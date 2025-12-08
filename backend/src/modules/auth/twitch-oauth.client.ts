@@ -1,109 +1,87 @@
-import axios from "axios";
-import { env } from "../../config/env";
+import axios from 'axios';
+import { env } from '../../config/env';
 
-const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
-const TWITCH_USER_URL = "https://api.twitch.tv/helix/users";
+export class TwitchOAuthClient {
+  private readonly clientId = env.twitchClientId;
+  private readonly clientSecret = env.twitchClientSecret;
+  private readonly redirectUri = env.twitchRedirectUri;
+  private readonly tokenUrl = 'https://id.twitch.tv/oauth2/token';
+  private readonly validateUrl = 'https://id.twitch.tv/oauth2/validate';
+  private readonly userInfoUrl = 'https://api.twitch.tv/helix/users';
 
-export interface TwitchTokenResponse {
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-  scope?: string[];
-  token_type: string;
-}
+  /**
+   * 產生 Twitch 授權 URL
+   * @param state 防止 CSRF 的隨機字串
+   */
+  public getOAuthUrl(state: string): string {
+    const scopes = [
+      'user:read:email',
+      'channel:read:subscriptions',
+      'analytics:read:games',
+      'analytics:read:extensions'
+    ].join(' ');
 
-export interface TwitchUser {
-  id: string;
-  login: string;
-  display_name: string;
-  profile_image_url: string;
-}
+    const url = new URL('https://id.twitch.tv/oauth2/authorize');
+    url.searchParams.append('client_id', this.clientId);
+    url.searchParams.append('redirect_uri', this.redirectUri);
+    url.searchParams.append('response_type', 'code');
+    url.searchParams.append('scope', scopes);
+    url.searchParams.append('state', state); // 加入 state 參數
 
-export async function exchangeCodeForToken(
-  code: string
-): Promise<TwitchTokenResponse> {
-  // #region agent log
-  const fs = require("fs");
-  const path = require("path");
-  const logPath = path.resolve(__dirname, "..", "..", "..", ".cursor", "debug.log");
-  const logDir = path.dirname(logPath);
-  try {
-    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-    const logEntry = JSON.stringify({
-      location: "twitch-oauth.client.ts:25",
-      message: "Exchanging code for token",
-      data: {
-        clientIdSet: !!env.twitchClientId,
-        clientIdLength: env.twitchClientId.length,
-        clientSecretSet: !!env.twitchClientSecret,
-        codeLength: code?.length || 0,
-      },
-      timestamp: Date.now(),
-      sessionId: "debug-session",
-      runId: "oauth-flow",
-      hypothesisId: "H4",
-    }) + "\n";
-    fs.appendFileSync(logPath, logEntry);
-  } catch (_) {}
-  // #endregion
+    return url.toString();
+  }
 
-  const params = new URLSearchParams({
-    client_id: env.twitchClientId,
-    client_secret: env.twitchClientSecret,
-    code,
-    grant_type: "authorization_code",
-    redirect_uri: env.twitchRedirectUri,
-  });
-
-  try {
-    const { data } = await axios.post<TwitchTokenResponse>(
-      TWITCH_TOKEN_URL,
-      params
-    );
-    return data;
-  } catch (error: any) {
-    // #region agent log
-    const fs = require("fs");
-    const path = require("path");
-    const logPath = path.resolve(__dirname, "..", "..", "..", ".cursor", "debug.log");
-    const logDir = path.dirname(logPath);
+  // ... existing code (getAccessToken, getUserInfo, etc.) ...
+  
+  public async getAccessToken(code: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
     try {
-      if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-      const logEntry = JSON.stringify({
-        location: "twitch-oauth.client.ts:45",
-        message: "Token exchange failed",
-        data: {
-          errorStatus: error?.response?.status,
-          errorMessage: error?.response?.data?.message || error?.message,
-          errorData: error?.response?.data,
+      const response = await axios.post(this.tokenUrl, null, {
+        params: {
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          code,
+          grant_type: 'authorization_code',
+          redirect_uri: this.redirectUri,
         },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        runId: "oauth-flow",
-        hypothesisId: "H4",
-      }) + "\n";
-      fs.appendFileSync(logPath, logEntry);
-    } catch (_) {}
-    // #endregion
-    throw error;
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Twitch Token Error:', error);
+      throw new Error('Failed to retrieve access token from Twitch');
+    }
+  }
+
+  public async getUserInfo(accessToken: string): Promise<any> {
+    try {
+      const response = await axios.get(this.userInfoUrl, {
+        headers: {
+          'Client-Id': this.clientId,
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+      return response.data.data[0];
+    } catch (error) {
+       console.error('Twitch User Info Error:', error);
+       throw new Error('Failed to get user info from Twitch');
+    }
   }
 }
 
-export async function fetchTwitchUser(
-  accessToken: string
-): Promise<TwitchUser> {
-  const { data } = await axios.get<{ data: TwitchUser[] }>(TWITCH_USER_URL, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Client-Id": env.twitchClientId,
-    },
-  });
+// 建立單例實例供函數匯出使用
+const clientInstance = new TwitchOAuthClient();
 
-  if (!data.data?.length) {
-    throw new Error("No Twitch user returned from API");
-  }
-
-  return data.data[0];
+/**
+ * 使用 authorization code 交換 access token
+ * @param code - Twitch OAuth authorization code
+ */
+export async function exchangeCodeForToken(code: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+  return clientInstance.getAccessToken(code);
 }
 
-
+/**
+ * 取得 Twitch 使用者資訊
+ * @param accessToken - Twitch access token
+ */
+export async function fetchTwitchUser(accessToken: string): Promise<any> {
+  return clientInstance.getUserInfo(accessToken);
+}

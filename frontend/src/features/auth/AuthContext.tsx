@@ -22,18 +22,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c123c75d-d53a-45de-8d08-1605f5f6c842',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:23',message:'fetchUser called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'auth-context',hypothesisId:'H6'})}).catch(()=>{});
-      // #endregion
       const userData = await getMe();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c123c75d-d53a-45de-8d08-1605f5f6c842',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:27',message:'getMe succeeded',data:{streamerId:userData.streamerId,displayName:userData.displayName},timestamp:Date.now(),sessionId:'debug-session',runId:'auth-context',hypothesisId:'H6'})}).catch(()=>{});
-      // #endregion
       setUser(userData);
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c123c75d-d53a-45de-8d08-1605f5f6c842',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:30',message:'getMe failed',data:{error:err instanceof Error ? err.message : String(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'auth-context',hypothesisId:'H6'})}).catch(()=>{});
-      // #endregion
       setError(err instanceof Error ? err.message : "Failed to fetch user");
       setUser(null);
     } finally {
@@ -79,4 +70,3 @@ export function useAuthSession() {
   }
   return context;
 }
-

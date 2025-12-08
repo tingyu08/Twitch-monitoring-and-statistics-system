@@ -1,0 +1,167 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================
+// Core Models - 基於 fullstack-architecture.md
+// ============================================
+
+// 實況主（Streamer）
+model Streamer {
+  id            String    @id @default(uuid())
+  twitchUserId  String    @unique
+  displayName   String
+  avatarUrl     String?
+  email         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 關聯
+  channels      Channel[]
+  twitchTokens  TwitchToken[]
+
+  @@map("streamers")
+}
+
+// 觀眾（Viewer）
+model Viewer {
+  id            String    @id @default(uuid())
+  twitchUserId  String    @unique
+  displayName   String?
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 關聯
+  dailyStats    ViewerChannelDailyStat[]
+  twitchTokens  TwitchToken[]
+
+  // 用於 GDPR 刪除請求
+  isAnonymized  Boolean   @default(false)
+  anonymizedAt  DateTime?
+
+  @@map("viewers")
+}
+
+// 頻道（Channel）- 通常 1:1 對應 Streamer，預留多頻道擴展
+model Channel {
+  id              String    @id @default(uuid())
+  streamerId      String
+  twitchChannelId String    @unique
+  channelName     String
+  channelUrl      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // 關聯
+  streamer        Streamer  @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamSessions  StreamSession[]
+  dailyStats      ChannelDailyStat[]
+  viewerStats     ViewerChannelDailyStat[]
+
+  @@map("channels")
+}
+
+// 開台紀錄（StreamSession）- 粗粒度
+model StreamSession {
+  id              String    @id @default(uuid())
+  channelId       String
+  twitchStreamId  String?   @unique // Twitch 的 stream ID
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSeconds Int?      // 開台時長（秒）
+  title           String?   // 直播標題
+  category        String?   // 遊戲/分類
+  avgViewers      Int?      // 平均同時在線
+  peakViewers     Int?      // 最高同時在線
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // 關聯
+  channel         Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, startedAt])
+  @@map("stream_sessions")
+}
+
+// 實況主每日彙總統計（ChannelDailyStat）
+model ChannelDailyStat {
+  id              String    @id @default(uuid())
+  channelId       String
+  date            DateTime  // YYYY-MM-DD
+  streamSeconds   Int       @default(0) // 當日開台總秒數
+  streamCount     Int       @default(0) // 當日開台場數
+  avgViewers      Int?      // 當日平均觀眾數
+  peakViewers     Int?      // 當日最高觀眾數
+  subsTotal       Int?      // 訂閱總數（若 API 可得）
+  subsDelta       Int?      // 訂閱淨變化（若 API 可得）
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // 關聯
+  channel         Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, date])
+  @@index([channelId, date])
+  @@map("channel_daily_stats")
+}
+
+// 觀眾在某頻道每日彙總（ViewerChannelDailyStat）
+model ViewerChannelDailyStat {
+  id            String    @id @default(uuid())
+  viewerId      String
+  channelId     String
+  date          DateTime  // YYYY-MM-DD
+  watchSeconds  Int       @default(0) // 觀看秒數
+  messageCount  Int       @default(0) // 聊天訊息數
+  emoteCount    Int       @default(0) // 表情符號使用數
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 關聯
+  viewer        Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, channelId, date])
+  @@index([viewerId, channelId, date])
+  @@map("viewer_channel_daily_stats")
+}
+
+// Twitch Token 管理（TwitchToken）
+model TwitchToken {
+  id            String    @id @default(uuid())
+  ownerType     String    // 'streamer' | 'viewer' | 'system'
+  streamerId    String?
+  viewerId      String?
+  accessToken   String
+  refreshToken  String?
+  expiresAt     DateTime?
+  scopes        String    @default("[]") // JSON 格式的 scopes 陣列
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 關聯
+  streamer      Streamer? @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  viewer        Viewer?   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerType])
+  @@map("twitch_tokens")
+}
+
+// 系統設定與狀態（可選）
+model SystemSetting {
+  id        String    @id @default(uuid())
+  key       String    @unique
+  value     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("system_settings")
+}

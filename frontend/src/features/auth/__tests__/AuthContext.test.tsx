@@ -84,6 +84,4 @@ describe("AuthContext / AuthProvider", () => {
     expect(screen.getByTestId("user").textContent).toBe("");
     expect(screen.getByTestId("error").textContent).toContain("network error");
   });
-}
-
-
+});

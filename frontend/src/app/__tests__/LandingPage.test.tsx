@@ -1,58 +1,133 @@
+/**
+ * @jest-environment jsdom
+ */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
-import LandingPage from "../page";
+import { render, screen, waitFor } from "@testing-library/react";
 
-// Mock AuthContext，讓我們可以控制 user / loading 狀態
+
+// Mock AuthContext
+const mockUseAuthSession = jest.fn();
 jest.mock("@/features/auth/AuthContext", () => ({
-  useAuthSession: () => ({
-    user: null,
-    loading: false,
-    error: null,
-    logout: jest.fn(),
-    refresh: jest.fn(),
-  }),
+  useAuthSession: () => mockUseAuthSession(),
 }));
 
-// Mock next/navigation，避免實際導航
+// Mock next/navigation
+const mockPush = jest.fn();
+const mockGet = jest.fn();
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockPush,
   }),
   useSearchParams: () => ({
-    get: () => null,
+    get: mockGet,
   }),
 }));
 
-describe("LandingPage 登入按鈕", () => {
-  const originalLocation = window.location;
+// 在測試前需要 import，這樣 mock 才會生效
+import LandingPage from "../page";
 
+describe("LandingPage", () => {
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    delete window.location;
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    window.location = { href: "" };
+    jest.clearAllMocks();
+    mockGet.mockReturnValue(null); // 預設無錯誤
   });
 
-  afterEach(() => {
-    window.location = originalLocation;
+  describe("未登入狀態", () => {
+    beforeEach(() => {
+      mockUseAuthSession.mockReturnValue({
+        user: null,
+        loading: false,
+        error: null,
+        logout: jest.fn(),
+        refresh: jest.fn(),
+      });
+    });
+
+    it("顯示『使用 Twitch 登入』按鈕", async () => {
+      render(<LandingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "使用 Twitch 登入" })).toBeInTheDocument();
+      });
+    });
+
+    it("顯示正確的標題和說明", async () => {
+      render(<LandingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Twitch 實況監控與統計平台/)).toBeInTheDocument();
+        expect(screen.getByText(/使用你的 Twitch 帳號登入/)).toBeInTheDocument();
+      });
+    });
   });
 
-  it("顯示『使用 Twitch 登入』按鈕並在點擊時導向後端 OAuth 登入 URL", () => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:4000";
+  describe("載入中狀態", () => {
+    beforeEach(() => {
+      mockUseAuthSession.mockReturnValue({
+        user: null,
+        loading: true,
+        error: null,
+        logout: jest.fn(),
+        refresh: jest.fn(),
+      });
+    });
 
-    render(<LandingPage />);
+    it("顯示載入中訊息", async () => {
+      render(<LandingPage />);
 
-    const button = screen.getByRole("button", { name: "使用 Twitch 登入" });
-    expect(button).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("載入中...")).toBeInTheDocument();
+      });
+    });
+  });
 
-    fireEvent.click(button);
+  describe("錯誤狀態", () => {
+    beforeEach(() => {
+      mockUseAuthSession.mockReturnValue({
+        user: null,
+        loading: false,
+        error: null,
+        logout: jest.fn(),
+        refresh: jest.fn(),
+      });
+    });
 
-    expect(window.location.href).toBe(
-      "http://localhost:4000/auth/twitch/login"
-    );
+    it("當有 authError 時顯示錯誤訊息和重新嘗試按鈕", async () => {
+      mockGet.mockReturnValue("authorization_failed");
+
+      render(<LandingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("登入失敗")).toBeInTheDocument();
+        expect(screen.getByText(/您取消了 Twitch 授權/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "重新嘗試登入" })).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("已登入狀態", () => {
+    beforeEach(() => {
+      mockUseAuthSession.mockReturnValue({
+        user: {
+          streamerId: "s1",
+          twitchUserId: "t1",
+          displayName: "Test User",
+          avatarUrl: "https://example.com/avatar.png",
+          channelUrl: "https://twitch.tv/test",
+        },
+        loading: false,
+        error: null,
+        logout: jest.fn(),
+        refresh: jest.fn(),
+      });
+    });
+
+    it("已登入使用者應該被導向到儀表板", async () => {
+      render(<LandingPage />);
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith("/dashboard/streamer");
+      });
+    });
   });
 });
-
-

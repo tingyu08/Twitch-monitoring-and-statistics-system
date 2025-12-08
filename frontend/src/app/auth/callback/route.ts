@@ -1,35 +1,42 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const token = searchParams.get('token');
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const errorDescription = searchParams.get('error_description');
 
-  // 1. 處理錯誤情況
-  if (error || !token) {
-    // 導回首頁並顯示錯誤
-    return NextResponse.redirect(new URL('/?error=auth_failed', request.url));
+  // 1. 處理 Twitch 回傳的錯誤 (例如：access_denied)
+  if (error) {
+    console.error(`Auth Error: ${error} - ${errorDescription}`);
+    // 導向到登入頁面並顯示錯誤訊息
+    return NextResponse.redirect(new URL(`/?error=${error}`, request.url));
   }
 
-  // 2. 設定 Cookie
-  const cookieStore = cookies();
-  
-  // 計算過期時間 (例如 7 天)
-  const expires = new Date();
-  expires.setDate(expires.getDate() + 7);
+  // 2. 如果沒有 code，視為異常請求
+  if (!code) {
+    return NextResponse.redirect(new URL('/?error=no_code', request.url));
+  }
 
-  // 設定 auth_token Cookie
-  cookieStore.set('auth_token', token, {
-    httpOnly: true, // 重要：防止 XSS，前端 JS 無法讀取
-    // 在生產環境 (HTTPS) 必須為 true，本地開發 (HTTP) 必須為 false
-    // 這樣才能在 localhost 正常儲存
-    secure: process.env.NODE_ENV === 'production', 
-    sameSite: 'lax', // 允許 OAuth 重定向後的 Cookie 寫入
-    path: '/',
-    expires: expires,
-  });
+  try {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    
+    // 呼叫後端交換 Token (這裡示範轉發，具體視您後端路由設計而定)
+    // 但根據上面的 Controller 代碼，後端其實已經接管了 Callback。
+    // 如果 Callback URL 設定的是指向後端，則這個前端檔案可能不會被執行到。
+    
+    // 如果 Callback URL 指向的是這裡 (前端)，我們需要將 code 傳給後端：
+    const res = await fetch(`${backendUrl}/api/auth/twitch/callback?code=${code}`, {
+        method: 'GET', // 或 POST
+    });
 
-  // 3. 登入成功，導向儀表板
-  return NextResponse.redirect(new URL('/dashboard/streamer', request.url));
+    if (res.ok) {
+        return NextResponse.redirect(new URL('/dashboard/streamer', request.url));
+    } else {
+        return NextResponse.redirect(new URL('/?error=login_failed', request.url));
+    }
+
+  } catch (err) {
+    return NextResponse.redirect(new URL('/?error=server_error', request.url));
+  }
 }

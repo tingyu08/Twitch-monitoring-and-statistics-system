@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { oauthRoutes, apiRoutes } from './modules/auth/auth.routes';
+import { streamerRoutes } from './modules/streamer/streamer.routes';
 import { env as config } from './config/env';
 
 class App {
@@ -36,7 +37,7 @@ class App {
     
     // API 路由（需要認證）：/api/auth/me, /api/auth/logout
     this.express.use('/api/auth', apiRoutes);
-
+    this.express.use('/api/streamer', streamerRoutes);
     // 健康檢查
     this.express.get('/', (req, res) => {
       res.send('Streamer Backend is running!');
