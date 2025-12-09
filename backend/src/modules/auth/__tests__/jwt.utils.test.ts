@@ -1,4 +1,5 @@
 import { signToken, verifyToken, type JWTPayload } from "../jwt.utils";
+import * as jwt from "jsonwebtoken";
 
 // Mock environment variables
 process.env.APP_JWT_SECRET = "test-secret-key-for-jwt-testing";
@@ -60,7 +61,6 @@ describe("JWT Utils", () => {
       // Need to reload the module to pick up new secret, or test differently
       // For now, we'll test that a token created with one secret can't be verified with another
       // by manually creating a token with wrong secret using jwt directly
-      const jwt = require("jsonwebtoken");
       const wrongToken = jwt.sign(mockPayload, "different-secret", {
         expiresIn: "7d",
       });

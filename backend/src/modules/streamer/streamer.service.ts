@@ -25,13 +25,16 @@ export async function getStreamerSummary(
   if (range === '90d') days = 90;
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  console.log('[DEBUG] getStreamerSummary - cutoffDate:', cutoffDate.toISOString());
 
   // 2. 取得實況主的頻道 ID
   const channel = await prisma.channel.findFirst({
     where: { streamerId },
   });
+  console.log('[DEBUG] getStreamerSummary - channel:', channel);
 
   if (!channel) {
+    console.log('[DEBUG] getStreamerSummary - No channel found for streamerId:', streamerId);
     // 如果找不到頻道，回傳空統計
     return {
       range,
@@ -52,8 +55,13 @@ export async function getStreamerSummary(
     },
     select: {
       durationSeconds: true,
+      startedAt: true,
     },
   });
+  console.log('[DEBUG] getStreamerSummary - sessions count:', sessions.length);
+  if (sessions.length > 0) {
+    console.log('[DEBUG] getStreamerSummary - first session:', sessions[0]);
+  }
 
   // 4. 計算統計數據
   const totalStreamSessions = sessions.length;

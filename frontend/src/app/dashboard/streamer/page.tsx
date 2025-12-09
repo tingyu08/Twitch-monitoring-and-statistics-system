@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 // 使用我們寫好的 auth library，而不是直接用 httpClient
 import { getMe, type StreamerInfo } from '@/lib/api/auth';
 import { useAuthSession } from '@/features/auth/AuthContext';
+import { StreamSummaryCards } from '@/features/streamer-dashboard/components/StreamSummaryCards';
 
 export default function StreamerDashboard() {
   // 使用正確的型別 StreamerInfo
@@ -58,14 +59,14 @@ export default function StreamerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <header className="mb-8 border-b border-gray-700 pb-4 flex justify-between items-center gap-4">
           <div className="flex items-center gap-4">
             {/* 使用正確的欄位名稱 avatarUrl */}
             {user?.avatarUrl && (
-              <img 
-                src={user.avatarUrl} 
-                alt="Profile" 
+              <img
+                src={user.avatarUrl}
+                alt="Profile"
                 className="w-14 h-14 rounded-full border-2 border-purple-500"
               />
             )}
@@ -84,6 +85,11 @@ export default function StreamerDashboard() {
             登出
           </button>
         </header>
+
+        {/* Story 1.2: 開台統計總覽 */}
+        <div className="mb-8">
+          <StreamSummaryCards />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* 基本資料卡片 */}

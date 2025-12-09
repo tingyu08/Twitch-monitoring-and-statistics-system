@@ -9,7 +9,12 @@ declare global {
 }
 
 // 建立 libSQL 適配器（用於 SQLite）
-const databaseUrl = process.env.DATABASE_URL || `file:${path.join(__dirname, '../../prisma/dev.db')}`;
+// 使用絕對路徑確保在任何執行環境下都能找到正確的資料庫檔案
+const dbPath = path.resolve(__dirname, '../../prisma/dev.db');
+const databaseUrl = process.env.DATABASE_URL || `file:${dbPath}`;
+console.log('[DEBUG] Database URL:', databaseUrl);
+console.log('[DEBUG] __dirname:', __dirname);
+console.log('[DEBUG] Resolved DB path:', dbPath);
 const adapter = new PrismaLibSql({ url: databaseUrl });
 
 export const prisma = global.prisma || new PrismaClient({

@@ -26,7 +26,7 @@ describe("AuthContext / AuthProvider", () => {
     jest.clearAllMocks();
   });
 
-  it("在載入期間會先顯示 loading=true", () => {
+  it("在載入期間會先顯示 loading=true", async () => {
     mockGetMe.mockResolvedValueOnce({
       streamerId: "s1",
       twitchUserId: "t1",
@@ -43,6 +43,11 @@ describe("AuthContext / AuthProvider", () => {
 
     // 初始 render 時 loading 應為 true
     expect(screen.getByTestId("loading").textContent).toBe("true");
+
+    // 等待 loading 完成，避免 act() 警告
+    await waitFor(() => {
+      expect(screen.getByTestId("loading").textContent).toBe("false");
+    });
   });
 
   it("getMe 成功時會設定 user 並結束 loading", async () => {

@@ -7,6 +7,22 @@
 
 ---
 
+## 📋 測試前準備
+
+### 環境配置（可選）
+
+如需自訂測試環境配置，可以建立 `.env.test` 檔案：
+
+```bash
+cd backend
+cp .env.test.example .env.test
+# 編輯 .env.test 以自訂配置
+```
+
+預設配置已經可以正常使用，無需額外設定。
+
+---
+
 ## 🚀 快速測試步驟
 
 ### 1. 啟動服務
@@ -43,9 +59,84 @@ npm run dev
 
 ---
 
-#### 方式 B：直接測試 API（使用測試腳本）
+#### 方式 B：直接測試 API（使用測試腳本）✨ 推薦
 
-**Step 1: 生成測試 JWT Token**
+**自動化測試腳本** - 包含完整的測試覆蓋率、Schema 驗證和效能監測
+
+```bash
+cd backend
+npx ts-node test-api-call.ts
+```
+
+**此腳本會自動：**
+- 🔑 動態生成有效的 JWT Token（無需手動複製）
+- ✅ 測試所有時間範圍 (7d, 30d, 90d)
+- ✅ 驗證 Response Schema 正確性
+- ✅ 測試錯誤處理（無效參數、未認證）
+- ⏱️ 監測 API 效能（超過 1000ms 會警告）
+- 📊 生成詳細的測試報告
+
+**預期輸出範例：**
+```
+=== Testing API Endpoints ===
+
+API Base URL: http://localhost:4000
+
+🔑 Generating test JWT token...
+✅ Token generated successfully
+
+✅ GET /api/streamer/me/summary?range=7d
+{
+  "range": "7d",
+  "totalStreamHours": 25.5,
+  "totalStreamSessions": 6,
+  "avgStreamDurationMinutes": 255,
+  "isEstimated": false
+}
+
+✅ GET /api/streamer/me/summary?range=30d
+{
+  "range": "30d",
+  "totalStreamHours": 65,
+  "totalStreamSessions": 18,
+  "avgStreamDurationMinutes": 217,
+  "isEstimated": false
+}
+
+✅ GET /api/streamer/me/summary?range=90d
+{
+  "range": "90d",
+  "totalStreamHours": 108,
+  "totalStreamSessions": 30,
+  "avgStreamDurationMinutes": 216,
+  "isEstimated": false
+}
+
+✅ Invalid range test (correctly rejected):
+{
+  "error": "Invalid range parameter. Use 7d, 30d, or 90d."
+}
+
+✅ No auth test (correctly rejected):
+{
+  "error": "Unauthorized: No token provided"
+}
+
+=== Test Summary ===
+
+✅ GET /api/streamer/me/summary?range=7d (245ms)
+✅ GET /api/streamer/me/summary?range=30d (156ms)
+✅ GET /api/streamer/me/summary?range=90d (168ms)
+✅ Invalid range parameter test (89ms)
+✅ No authentication test (12ms)
+
+Total: 5 | Passed: 5 | Failed: 0
+
+✅ All tests passed!
+```
+
+**手動生成 Token（可選）：**
+如果您需要手動測試或使用 curl/Postman：
 ```bash
 cd backend
 npx ts-node test-api.ts
@@ -55,29 +146,6 @@ npx ts-node test-api.ts
 - 測試實況主資訊
 - JWT Token
 - curl 測試指令
-
-**Step 2: 測試 API Endpoints**
-```bash
-cd backend
-npx ts-node test-api-call.ts
-```
-
-這會測試：
-- ✅ GET /api/streamer/me/summary?range=7d
-- ✅ GET /api/streamer/me/summary?range=30d
-- ✅ GET /api/streamer/me/summary?range=90d
-- ✅ 錯誤處理（無效參數、未認證）
-
-**預期輸出範例：**
-```json
-{
-  "range": "30d",
-  "totalStreamHours": 65,
-  "totalStreamSessions": 18,
-  "avgStreamDurationMinutes": 217,
-  "isEstimated": false
-}
-```
 
 ---
 
