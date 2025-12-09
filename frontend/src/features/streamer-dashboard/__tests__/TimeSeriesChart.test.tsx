@@ -108,4 +108,20 @@ describe('TimeSeriesChart', () => {
       render(<TimeSeriesChart data={zeroData} granularity="day" />);
     }).not.toThrow();
   });
+
+  it('should render chart container and ResponsiveContainer', () => {
+    const { container } = render(<TimeSeriesChart data={mockData} granularity="day" />);
+    
+    // Check that chart wrapper and ResponsiveContainer are rendered
+    expect(container.querySelector('.w-full')).toBeInTheDocument();
+    const responsiveContainer = document.querySelector('.recharts-responsive-container');
+    expect(responsiveContainer).toBeInTheDocument();
+  });
+
+  it('should handle tooltip and legend formatters', () => {
+    const { container } = render(<TimeSeriesChart data={mockData} granularity="day" />);
+    
+    // Component should render without errors with formatters
+    expect(container.querySelector('.w-full')).toBeInTheDocument();
+  });
 });
