@@ -124,7 +124,7 @@ npm install
 **後端 (\ackend/.env\)**
 \\\env
 # 資料庫
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="file:./prisma/dev.db"
 
 # Twitch OAuth
 TWITCH_CLIENT_ID=your_twitch_client_id
