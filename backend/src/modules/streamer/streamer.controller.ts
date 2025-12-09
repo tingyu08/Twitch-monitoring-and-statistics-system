@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
-import { getStreamerSummary } from "./streamer.service";
+import { getStreamerSummary, getStreamerTimeSeries, getStreamerHeatmap } from "./streamer.service";
 
 export async function getSummaryHandler(
   req: AuthRequest,
@@ -8,7 +8,6 @@ export async function getSummaryHandler(
 ): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
-    console.log('[DEBUG] getSummary - streamerId:', streamerId);
 
     if (!streamerId) {
       res.status(401).json({ error: "Unauthorized" });
@@ -24,7 +23,6 @@ export async function getSummaryHandler(
     }
 
     const summary = await getStreamerSummary(streamerId, range);
-    console.log('[DEBUG] getSummary - result:', summary);
     res.json(summary);
   } catch (error) {
     console.error("Get Summary Error:", error);
@@ -45,8 +43,6 @@ export async function getStreamerSummaryByIdHandler(
     const { streamerId } = req.params;
     const range = (req.query.range as string) || "30d";
 
-    console.log('[DEBUG] getStreamerSummaryById - streamerId:', streamerId, 'range:', range);
-
     if (!streamerId) {
       res.status(400).json({ error: "streamerId is required" });
       return;
@@ -58,10 +54,83 @@ export async function getStreamerSummaryByIdHandler(
     }
 
     const summary = await getStreamerSummary(streamerId, range);
-    console.log('[DEBUG] getStreamerSummaryById - result:', summary);
     res.json(summary);
   } catch (error) {
     console.error("Get Streamer Summary By ID Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
+
+/**
+ * 取得時間序列資料（每日或每週開台統計）
+ * GET /api/streamer/me/time-series?range=30d&granularity=day
+ */
+export async function getTimeSeriesHandler(
+  req: AuthRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const streamerId = req.user?.streamerId;
+
+    if (!streamerId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const range = (req.query.range as string) || "30d";
+    const granularity = (req.query.granularity as string) || "day";
+
+    // 驗證參數
+    if (!["7d", "30d", "90d"].includes(range)) {
+      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      return;
+    }
+
+    if (!["day", "week"].includes(granularity)) {
+      res.status(400).json({ error: "Invalid granularity parameter. Use day or week." });
+      return;
+    }
+
+    const timeSeries = await getStreamerTimeSeries(
+      streamerId,
+      range,
+      granularity as 'day' | 'week'
+    );
+    res.json(timeSeries);
+  } catch (error) {
+    console.error("Get Time Series Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
+
+/**
+ * 取得 Heatmap 資料（一週 × 24 小時的開台分布）
+ * GET /api/streamer/me/heatmap?range=30d
+ */
+export async function getHeatmapHandler(
+  req: AuthRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const streamerId = req.user?.streamerId;
+
+    if (!streamerId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const range = (req.query.range as string) || "30d";
+
+    // 驗證參數
+    if (!["7d", "30d", "90d"].includes(range)) {
+      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      return;
+    }
+
+    const heatmap = await getStreamerHeatmap(streamerId, range);
+    res.json(heatmap);
+  } catch (error) {
+    console.error("Get Heatmap Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 }

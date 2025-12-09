@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { getMe, logout as apiLogout, type StreamerInfo } from "@/lib/api/auth";
+import { authLogger } from "@/lib/logger";
 
 interface AuthContextType {
   user: StreamerInfo | null;
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 導向首頁
       window.location.href = "/";
     } catch (err) {
-      console.error("Logout failed:", err);
+      authLogger.error("Logout failed:", err);
     }
   };
 

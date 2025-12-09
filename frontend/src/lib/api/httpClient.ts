@@ -1,3 +1,5 @@
+import { apiLogger } from '../logger';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 /**
@@ -33,7 +35,7 @@ export async function httpClient<T = any>(endpoint: string, options: RequestInit
     if (!response.ok) {
       // 處理 401 未授權錯誤
       if (response.status === 401) {
-        console.warn('Unauthorized access request to:', url);
+        apiLogger.warn('Unauthorized access request to:', url);
       }
       
       const errorMessage = (typeof data === 'object' && data.message) 
@@ -45,7 +47,7 @@ export async function httpClient<T = any>(endpoint: string, options: RequestInit
 
     return data as T;
   } catch (error) {
-    console.error('API Request Error:', error);
+    apiLogger.error('API Request Error:', error);
     throw error;
   }
 }

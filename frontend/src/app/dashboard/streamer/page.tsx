@@ -2,31 +2,37 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-// 使用我們寫好的 auth library，而不是直接用 httpClient
 import { getMe, type StreamerInfo } from '@/lib/api/auth';
 import { useAuthSession } from '@/features/auth/AuthContext';
 import { StreamSummaryCards } from '@/features/streamer-dashboard/components/StreamSummaryCards';
+import { TimeSeriesChart, HeatmapChart, ChartLoading, ChartError, ChartEmpty } from '@/features/streamer-dashboard/charts';
+import { useTimeSeriesData, useHeatmapData, type ChartRange, type ChartGranularity } from '@/features/streamer-dashboard/hooks/useChartData';
+import { authLogger } from '@/lib/logger';
 
 export default function StreamerDashboard() {
-  // 使用正確的型別 StreamerInfo
   const [user, setUser] = useState<StreamerInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const router = useRouter();
   const { logout } = useAuthSession();
 
+  // Story 1.3: 圖表範圍與粒度狀態
+  const [chartRange, setChartRange] = useState<ChartRange>('30d');
+  const [granularity, setGranularity] = useState<ChartGranularity>('day');
+
+  // Story 1.3: 使用 SWR hooks 獲取圖表資料
+  const timeSeries = useTimeSeriesData(chartRange, granularity);
+  const heatmap = useHeatmapData(chartRange);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // [FIX] 使用 getMe() 函式，它會呼叫正確的 /api/auth/me
         const data = await getMe();
         setUser(data);
       } catch (err: any) {
-        console.error("Dashboard fetch error:", err);
+        authLogger.error("Dashboard fetch error:", err);
         setError(err.message || '無法獲取資料');
         
-        // 驗證失敗處理
-        // 寬鬆判斷錯誤訊息，包含 401 相關的關鍵字都導回首頁
         const errMsg = err.message?.toLowerCase() || '';
         if (errMsg.includes('unauthorized') || errMsg.includes('auth') || errMsg.includes('token')) {
             setTimeout(() => router.push('/'), 2000);
@@ -89,6 +95,76 @@ export default function StreamerDashboard() {
         {/* Story 1.2: 開台統計總覽 */}
         <div className="mb-8">
           <StreamSummaryCards />
+        </div>
+
+        {/* Story 1.3: 時間與頻率圖表 */}
+        <div className="mb-8">
+          <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg border border-gray-700">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-purple-300">開台時間分析</h2>
+              <div className="flex flex-wrap gap-2">
+                {/* 時間範圍選擇 */}
+                <select
+                  id="chart-range"
+                  name="chart-range"
+                  value={chartRange}
+                  onChange={(e) => setChartRange(e.target.value as '7d' | '30d' | '90d')}
+                  className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+                >
+                  <option value="7d">最近 7 天</option>
+                  <option value="30d">最近 30 天</option>
+                  <option value="90d">最近 90 天</option>
+                </select>
+                {/* 粒度選擇 */}
+                <select
+                  id="chart-granularity"
+                  name="chart-granularity"
+                  value={granularity}
+                  onChange={(e) => setGranularity(e.target.value as 'day' | 'week')}
+                  className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+                >
+                  <option value="day">依日</option>
+                  <option value="week">依週</option>
+                </select>
+              </div>
+            </div>
+            
+            {timeSeries.isLoading ? (
+              <ChartLoading message="載入圖表資料中..." />
+            ) : timeSeries.error ? (
+              <ChartError error={timeSeries.error} onRetry={timeSeries.refresh} />
+            ) : timeSeries.data.length === 0 ? (
+              <ChartEmpty
+                emoji="📊"
+                title="暫無開台資料"
+                description={`在選定的 ${chartRange === '7d' ? '7天' : chartRange === '30d' ? '30天' : '90天'} 時間範圍內沒有開台記錄`}
+                hint="試試切換其他時間範圍"
+              />
+            ) : (
+              <TimeSeriesChart data={timeSeries.data} granularity={granularity} />
+            )}
+          </div>
+        </div>
+
+        {/* Story 1.3: 熱力圖 */}
+        <div className="mb-8">
+          <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg border border-gray-700">
+            <h2 className="text-lg sm:text-xl font-semibold text-purple-300 mb-6">開台時段分布</h2>
+            {heatmap.isLoading ? (
+              <ChartLoading message="載入熱力圖資料中..." />
+            ) : heatmap.error ? (
+              <ChartError error={heatmap.error} onRetry={heatmap.refresh} />
+            ) : heatmap.data.length === 0 ? (
+              <ChartEmpty
+                emoji="🔥"
+                title="暫無時段資料"
+                description={`在選定的 ${chartRange === '7d' ? '7天' : chartRange === '30d' ? '30天' : '90天'} 時間範圍內沒有開台記錄`}
+                hint="試試切換其他時間範圍"
+              />
+            ) : (
+              <HeatmapChart data={heatmap.data} />
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

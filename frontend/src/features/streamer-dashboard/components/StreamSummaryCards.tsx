@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { getStreamerSummary, type StreamerSummary } from '@/lib/api/streamer';
 import { StatCard } from './StatCard';
 import { DateRangePicker } from './DateRangePicker';
+import { apiLogger } from '@/lib/logger';
 
 type DateRange = '7d' | '30d' | '90d';
 
@@ -21,7 +22,7 @@ export function StreamSummaryCards() {
         const data = await getStreamerSummary(range);
         setSummary(data);
       } catch (err) {
-        console.error('Failed to fetch summary:', err);
+        apiLogger.error('Failed to fetch summary:', err);
         setError(err instanceof Error ? err.message : '載入統計資料失敗');
       } finally {
         setLoading(false);
