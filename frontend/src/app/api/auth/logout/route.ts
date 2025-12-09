@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiLogger } from "@/lib/logger";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     return nextResponse;
   } catch (error) {
-    console.error("[API Proxy] Error forwarding request:", error);
+    apiLogger.error("Error forwarding /auth/logout request:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { apiLogger } from "@/lib/logger";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     // 返回後端的響應
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error("[API Proxy] Error forwarding request:", error);
+    apiLogger.error("Error forwarding /auth/me request:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

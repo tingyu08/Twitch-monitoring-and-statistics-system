@@ -53,4 +53,6 @@ export const authLogger = Logger.create('Auth');
 export const apiLogger = Logger.create('API');
 export const chartLogger = Logger.create('Chart');
 
+// 導出 Logger class 以供測試使用
+export { Logger };
 export default Logger;

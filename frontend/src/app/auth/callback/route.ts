@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authLogger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
 
   // 1. 處理 Twitch 回傳的錯誤 (例如：access_denied)
   if (error) {
-    console.error(`Auth Error: ${error} - ${errorDescription}`);
+    authLogger.error(`Auth Error: ${error} - ${errorDescription}`);
     // 導向到登入頁面並顯示錯誤訊息
     return NextResponse.redirect(new URL(`/?error=${error}`, request.url));
   }
