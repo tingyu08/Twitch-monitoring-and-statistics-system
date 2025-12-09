@@ -14,9 +14,14 @@
 | 1.4 實況主訂閱趨勢 (Lite) |  Draft | - | - |
 | 1.5 實況主儀表板 UX 偏好設定 |  Draft | - | - |
 
-**總測試數**: 62 tests (Backend: 48, Frontend: 14 new tests)
+**總測試數**: 92 tests (Backend: 48, Frontend: 44 tests)
 **測試通過率**: 100% (1 skipped)
-**測試覆蓋率**: 74.17% (整體), useChartData: 100%, Logger: 100%
+**測試覆蓋率**: 91.75% (整體) ⬆️ +17.58%
+  - API 層: 100% (auth, httpClient, streamer) ✨
+  - Hooks: 100% (useChartData) ✨
+  - Utils: 100% (logger) ✨
+  - Components: 82-100%
+  - AuthContext: 100% ✨
 
 ## 技術指標
 
@@ -65,20 +70,33 @@
 - 無
 
 ### 中優先級
-- [ ] 增加 E2E 測試覆蓋
-- [ ] 提升 API 層測試覆蓋率 (目前 21.87%)
-- [ ] 增加 TimeSeriesChart 錯誤處理測試覆蓋
+- [ ] 增加 E2E 測試覆蓋 (Playwright/Cypress)
+- [ ] 視覺回歸測試 (Chromatic/Percy for charts)
+- [ ] API Contract Testing (前後端介面合約測試)
 
 ### 低優先級
+- [ ] TimeSeriesChart formatter 覆蓋 (JSDOM 限制,可改用視覺測試)
+- [ ] 性能基準測試 (API 回應時間)
+- [ ] Mutation Testing (測試品質驗證)
 - [ ] 探索圖表動畫效果
 - [ ] 考慮添加圖表匯出功能
 
 ### 已完成清理 (2025-12-09)
+**第一階段 - 基礎清理**:
 - ✅ ChartStates 組件完整測試 (12 tests, 100%)
 - ✅ useChartData hooks 測試 (5 tests, 100%)
 - ✅ Logger 工具測試 (11 tests, 100%)
 - ✅ 所有 API 路由 console.error 替換為 Logger
 - ✅ Logger class 正確導出供測試使用
+
+**第二階段 - 100% 覆蓋率挑戰** (2025-12-09):
+- ✅ API 層完整測試覆蓋 (auth, httpClient, streamer)
+  - auth.test.ts: 4 tests, 0% → 100%
+  - httpClient.test.ts: 10 tests, 15% → 100%
+  - streamer.test.ts: 9 tests, 57% → 100%
+- ✅ AuthContext 完整測試 (3 → 8 tests, 78% → 100%)
+- ✅ TimeSeriesChart 測試增強
+- ✅ 整體覆蓋率提升至 91.75% (+17.58%)
 
 ## 團隊里程碑
 
