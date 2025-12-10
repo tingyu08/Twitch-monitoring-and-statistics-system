@@ -20,11 +20,11 @@ apiRouter.post("/logout", requireAuth, logoutHandler);
 export function getMeHandler(req: AuthRequest, res: Response): void {
   // requireAuth 中間件已確保 req.user 存在
   res.json({
-    streamerId: req.user!.streamerId,
-    twitchUserId: req.user!.twitchUserId,
-    displayName: req.user!.displayName,
-    avatarUrl: req.user!.avatarUrl,
-    channelUrl: req.user!.channelUrl,
+    streamerId: req.user?.streamerId,
+    twitchUserId: req.user?.twitchUserId,
+    displayName: req.user?.displayName,
+    avatarUrl: req.user?.avatarUrl,
+    channelUrl: req.user?.channelUrl,
   });
 }
 

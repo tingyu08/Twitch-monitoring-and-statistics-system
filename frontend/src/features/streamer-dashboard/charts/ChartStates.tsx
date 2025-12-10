@@ -49,11 +49,11 @@ interface ChartEmptyProps {
   hint?: string;
 }
 
-export function ChartEmpty({ 
-  emoji = '📊', 
+export function ChartEmpty({
+  emoji = '📊',
   title = '暫無資料',
   description,
-  hint 
+  hint
 }: ChartEmptyProps) {
   return (
     <div className="flex flex-col items-center justify-center h-[300px] text-gray-400 px-4">
@@ -62,5 +62,42 @@ export function ChartEmpty({
       <p className="text-xs sm:text-sm text-center">{description}</p>
       {hint && <p className="text-xs text-gray-500 mt-2">{hint}</p>}
     </div>
+  );
+}
+
+interface ChartDataLimitedBannerProps {
+  currentDays: number;
+  minDays: number;
+}
+
+export function ChartDataLimitedBanner({
+  currentDays,
+  minDays
+}: ChartDataLimitedBannerProps) {
+  return (
+    <div className="bg-yellow-900/20 border border-yellow-600/50 rounded-lg p-4 mb-4">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl">⚠️</span>
+        <div>
+          <h3 className="font-semibold text-yellow-400">資料收集中</h3>
+          <p className="text-sm text-gray-300 mt-1">
+            訂閱趨勢資料為估算值，僅供參考。目前已收集 {currentDays} 天資料，
+            建議累積至少 {minDays} 天後，趨勢會更準確。
+          </p>
+          <p className="text-xs text-gray-400 mt-2">
+            💡 資料來源：每日快照（非即時數據）
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ChartEstimatedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-900/30 border border-blue-600/50 rounded text-xs text-blue-300">
+      <span>📊</span>
+      <span>估算值</span>
+    </span>
   );
 }

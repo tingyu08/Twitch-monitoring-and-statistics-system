@@ -50,6 +50,8 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
               if (name === 'sessionCount') return [`${value} 場`, '開台場數'];
               return [value, name];
             }}
+            animationDuration={300}
+            animationEasing="ease-in-out"
           />
           <Legend
             wrapperStyle={{ color: '#9ca3af' }}
@@ -66,6 +68,9 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
             strokeWidth={2}
             dot={{ fill: '#3b82f6', r: 4 }}
             activeDot={{ r: 6 }}
+            animationDuration={1500}
+            animationBegin={0}
+            animationEasing="ease-in-out"
           />
           <Line
             type="monotone"
@@ -74,6 +79,9 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
             strokeWidth={2}
             dot={{ fill: '#10b981', r: 4 }}
             activeDot={{ r: 6 }}
+            animationDuration={1500}
+            animationBegin={200}
+            animationEasing="ease-in-out"
           />
         </LineChart>
       </ResponsiveContainer>

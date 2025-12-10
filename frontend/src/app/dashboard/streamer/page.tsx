@@ -5,8 +5,17 @@ import { useRouter } from 'next/navigation';
 import { getMe, type StreamerInfo } from '@/lib/api/auth';
 import { useAuthSession } from '@/features/auth/AuthContext';
 import { StreamSummaryCards } from '@/features/streamer-dashboard/components/StreamSummaryCards';
-import { TimeSeriesChart, HeatmapChart, ChartLoading, ChartError, ChartEmpty } from '@/features/streamer-dashboard/charts';
-import { useTimeSeriesData, useHeatmapData, type ChartRange, type ChartGranularity } from '@/features/streamer-dashboard/hooks/useChartData';
+import {
+  TimeSeriesChart,
+  HeatmapChart,
+  SubscriptionTrendChart,
+  ChartLoading,
+  ChartError,
+  ChartEmpty,
+  ChartDataLimitedBanner,
+  ChartEstimatedBadge
+} from '@/features/streamer-dashboard/charts';
+import { useTimeSeriesData, useHeatmapData, useSubscriptionTrendData, type ChartRange, type ChartGranularity } from '@/features/streamer-dashboard/hooks/useChartData';
 import { authLogger } from '@/lib/logger';
 
 export default function StreamerDashboard() {
@@ -20,21 +29,32 @@ export default function StreamerDashboard() {
   const [chartRange, setChartRange] = useState<ChartRange>('30d');
   const [granularity, setGranularity] = useState<ChartGranularity>('day');
 
+  // Story 1.4: 訂閱趨勢範圍狀態
+  const [subsChartRange, setSubsChartRange] = useState<ChartRange>('30d');
+
   // Story 1.3: 使用 SWR hooks 獲取圖表資料
   const timeSeries = useTimeSeriesData(chartRange, granularity);
   const heatmap = useHeatmapData(chartRange);
+
+  // Story 1.4: 使用 SWR hooks 獲取訂閱趨勢資料
+  const subscriptionTrend = useSubscriptionTrendData(subsChartRange);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const data = await getMe();
         setUser(data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         authLogger.error("Dashboard fetch error:", err);
-        setError(err.message || '無法獲取資料');
-        
-        const errMsg = err.message?.toLowerCase() || '';
-        if (errMsg.includes('unauthorized') || errMsg.includes('auth') || errMsg.includes('token')) {
+        const errorMessage = err instanceof Error ? err.message : '無法獲取資料';
+        setError(errorMessage);
+
+        // 檢查是否為認證錯誤 (包含 status 401)
+        const errMsg = errorMessage.toLowerCase();
+        if (errMsg.includes('unauthorized') || 
+            errMsg.includes('auth') || 
+            errMsg.includes('token') ||
+            errMsg.includes('status 401')) {
             setTimeout(() => router.push('/'), 2000);
         }
       } finally {
@@ -64,9 +84,9 @@ export default function StreamerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
+    <div className="min-h-screen bg-gray-900 text-white p-8" data-testid="dashboard-container">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 border-b border-gray-700 pb-4 flex justify-between items-center gap-4">
+        <header className="mb-8 border-b border-gray-700 pb-4 flex justify-between items-center gap-4" data-testid="dashboard-header">
           <div className="flex items-center gap-4">
             {/* 使用正確的欄位名稱 avatarUrl */}
             {user?.avatarUrl && (
@@ -74,11 +94,12 @@ export default function StreamerDashboard() {
                 src={user.avatarUrl}
                 alt="Profile"
                 className="w-14 h-14 rounded-full border-2 border-purple-500"
+                data-testid="user-avatar"
               />
             )}
             <div>
-              <h1 className="text-3xl font-bold text-purple-400">實況主儀表板</h1>
-              <p className="text-gray-400 mt-2">
+              <h1 className="text-3xl font-bold text-purple-400" data-testid="dashboard-title">實況主儀表板</h1>
+              <p className="text-gray-400 mt-2" data-testid="user-greeting">
                 歡迎回來，{user?.displayName || '實況主'}
               </p>
             </div>
@@ -87,21 +108,22 @@ export default function StreamerDashboard() {
             type="button"
             onClick={logout}
             className="px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-sm text-white transition-colors"
+            data-testid="logout-button"
           >
             登出
           </button>
         </header>
 
         {/* Story 1.2: 開台統計總覽 */}
-        <div className="mb-8">
+        <div className="mb-8" data-testid="summary-section">
           <StreamSummaryCards />
         </div>
 
         {/* Story 1.3: 時間與頻率圖表 */}
-        <div className="mb-8">
+        <div className="mb-8" data-testid="timeseries-section">
           <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg border border-gray-700">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-              <h2 className="text-lg sm:text-xl font-semibold text-purple-300">開台時間分析</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-purple-300" data-testid="timeseries-title">開台時間分析</h2>
               <div className="flex flex-wrap gap-2">
                 {/* 時間範圍選擇 */}
                 <select
@@ -110,6 +132,7 @@ export default function StreamerDashboard() {
                   value={chartRange}
                   onChange={(e) => setChartRange(e.target.value as '7d' | '30d' | '90d')}
                   className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+                  data-testid="chart-range-select"
                 >
                   <option value="7d">最近 7 天</option>
                   <option value="30d">最近 30 天</option>
@@ -122,6 +145,7 @@ export default function StreamerDashboard() {
                   value={granularity}
                   onChange={(e) => setGranularity(e.target.value as 'day' | 'week')}
                   className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+                  data-testid="chart-granularity-select"
                 >
                   <option value="day">依日</option>
                   <option value="week">依週</option>
@@ -141,15 +165,17 @@ export default function StreamerDashboard() {
                 hint="試試切換其他時間範圍"
               />
             ) : (
-              <TimeSeriesChart data={timeSeries.data} granularity={granularity} />
+              <div data-testid="timeseries-chart">
+                <TimeSeriesChart data={timeSeries.data} granularity={granularity} />
+              </div>
             )}
           </div>
         </div>
 
         {/* Story 1.3: 熱力圖 */}
-        <div className="mb-8">
+        <div className="mb-8" data-testid="heatmap-section">
           <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 className="text-lg sm:text-xl font-semibold text-purple-300 mb-6">開台時段分布</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-purple-300 mb-6" data-testid="heatmap-title">開台時段分布</h2>
             {heatmap.isLoading ? (
               <ChartLoading message="載入熱力圖資料中..." />
             ) : heatmap.error ? (
@@ -162,7 +188,57 @@ export default function StreamerDashboard() {
                 hint="試試切換其他時間範圍"
               />
             ) : (
-              <HeatmapChart data={heatmap.data} />
+              <div data-testid="heatmap-chart">
+                <HeatmapChart data={heatmap.data} maxValue={heatmap.maxValue} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Story 1.4: 訂閱趨勢 */}
+        <div className="mb-8">
+          <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-lg border border-gray-700">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-semibold text-purple-300">
+                  訂閱數趨勢
+                </h2>
+                {subscriptionTrend.isEstimated && <ChartEstimatedBadge />}
+              </div>
+              <select
+                id="subs-chart-range"
+                name="subs-chart-range"
+                value={subsChartRange}
+                onChange={(e) => setSubsChartRange(e.target.value as ChartRange)}
+                className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white"
+              >
+                <option value="7d">最近 7 天</option>
+                <option value="30d">最近 30 天</option>
+                <option value="90d">最近 90 天</option>
+              </select>
+            </div>
+
+            {/* Show banner if insufficient data */}
+            {subscriptionTrend.currentDataDays < subscriptionTrend.minDataDays && subscriptionTrend.currentDataDays > 0 && (
+              <ChartDataLimitedBanner
+                currentDays={subscriptionTrend.currentDataDays}
+                minDays={subscriptionTrend.minDataDays}
+              />
+            )}
+
+            {subscriptionTrend.isLoading ? (
+              <ChartLoading message="載入訂閱趨勢資料中..." />
+            ) : subscriptionTrend.error ? (
+              <ChartError error={subscriptionTrend.error} onRetry={subscriptionTrend.refresh} />
+            ) : subscriptionTrend.data.length === 0 ? (
+              <ChartEmpty
+                emoji="📈"
+                title="尚無訂閱資料"
+                description="系統尚未開始收集訂閱數據，請稍後再試"
+                hint="訂閱數據需要每日同步，請確保已授權相關權限"
+              />
+            ) : (
+              <SubscriptionTrendChart data={subscriptionTrend.data} />
             )}
           </div>
         </div>

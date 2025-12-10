@@ -5,22 +5,26 @@ import type { HeatmapCell } from '@/lib/api/streamer';
 
 interface HeatmapChartProps {
   data: HeatmapCell[];
+  maxValue?: number;
 }
 
 const DAYS = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function HeatmapChart({ data }: HeatmapChartProps) {
+export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
   const dataMap = new Map<string, number>();
   data.forEach(cell => {
     const key = `${cell.dayOfWeek}-${cell.hour}`;
     dataMap.set(key, cell.value);
   });
 
+  // 使用 API 提供的 maxValue 進行動態顏色計算
+  const effectiveMax = maxValue > 0 ? maxValue : 4; // 如果 maxValue 為 0，使用預設值 4
+
   const getColor = (hours: number) => {
     if (hours === 0) return '#1f2937';
-    // 假設最大開台時數為 4 小時，正規化到 0-1
-    const intensity = Math.min(hours / 4, 1);
+    // 使用實際的最大值進行正規化
+    const intensity = Math.min(hours / effectiveMax, 1);
     const blue = Math.round(59 + (255 - 59) * intensity);
     const green = Math.round(130 + (59 - 130) * (1 - intensity));
     return `rgb(59, ${green}, ${blue})`;
@@ -37,16 +41,16 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
               <span>0</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: getColor(1) }}></div>
-              <span>1</span>
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: getColor(effectiveMax * 0.25) }}></div>
+              <span>{(effectiveMax * 0.25).toFixed(1)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: getColor(2) }}></div>
-              <span>2</span>
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: getColor(effectiveMax * 0.5) }}></div>
+              <span>{(effectiveMax * 0.5).toFixed(1)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: getColor(4) }}></div>
-              <span>4+</span>
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: getColor(effectiveMax) }}></div>
+              <span>{effectiveMax.toFixed(1)}+</span>
             </div>
           </div>
         </div>
@@ -74,8 +78,11 @@ export function HeatmapChart({ data }: HeatmapChartProps) {
                 return (
                   <div
                     key={`${dayOfWeek}-${hour}`}
-                    className="h-8 rounded hover:ring-2 hover:ring-blue-400 cursor-pointer transition-all"
-                    style={{ backgroundColor: color }}
+                    className="h-8 rounded hover:ring-2 hover:ring-blue-400 cursor-pointer transition-all duration-300 ease-in-out hover:scale-105"
+                    style={{ 
+                      backgroundColor: color,
+                      animation: `fadeIn 0.5s ease-in-out ${(dayIndex * 24 + hour) * 10}ms both`
+                    }}
                     title={`${DAYS[dayIndex]} ${hour}:00 - ${hours.toFixed(1)} 小時`}
                   />
                 );

@@ -65,6 +65,78 @@ export class TwitchOAuthClient {
        throw new Error('Failed to get user info from Twitch');
     }
   }
+
+  /**
+   * 獲取實況主的訂閱者清單並計算總數與分層統計
+   * @param broadcasterId - Twitch broadcaster ID
+   * @param accessToken - User access token with channel:read:subscriptions scope
+   * @returns 總訂閱數與各層級訂閱數統計
+   */
+  public async getBroadcasterSubscriptions(
+    broadcasterId: string,
+    accessToken: string
+  ): Promise<{ total: number; byTier: { tier1: number; tier2: number; tier3: number } }> {
+    try {
+      const subscriptionsUrl = 'https://api.twitch.tv/helix/subscriptions';
+      let total = 0;
+      const byTier = { tier1: 0, tier2: 0, tier3: 0 };
+      let cursor: string | undefined = undefined;
+
+      // 使用分頁獲取所有訂閱者
+      do {
+        const params: any = {
+          broadcaster_id: broadcasterId,
+          first: 100, // 每頁最多 100 筆
+        };
+
+        if (cursor) {
+          params.after = cursor;
+        }
+
+        const response = await axios.get(subscriptionsUrl, {
+          headers: {
+            'Client-Id': this.clientId,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          params,
+        });
+
+        const subscriptions = response.data.data;
+        total += subscriptions.length;
+
+        // 按層級分類
+        subscriptions.forEach((sub: any) => {
+          switch (sub.tier) {
+            case '1000':
+              byTier.tier1++;
+              break;
+            case '2000':
+              byTier.tier2++;
+              break;
+            case '3000':
+              byTier.tier3++;
+              break;
+          }
+        });
+
+        // 檢查是否有下一頁
+        cursor = response.data.pagination?.cursor;
+      } while (cursor);
+
+      return { total, byTier };
+    } catch (error: any) {
+      // 處理特定錯誤情況
+      if (error.response?.status === 401) {
+        throw new Error('Unauthorized: Token may be expired or invalid');
+      } else if (error.response?.status === 403) {
+        throw new Error('Forbidden: Broadcaster ID does not match token user or missing scope');
+      } else if (error.response?.status === 429) {
+        throw new Error('Rate limit exceeded: Please try again later');
+      }
+      console.error('Twitch Subscriptions Error:', error);
+      throw new Error('Failed to get broadcaster subscriptions from Twitch');
+    }
+  }
 }
 
 // 建立單例實例供函數匯出使用

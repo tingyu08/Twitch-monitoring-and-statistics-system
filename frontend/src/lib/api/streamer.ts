@@ -86,3 +86,49 @@ export async function getStreamerHeatmap(
 ): Promise<HeatmapResponse> {
   return httpClient<HeatmapResponse>(`/api/streamer/me/heatmap?range=${range}`);
 }
+
+/**
+ * 訂閱數資料點
+ */
+export interface SubscriptionDataPoint {
+  date: string; // ISO date string (YYYY-MM-DD)
+  subsTotal: number | null; // 當日訂閱總數
+  subsDelta: number | null; // 相較前一日的淨變化
+}
+
+/**
+ * 訂閱趨勢回應
+ */
+export interface SubscriptionTrendResponse {
+  range: '7d' | '30d' | '90d';
+  data: SubscriptionDataPoint[];
+  hasExactData: boolean; // 是否為精確資料（總是 false，因為是每日快照）
+  isEstimated: boolean; // 是否為估算值（總是 true）
+  estimateSource: string; // 估算來源（例如 'daily_snapshot'）
+  minDataDays: number; // 建議最少資料天數（例如 7）
+  currentDataDays: number; // 目前可用資料天數
+}
+
+/**
+ * 取得實況主訂閱趨勢資料
+ * @param range - 時間範圍 ('7d' | '30d' | '90d')
+ * @returns 訂閱趨勢資料
+ */
+export async function getStreamerSubscriptionTrend(
+  range: '7d' | '30d' | '90d' = '30d'
+): Promise<SubscriptionTrendResponse> {
+  return httpClient<SubscriptionTrendResponse>(
+    `/api/streamer/me/subscription-trend?range=${range}`
+  );
+}
+
+/**
+ * 手動同步訂閱數據
+ * @returns 同步成功訊息
+ */
+export async function syncSubscriptions(): Promise<{ message: string }> {
+  return httpClient<{ message: string }>(
+    `/api/streamer/me/sync-subscriptions`,
+    { method: 'POST' }
+  );
+}

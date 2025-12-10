@@ -4,6 +4,7 @@ import { handleTwitchCallback, Streamer } from './auth.service';
 import { TwitchOAuthClient } from './twitch-oauth.client';
 import { signToken, JWTPayload } from './jwt.utils';
 import { env } from '../../config/env';
+import { authLogger } from '../../utils/logger';
 
 // 擴展 Express Request 類型以支援 user 屬性
 interface AuthenticatedRequest extends Request {
@@ -34,7 +35,7 @@ export class AuthController {
       // 4. 導向
       res.redirect(authUrl);
     } catch (error) {
-      console.error('Login Redirect Error:', error);
+      authLogger.error('Login Redirect Error:', error);
       res.status(500).json({ message: 'Internal Server Error' });
     }
   };
@@ -50,14 +51,14 @@ export class AuthController {
 
       // 0. 處理 Twitch 回傳的錯誤 (例如使用者拒絕)
       if (error) {
-        console.warn(`Twitch Auth Error: ${error} - ${error_description}`);
+        authLogger.warn(`Twitch Auth Error: ${error} - ${error_description}`);
         return res.redirect(`${env.frontendUrl}/auth/error?reason=${error}`);
       }
 
       // 1. 驗證 State (CSRF 防護)
       const storedState = req.cookies['twitch_auth_state'];
       if (!state || !storedState || state !== storedState) {
-        console.error('CSRF State Mismatch');
+        authLogger.error('CSRF State Mismatch');
         return res.status(403).json({ message: 'Invalid state parameter (CSRF detected)' });
       }
 
@@ -83,7 +84,7 @@ export class AuthController {
       res.redirect(`${env.frontendUrl}/dashboard/streamer`);
 
     } catch (error) {
-      console.error('Twitch Callback Error:', error);
+      authLogger.error('Twitch Callback Error:', error);
       res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
     }
   };

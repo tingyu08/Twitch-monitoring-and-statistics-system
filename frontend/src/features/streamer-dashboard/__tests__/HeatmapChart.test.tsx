@@ -44,7 +44,8 @@ describe('HeatmapChart', () => {
     expect(screen.getAllByText('0').length).toBeGreaterThan(0);
     expect(screen.getAllByText('1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('2').length).toBeGreaterThan(0);
-    expect(screen.getByText('4+')).toBeInTheDocument();
+    // After dynamic scale optimization, legend shows "4.0+" instead of "4+"
+    expect(screen.getByText('4.0+')).toBeInTheDocument();
   });
 
   it('should render 7 rows (days) x 24 columns (hours) of cells', () => {
