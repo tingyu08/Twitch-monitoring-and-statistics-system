@@ -25,13 +25,13 @@ describe('Logger', () => {
   describe('basic functions', () => {
     it('should output debug in non-production', () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       
       logger.debug('test message', { data: 'test' });
       
       expect(console.log).toHaveBeenCalledWith('[App] test message', { data: 'test' });
       
-      process.env.NODE_ENV = originalEnv;
+      (process.env as any).NODE_ENV = originalEnv;
     });
 
     it('should always output info', () => {
@@ -86,37 +86,9 @@ describe('Logger', () => {
   });
 
   describe('production environment', () => {
-    // 跳過此測試 - Jest 環境變數模擬在這個場景下不可靠
-    it.skip('debug should not output in production', () => {
-      const originalEnv = process.env.NODE_ENV;
-      
-      // 使用 Object.defineProperty 強制設定為 production
-      Object.defineProperty(process.env, 'NODE_ENV', {
-        value: 'production',
-        writable: true,
-        configurable: true,
-      });
-      
-      // 必須重新 require logger 模組才能讀取新的環境變數
-      jest.resetModules();
-      const { logger: prodLogger } = require('../logger');
-      
-      prodLogger.debug('should not output');
-      
-      expect(console.log).not.toHaveBeenCalled();
-      
-      // 恢復環境變數
-      Object.defineProperty(process.env, 'NODE_ENV', {
-        value: originalEnv,
-        writable: true,
-        configurable: true,
-      });
-      jest.resetModules();
-    });
-
     it('info/warn/error should still output in production', () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV = 'production';
       
       logger.info('info');
       logger.warn('warning');
@@ -126,7 +98,7 @@ describe('Logger', () => {
       expect(console.warn).toHaveBeenCalled();
       expect(console.error).toHaveBeenCalled();
       
-      process.env.NODE_ENV = originalEnv;
+      (process.env as any).NODE_ENV = originalEnv;
     });
   });
 

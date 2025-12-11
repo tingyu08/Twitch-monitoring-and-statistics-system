@@ -22,13 +22,15 @@ describe('useChartData Hooks', () => {
 
   describe('useTimeSeriesData', () => {
     const mockData = [
-      { date: '2025-12-01', value: 100, label: 'Day 1' },
-      { date: '2025-12-02', value: 150, label: 'Day 2' },
+      { date: '2025-12-01', totalHours: 4.5, sessionCount: 2 },
+      { date: '2025-12-02', totalHours: 3.2, sessionCount: 1 },
     ];
 
     it('should fetch time series data', async () => {
       mockedStreamerApi.getStreamerTimeSeries.mockResolvedValue({
         data: mockData,
+        range: '7d',
+        granularity: 'day',
       });
 
       const { result } = renderHook(
@@ -64,6 +66,8 @@ describe('useChartData Hooks', () => {
     it('should provide refresh function', async () => {
       mockedStreamerApi.getStreamerTimeSeries.mockResolvedValue({
         data: mockData,
+        range: '7d',
+        granularity: 'day',
       });
 
       const { result } = renderHook(() => useTimeSeriesData('7d', 'day'), { wrapper });
@@ -76,10 +80,10 @@ describe('useChartData Hooks', () => {
   });
 
   describe('useHeatmapData', () => {
-    const mockData = [{ day: 0, hour: 10, value: 50 }, { day: 1, hour: 14, value: 80 }];
+    const mockData = [{ dayOfWeek: 0, hour: 10, value: 50 }, { dayOfWeek: 1, hour: 14, value: 80 }];
 
     it('should fetch heatmap data', async () => {
-      mockedStreamerApi.getStreamerHeatmap.mockResolvedValue({ data: mockData });
+      mockedStreamerApi.getStreamerHeatmap.mockResolvedValue({ data: mockData, range: '7d', maxValue: 80, minValue: 50 });
 
       const { result } = renderHook(() => useHeatmapData('7d'), { wrapper });
 

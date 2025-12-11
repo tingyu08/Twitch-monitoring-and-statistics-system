@@ -1,4 +1,4 @@
-﻿import { render, screen, waitFor } from '@testing-library/react';
+﻿import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StreamSummaryCards } from '../components/StreamSummaryCards';
 import * as streamerApi from '@/lib/api/streamer';
@@ -15,13 +15,32 @@ describe('StreamSummaryCards', () => {
     isEstimated: false,
   };
 
+  // 用於控制 pending promise 的 resolver
+  let pendingResolvers: Array<(value: any) => void> = [];
+
   beforeEach(() => {
     jest.clearAllMocks();
+    pendingResolvers = [];
   });
 
-  it('應該在載入時顯示 skeleton 狀態', () => {
+  afterEach(async () => {
+    // 解決所有 pending promises 以避免 act() 警告
+    pendingResolvers.forEach((resolve) => resolve(mockSummary));
+    pendingResolvers = [];
+    
+    // 確保所有非同步狀態更新完成
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    
+    cleanup();
+  });
+
+  it('應該在載入時顯示 skeleton 狀態', async () => {
     (streamerApi.getStreamerSummary as jest.Mock).mockImplementation(
-      () => new Promise(() => {}) // 永遠 pending
+      () => new Promise((resolve) => {
+        pendingResolvers.push(resolve);
+      })
     );
 
     render(<StreamSummaryCards />);
@@ -71,8 +90,14 @@ describe('StreamSummaryCards', () => {
 
     render(<StreamSummaryCards />);
 
+    // Wait for error state to be set and loading to complete
     await waitFor(() => {
       expect(screen.getByText(/載入統計資料失敗/)).toBeInTheDocument();
+    });
+
+    // Ensure all state updates have settled
+    await waitFor(() => {
+      expect(screen.queryByText('總開台時數')).not.toBeInTheDocument();
     });
   });
 
@@ -110,12 +135,17 @@ describe('StreamSummaryCards', () => {
     });
   });
 
-  it('應該預設顯示 30 天範圍', () => {
+  it('應該預設顯示 30 天範圍', async () => {
     (streamerApi.getStreamerSummary as jest.Mock).mockResolvedValue(mockSummary);
 
     render(<StreamSummaryCards />);
 
     expect(streamerApi.getStreamerSummary).toHaveBeenCalledWith('30d');
+    
+    // 等待狀態更新完成
+    await waitFor(() => {
+      expect(screen.getByText('10.5')).toBeInTheDocument();
+    });
   });
 
   it('應該正確處理載入狀態轉換', async () => {
@@ -124,6 +154,7 @@ describe('StreamSummaryCards', () => {
       () =>
         new Promise((resolve) => {
           resolvePromise = resolve;
+          pendingResolvers.push(resolve);
         })
     );
 
@@ -133,7 +164,9 @@ describe('StreamSummaryCards', () => {
     expect(document.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
 
     // 解決 Promise
-    resolvePromise!(mockSummary);
+    await act(async () => {
+      resolvePromise!(mockSummary);
+    });
 
     // 等待載入完成
     await waitFor(() => {

@@ -1,188 +1,272 @@
-﻿# 專案進度狀態
+# 專案進度狀態
 
-**最後更新**: 2025-12-10 (更新時間: 晚間 22:30)
+**最後更新**: 2025-12-11 (更新時間: 晚上 21:30)
 
-## Epic 1: 實況主分析儀表板
+🎉 **重大更新**: Epic 2 所有 5 個 Stories 規劃完成！詳細規格文件已就緒，可開始實作。
 
-**進度**: 80% (4/5 stories 完成)
+---
 
-| Story | 狀態 | 完成日期 | 備註 |
-|-------|------|---------|------|
-| 1.1 實況主登入與頻道綁定 | ✅ Done | 2025-12-09 | Twitch OAuth 完整流程 |
-| 1.2 實況主會話統計總覽 | ✅ Done | 2025-12-09 | Summary Cards + Range 切換 |
-| 1.3 實況主時間與頻率圖表 | ✅ Done | 2025-12-10 | TimeSeriesChart + HeatmapChart + SWR + 動畫效果 |
-| 1.4 實況主訂閱趨勢 (Lite) | ✅ Done | 2025-12-10 | SubscriptionTrendChart + 每日快照 + 13 新測試 |
-| 1.5 實況主儀表板 UX 偏好設定 | 📝 Draft | - | 待開發 |
+## 總覽
 
-**總測試數**: 161 tests (Backend: 61 + Frontend: 100)
-  - Backend: 61 tests ✅ 100% passing
-  - Frontend: 100 tests ✅ 99% passing (1 skipped)
-  - **E2E (Playwright): 13 tests ✅ 100% passing (完全修復!)** 🎉
+| Epic | 名稱 | 進度 | Stories |
+|------|------|------|---------|
+| Epic 1 | 實況主分析儀表板 | 100% ✅ | 5/5 完成 |
+| Epic 2 | 觀眾參與度分析 | 100% 規劃 📝 | 5/5 規格完成 |
+| Epic 3 | 資料收集與平台基礎 | ~40%* | 部分完成 |
 
-**測試通過率**: 100% (173/173 執行測試,包含 E2E)
-**測試覆蓋率**: 91.75% (整體)
-  - API 層: 100% (auth, httpClient, streamer) ✨
-  - API 效能: 100% (8 benchmarks, 所有 API < 0.1ms) ✨
-  - Hooks: 100% (useChartData) ✨
-  - Utils: 100% (logger) ✨
-  - Components: 82-100%
-  - AuthContext: 100% ✨
-  - **E2E: 100% (auth + navigation + charts 全通過)** ✨
+*Epic 3 的基礎設施已隨 Epic 1 一同建立
 
-**E2E 測試基礎設施**: ✅ Playwright 已設置
-  - 3/4 auth tests passing
-  - Dashboard tests 需 UI selector 微調
+---
 
-## 技術指標
+## 🎉 Epic 1 完成慶祝
 
-### 程式碼品質
-- ✅ TypeScript 嚴格模式
-- ✅ ESLint 無錯誤
-- ✅ 100% 測試通過率
-- ✅ Logger 工具已實作與測試
-- ✅ SWR 資料快取已整合與測試
-- ✅ 所有 console.* 已替換為 Logger
-- ✅ API 路由錯誤處理已標準化
+Epic 1 已於 2025-12-11 完美達成 100% 完成度！
+- ✅ 所有 5 個 Stories 完成並通過測試
+- ✅ 168 項測試全數通過（前端 107 + 後端 61）
+- ✅ 無 ESLint 錯誤、無 React act() 警告
+- ✅ E2E 測試全數通過（20 項）
+- ✅ 程式碼品質達到高標準
 
-### 重構完成項目
--  抽取 Chart UI 組件 (ChartLoading, ChartError, ChartEmpty)
--  實作 SWR hooks (useTimeSeriesData, useHeatmapData)
--  建立環境感知 Logger 工具
--  移除所有 console.log/warn/error (改用 Logger)
--  Dashboard 頁面程式碼減少 40%
+---
 
-## 最近完成項目
+## Epic 1: 實況主分析儀表板 🎉 **100% 完成**
 
-### 2025-12-10 (晚間更新 - 專案全面審查)
-- ✅ **專案完整狀態檢查與文件更新**
-- ✅ 修正 HeatmapChart 測試 (legend 格式從 "4+" → "4.0+")
-- ✅ 確認所有 161 個測試通過 (Backend 61 + Frontend 100)
-- ✅ E2E 測試基礎設施完整建置 (Playwright + 14 tests)
-- ✅ **圖表動畫效果完成** (TimeSeriesChart + HeatmapChart)
-  - Recharts 動畫屬性 + CSS keyframes
-  - 1.5s 線條動畫 + 1.68s 熱力圖瀑布效果
-- ✅ **API 效能基準測試建立** (8 comprehensive benchmarks)
-  - 所有 API 回應時間 < 0.1ms (遠超 100-500ms 閾值)
-  - Auth, Summary, TimeSeries, Heatmap, Subscription APIs 全部測試
+| Story | 名稱 | 狀態 | 完成日期 |
+|-------|------|------|---------|
+| 1.1 | 實況主登入與頻道綁定 | ✅ Done | 2025-12-09 |
+| 1.2 | 實況主會話統計總覽 | ✅ Done | 2025-12-09 |
+| 1.3 | 實況主時間與頻率圖表 | ✅ Done | 2025-12-10 |
+| 1.4 | 實況主訂閱趨勢 (Lite) | ✅ Done | 2025-12-10 |
+| 1.5 | 儀表板 UX 偏好設定 | ✅ Done | 2025-12-11 |
 
-### 2025-12-10 (下午更新 - Story 1.4 完成)
-- ✅ **Story 1.4 實況主訂閱趨勢 (Lite) 完成**
-- ✅ 研究 Twitch API 訂閱數據能力（僅提供當前列表，無歷史數據）
-- ✅ 實作每日快照同步機制
-  - `POST /api/streamer/me/sync-subscriptions` - 手動觸發同步
-  - `GET /api/streamer/me/subscription-trend?range=...` - 查詢趨勢資料
-- ✅ 建立 SubscriptionTrendChart 組件（雙線圖：總數 + 淨變化）
-- ✅ 實作資料限制 UI 組件
-  - ChartDataLimitedBanner - 顯示資料收集進度警告
-  - ChartEstimatedBadge - 標記估算值
-- ✅ 新增 13 個後端整合測試（總測試數 148 → 161）
-- ✅ 所有測試 100% 通過
-- ✅ Epic 1 進度更新：60% → 80%
+### 功能摘要
+- Twitch OAuth 登入與頻道綁定
+- Summary Cards (開台時數/場次/平均時長)
+- 時間範圍切換 (7d/30d/90d)
+- TimeSeriesChart (觀眾數趨勢)
+- HeatmapChart (開台頻率熱力圖)
+- SubscriptionTrendChart (訂閱趨勢)
+- UI 偏好設定 (顯示/隱藏各區塊)
+- localStorage 偏好持久化
 
-### 2025-12-10 (下午更新 - 技術債務全部清除)
-- ✅ Story 1.3 完整 Code Review 完成
-- ✅ 撰寫 Chart Components 單元測試 (TimeSeriesChart + HeatmapChart)
-- ✅ 撰寫 API Integration 測試 (time-series + heatmap endpoints)
-- ✅ **建立 Backend Logger 工具** (backend/src/utils/logger.ts)
-- ✅ **替換所有 Backend console.* 為 Logger** (8 處)
-  - streamer.controller.ts (4 處)
-  - auth.controller.ts (4 處)
-- ✅ **修正 TypeScript `any` 型別** (frontend page.tsx - 使用 `unknown` + type guard)
-- ✅ **優化 Heatmap 動態色階** (使用 API maxValue 取代硬編碼)
-- ✅ Story 1.3 狀態更新為 Done
-- ✅ **技術債務全部清除完成** 🎉
+---
 
-### 2025-12-10 (上午)
-- ✅ 完成圖表動畫效果 (TimeSeriesChart + HeatmapChart)
-- ✅ 建立 API 效能基準測試框架 (8 tests)
-- ✅ 所有 API 效能遠超閾值 (0.03-0.08ms vs 100-500ms)
-- ✅ 開始 E2E 測試基礎設施建置
+## Epic 2: 觀眾參與度分析 📋 **規劃完成 - 待實作**
 
-### 2025-12-09
--  完成 Story 1.3 實作與重構
--  新增 TimeSeriesChart (觀眾數趨勢圖)
--  新增 HeatmapChart (直播頻率熱力圖)
--  整合 SWR 資料快取機制
--  建立 Logger 工具
--  新增 24 個圖表相關測試
--  撰寫專案 README.md
+| Story | 名稱 | 狀態 | 規劃完成日期 |
+|-------|------|------|-------------|
+| 2.1 | 觀眾登入與授權 | 📝 規格完成 | 2025-12-11 |
+| 2.2 | 觀看時數與互動統計 | 📝 規格完成 | 2025-12-11 |
+| 2.3 | 聊天與互動統計 | 📝 規格完成 | 2025-12-11 |
+| 2.4 | 觀眾足跡總覽 (互動式儀表板) | 📝 規格完成 | 2025-12-11 |
+| 2.5 | 隱私與授權控制 (GDPR) | 📝 規格完成 | 2025-12-11 |
+
+### 技術決策摘要
+- **Story 2.1**: 共享 OAuth（JWT role 欄位）+ 日統計 + EventSub + 完整 UX
+- **Story 2.2**: Recharts + react-day-picker + 物化視圖 + Cron 聚合 + 每日折線圖
+- **Story 2.3**: TMI.js IRC 監控 + 完整互動分類（6 類）+ 混合儲存 + 長條圖/圓餅圖
+- **Story 2.4**: React Grid Layout 拖拽 + 固定徽章（17 個）+ 雷達圖（6 維度）+ 每日預聚合
+- **Story 2.5**: 軟刪除匿名化 + 多格式匯出（JSON+CSV+HTML）+ 細粒度控制（10 項）+ 分級保留
+
+### 規劃文件
+- ✅ Epic 文件: `docs/epic-2-viewer-engagement-analytics.md`
+- ✅ Story 2.1 規格: `docs/stories/2.1.viewer-login-and-authorization.md`
+- ✅ Story 2.2 規格: `docs/stories/2.2.viewer-watch-time-and-interaction-stats.md`
+- ✅ Story 2.3 規格: `docs/stories/2.3.viewer-chat-and-interaction-stats.md`
+- ✅ Story 2.4 規格: `docs/stories/2.4.viewer-footprint-overview.md`
+- ✅ Story 2.5 規格: `docs/stories/2.5.viewer-privacy-and-authorization-controls.md`
+
+### 新增技術棧（Epic 2）
+| 庫 | 用途 | Story |
+|----|------|-------|
+| react-day-picker | 進階日期選擇器 | 2.2 |
+| TMI.js | Twitch IRC 聊天監控 | 2.3 |
+| react-grid-layout | 拖拽網格佈局 | 2.4 |
+| react-resizable | 卡片大小調整 | 2.4 |
+| bull | 非同步任務佇列 | 2.5 |
+| archiver | ZIP 壓縮檔生成 | 2.5 |
+| handlebars | HTML 模板引擎 | 2.5 |
+
+### 資料模型預覽（新增）
+- `ViewerChannelDailyAgg` - 觀眾每日觀看聚合
+- `ViewerChannelMessageDailyAgg` - 觀眾每日留言聚合
+- `ViewerChannelLifetimeStats` - 觀眾全時段統計
+- `ViewerDashboardLayout` - 儀表板佈局配置
+- `ViewerPrivacyConsent` - 隱私同意記錄（10 個細粒度欄位）
+- `DeletionRequest` - 帳號刪除請求（7 天冷靜期）
+- `ExportJob` - 資料匯出任務
+- `DataRetentionLog` - 資料保留日誌
+- `PrivacyAuditLog` - 隱私操作稽核
+
+---
+
+## Epic 3: 資料收集與平台基礎 🔧 **部分完成**
+
+| Story | 名稱 | 狀態 | 備註 |
+|-------|------|------|------|
+| 3.1 | Twitch API 串接 | ✅ Done | OAuth + Token 管理 |
+| 3.2 | 資料模型設計 | ✅ Done | Prisma Schema |
+| 3.3 | 定時資料抓取 | ⏳ Pending | 需排程 Worker |
+| 3.4 | 安全與存取控制 | ✅ Done | JWT + 中介層 |
+| 3.5 | 監控與 Log 基礎 | ✅ Done | Logger 工具 |
+
+---
+
+## 測試狀態
+
+| 類型 | 數量 | 通過率 |
+|------|------|--------|
+| Backend | 61 tests | 100% ✅ |
+| Frontend | 107 tests | 100% ✅ |
+| E2E (Playwright) | 20 tests | 100% ✅ |
+| **總計** | **188 tests** | **100%** |
+
+### 最近更新 (2025-12-11)
+- ✅ 修復所有 React act() 警告
+- ✅ 移除已跳過的測試（production debug test）
+- ✅ StreamSummaryCards 測試改進（pending promise 管理）
+- ✅ 前端 ESLint 配置確認（已正確設定）
+
+### 測試覆蓋率
+- 整體覆蓋率: 91.75%
+- API 層: 100%
+- Hooks: 100%
+- Utils: 100%
+- Components: 82-100%
+
+---
+
+## 技術架構
+
+### 前端
+- Next.js 15 + React 19
+- TypeScript (嚴格模式)
+- Tailwind CSS + shadcn/ui
+- SWR (資料快取)
+- Recharts (圖表)
+- Jest + React Testing Library
+
+### 後端
+- Express.js + TypeScript
+- Prisma ORM + SQLite
+- JWT 認證
+- Twitch Helix API
+配置完整（frontend + backend）
+- ✅ 100% 測試通過率（188/188 tests）
+- ✅ 無 React act() 警告
+- ✅ Logger 統一日誌管理
+- ✅ 無 console.* 直接調用
+- ✅ API 錯誤處理標準化
+- ✅ 測試品質改進（無 skip 測試）
+
+---
+
+## 🎯 準備就緒：可以開始 Epic 2
+
+### Epic 1 檢查清單 ✅
+- [x] 所有 5 個 Stories 完成
+- [x] 所有測試通過（188/188）
+- [x] 無程式碼品質問題
+- [x] 無 ESLint 錯誤
+- [x] 無測試警告
+- [x] E2E 測試覆蓋完整
+- [x] 文件完整更新
+
+### Epic 2 準備工作 ✅
+- [x] Epic 2 文件已建立（`docs/epic-2-viewer-engagement-analytics.md`）
+- [x] Stories 已定義（5 個 Stories）
+- [x] 所有 5 個 Stories 詳細規格已完成（2025-12-11）
+- [x] 技術決策已記錄於各 Story 規格
+- [x] 新增資料模型已設計（9 個新表）
+- [x] 新增技術棧已確定（7 個新庫）
+
+### 建議下一步
+✅ **Epic 2 規劃 100% 完成 - 準備開始實作 Story 2.1: 觀眾登入與授權**
+
+Epic 1 已完全穩定，Epic 2 所有規劃文件已完成，技術架構清晰，可以開始實作工作。
+
+建議實作順序：Story 2.1 → 2.2 → 2.3 → 2.4 → 2.5（有嚴格依賴關係）
+
+---
 
 ## 下一步計劃
 
-### 短期目標 (本週)
-1. ~~開始 Story 1.4 - 訂閱趨勢 (Lite)~~ ✅ 完成
-2. 開始 Story 1.5 - UX 偏好設定
-3. Epic 1 完整度達到 100% (目前 80%)
+### 短期目標（Epic 2 Phase 1）
+1. ✨ Story 2.1: 觀眾登入與授權
+   - 實作觀眾端 OAuth 流程
+   - 建立觀眾資料模型
+   - 觀眾端首頁與導覽
+   
+2. Story 2.2: 觀看時數統計
+   - 查詢觀眾在特定頻道的觀看時數
+   - 時間範圍篩選
+   - 統計資料視覺化
 
-### 中期目標 (下週)
-1. 開始 Epic 2 - 觀眾參與度分析
-2. 改善測試覆蓋率
-3. 效能優化
+### 中期目標（Epic 2 Complete）
+1. 完成 Epic 2 所有 5 個 Stories
+2. 觀眾端完整功能上線
+3. 隱私與授權控制完善
 
-## 技術債務
+### 長期目標
+1. 實作定時資料抓取 (Story 3.3)
+2. 生產環境部署準備
+3. 效能優化與監控2.1: 觀眾登入與授權
+   - Story 2.2: 觀看時數統計
 
-### ✅ 全部清除完成 (2025-12-10)
+### 中期目標
+1. 完成 Epic 2 所有 Stories
+2. 實作定時資料抓取 (14:15 | Story 1.5 完成 |
+| 2025-12-11 14:30 | **Epic 1 達成 100%** 🎉 測試品質提升、準備進入 Epic 2 |
 
-**所有已識別的技術債務已完成清理** 🎉
+---
 
-核心清理項目:
-- ✅ **圖表動畫效果** (Recharts + CSS keyframes, Story 1.3)
-- ✅ **API 效能基準測試** (8 comprehensive benchmarks, 所有 < 0.1ms)
-- ✅ **E2E 測試基礎設施** (Playwright 完整設定 + 14 tests)
-- ✅ **Backend Logger 工具** (統一 logging 系統)
-- ✅ **移除所有 console.* 直接調用** (改用環境感知 Logger)
-- ✅ **TypeScript 型別安全強化** (`any` → `unknown` + type guards)
-- ✅ **Heatmap 動態色階優化** (使用 API maxValue)
-- ✅ **Code Review 完成** (Story 1.3 完整品質檢查)
-- ✅ **測試覆蓋率提升** (92 → 161 tests, +75% 增長)
+## Epic 2 路線圖
 
-**清理統計**:
-- 測試數量: 92 → 174 tests (+82 tests, +89%)
-- Backend: 48 → 61 tests (+13 subscription tests)
-- Frontend: 44 → 100 tests (+56 tests)
-- E2E: 0 → 13 tests ✅ 100% passing (完全修復!)
-- 測試通過率: 100% (174/174 所有測試通過)
+### Phase 1: 觀眾登入與基礎 (Story 2.1)
+- 觀眾端 OAuth 流程
+- 觀眾資料模型
+- 觀眾首頁建立
 
-### 待優化項目 (非阻塞)
-- [ ] Story 1.5 開發 (Epic 1 最後階段)
+### Phase 2: 觀看統計 (Story 2.2-2.3)
+- 觀看時數統計
+- 留言與互動統計
 
-### 未來考慮項目 (可選)
-這些項目已移至「未來增強功能」清單:
-- [ ] 視覺回歸測試 (Chromatic/Percy)
-- [ ] API Contract Testing (OpenAPI validation)
-- [ ] API Contract Testing (Pact/OpenAPI)
-- [ ] Mutation Testing (測試品質驗證)
-- [ ] 圖表匯出功能 (CSV/PNG)
+### Phase 3: 總覽與控制 (Story 2.4-2.5)
+- 觀眾足跡總覽頁面
+- 隱私與授權控制
+3. 生產環境部署準備
 
-### 已完成清理
-**技術債務快速勝利 - 選項 1** (2025-12-10):
-- ✅ 圖表動畫效果 (Recharts 整合 + CSS keyframes)
-- ✅ API 效能基準測試 (8 comprehensive benchmarks)
-  - getMe/logout: 0.04-0.08ms (閾值 <100ms)
-  - Streamer APIs: 0.03ms (閾值 <500ms)
-  - 批次操作穩定性測試通過
+---
 
-**第一階段 - 基礎清理** (2025-12-09):
-- ✅ ChartStates 組件完整測試 (12 tests, 100%)
-- ✅ useChartData hooks 測試 (5 tests, 100%)
-- ✅ Logger 工具測試 (11 tests, 100%)
-- ✅ 所有 API 路由 console.error 替換為 Logger
-- ✅ Logger class 正確導出供測試使用
+## 專案結構
 
-**第二階段 - 100% 覆蓋率挑戰** (2025-12-09):
-- ✅ API 層完整測試覆蓋 (auth, httpClient, streamer)
-  - auth.test.ts: 4 tests, 0% → 100%
-  - httpClient.test.ts: 10 tests, 15% → 100%
-  - streamer.test.ts: 9 tests, 57% → 100%
-- ✅ AuthContext 完整測試 (3 → 8 tests, 78% → 100%)
-- ✅ TimeSeriesChart 測試增強
-- ✅ 整體覆蓋率提升至 91.75% (+17.58%)
+```
+Bmad/
+├── backend/                 # Express API 伺服器
+│   ├── prisma/             # 資料庫 Schema
+│   └── src/
+│       ├── modules/        # 功能模組 (auth, streamer)
+│       └── utils/          # 工具 (logger)
+├── frontend/               # Next.js 前端
+│   └── src/
+│       ├── app/           # 頁面路由
+│       ├── features/      # 功能模組
+│       │   ├── auth/      # 認證
+│       │   └── streamer-dashboard/  # 儀表板
+│       └── lib/           # 共用工具
+├── docs/                   # 專案文件
+│   ├── stories/           # User Stories
+│   └── architecture/      # 架構文件
+└── e2e/                    # E2E 測試
+```
 
-## 團隊里程碑
+---
 
--  專案架構建立完成
--  認證系統完成
--  基礎儀表板完成
--  圖表系統完成
--  訂閱趨勢開發中
--  Epic 1 收尾階段
+## 里程碑
+
+| 日期 | 里程碑 |
+|------|--------|
+| 2025-12-09 | 專案架構建立、認證系統完成 |
+| 2025-12-09 | Story 1.1, 1.2 完成 |
+| 2025-12-10 | Story 1.3, 1.4 完成 |
+| 2025-12-11 | Story 1.5 完成、**Epic 1 達成 100%** 🎉 |

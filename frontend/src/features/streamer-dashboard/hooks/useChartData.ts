@@ -86,10 +86,10 @@ export function useSubscriptionTrendData(range: ChartRange) {
 
   return {
     data: data?.data || [],
-    hasExactData: data?.hasExactData || false,
-    isEstimated: data?.isEstimated || true,
-    currentDataDays: data?.currentDataDays || 0,
-    minDataDays: data?.minDataDays || 7,
+    hasExactData: data?.hasExactData ?? false,
+    isEstimated: data?.isEstimated ?? false,
+    currentDataDays: data?.currentDataDays ?? 0,
+    minDataDays: data?.minDataDays ?? 7,
     error: error?.message || null,
     isLoading,
     refresh: mutate,
