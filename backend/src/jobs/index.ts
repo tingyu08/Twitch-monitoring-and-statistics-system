@@ -13,6 +13,10 @@ export function startAllJobs(): void {
   // 訊息聚合任務
   startMessageAggregationJob();
 
+  // 全時段統計聚合任務
+  const { updateLifetimeStatsJob } = require("./update-lifetime-stats.job");
+  updateLifetimeStatsJob();
+
   // 未來可以在這裡添加更多任務
   // startTokenRefreshJob();
   // startStreamerStatusCheckJob();

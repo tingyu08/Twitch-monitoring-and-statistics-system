@@ -36,6 +36,8 @@ model Viewer {
 
   messages     ViewerChannelMessage[]
   messageAggs  ViewerChannelMessageDailyAgg[]
+  lifetimeStats ViewerChannelLifetimeStats[]
+  dashboardLayouts ViewerDashboardLayout[]
 
   @@map("viewers")
 }
@@ -54,6 +56,8 @@ model Channel {
   viewerStats     ViewerChannelDailyStat[]
   viewerMessages  ViewerChannelMessage[]
   viewerMessageAggs ViewerChannelMessageDailyAgg[]
+  viewerLifetimeStats ViewerChannelLifetimeStats[]
+  viewerDashboardLayouts ViewerDashboardLayout[]
 
   @@map("channels")
 }
@@ -211,5 +215,69 @@ model ChannelListenerLock {
   @@index([instanceId])
   @@index([lastHeartbeat])
   @@map("channel_listener_locks")
+}
+
+// ========== Story 2.4 Models ==========
+
+model ViewerChannelLifetimeStats {
+  id                    String   @id @default(uuid())
+  viewerId              String
+  channelId             String
+
+  // 觀看統計
+  totalWatchTimeMinutes Int      @default(0)
+  totalSessions         Int      @default(0)
+  avgSessionMinutes     Int      @default(0)
+  firstWatchedAt        DateTime?
+  lastWatchedAt         DateTime?
+
+  // 留言統計
+  totalMessages         Int      @default(0)
+  totalChatMessages     Int      @default(0)
+  totalSubscriptions    Int      @default(0)
+  totalCheers           Int      @default(0)
+  totalBits             Int      @default(0)
+
+  // 忠誠度
+  trackingStartedAt     DateTime @default(now())
+  trackingDays          Int      @default(0)
+  longestStreakDays     Int      @default(0)
+  currentStreakDays     Int      @default(0)
+
+  // 活躍度
+  activeDaysLast30      Int      @default(0)
+  activeDaysLast90      Int      @default(0)
+  mostActiveMonth       String?  // "YYYY-MM"
+  mostActiveMonthCount  Int      @default(0)
+
+  // 排名 (百分位 0.0 - 100.0)
+  watchTimePercentile   Float?
+  messagePercentile     Float?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  viewer                Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel               Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, channelId])
+  @@index([viewerId])
+  @@index([channelId])
+  @@map("viewer_channel_lifetime_stats")
+}
+
+model ViewerDashboardLayout {
+  id        String   @id @default(uuid())
+  viewerId  String
+  channelId String
+  layout    String   // JSON string of grid layout
+  updatedAt DateTime @updatedAt
+
+  viewer    Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, channelId])
+  @@index([viewerId])
+  @@map("viewer_dashboard_layouts")
 }
 

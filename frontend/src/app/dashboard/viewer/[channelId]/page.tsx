@@ -178,33 +178,45 @@ export default function ViewerChannelStatsPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Channel Header */}
-        <header className="mb-10 flex items-center gap-6">
-          <div className="relative">
-            <Image
-              src={channel.avatarUrl}
-              alt={channel.displayName}
-              width={80}
-              height={80}
-              className="w-20 h-20 rounded-full border-4 border-gray-800 ring-2 ring-purple-500 object-cover shadow-xl"
-              unoptimized
-            />
-            {channel.isLive && (
-              <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider border border-gray-900">
-                LIVE
-              </span>
-            )}
+        <header className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
+            <div className="relative">
+              <Image
+                src={channel.avatarUrl}
+                alt={channel.displayName}
+                width={80}
+                height={80}
+                className="w-20 h-20 rounded-full border-4 border-gray-800 ring-2 ring-purple-500 object-cover shadow-xl"
+                unoptimized
+              />
+              {channel.isLive && (
+                <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider border border-gray-900">
+                  LIVE
+                </span>
+              )}
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                {channel.displayName}
+                <span className="text-lg font-normal text-gray-500 font-mono">
+                  @{channel.name}
+                </span>
+              </h1>
+              <p className="text-gray-400 text-sm">
+                查看你在該頻道的觀看記錄與互動分析
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-1 flex items-center gap-3">
-              {channel.displayName}
-              <span className="text-lg font-normal text-gray-500 font-mono">
-                @{channel.name}
-              </span>
-            </h1>
-            <p className="text-gray-400 text-sm">
-              查看你在該頻道的觀看記錄與互動分析
-            </p>
-          </div>
+
+          <button
+            onClick={() =>
+              router.push(`/dashboard/viewer/footprint/${channelId}`)
+            }
+            className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl shadow-lg shadow-purple-900/40 font-bold transition-all transform hover:-translate-y-1 hover:shadow-purple-900/60 flex items-center gap-2 border border-white/10"
+          >
+            <span className="text-xl">🏆</span>
+            查看成就足跡
+          </button>
         </header>
 
         {/* 時間範圍選擇器 */}

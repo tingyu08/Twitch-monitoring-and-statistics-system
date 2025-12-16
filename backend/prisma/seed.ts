@@ -645,6 +645,29 @@ async function main() {
   console.log(`  - 頻道: ${channels.length + mockChannels.length}`);
   console.log(`  - 觀眾: ${viewers.count}`);
 
+  // ========== 計算 Lifetime Stats ==========
+  console.log("📊 計算 Lifetime Stats...");
+
+  // 動態導入 Service 避免頂層 await 或環境問題
+  const {
+    lifetimeStatsAggregator,
+  } = require("../src/services/lifetime-stats-aggregator.service");
+
+  // 為主要測試觀眾 (Viewer) 和 Mock 頻道聚合數據
+  if (yourViewer) {
+    const mockChannelIds = ["ch_1", "ch_2", "ch_3"];
+    for (const ch of mockChannelIds) {
+      process.stdout.write(`  處理 ${ch}... `);
+      await lifetimeStatsAggregator.aggregateStats(yourViewer.id, ch);
+      console.log("✅");
+    }
+
+    console.log("🏆 更新排名...");
+    for (const ch of mockChannelIds) {
+      await lifetimeStatsAggregator.updatePercentileRankings(ch);
+    }
+  }
+
   console.log("\n✨ 測試資料建立完成！");
 }
 

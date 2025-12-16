@@ -8,6 +8,8 @@ import { ViewerPrivacyController } from "./viewer-privacy.controller";
 const controller = new ViewerController();
 const messageStatsController = new ViewerMessageStatsController();
 const privacyController = new ViewerPrivacyController();
+import { viewerLifetimeStatsController } from "./viewer-lifetime-stats.controller";
+import { dashboardLayoutController } from "./dashboard-layout.controller";
 
 const viewerApiRoutes = Router();
 viewerApiRoutes.post(
@@ -64,6 +66,32 @@ viewerApiRoutes.delete(
   "/privacy/messages/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
   privacyController.clearChannelMessages.bind(privacyController)
+);
+
+// Lifetime Stats Routes
+viewerApiRoutes.get(
+  "/:viewerId/channels/:channelId/lifetime-stats",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  viewerLifetimeStatsController.getLifetimeStats
+);
+
+// Dashboard Layout Routes
+viewerApiRoutes.post(
+  "/dashboard-layout",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  dashboardLayoutController.saveLayout
+);
+
+viewerApiRoutes.get(
+  "/dashboard-layout/:channelId",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  dashboardLayoutController.getLayout
+);
+
+viewerApiRoutes.delete(
+  "/dashboard-layout/:channelId",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  dashboardLayoutController.resetLayout
 );
 
 export { viewerApiRoutes };
