@@ -1,4 +1,4 @@
-import { handleTwitchCallback } from "../auth.service";
+import { handleStreamerTwitchCallback } from "../auth.service";
 import * as twitchOAuthClient from "../twitch-oauth.client";
 
 // Mock Twitch OAuth client
@@ -6,13 +6,15 @@ jest.mock("../twitch-oauth.client");
 
 // Mock environment variables
 process.env.APP_JWT_SECRET = "test-secret-key-for-service-testing";
+process.env.VIEWER_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString("base64");
+process.env.TWITCH_REDIRECT_URI = "http://localhost:4000/auth/twitch/callback";
 
 describe("Auth Service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe("handleTwitchCallback", () => {
+  describe("handleStreamerTwitchCallback", () => {
     const mockCode = "test_oauth_code_123";
 
     const mockTokenResponse = {
@@ -38,7 +40,7 @@ describe("Auth Service", () => {
         mockTwitchUser
       );
 
-      const result = await handleTwitchCallback(mockCode);
+      const result = await handleStreamerTwitchCallback(mockCode);
 
       expect(result.streamer).toBeDefined();
       expect(result.streamer.twitchUserId).toBe("twitch_user_123");
@@ -46,11 +48,12 @@ describe("Auth Service", () => {
       expect(result.streamer.channelUrl).toBe(
         "https://www.twitch.tv/teststreamer"
       );
-      expect(result.jwtToken).toBeDefined();
-      expect(typeof result.jwtToken).toBe("string");
+      expect(result.accessToken).toBeDefined();
+      expect(result.refreshToken).toBeDefined();
 
       expect(twitchOAuthClient.exchangeCodeForToken).toHaveBeenCalledWith(
-        mockCode
+        mockCode,
+        expect.any(Object)
       );
       expect(twitchOAuthClient.fetchTwitchUser).toHaveBeenCalledWith(
         "mock_access_token"
@@ -66,7 +69,7 @@ describe("Auth Service", () => {
       );
 
       // First call - create streamer
-      const result1 = await handleTwitchCallback(mockCode);
+      const result1 = await handleStreamerTwitchCallback(mockCode);
       const streamerId1 = result1.streamer.id;
 
       // Second call - update streamer
@@ -79,14 +82,14 @@ describe("Auth Service", () => {
         updatedUser
       );
 
-      const result2 = await handleTwitchCallback(mockCode);
+      const result2 = await handleStreamerTwitchCallback(mockCode);
 
       expect(result2.streamer.id).toBe(streamerId1); // Same streamer ID
       expect(result2.streamer.displayName).toBe("Updated Streamer Name");
       expect(result2.streamer.avatarUrl).toBe(
         "https://example.com/new-avatar.jpg"
       );
-      expect(result2.jwtToken).toBeDefined();
+      expect(result2.accessToken).toBeDefined();
     });
 
     it("should generate correct channel URL from Twitch login", async () => {
@@ -98,7 +101,7 @@ describe("Auth Service", () => {
         login: "differentstreamer",
       });
 
-      const result = await handleTwitchCallback(mockCode);
+      const result = await handleStreamerTwitchCallback(mockCode);
 
       expect(result.streamer.channelUrl).toBe(
         "https://www.twitch.tv/differentstreamer"
@@ -110,7 +113,7 @@ describe("Auth Service", () => {
         new Error("Token exchange failed")
       );
 
-      await expect(handleTwitchCallback(mockCode)).rejects.toThrow(
+      await expect(handleStreamerTwitchCallback(mockCode)).rejects.toThrow(
         "Token exchange failed"
       );
     });
@@ -123,7 +126,7 @@ describe("Auth Service", () => {
         new Error("Failed to fetch user")
       );
 
-      await expect(handleTwitchCallback(mockCode)).rejects.toThrow(
+      await expect(handleStreamerTwitchCallback(mockCode)).rejects.toThrow(
         "Failed to fetch user"
       );
     });

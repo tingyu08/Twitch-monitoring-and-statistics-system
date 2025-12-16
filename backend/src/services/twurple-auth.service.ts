@@ -1,0 +1,137 @@
+/**
+ * Twurple Auth Service
+ *
+ * 使用 @twurple/auth 統一管理 Twitch OAuth Token：
+ * - App Access Token (用於公開 API)
+ * - User Access Token (用於用戶相關 API)
+ */
+
+import { AppTokenAuthProvider, RefreshingAuthProvider } from "@twurple/auth";
+import { logger } from "../utils/logger";
+
+// ========== 類型定義 ==========
+
+interface TokenData {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresIn: number | null;
+  obtainmentTimestamp: number;
+}
+
+// ========== 服務實作 ==========
+
+class TwurpleAuthService {
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private appAuthProvider: AppTokenAuthProvider | null = null;
+  private userAuthProviders: Map<string, RefreshingAuthProvider> = new Map();
+
+  constructor() {
+    this.clientId = process.env.TWITCH_CLIENT_ID || "";
+    this.clientSecret = process.env.TWITCH_CLIENT_SECRET || "";
+  }
+
+  /**
+   * 檢查是否有有效的憑證
+   */
+  hasCredentials(): boolean {
+    return !!(this.clientId && this.clientSecret);
+  }
+
+  /**
+   * 獲取 App Auth Provider (用於公開 API)
+   */
+  getAppAuthProvider(): AppTokenAuthProvider {
+    if (!this.appAuthProvider) {
+      if (!this.hasCredentials()) {
+        throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET");
+      }
+      this.appAuthProvider = new AppTokenAuthProvider(
+        this.clientId,
+        this.clientSecret
+      );
+      logger.info("Twurple Auth", "App Auth Provider initialized");
+    }
+    return this.appAuthProvider;
+  }
+
+  /**
+   * 為特定用戶建立 Refreshing Auth Provider
+   * @param userId Twitch 用戶 ID
+   * @param tokenData 用戶的 Token 資料
+   * @param onRefresh 當 Token 刷新時的回調（用於保存新 Token）
+   */
+  createUserAuthProvider(
+    userId: string,
+    tokenData: TokenData,
+    onRefresh?: (userId: string, newTokenData: TokenData) => Promise<void>
+  ): RefreshingAuthProvider {
+    const authProvider = new RefreshingAuthProvider({
+      clientId: this.clientId,
+      clientSecret: this.clientSecret,
+    });
+
+    // 設定初始 Token
+    authProvider.addUser(
+      userId,
+      {
+        accessToken: tokenData.accessToken,
+        refreshToken: tokenData.refreshToken,
+        expiresIn: tokenData.expiresIn,
+        obtainmentTimestamp: tokenData.obtainmentTimestamp,
+      },
+      ["chat"]
+    );
+
+    // 設定 Token 刷新回調
+    if (onRefresh) {
+      authProvider.onRefresh(async (userId, newTokenData) => {
+        logger.info("Twurple Auth", `Token refreshed for user: ${userId}`);
+        await onRefresh(userId, {
+          accessToken: newTokenData.accessToken,
+          refreshToken: newTokenData.refreshToken,
+          expiresIn: newTokenData.expiresIn ?? null,
+          obtainmentTimestamp: newTokenData.obtainmentTimestamp,
+        });
+      });
+    }
+
+    this.userAuthProviders.set(userId, authProvider);
+    return authProvider;
+  }
+
+  /**
+   * 獲取已存在的用戶 Auth Provider
+   */
+  getUserAuthProvider(userId: string): RefreshingAuthProvider | null {
+    return this.userAuthProviders.get(userId) || null;
+  }
+
+  /**
+   * 移除用戶的 Auth Provider
+   */
+  removeUserAuthProvider(userId: string): void {
+    this.userAuthProviders.delete(userId);
+  }
+
+  /**
+   * 獲取 Client ID
+   */
+  getClientId(): string {
+    return this.clientId;
+  }
+
+  /**
+   * 獲取服務狀態
+   */
+  getStatus() {
+    return {
+      hasCredentials: this.hasCredentials(),
+      appProviderInitialized: !!this.appAuthProvider,
+      userProviderCount: this.userAuthProviders.size,
+    };
+  }
+}
+
+// 單例模式
+export const twurpleAuthService = new TwurpleAuthService();

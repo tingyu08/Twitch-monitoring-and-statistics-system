@@ -29,8 +29,13 @@ model Viewer {
   updatedAt    DateTime                 @updatedAt
   isAnonymized Boolean                  @default(false)
   anonymizedAt DateTime?
+  consentedAt  DateTime?
+  consentVersion Int?
   twitchTokens TwitchToken[]
   dailyStats   ViewerChannelDailyStat[]
+
+  messages     ViewerChannelMessage[]
+  messageAggs  ViewerChannelMessageDailyAgg[]
 
   @@map("viewers")
 }
@@ -47,6 +52,8 @@ model Channel {
   streamer        Streamer                 @relation(fields: [streamerId], references: [id], onDelete: Cascade)
   streamSessions  StreamSession[]
   viewerStats     ViewerChannelDailyStat[]
+  viewerMessages  ViewerChannelMessage[]
+  viewerMessageAggs ViewerChannelMessageDailyAgg[]
 
   @@map("channels")
 }
@@ -107,6 +114,48 @@ model ViewerChannelDailyStat {
   @@map("viewer_channel_daily_stats")
 }
 
+model ViewerChannelMessage {
+  id          String   @id @default(uuid())
+  viewerId    String
+  channelId   String
+  messageText String
+  messageType String // "CHAT", "SUBSCRIPTION", "CHEER", etc.
+  timestamp   DateTime
+  badges      String? // JSON string
+  emotesUsed  String? // JSON string
+  bitsAmount  Int?
+  createdAt   DateTime @default(now())
+
+  viewer  Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId, channelId, timestamp])
+  @@map("viewer_channel_messages")
+}
+
+model ViewerChannelMessageDailyAgg {
+  id            String   @id @default(uuid())
+  viewerId      String
+  channelId     String
+  date          DateTime
+  totalMessages Int      @default(0)
+  chatMessages  Int      @default(0)
+  subscriptions Int      @default(0)
+  cheers        Int      @default(0)
+  giftSubs      Int      @default(0)
+  raids         Int      @default(0)
+  totalBits     Int?     @default(0)
+  updatedAt     DateTime @updatedAt
+
+  viewer  Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, channelId, date])
+  @@index([viewerId])
+  @@index([channelId])
+  @@map("viewer_channel_message_daily_aggs")
+}
+
 model TwitchToken {
   id           String    @id @default(uuid())
   ownerType    String
@@ -134,3 +183,33 @@ model SystemSetting {
 
   @@map("system_settings")
 }
+
+// ========== 分佈式協調表 ==========
+
+model ListenerInstance {
+  id            String   @id @default(uuid())
+  instanceId    String   @unique
+  channelCount  Int      @default(0)
+  lastHeartbeat DateTime @default(now())
+  startedAt     DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([lastHeartbeat])
+  @@map("listener_instances")
+}
+
+model ChannelListenerLock {
+  id            String   @id @default(uuid())
+  channelId     String   @unique
+  instanceId    String
+  lastHeartbeat DateTime @default(now())
+  acquiredAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([instanceId])
+  @@index([lastHeartbeat])
+  @@map("channel_listener_locks")
+}
+

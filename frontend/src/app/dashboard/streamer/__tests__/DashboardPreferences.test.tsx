@@ -12,7 +12,9 @@ jest.mock('@/lib/api/auth', () => ({
     twitchUserId: '123',
     streamerId: 'abc',
     channelUrl: 'https://twitch.tv/test',
+    role: 'streamer',
   }),
+  isStreamer: (user: { role?: string }) => user?.role === 'streamer',
 }));
 
 jest.mock('@/features/auth/AuthContext', () => ({

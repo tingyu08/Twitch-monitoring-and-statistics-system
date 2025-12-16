@@ -1,9 +1,8 @@
 import request from "supertest";
 import express from "express";
 import cookieParser from "cookie-parser";
-import { signToken } from "../jwt.utils";
+import { signAccessToken } from "../jwt.utils";
 import { requireAuth, getMeHandler } from "../auth.routes";
-import type { AuthRequest } from "../auth.middleware";
 
 // Mock environment variables
 process.env.APP_JWT_SECRET = "test-secret-key-for-integration-testing";
@@ -16,7 +15,12 @@ describe("Auth Integration Tests", () => {
     app = express();
     app.use(express.json());
     app.use(cookieParser());
-    app.get("/api/auth/me", requireAuth, getMeHandler);
+    // Wrap requireAuth to ensure it's treated as middleware (3 params), not error handler (4 params)
+    app.get(
+      "/api/auth/me",
+      (req, res, next) => requireAuth(req, res, next),
+      getMeHandler
+    );
   });
 
   describe("GET /api/auth/me", () => {
@@ -25,7 +29,7 @@ describe("Auth Integration Tests", () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toMatchObject({
-        error: "Unauthorized: No token provided",
+        error: "Unauthorized",
       });
     });
 
@@ -36,7 +40,7 @@ describe("Auth Integration Tests", () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toMatchObject({
-        error: "Unauthorized: Invalid token",
+        error: "Invalid token",
       });
     });
 
@@ -47,8 +51,9 @@ describe("Auth Integration Tests", () => {
         displayName: "Test Streamer",
         avatarUrl: "https://example.com/avatar.jpg",
         channelUrl: "https://www.twitch.tv/teststreamer",
+        role: "streamer" as const,
       };
-      const token = signToken(payload);
+      const token = signAccessToken(payload);
 
       const response = await request(app)
         .get("/api/auth/me")
@@ -65,4 +70,3 @@ describe("Auth Integration Tests", () => {
     });
   });
 });
-

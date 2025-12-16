@@ -1,0 +1,264 @@
+/**
+ * Unified Twitch Service
+ *
+ * 統一封裝所有 Twitch 相關服務（使用 Twurple）：
+ * - @twurple/chat (聊天監聽)
+ * - @twurple/api (Helix API)
+ * - DecAPI (快速查詢)
+ *
+ * 提供高階 API 給業務層使用
+ */
+
+import { twurpleChatService } from "./twitch-chat.service";
+import { twurpleHelixService } from "./twitch-helix.service";
+import { decApiService } from "./decapi.service";
+import { twurpleAuthService } from "./twurple-auth.service";
+import { logger } from "../utils/logger";
+
+// ========== 類型定義 ==========
+
+export interface ChannelInfo {
+  id: string;
+  login: string;
+  displayName: string;
+  avatarUrl: string;
+  isLive: boolean;
+  currentGame?: string;
+  streamTitle?: string;
+  viewerCount?: number;
+  followerCount: number;
+}
+
+export interface UserFollowInfo {
+  isFollowing: boolean;
+  followedAt?: string;
+  followDuration?: string;
+}
+
+export interface ViewerChannelRelation {
+  channel: ChannelInfo;
+  followInfo: UserFollowInfo;
+  viewerAccountAge?: string;
+}
+
+// ========== 服務實作 ==========
+
+export class UnifiedTwitchService {
+  // ========== 初始化 ==========
+
+  /**
+   * 初始化所有 Twitch 服務
+   */
+  async initialize(): Promise<void> {
+    logger.info(
+      "Twitch Service",
+      "Initializing unified Twitch service (Twurple)..."
+    );
+
+    // 初始化聊天服務
+    await twurpleChatService.initialize();
+
+    // 測試 Helix API
+    const helixHealthy = await twurpleHelixService.healthCheck();
+    if (helixHealthy) {
+      logger.info("Twitch Service", "Helix API connection OK (Twurple)");
+    } else {
+      logger.warn(
+        "Twitch Service",
+        "Helix API connection failed - some features may be unavailable"
+      );
+    }
+
+    logger.info("Twitch Service", "Initialization complete (Twurple)");
+  }
+
+  // ========== 頻道資訊 ==========
+
+  /**
+   * 獲取頻道完整資訊（整合多個 API）
+   */
+  async getChannelInfo(channelLogin: string): Promise<ChannelInfo | null> {
+    try {
+      // 使用 Twurple Helix API 獲取準確資訊
+      const user = await twurpleHelixService.getUserByLogin(channelLogin);
+      if (!user) {
+        logger.warn(
+          "Twitch Service",
+          `User not found via Helix: ${channelLogin}`
+        );
+        return null;
+      }
+
+      // 並行獲取直播狀態和追蹤者數量
+      const [stream, followerCount] = await Promise.all([
+        twurpleHelixService.getStream(user.id),
+        twurpleHelixService.getFollowerCount(user.id).catch(() => 0),
+      ]);
+
+      return {
+        id: user.id,
+        login: user.login,
+        displayName: user.displayName,
+        avatarUrl: user.profileImageUrl,
+        isLive: stream?.type === "live",
+        currentGame: stream?.gameName,
+        streamTitle: stream?.title,
+        viewerCount: stream?.viewerCount,
+        followerCount,
+      };
+    } catch (error) {
+      logger.error(
+        "Twitch Service",
+        `Failed to get channel info: ${channelLogin}`,
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 批量獲取頻道資訊
+   */
+  async getChannelsInfo(channelLogins: string[]): Promise<ChannelInfo[]> {
+    const results: ChannelInfo[] = [];
+
+    // 分批處理，每批最多 20 個
+    const batchSize = 20;
+    for (let i = 0; i < channelLogins.length; i += batchSize) {
+      const batch = channelLogins.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map((login) => this.getChannelInfo(login))
+      );
+      results.push(...batchResults.filter((r): r is ChannelInfo => r !== null));
+    }
+
+    return results;
+  }
+
+  // ========== 追蹤資訊 ==========
+
+  /**
+   * 獲取用戶對頻道的追蹤資訊
+   */
+  async getUserFollowInfo(
+    channelLogin: string,
+    userLogin: string
+  ): Promise<UserFollowInfo> {
+    try {
+      const followage = await decApiService.getFollowage(
+        channelLogin,
+        userLogin
+      );
+      return {
+        isFollowing: followage.isFollowing,
+        followedAt: followage.followedAt,
+        followDuration: followage.duration,
+      };
+    } catch (error) {
+      logger.error(
+        "Twitch Service",
+        `Failed to get follow info: ${userLogin} -> ${channelLogin}`,
+        error
+      );
+      return { isFollowing: false };
+    }
+  }
+
+  /**
+   * 獲取觀眾與頻道的完整關係資訊
+   */
+  async getViewerChannelRelation(
+    channelLogin: string,
+    viewerLogin: string
+  ): Promise<ViewerChannelRelation | null> {
+    try {
+      const [channel, followInfo, accountAge] = await Promise.all([
+        this.getChannelInfo(channelLogin),
+        this.getUserFollowInfo(channelLogin, viewerLogin),
+        decApiService.getAccountAge(viewerLogin),
+      ]);
+
+      if (!channel) return null;
+
+      return {
+        channel,
+        followInfo,
+        viewerAccountAge: accountAge?.age,
+      };
+    } catch (error) {
+      logger.error(
+        "Twitch Service",
+        `Failed to get viewer-channel relation`,
+        error
+      );
+      return null;
+    }
+  }
+
+  // ========== 聊天監聽管理 ==========
+
+  /**
+   * 開始監聽頻道聊天
+   */
+  async startListeningToChannel(channelLogin: string): Promise<boolean> {
+    try {
+      await twurpleChatService.joinChannel(channelLogin);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 停止監聽頻道聊天
+   */
+  async stopListeningToChannel(channelLogin: string): Promise<boolean> {
+    try {
+      await twurpleChatService.leaveChannel(channelLogin);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ========== 直播狀態 ==========
+
+  /**
+   * 檢查多個頻道的直播狀態
+   */
+  async checkLiveStatus(channelIds: string[]): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+
+    try {
+      const streams = await twurpleHelixService.getStreamsByUserIds(channelIds);
+      const liveIds = new Set(streams.map((s) => s.userId));
+
+      channelIds.forEach((id) => {
+        result.set(id, liveIds.has(id));
+      });
+    } catch (error) {
+      logger.error("Twitch Service", "Failed to check live status", error);
+      // 全部標記為未知（false）
+      channelIds.forEach((id) => result.set(id, false));
+    }
+
+    return result;
+  }
+
+  // ========== 服務狀態 ==========
+
+  /**
+   * 獲取所有服務的狀態
+   */
+  getServicesStatus() {
+    return {
+      chat: twurpleChatService.getStatus(),
+      helix: twurpleHelixService.getStatus(),
+      auth: twurpleAuthService.getStatus(),
+      decapi: decApiService.getCacheStats(),
+    };
+  }
+}
+
+// 單例模式
+export const unifiedTwitchService = new UnifiedTwitchService();

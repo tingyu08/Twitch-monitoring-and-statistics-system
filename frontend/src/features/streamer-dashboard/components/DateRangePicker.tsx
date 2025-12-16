@@ -13,11 +13,17 @@ const rangeOptions: { value: DateRange; label: string }[] = [
 
 export function DateRangePicker({ selectedRange, onRangeChange }: DateRangePickerProps) {
   return (
-    <div className="flex gap-2">
+    <div 
+      className="flex gap-2" 
+      role="group" 
+      aria-label="選擇時間範圍"
+    >
       {rangeOptions.map((option) => (
         <button
           key={option.value}
           onClick={() => onRangeChange(option.value)}
+          aria-pressed={selectedRange === option.value}
+          aria-label={`${option.label}${selectedRange === option.value ? '，目前已選擇' : ''}`}
           className={`
             px-4 py-2 rounded-lg font-medium transition-all
             ${

@@ -1,21 +1,23 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { getMe, logout as apiLogout, type StreamerInfo } from "@/lib/api/auth";
+import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from "react";
+import { getMe, logout as apiLogout, type UserInfo, isStreamer as checkIsStreamer, isViewer as checkIsViewer } from "@/lib/api/auth";
 import { authLogger } from "@/lib/logger";
 
 interface AuthContextType {
-  user: StreamerInfo | null;
+  user: UserInfo | null;
   loading: boolean;
   error: string | null;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  isStreamer: boolean;
+  isViewer: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<StreamerInfo | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, []);
 
+  const isStreamer = useMemo(() => user !== null && checkIsStreamer(user), [user]);
+  const isViewer = useMemo(() => user !== null && checkIsViewer(user), [user]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -57,6 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error,
         logout,
         refresh: fetchUser,
+        isStreamer,
+        isViewer,
       }}
     >
       {children}

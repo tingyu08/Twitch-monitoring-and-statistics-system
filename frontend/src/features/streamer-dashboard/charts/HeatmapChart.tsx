@@ -30,12 +30,33 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
     return `rgb(59, ${green}, ${blue})`;
   };
 
+  // 為螢幕閱讀器生成資料摘要
+  const generateDataSummary = () => {
+    if (!data || data.length === 0) return '無資料';
+    const totalHours = data.reduce((sum, d) => sum + d.value, 0);
+    // 找出最活躍的時段
+    let maxHourData = { day: 0, hour: 0, value: 0 };
+    data.forEach(cell => {
+      if (cell.value > maxHourData.value) {
+        maxHourData = { day: cell.dayOfWeek, hour: cell.hour, value: cell.value };
+      }
+    });
+    const peakInfo = maxHourData.value > 0
+      ? `，最活躍時段為${DAYS[maxHourData.day === 0 ? 6 : maxHourData.day - 1]} ${maxHourData.hour}:00 (${maxHourData.value.toFixed(1)} 小時)`
+      : '';
+    return `總計 ${totalHours.toFixed(1)} 開台小時${peakInfo}`;
+  };
+
   return (
-    <div className="w-full overflow-x-auto">
+    <figure
+      className="w-full overflow-x-auto"
+      role="img"
+      aria-label={`開台時段熱力圖：${generateDataSummary()}`}
+    >
       <div className="min-w-[600px] md:min-w-0">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-gray-300">開台時段熱力圖 (小時數)</h3>
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <h3 className="text-sm font-medium text-gray-300" id="heatmap-title">開台時段熱力圖 (小時數)</h3>
+          <div className="flex items-center gap-2 text-xs text-gray-400" aria-hidden="true">
             <div className="flex items-center gap-1">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: '#1f2937' }}></div>
               <span>0</span>
@@ -84,6 +105,8 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
                       animation: `fadeIn 0.5s ease-in-out ${(dayIndex * 24 + hour) * 10}ms both`
                     }}
                     title={`${DAYS[dayIndex]} ${hour}:00 - ${hours.toFixed(1)} 小時`}
+                    role="gridcell"
+                    aria-label={`${DAYS[dayIndex]} ${hour}:00，開台 ${hours.toFixed(1)} 小時`}
                   />
                 );
               })}
@@ -91,6 +114,9 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
           ))}
         </div>
       </div>
-    </div>
+      <figcaption className="sr-only">
+        顯示每週每個時段的開台時間分布熱力圖，顏色越深代表該時段開台時間越長
+      </figcaption>
+    </figure>
   );
 }

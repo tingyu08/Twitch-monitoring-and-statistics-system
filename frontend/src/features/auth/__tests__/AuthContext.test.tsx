@@ -7,6 +7,8 @@ import { AuthProvider, useAuthSession } from '../AuthContext';
 jest.mock('@/lib/api/auth', () => ({
   getMe: jest.fn(),
   logout: jest.fn(),
+  isStreamer: (user: { role?: string }) => user?.role === 'streamer',
+  isViewer: (user: { role?: string }) => user?.role === 'viewer',
 }));
 
 const mockGetMe = require('@/lib/api/auth').getMe as jest.Mock;
@@ -52,6 +54,7 @@ describe('AuthContext / AuthProvider', () => {
       displayName: 'Test User',
       avatarUrl: 'https://example.com/avatar.png',
       channelUrl: 'https://twitch.tv/test',
+      role: 'streamer',
     });
 
     render(
@@ -74,6 +77,7 @@ describe('AuthContext / AuthProvider', () => {
       displayName: 'Test User',
       avatarUrl: 'https://example.com/avatar.png',
       channelUrl: 'https://twitch.tv/test',
+      role: 'streamer',
     });
 
     render(
@@ -115,6 +119,7 @@ describe('AuthContext / AuthProvider', () => {
       displayName: 'Test User',
       avatarUrl: 'https://example.com/avatar.png',
       channelUrl: 'https://twitch.tv/test',
+      role: 'streamer',
     });
     mockLogout.mockResolvedValueOnce({ message: 'Logged out' });
 
@@ -142,13 +147,14 @@ describe('AuthContext / AuthProvider', () => {
   it('logout 失敗時會記錄錯誤但不影響狀態', async () => {
     const user = userEvent.setup();
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    
+
     mockGetMe.mockResolvedValueOnce({
       streamerId: 's1',
       twitchUserId: 't1',
       displayName: 'Test User',
       avatarUrl: 'https://example.com/avatar.png',
       channelUrl: 'https://twitch.tv/test',
+      role: 'streamer',
     });
     mockLogout.mockRejectedValueOnce(new Error('Logout failed'));
 
@@ -181,6 +187,7 @@ describe('AuthContext / AuthProvider', () => {
         displayName: 'Initial User',
         avatarUrl: 'https://example.com/avatar1.png',
         channelUrl: 'https://twitch.tv/initial',
+        role: 'streamer',
       })
       .mockResolvedValueOnce({
         streamerId: 's2',
@@ -188,6 +195,7 @@ describe('AuthContext / AuthProvider', () => {
         displayName: 'Updated User',
         avatarUrl: 'https://example.com/avatar2.png',
         channelUrl: 'https://twitch.tv/updated',
+        role: 'streamer',
       });
 
     render(

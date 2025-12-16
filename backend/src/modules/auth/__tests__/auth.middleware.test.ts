@@ -1,6 +1,6 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Response, NextFunction } from "express";
 import { requireAuth, type AuthRequest } from "../auth.middleware";
-import { signToken } from "../jwt.utils";
+import { signAccessToken } from "../jwt.utils";
 
 // Mock environment variables
 process.env.APP_JWT_SECRET = "test-secret-key-for-middleware-testing";
@@ -31,7 +31,7 @@ describe("requireAuth Middleware", () => {
 
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Unauthorized: No token provided",
+        error: "Unauthorized",
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -46,7 +46,7 @@ describe("requireAuth Middleware", () => {
 
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Unauthorized: No token provided",
+        error: "Unauthorized",
       });
     });
   });
@@ -62,18 +62,19 @@ describe("requireAuth Middleware", () => {
 
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Unauthorized: Invalid token",
+        error: "Invalid token",
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
     it("should return 401 for tampered token", () => {
-      const validToken = signToken({
+      const validToken = signAccessToken({
         streamerId: "streamer_123",
         twitchUserId: "twitch_456",
         displayName: "Test",
         avatarUrl: "https://example.com/avatar.jpg",
         channelUrl: "https://www.twitch.tv/test",
+        role: "streamer",
       });
       mockRequest.cookies = { auth_token: validToken.slice(0, -5) + "xxxxx" };
       requireAuth(
@@ -84,7 +85,7 @@ describe("requireAuth Middleware", () => {
 
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Unauthorized: Invalid token",
+        error: "Invalid token",
       });
     });
   });
@@ -97,8 +98,9 @@ describe("requireAuth Middleware", () => {
         displayName: "Test Streamer",
         avatarUrl: "https://example.com/avatar.jpg",
         channelUrl: "https://www.twitch.tv/teststreamer",
+        role: "streamer" as const,
       };
-      const token = signToken(payload);
+      const token = signAccessToken(payload);
       mockRequest.cookies = { auth_token: token };
 
       requireAuth(
@@ -114,4 +116,3 @@ describe("requireAuth Middleware", () => {
     });
   });
 });
-

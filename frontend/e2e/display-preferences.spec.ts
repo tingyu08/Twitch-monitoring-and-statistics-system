@@ -26,12 +26,12 @@ test.describe('Display Preferences (Story 1.5)', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          userId: 'test-user-id',
           streamerId: 'test-streamer-123',
-          username: 'TestStreamer',
+          twitchUserId: 'test-twitch-id',
           displayName: 'Test Streamer',
           avatarUrl: 'https://static-cdn.jtvnw.net/user-default-pictures-uv/placeholder.png',
-          channelId: 'test-channel-id',
+          channelUrl: 'https://twitch.tv/teststreamer',
+          role: 'streamer',
         }),
       });
     });

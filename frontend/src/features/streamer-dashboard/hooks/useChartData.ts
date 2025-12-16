@@ -15,9 +15,9 @@ export type ChartGranularity = 'day' | 'week';
 /**
  * 使用 SWR 獲取時間序列資料
  */
-export function useTimeSeriesData(range: ChartRange, granularity: ChartGranularity) {
+export function useTimeSeriesData(range: ChartRange, granularity: ChartGranularity, enabled = true) {
   const { data, error, isLoading, mutate } = useSWR<TimeSeriesDataPoint[]>(
-    `/api/streamer/time-series/${range}/${granularity}`,
+    enabled ? `/api/streamer/time-series/${range}/${granularity}` : null,
     async () => {
       chartLogger.debug('Fetching time series data', { range, granularity });
       const response = await getStreamerTimeSeries(range, granularity);
@@ -31,7 +31,7 @@ export function useTimeSeriesData(range: ChartRange, granularity: ChartGranulari
   );
 
   return {
-    data: data || [],
+    data: Array.isArray(data) ? data : [],
     error: error?.message || null,
     isLoading,
     refresh: mutate,
@@ -41,9 +41,9 @@ export function useTimeSeriesData(range: ChartRange, granularity: ChartGranulari
 /**
  * 使用 SWR 獲取熱力圖資料
  */
-export function useHeatmapData(range: ChartRange) {
+export function useHeatmapData(range: ChartRange, enabled = true) {
   const { data, error, isLoading, mutate } = useSWR<HeatmapResponse>(
-    `/api/streamer/heatmap/${range}`,
+    enabled ? `/api/streamer/heatmap/${range}` : null,
     async () => {
       chartLogger.debug('Fetching heatmap data', { range });
       const response = await getStreamerHeatmap(range);
@@ -69,9 +69,9 @@ export function useHeatmapData(range: ChartRange) {
 /**
  * 使用 SWR 獲取訂閱趨勢資料
  */
-export function useSubscriptionTrendData(range: ChartRange) {
+export function useSubscriptionTrendData(range: ChartRange, enabled = true) {
   const { data, error, isLoading, mutate } = useSWR<SubscriptionTrendResponse>(
-    `/api/streamer/subscription-trend/${range}`,
+    enabled ? `/api/streamer/subscription-trend/${range}` : null,
     async () => {
       chartLogger.debug('Fetching subscription trend data', { range });
       const response = await getStreamerSubscriptionTrend(range);

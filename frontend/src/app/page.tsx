@@ -12,14 +12,15 @@ function LandingPageContent() {
   const { user, loading } = useAuthSession();
   const authError = searchParams.get("authError");
 
-  // 如果已登入，導向儀表板
+  // 如果已登入，導向儀表板切換頁
   useEffect(() => {
     if (!loading && user) {
-      router.push("/dashboard/streamer");
+      router.push("/dashboard/viewer");
     }
   }, [loading, user, router]);
 
   const handleLogin = () => {
+    // 預設以實況主流程登入；進入儀表板後可切換到觀眾並重新登入授權
     window.location.href = `${API_BASE_URL}/auth/twitch/login`;
   };
 
@@ -36,14 +37,14 @@ function LandingPageContent() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-4">
-      <h1 className="text-3xl font-bold">
-        Twitch 實況監控與統計平台（Streamer Dashboard）
+    <main className="min-h-screen flex flex-col items-center justify-center gap-6 px-4">
+      <h1 className="text-3xl font-bold text-center">
+        Twitch 實況監控與統計平台
       </h1>
-      <p className="text-gray-600">
-        使用你的 Twitch 帳號登入並綁定頻道，開始查看長期營運數據。
+      <p className="text-gray-600 text-center max-w-lg">
+        無論您是實況主或觀眾，都能透過本平台查看詳細的統計數據與互動記錄。
       </p>
-      
+
       {authError && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 max-w-md">
           <p className="font-bold mb-2">登入失敗</p>
@@ -57,13 +58,18 @@ function LandingPageContent() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={handleLogin}
-        className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700"
-      >
-        {authError ? "重新嘗試登入" : "使用 Twitch 登入"}
-      </button>
+      <div className="w-full max-w-md bg-white border border-gray-200 rounded-lg p-6 shadow-sm space-y-4">
+        <p className="text-sm text-gray-600 text-center">
+          單一登入入口，進入儀表板後可切換「實況主 / 觀眾」頁面
+        </p>
+        <button
+          type="button"
+          onClick={handleLogin}
+          className="w-full px-4 py-3 rounded bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition"
+        >
+          前往登入
+        </button>
+      </div>
     </main>
   );
 }
@@ -79,5 +85,3 @@ export default function LandingPage() {
     </Suspense>
   );
 }
-
-

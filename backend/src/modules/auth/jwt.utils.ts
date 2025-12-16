@@ -1,28 +1,51 @@
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env";
 
+export type UserRole = "streamer" | "viewer";
+export type TokenType = "access" | "refresh";
+
 export interface JWTPayload {
-  streamerId: string;
+  streamerId?: string;
+  viewerId?: string;
   twitchUserId: string;
   displayName: string;
-  avatarUrl: string;
-  channelUrl: string;
+  avatarUrl?: string;
+  channelUrl?: string;
+  consentedAt?: string | null;
+  consentVersion?: number | null;
+  role: UserRole;
+  tokenType: TokenType;
 }
 
-const JWT_EXPIRES_IN = "7d"; // 7 天有效期
+const ACCESS_EXPIRES_IN = "1h"; // Story 2.1 要求
+const REFRESH_EXPIRES_IN = "7d";
 
-export function signToken(payload: JWTPayload): string {
-  return jwt.sign(payload, env.jwtSecret, {
-    expiresIn: JWT_EXPIRES_IN,
+export function signAccessToken(payload: Omit<JWTPayload, "tokenType">): string {
+  return jwt.sign({ ...payload, tokenType: "access" as const }, env.jwtSecret, {
+    expiresIn: ACCESS_EXPIRES_IN,
   });
 }
 
-export function verifyToken(token: string): JWTPayload | null {
+export function signRefreshToken(payload: Omit<JWTPayload, "tokenType">): string {
+  return jwt.sign({ ...payload, tokenType: "refresh" as const }, env.jwtSecret, {
+    expiresIn: REFRESH_EXPIRES_IN,
+  });
+}
+
+function verifyToken(token: string, expectedType: TokenType): JWTPayload | null {
   try {
     const decoded = jwt.verify(token, env.jwtSecret) as JWTPayload;
+    if (decoded.tokenType !== expectedType) return null;
     return decoded;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
+export function verifyAccessToken(token: string): JWTPayload | null {
+  return verifyToken(token, "access");
+}
+
+export function verifyRefreshToken(token: string): JWTPayload | null {
+  return verifyToken(token, "refresh");
+}

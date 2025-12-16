@@ -4,7 +4,6 @@ import * as path from 'path';
 
 // 使用單例模式確保只有一個 Prisma Client 實例
 declare global {
-  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 

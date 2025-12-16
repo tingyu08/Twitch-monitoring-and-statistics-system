@@ -1,6 +1,12 @@
 import { exchangeCodeForToken, fetchTwitchUser } from "./twitch-oauth.client";
-import { signToken, type JWTPayload } from "./jwt.utils";
+import {
+  signAccessToken,
+  signRefreshToken,
+  type JWTPayload,
+} from "./jwt.utils";
 import { prisma } from "../../db/prisma";
+import { encryptToken } from "../../utils/crypto.utils";
+import { env } from "../../config/env";
 
 // Streamer 介面（與 Prisma model 對應）
 export interface Streamer {
@@ -19,20 +25,23 @@ export interface Streamer {
  * - 儲存 access token
  * - 回傳 JWT token
  */
-export async function handleTwitchCallback(code: string): Promise<{
+export async function handleStreamerTwitchCallback(code: string): Promise<{
   streamer: Streamer;
-  jwtToken: string;
+  accessToken: string;
+  refreshToken: string;
 }> {
   // 1. 交換 code 為 access token
-  const tokenData = await exchangeCodeForToken(code);
-  
+  const tokenData = await exchangeCodeForToken(code, {
+    redirectUri: env.twitchRedirectUri,
+  });
+
   // 2. 取得 Twitch 使用者資訊
   const user = await fetchTwitchUser(tokenData.access_token);
-  const channelUrl = `https://www.twitch.tv/${user.login}`;
+  const channelLogin = user.login ?? user.display_name ?? `twitch-${user.id}`;
+  const channelUrl = `https://www.twitch.tv/${channelLogin}`;
 
   // 3. 使用 transaction 確保資料一致性
   const result = await prisma.$transaction(async (tx) => {
-    // 3a. 建立或更新 Streamer
     const streamerRecord = await tx.streamer.upsert({
       where: { twitchUserId: user.id },
       update: {
@@ -48,86 +57,200 @@ export async function handleTwitchCallback(code: string): Promise<{
       },
     });
 
-    // 3b. 建立或更新 Channel（1:1 對應 Streamer）
     await tx.channel.upsert({
       where: { twitchChannelId: user.id },
       update: {
-        channelName: user.login,
+        channelName: channelLogin,
         channelUrl: channelUrl,
       },
       create: {
         streamerId: streamerRecord.id,
         twitchChannelId: user.id,
-        channelName: user.login,
+        channelName: channelLogin,
         channelUrl: channelUrl,
       },
     });
 
-    // 3c. 儲存或更新 Twitch Token
+    // 同時 Check/Create Viewer record (實況主也是觀眾)
+    const viewerRecord = await tx.viewer.upsert({
+      where: { twitchUserId: user.id },
+      update: {
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+      },
+      create: {
+        twitchUserId: user.id,
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+        // Streamer 預設視為已同意? 或者保持 null 等待手動同意?
+        // 為了方便，我們可以假設 Streamer 登入即同意 Viewer 條款 (因為是同一人操作)
+        consentedAt: new Date(),
+        consentVersion: 1,
+      },
+    });
+
+    const encryptedAccess = encryptToken(tokenData.access_token);
+    const encryptedRefresh = tokenData.refresh_token
+      ? encryptToken(tokenData.refresh_token)
+      : null;
+
+    const expiresAt = tokenData.expires_in
+      ? new Date(Date.now() + tokenData.expires_in * 1000)
+      : null;
+
     const existingToken = await tx.twitchToken.findFirst({
       where: {
-        ownerType: 'streamer',
+        ownerType: "streamer",
         streamerId: streamerRecord.id,
       },
     });
 
+    const data = {
+      ownerType: "streamer" as const,
+      streamerId: streamerRecord.id,
+      // 同時關聯 Viewer ID
+      viewerId: viewerRecord.id,
+      accessToken: encryptedAccess,
+      refreshToken: encryptedRefresh,
+      expiresAt,
+      // 合併 Scopes: user:read:email (Streamer) + chat:read (Viewer Future)
+      scopes: JSON.stringify(["user:read:email", "chat:read"]),
+    };
+
     if (existingToken) {
-      await tx.twitchToken.update({
-        where: { id: existingToken.id },
-        data: {
-          accessToken: tokenData.access_token,
-          refreshToken: tokenData.refresh_token || null,
-          expiresAt: tokenData.expires_in 
-            ? new Date(Date.now() + tokenData.expires_in * 1000)
-            : null,
-          scopes: JSON.stringify(['user:read:email']),
-        },
-      });
+      await tx.twitchToken.update({ where: { id: existingToken.id }, data });
     } else {
-      await tx.twitchToken.create({
-        data: {
-          ownerType: 'streamer',
-          streamerId: streamerRecord.id,
-          accessToken: tokenData.access_token,
-          refreshToken: tokenData.refresh_token || null,
-          expiresAt: tokenData.expires_in 
-            ? new Date(Date.now() + tokenData.expires_in * 1000)
-            : null,
-          scopes: JSON.stringify(['user:read:email']),
-        },
-      });
+      await tx.twitchToken.create({ data });
     }
 
-    return streamerRecord;
+    // 回傳包含 viewerId 的複合資料
+    return { streamerRecord, viewerRecord };
   });
 
-  // 4. 建立回傳的 Streamer 物件
   const streamer: Streamer = {
-    id: result.id,
-    twitchUserId: result.twitchUserId,
-    displayName: result.displayName,
-    avatarUrl: result.avatarUrl || '',
+    id: result.streamerRecord.id,
+    twitchUserId: result.streamerRecord.twitchUserId,
+    displayName: result.streamerRecord.displayName,
+    avatarUrl: result.streamerRecord.avatarUrl || "",
     channelUrl: channelUrl,
   };
 
-  // 5. 建立 JWT token
-  const jwtPayload: JWTPayload = {
+  const jwtPayload: Omit<JWTPayload, "tokenType"> = {
     streamerId: streamer.id,
+    viewerId: result.viewerRecord.id, // 重要：加入 viewerId
     twitchUserId: streamer.twitchUserId,
     displayName: streamer.displayName,
     avatarUrl: streamer.avatarUrl,
     channelUrl: streamer.channelUrl,
+    role: "streamer", // 保持 role 為 streamer，但在 middleware 允許其存取 viewer 資源
+    consentedAt: result.viewerRecord.consentedAt?.toISOString() ?? null,
+    consentVersion: result.viewerRecord.consentVersion ?? null,
   };
 
-  const jwtToken = signToken(jwtPayload);
+  const accessToken = signAccessToken(jwtPayload);
+  const refreshToken = signRefreshToken(jwtPayload);
 
-  return { streamer, jwtToken };
+  return { streamer, accessToken, refreshToken };
+}
+
+export async function handleViewerTwitchCallback(code: string): Promise<{
+  viewer: {
+    id: string;
+    twitchUserId: string;
+    displayName: string;
+    avatarUrl: string;
+    consentedAt: Date | null;
+  };
+  accessToken: string;
+  refreshToken: string;
+}> {
+  const tokenData = await exchangeCodeForToken(code, {
+    redirectUri: env.twitchViewerRedirectUri,
+  });
+
+  const user = await fetchTwitchUser(tokenData.access_token);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const viewerRecord = await tx.viewer.upsert({
+      where: { twitchUserId: user.id },
+      update: {
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+      },
+      create: {
+        twitchUserId: user.id,
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+      },
+    });
+
+    const encryptedAccess = encryptToken(tokenData.access_token);
+    const encryptedRefresh = tokenData.refresh_token
+      ? encryptToken(tokenData.refresh_token)
+      : null;
+
+    const expiresAt = tokenData.expires_in
+      ? new Date(Date.now() + tokenData.expires_in * 1000)
+      : null;
+
+    const existingToken = await tx.twitchToken.findFirst({
+      where: {
+        ownerType: "viewer",
+        viewerId: viewerRecord.id,
+      },
+    });
+
+    const data = {
+      ownerType: "viewer" as const,
+      viewerId: viewerRecord.id,
+      accessToken: encryptedAccess,
+      refreshToken: encryptedRefresh,
+      expiresAt,
+      scopes: JSON.stringify(["user:read:email", "chat:read"]),
+    };
+
+    if (existingToken) {
+      await tx.twitchToken.update({ where: { id: existingToken.id }, data });
+    } else {
+      await tx.twitchToken.create({ data });
+    }
+
+    return viewerRecord;
+  });
+
+  const viewer = {
+    id: result.id,
+    twitchUserId: result.twitchUserId,
+    displayName: result.displayName ?? "",
+    avatarUrl: result.avatarUrl ?? "",
+    consentedAt: result.consentedAt ?? null,
+    consentVersion: result.consentVersion ?? null,
+  };
+
+  const jwtPayload: Omit<JWTPayload, "tokenType"> = {
+    viewerId: viewer.id,
+    twitchUserId: viewer.twitchUserId,
+    displayName: viewer.displayName,
+    avatarUrl: viewer.avatarUrl,
+    consentedAt: viewer.consentedAt
+      ? viewer.consentedAt.toISOString?.() ?? String(viewer.consentedAt)
+      : null,
+    consentVersion: viewer.consentVersion ?? null,
+    role: "viewer",
+  };
+
+  const accessToken = signAccessToken(jwtPayload);
+  const refreshToken = signRefreshToken(jwtPayload);
+
+  return { viewer, accessToken, refreshToken };
 }
 
 /**
  * 根據 Streamer ID 取得 Streamer 資訊
  */
-export async function getStreamerById(streamerId: string): Promise<Streamer | null> {
+export async function getStreamerById(
+  streamerId: string
+): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { id: streamerId },
     include: {
@@ -145,15 +268,19 @@ export async function getStreamerById(streamerId: string): Promise<Streamer | nu
     id: streamerRecord.id,
     twitchUserId: streamerRecord.twitchUserId,
     displayName: streamerRecord.displayName,
-    avatarUrl: streamerRecord.avatarUrl || '',
-    channelUrl: channel?.channelUrl || `https://www.twitch.tv/${channel?.channelName || ''}`,
+    avatarUrl: streamerRecord.avatarUrl || "",
+    channelUrl:
+      channel?.channelUrl ||
+      `https://www.twitch.tv/${channel?.channelName || ""}`,
   };
 }
 
 /**
  * 根據 Twitch User ID 取得 Streamer 資訊
  */
-export async function getStreamerByTwitchId(twitchUserId: string): Promise<Streamer | null> {
+export async function getStreamerByTwitchId(
+  twitchUserId: string
+): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { twitchUserId },
     include: {
@@ -171,7 +298,9 @@ export async function getStreamerByTwitchId(twitchUserId: string): Promise<Strea
     id: streamerRecord.id,
     twitchUserId: streamerRecord.twitchUserId,
     displayName: streamerRecord.displayName,
-    avatarUrl: streamerRecord.avatarUrl || '',
-    channelUrl: channel?.channelUrl || `https://www.twitch.tv/${channel?.channelName || ''}`,
+    avatarUrl: streamerRecord.avatarUrl || "",
+    channelUrl:
+      channel?.channelUrl ||
+      `https://www.twitch.tv/${channel?.channelName || ""}`,
   };
 }

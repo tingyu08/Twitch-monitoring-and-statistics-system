@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { getMe, type StreamerInfo } from '@/lib/api/auth';
+import { getMe, isStreamer, type StreamerInfo } from '@/lib/api/auth';
 import { useAuthSession } from '@/features/auth/AuthContext';
 import { StreamSummaryCards } from '@/features/streamer-dashboard/components/StreamSummaryCards';
 import { DisplayPreferences } from '@/features/streamer-dashboard/components/DisplayPreferences';
@@ -27,21 +27,27 @@ export default function StreamerDashboard() {
   const router = useRouter();
   const { logout } = useAuthSession();
 
-  // Story 1.3: 圖表範圍與粒度狀態
+  // Story 1.3: ??? SWR hooks ?????????
+
   const [chartRange, setChartRange] = useState<ChartRange>('30d');
+
   const [granularity, setGranularity] = useState<ChartGranularity>('day');
 
-  // Story 1.4: 訂閱趨勢範圍狀態
+  // Story 1.4: ??? SWR hooks ????????????
+
   const [subsChartRange, setSubsChartRange] = useState<ChartRange>('30d');
 
-  // Story 1.3: 使用 SWR hooks 獲取圖表資料
-  const timeSeries = useTimeSeriesData(chartRange, granularity);
-  const heatmap = useHeatmapData(chartRange);
+  const canFetch = !!user;
 
-  // Story 1.4: 使用 SWR hooks 獲取訂閱趨勢資料
-  const subscriptionTrend = useSubscriptionTrendData(subsChartRange);
+  const timeSeries = useTimeSeriesData(chartRange, granularity, canFetch);
 
-  // Story 1.5: UI 顯示偏好
+  const heatmap = useHeatmapData(chartRange, canFetch);
+
+  // Story 1.4: ??? SWR hooks ????????????
+
+  const subscriptionTrend = useSubscriptionTrendData(subsChartRange, canFetch);
+
+  // Story 1.5: UI ??????
   const { preferences, togglePreference, showAll, resetToDefault, isLoaded, visibleCount } = useUiPreferences();
 
   const visibleSectionCount = useMemo(() => {
@@ -68,7 +74,13 @@ export default function StreamerDashboard() {
     const fetchData = async () => {
       try {
         const data = await getMe();
-        setUser(data);
+        if (isStreamer(data)) {
+          setUser(data);
+        } else {
+          setError('目前登入的角色不是實況主');
+          setTimeout(() => router.push('/'), 1500);
+          return;
+        }
       } catch (err: unknown) {
         authLogger.error("Dashboard fetch error:", err);
         const errorMessage = err instanceof Error ? err.message : '無法獲取資料';
@@ -117,37 +129,67 @@ export default function StreamerDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8" data-testid="dashboard-container">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8 border-b border-gray-700 pb-4 flex justify-between items-center gap-4" data-testid="dashboard-header">
-          <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gray-900 text-white" data-testid="dashboard-container">
+      {/* 頂部快捷列 & 身分切換 (Radio Style) */}
+      <div className="border-b border-gray-800 bg-gray-900/50 sticky top-0 z-10 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-2 flex justify-between items-center">
+          <div className="text-xs text-gray-500 font-mono tracking-wider">STREAMER DASHBOARD</div>
+          
+          {/* Radio Button Style Switcher */}
+          <div className="flex bg-gray-800 rounded-lg p-1 border border-gray-700">
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard/viewer")}
+              className="px-3 py-1 rounded-md text-xs font-medium text-gray-400 hover:text-white transition-all hover:bg-gray-700/50"
+            >
+              觀眾
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 rounded-md text-xs font-medium bg-purple-600 text-white shadow-sm shadow-purple-900/20 cursor-default"
+            >
+              實況主
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto p-4 sm:p-8">
+        <header className="mb-10 border-b border-gray-800 pb-6 flex justify-between items-end" data-testid="dashboard-header">
+          <div className="flex items-center gap-5">
             {/* 使用正確的欄位名稱 avatarUrl */}
             {user?.avatarUrl && (
               <Image
                 src={user.avatarUrl}
                 alt="Profile"
-                width={56}
-                height={56}
-                className="rounded-full border-2 border-purple-500"
+                width={64}
+                height={64}
+                className="w-16 h-16 rounded-full border-2 border-purple-500 object-cover shadow-lg shadow-purple-500/20"
                 data-testid="user-avatar"
                 unoptimized
               />
             )}
             <div>
-              <h1 className="text-3xl font-bold text-purple-400" data-testid="dashboard-title">實況主儀表板</h1>
-              <p className="text-gray-400 mt-2" data-testid="user-greeting">
+              <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400" data-testid="dashboard-title">
+                實況主儀表板
+              </h1>
+              <p className="text-gray-400 mt-1" data-testid="user-greeting">
                 歡迎回來，{user?.displayName || '實況主'}
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-sm text-white transition-colors"
-            data-testid="logout-button"
-          >
-            登出
-          </button>
+          
+          <div className="flex items-center gap-3">
+             {/* 這裡未來可以放設置按鈕 */}
+            <button
+              type="button"
+              onClick={logout}
+              className="px-4 py-2 rounded bg-gray-800 hover:bg-red-900/30 text-sm text-gray-300 hover:text-red-400 transition-colors border border-gray-700 hover:border-red-900/50"
+              data-testid="logout-button"
+            >
+              登出
+            </button>
+          </div>
         </header>
 
         <div className="mb-6 flex justify-end">

@@ -1,0 +1,514 @@
+openapi: 3.0.3
+info:
+  title: Twitch Analytics API
+  description: |
+    Twitch 實況監控與統計平台 API 文檔
+
+    ## 認證方式
+    所有需要認證的 API 端點都使用 JWT Token，通過 httpOnly Cookie 傳遞。
+
+    ## 錯誤回應格式
+    ```json
+    {
+      "error": "錯誤描述訊息"
+    }
+    ```
+  version: 0.2.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:4000
+    description: 開發環境
+  - url: https://api.example.com
+    description: 生產環境
+
+tags:
+  - name: Auth
+    description: 認證相關 API
+  - name: Viewer
+    description: 觀眾相關 API
+  - name: Streamer
+    description: 實況主相關 API
+  - name: Proxy
+    description: 代理服務 API
+
+paths:
+  # ==================== Auth APIs ====================
+  /auth/twitch/login:
+    get:
+      tags:
+        - Auth
+      summary: 啟動 Twitch OAuth 登入流程
+      description: 重導向至 Twitch OAuth 授權頁面
+      responses:
+        "302":
+          description: 重導向至 Twitch
+
+  /auth/twitch/callback:
+    get:
+      tags:
+        - Auth
+      summary: Twitch OAuth 回調處理
+      description: 處理 Twitch OAuth 授權回調，設定 JWT Cookie
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Twitch 授權碼
+      responses:
+        "302":
+          description: 重導向至前端儀表板
+
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: 取得當前登入用戶資訊
+      description: 返回當前 JWT Token 中的用戶資訊
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 成功取得用戶資訊
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/StreamerInfo"
+                  - $ref: "#/components/schemas/ViewerInfo"
+        "401":
+          description: 未認證
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: 登出
+      description: 清除 JWT Cookie
+      responses:
+        "200":
+          description: 成功登出
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Logged out successfully"
+
+  # ==================== Viewer APIs ====================
+  /api/viewer/consent:
+    post:
+      tags:
+        - Viewer
+      summary: 記錄用戶同意
+      description: 記錄觀眾的隱私同意狀態
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                consented:
+                  type: boolean
+                  example: true
+                consentVersion:
+                  type: integer
+                  example: 1
+              required:
+                - consented
+      responses:
+        "200":
+          description: 成功記錄同意
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewerConsentResponse"
+        "400":
+          description: 缺少必要參數
+        "403":
+          description: 無權限
+
+  /api/viewer/channels:
+    get:
+      tags:
+        - Viewer
+      summary: 取得觀眾追蹤的頻道列表
+      description: 返回當前觀眾追蹤的所有頻道及其摘要統計
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 成功取得頻道列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FollowedChannel"
+        "403":
+          description: 無權限
+
+  /api/viewer/stats/{channelId}:
+    get:
+      tags:
+        - Viewer
+      summary: 取得特定頻道的觀看統計
+      description: |
+        返回觀眾在特定頻道的每日觀看統計資料。
+
+        **時間範圍參數**：
+        - 使用 `days` 參數查詢過去 N 天的資料
+        - 或使用 `startDate` + `endDate` 指定精確日期範圍
+        - 兩種方式二選一，若同時提供則優先使用 startDate/endDate
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 頻道 ID
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 30
+          description: 查詢天數 (1-365，預設 30 天)
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-01-01"
+          description: 開始日期 (YYYY-MM-DD)，需與 endDate 一起使用
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-01-31"
+          description: 結束日期 (YYYY-MM-DD)，需與 startDate 一起使用
+      responses:
+        "200":
+          description: 成功取得統計資料
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewerChannelStatsResponse"
+        "400":
+          description: 缺少 channelId 或參數格式錯誤
+        "403":
+          description: 無權限
+
+  # ==================== Proxy APIs ====================
+  /api/proxy/avatar:
+    get:
+      tags:
+        - Proxy
+      summary: 頭像代理
+      description: |
+        代理 Twitch CDN 頭像圖片請求，避免前端 CORB 問題。
+        僅支援白名單網域：
+        - static-cdn.jtvnw.net
+        - ui-avatars.com
+        - assets.twitch.tv
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+          description: URL 編碼後的原始頭像 URL
+      responses:
+        "200":
+          description: 成功返回圖片
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "302":
+          description: 錯誤時重導向至預設頭像
+        "400":
+          description: 缺少 URL 參數
+        "403":
+          description: 網域不在白名單
+
+  # ==================== Streamer APIs ====================
+  /api/streamer/sessions:
+    get:
+      tags:
+        - Streamer
+      summary: 取得直播場次列表
+      description: 返回實況主的歷史直播場次
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+          description: 查詢天數
+      responses:
+        "200":
+          description: 成功取得場次列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StreamSession"
+        "403":
+          description: 無權限
+
+  /api/streamer/stats/daily:
+    get:
+      tags:
+        - Streamer
+      summary: 取得每日統計
+      description: 返回實況主的每日統計資料
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+          description: 查詢天數
+      responses:
+        "200":
+          description: 成功取得統計資料
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChannelDailyStat"
+        "403":
+          description: 無權限
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description: JWT Token stored in httpOnly cookie
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Unauthorized"
+
+    StreamerInfo:
+      type: object
+      properties:
+        streamerId:
+          type: string
+          example: "str_123"
+        twitchUserId:
+          type: string
+          example: "12345678"
+        displayName:
+          type: string
+          example: "Shroud"
+        avatarUrl:
+          type: string
+          example: "https://static-cdn.jtvnw.net/..."
+        role:
+          type: string
+          enum: [streamer]
+          example: "streamer"
+
+    ViewerInfo:
+      type: object
+      properties:
+        viewerId:
+          type: string
+          example: "vwr_123"
+        twitchUserId:
+          type: string
+          example: "87654321"
+        displayName:
+          type: string
+          example: "TestViewer"
+        avatarUrl:
+          type: string
+          example: "https://ui-avatars.com/api/?name=Test"
+        role:
+          type: string
+          enum: [viewer]
+          example: "viewer"
+        consentedAt:
+          type: string
+          format: date-time
+          nullable: true
+        consentVersion:
+          type: integer
+          nullable: true
+
+    ViewerConsentResponse:
+      type: object
+      properties:
+        viewerId:
+          type: string
+        consentedAt:
+          type: string
+          format: date-time
+        consentVersion:
+          type: integer
+
+    FollowedChannel:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "ch_1"
+        channelName:
+          type: string
+          example: "shroud"
+        displayName:
+          type: string
+          example: "Shroud"
+        avatarUrl:
+          type: string
+        isLive:
+          type: boolean
+        totalWatchMinutes:
+          type: integer
+          example: 210
+        messageCount:
+          type: integer
+          example: 12
+
+    ViewerDailyStat:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2025-01-01"
+        watchHours:
+          type: number
+          format: float
+          example: 2.5
+        messageCount:
+          type: integer
+          example: 10
+        emoteCount:
+          type: integer
+          example: 5
+
+    TimeRange:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+          example: "2025-01-01"
+        endDate:
+          type: string
+          format: date
+          example: "2025-01-31"
+        days:
+          type: integer
+          example: 31
+
+    ViewerChannelStatsResponse:
+      type: object
+      description: 觀眾頻道統計回應結構
+      properties:
+        dailyStats:
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewerDailyStat"
+        timeRange:
+          $ref: "#/components/schemas/TimeRange"
+      required:
+        - dailyStats
+        - timeRange
+
+    StreamSession:
+      type: object
+      properties:
+        id:
+          type: string
+        channelId:
+          type: string
+        twitchStreamId:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        durationSeconds:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        avgViewers:
+          type: integer
+          nullable: true
+        peakViewers:
+          type: integer
+          nullable: true
+
+    ChannelDailyStat:
+      type: object
+      properties:
+        id:
+          type: string
+        channelId:
+          type: string
+        date:
+          type: string
+          format: date-time
+        streamSeconds:
+          type: integer
+        streamCount:
+          type: integer
+        avgViewers:
+          type: integer
+          nullable: true
+        peakViewers:
+          type: integer
+          nullable: true
+        subsTotal:
+          type: integer
+          nullable: true
+        subsDelta:
+          type: integer
+          nullable: true

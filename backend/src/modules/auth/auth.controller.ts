@@ -1,42 +1,101 @@
-import { Request, Response } from 'express';
-import crypto from 'crypto';
-import { handleTwitchCallback, Streamer } from './auth.service';
-import { TwitchOAuthClient } from './twitch-oauth.client';
-import { signToken, JWTPayload } from './jwt.utils';
-import { env } from '../../config/env';
-import { authLogger } from '../../utils/logger';
+import { Request, Response } from "express";
+import crypto from "crypto";
+import {
+  handleStreamerTwitchCallback,
+  handleViewerTwitchCallback,
+} from "./auth.service";
+import { TwitchOAuthClient } from "./twitch-oauth.client";
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  type JWTPayload,
+} from "./jwt.utils";
+import { env } from "../../config/env";
+import { authLogger } from "../../utils/logger";
 
 // 擴展 Express Request 類型以支援 user 屬性
 interface AuthenticatedRequest extends Request {
   user?: JWTPayload;
 }
 
+const STREAMER_STATE_COOKIE = "twitch_auth_state";
+const VIEWER_STATE_COOKIE = "twitch_viewer_auth_state";
+
+const DEFAULT_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: env.nodeEnv === "production",
+  sameSite: "lax" as const,
+  path: "/",
+};
+
+function setAuthCookies(
+  res: Response,
+  accessToken: string,
+  refreshToken: string
+) {
+  res.cookie("auth_token", accessToken, {
+    ...DEFAULT_COOKIE_OPTIONS,
+    maxAge: 60 * 60 * 1000, // 1h
+  });
+
+  res.cookie("refresh_token", refreshToken, {
+    ...DEFAULT_COOKIE_OPTIONS,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
+  });
+}
+
+function clearAuthCookies(res: Response) {
+  res.clearCookie("auth_token", DEFAULT_COOKIE_OPTIONS);
+  res.clearCookie("refresh_token", DEFAULT_COOKIE_OPTIONS);
+}
+
 const twitchClient = new TwitchOAuthClient();
 
 export class AuthController {
-  
   // 登入：產生 State 並導向 Twitch
   public login = async (req: Request, res: Response) => {
     try {
       // 1. 產生隨機 State
-      const state = crypto.randomBytes(16).toString('hex');
-      
+      const state = crypto.randomBytes(16).toString("hex");
+
       // 2. 將 State 存入 HTTP-only Cookie (設定 5 分鐘過期)
-      res.cookie('twitch_auth_state', state, {
-        httpOnly: true,
-        secure: env.nodeEnv === 'production',
-        maxAge: 5 * 60 * 1000, 
-        sameSite: 'lax'
+      res.cookie(STREAMER_STATE_COOKIE, state, {
+        ...DEFAULT_COOKIE_OPTIONS,
+        maxAge: 5 * 60 * 1000,
       });
 
       // 3. 取得帶有 State 的授權 URL
-      const authUrl = twitchClient.getOAuthUrl(state);
-      
+      const authUrl = twitchClient.getOAuthUrl(state, {
+        redirectUri: env.twitchRedirectUri,
+      });
+
       // 4. 導向
       res.redirect(authUrl);
     } catch (error) {
-      authLogger.error('Login Redirect Error:', error);
-      res.status(500).json({ message: 'Internal Server Error' });
+      authLogger.error("Login Redirect Error:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+    }
+  };
+
+  // Viewer 登入
+  public viewerLogin = async (_req: Request, res: Response) => {
+    try {
+      const state = crypto.randomBytes(16).toString("hex");
+      res.cookie(VIEWER_STATE_COOKIE, state, {
+        ...DEFAULT_COOKIE_OPTIONS,
+        maxAge: 5 * 60 * 1000,
+      });
+
+      const authUrl = twitchClient.getOAuthUrl(state, {
+        redirectUri: env.twitchViewerRedirectUri,
+        scopes: ["user:read:email", "chat:read"],
+      });
+
+      res.redirect(authUrl);
+    } catch (error) {
+      authLogger.error("Viewer Login Redirect Error:", error);
+      res.status(500).json({ message: "Internal Server Error" });
     }
   };
 
@@ -56,49 +115,106 @@ export class AuthController {
       }
 
       // 1. 驗證 State (CSRF 防護)
-      const storedState = req.cookies['twitch_auth_state'];
+      const storedState = req.cookies[STREAMER_STATE_COOKIE];
       if (!state || !storedState || state !== storedState) {
-        authLogger.error('CSRF State Mismatch');
-        return res.status(403).json({ message: 'Invalid state parameter (CSRF detected)' });
+        authLogger.error("CSRF State Mismatch");
+        return res
+          .status(403)
+          .json({ message: "Invalid state parameter (CSRF detected)" });
       }
 
-      // 清除 State Cookie
-      res.clearCookie('twitch_auth_state');
+      res.clearCookie(STREAMER_STATE_COOKIE);
 
       if (!code) {
-        return res.status(400).json({ message: 'Authorization code missing' });
+        return res.status(400).json({ message: "Authorization code missing" });
       }
 
-      // 2. 透過 Service 處理登入邏輯 (使用現有的 handleTwitchCallback)
-      const { streamer, jwtToken } = await handleTwitchCallback(code);
+      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(
+        code
+      );
 
-      // 3. 設定 JWT Cookie (Token 已由 service 產生)
-      res.cookie('auth_token', jwtToken, {
-        httpOnly: true,
-        secure: env.nodeEnv === 'production',
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
-        sameSite: 'lax'
-      });
+      setAuthCookies(res, accessToken, refreshToken);
 
-      // 4. 導向回前端 Dashboard
-      res.redirect(`${env.frontendUrl}/dashboard/streamer`);
-
+      res.redirect(`${env.frontendUrl}/dashboard/viewer`);
     } catch (error) {
-      authLogger.error('Twitch Callback Error:', error);
+      console.error("[AuthCallbackError] Detailed error:", error);
+      authLogger.error("Twitch Callback Error:", error);
+      res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
+    }
+  };
+
+  // Viewer Callback：驗證 State 並處理登入
+  public viewerCallback = async (req: Request, res: Response) => {
+    try {
+      const code = req.query.code as string;
+      const state = req.query.state as string;
+      const error = req.query.error as string;
+      const error_description = req.query.error_description as string;
+
+      if (error) {
+        authLogger.warn(
+          `Viewer Twitch Auth Error: ${error} - ${error_description}`
+        );
+        return res.redirect(`${env.frontendUrl}/auth/error?reason=${error}`);
+      }
+
+      const storedState = req.cookies[VIEWER_STATE_COOKIE];
+      if (!state || !storedState || state !== storedState) {
+        authLogger.error("Viewer CSRF State Mismatch");
+        return res
+          .status(403)
+          .json({ message: "Invalid state parameter (CSRF detected)" });
+      }
+
+      res.clearCookie(VIEWER_STATE_COOKIE);
+
+      if (!code) {
+        return res.status(400).json({ message: "Authorization code missing" });
+      }
+
+      const { viewer, accessToken, refreshToken } =
+        await handleViewerTwitchCallback(code);
+
+      setAuthCookies(res, accessToken, refreshToken);
+
+      if (!viewer.consentedAt) {
+        return res.redirect(`${env.frontendUrl}/auth/viewer/consent`);
+      }
+
+      res.redirect(`${env.frontendUrl}/dashboard/viewer`);
+    } catch (error) {
+      authLogger.error("Viewer Twitch Callback Error:", error);
       res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
     }
   };
 
   public me = async (req: AuthenticatedRequest, res: Response) => {
-      // 假設 middleware 已經將 user 放入 req.user
-      if (!req.user) {
-          return res.status(401).json({ message: 'Unauthorized' });
-      }
-      return res.json({ user: req.user });
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    return res.json({ user: req.user });
   };
 
   public logout = async (req: Request, res: Response) => {
-      res.clearCookie('auth_token');
-      return res.status(200).json({ message: 'Logged out successfully' });
+    clearAuthCookies(res);
+    return res.status(200).json({ message: "Logged out successfully" });
+  };
+
+  public refresh = async (req: Request, res: Response) => {
+    const refreshToken = req.cookies?.refresh_token;
+    if (!refreshToken) {
+      return res.status(401).json({ error: "Missing refresh token" });
+    }
+
+    const payload = verifyRefreshToken(refreshToken);
+    if (!payload) {
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+
+    const { tokenType: _tokenType, ...rest } = payload;
+    const newAccess = signAccessToken(rest);
+    const newRefresh = signRefreshToken(rest);
+    setAuthCookies(res, newAccess, newRefresh);
+    return res.json({ message: "refreshed" });
   };
 }

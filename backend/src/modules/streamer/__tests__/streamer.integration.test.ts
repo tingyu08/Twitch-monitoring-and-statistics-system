@@ -10,8 +10,8 @@ jest.mock('../subscription-sync.service');
 
 // Mock auth middleware
 jest.mock('../../auth/auth.middleware', () => ({
-  requireAuth: (req: any, res: any, next: any) => {
-    req.user = { streamerId: 'test-streamer-123' };
+  requireAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    (req as express.Request & { user?: { streamerId: string } }).user = { streamerId: 'test-streamer-123' };
     next();
   },
 }));

@@ -40,14 +40,16 @@ describe("LandingPage", () => {
         error: null,
         logout: jest.fn(),
         refresh: jest.fn(),
+        isStreamer: false,
+        isViewer: false,
       });
     });
 
-    it("顯示『使用 Twitch 登入』按鈕", async () => {
+    it("顯示單一登入按鈕", async () => {
       render(<LandingPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: "使用 Twitch 登入" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "前往登入" })).toBeInTheDocument();
       });
     });
 
@@ -56,7 +58,7 @@ describe("LandingPage", () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Twitch 實況監控與統計平台/)).toBeInTheDocument();
-        expect(screen.getByText(/使用你的 Twitch 帳號登入/)).toBeInTheDocument();
+        expect(screen.getByText(/無論您是實況主或觀眾/)).toBeInTheDocument();
       });
     });
   });
@@ -69,6 +71,8 @@ describe("LandingPage", () => {
         error: null,
         logout: jest.fn(),
         refresh: jest.fn(),
+        isStreamer: false,
+        isViewer: false,
       });
     });
 
@@ -89,10 +93,12 @@ describe("LandingPage", () => {
         error: null,
         logout: jest.fn(),
         refresh: jest.fn(),
+        isStreamer: false,
+        isViewer: false,
       });
     });
 
-    it("當有 authError 時顯示錯誤訊息和重新嘗試按鈕", async () => {
+    it("當有 authError 時顯示錯誤訊息", async () => {
       mockGet.mockReturnValue("authorization_failed");
 
       render(<LandingPage />);
@@ -100,7 +106,6 @@ describe("LandingPage", () => {
       await waitFor(() => {
         expect(screen.getByText("登入失敗")).toBeInTheDocument();
         expect(screen.getByText(/您取消了 Twitch 授權/)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "重新嘗試登入" })).toBeInTheDocument();
       });
     });
   });
@@ -114,19 +119,22 @@ describe("LandingPage", () => {
           displayName: "Test User",
           avatarUrl: "https://example.com/avatar.png",
           channelUrl: "https://twitch.tv/test",
+          role: "streamer",
         },
         loading: false,
         error: null,
         logout: jest.fn(),
         refresh: jest.fn(),
+        isStreamer: true,
+        isViewer: false,
       });
     });
 
-    it("已登入使用者應該被導向到儀表板", async () => {
+    it("已登入應導向到觀眾儀表板", async () => {
       render(<LandingPage />);
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/dashboard/streamer");
+        expect(mockPush).toHaveBeenCalledWith("/dashboard/viewer");
       });
     });
   });

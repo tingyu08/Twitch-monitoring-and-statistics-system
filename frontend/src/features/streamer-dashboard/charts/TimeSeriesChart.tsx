@@ -18,8 +18,20 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
     return formatDate(value);
   };
 
+  // 為螢幕閱讀器生成資料摘要
+  const generateDataSummary = () => {
+    if (!data || data.length === 0) return '無資料';
+    const totalHours = data.reduce((sum, d) => sum + d.totalHours, 0);
+    const totalSessions = data.reduce((sum, d) => sum + d.sessionCount, 0);
+    return `顯示 ${data.length} 個${granularity === 'day' ? '日' : '週'}的資料，總開台時數 ${totalHours.toFixed(1)} 小時，總開台場數 ${totalSessions} 場`;
+  };
+
   return (
-    <div className="w-full">
+    <figure 
+      className="w-full" 
+      role="img" 
+      aria-label={`開台時數與場數趨勢圖表：${generateDataSummary()}`}
+    >
       <ResponsiveContainer width="100%" height={300} minHeight={300}>
         <LineChart
           data={data}
@@ -85,6 +97,9 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
           />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+      <figcaption className="sr-only">
+        顯示開台時數與開台場數隨時間變化的折線圖，藍色線條代表開台時數，綠色線條代表開台場數
+      </figcaption>
+    </figure>
   );
 }

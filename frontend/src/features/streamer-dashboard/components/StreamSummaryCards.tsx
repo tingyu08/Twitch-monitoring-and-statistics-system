@@ -34,33 +34,44 @@ export function StreamSummaryCards() {
 
   if (error) {
     return (
-      <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
+      <div 
+        className="bg-red-900/20 border border-red-700 rounded-lg p-6"
+        role="alert"
+        aria-live="assertive"
+      >
         <p className="text-red-400">⚠️ {error}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <section className="space-y-6" aria-label="開台統計總覽">
       {/* 時間範圍選擇器 */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-purple-300">開台統計總覽</h2>
+        <h2 id="stats-heading" className="text-2xl font-bold text-purple-300">開台統計總覽</h2>
         <DateRangePicker selectedRange={range} onRangeChange={setRange} />
       </div>
 
       {/* Summary Cards */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div 
+          className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          role="status"
+          aria-busy="true"
+          aria-label="正在載入統計資料"
+        >
           {[1, 2, 3].map((i) => (
             <div
               key={i}
               className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 animate-pulse"
+              aria-hidden="true"
             >
               <div className="h-4 bg-gray-700 rounded w-24 mb-4"></div>
               <div className="h-10 bg-gray-700 rounded w-32 mb-2"></div>
               <div className="h-3 bg-gray-700 rounded w-16"></div>
             </div>
           ))}
+          <span className="sr-only">正在載入統計資料，請稍候...</span>
         </div>
       ) : summary ? (
         // 檢查是否所有值都是 0（無資料狀態）
@@ -107,6 +118,6 @@ export function StreamSummaryCards() {
           <p className="text-gray-500 text-sm mt-2">開始直播後即可查看統計數據</p>
         </div>
       )}
-    </div>
+    </section>
   );
 }
