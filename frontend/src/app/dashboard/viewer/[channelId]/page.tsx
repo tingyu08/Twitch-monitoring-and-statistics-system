@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
+import {
+  Clock,
+  Eye,
+  MessageSquare,
+  Smile,
+  Activity,
+  Calendar,
+  History,
+} from "lucide-react";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import {
   viewerApi,
@@ -239,51 +248,85 @@ export default function ViewerChannelStatsPage() {
           </h2>
 
           <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
-            <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 backdrop-blur-sm rounded-xl border border-blue-500/20 p-4 text-center">
-              <p className="text-2xl font-bold text-blue-400">
-                {summary.totalWatchHours}
-              </p>
-              <p className="text-xs text-blue-300/70">總觀看時數</p>
+            {/* 總觀看時數 */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-blue-500/20 to-blue-600/10 backdrop-blur-sm rounded-xl border border-blue-500/20 p-4 text-center group hover:border-blue-500/40 transition-all">
+              <div className="relative z-10">
+                <p className="text-2xl font-bold text-blue-400">
+                  {summary.totalWatchHours}
+                </p>
+                <p className="text-xs text-blue-300/70">總觀看時數</p>
+              </div>
+              <Clock className="absolute -right-4 -bottom-4 w-24 h-24 text-blue-500/5 group-hover:text-blue-500/10 transition-colors rotate-12" />
             </div>
-            <div className="bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 backdrop-blur-sm rounded-xl border border-cyan-500/20 p-4 text-center">
-              <p className="text-2xl font-bold text-cyan-400">
-                {summary.sessionCount}
-              </p>
-              <p className="text-xs text-cyan-300/70">觀看次數</p>
+
+            {/* 觀看次數 */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 backdrop-blur-sm rounded-xl border border-cyan-500/20 p-4 text-center group hover:border-cyan-500/40 transition-all">
+              <div className="relative z-10">
+                <p className="text-2xl font-bold text-cyan-400">
+                  {summary.sessionCount}
+                </p>
+                <p className="text-xs text-cyan-300/70">觀看次數</p>
+              </div>
+              <Eye className="absolute -right-4 -bottom-4 w-24 h-24 text-cyan-500/5 group-hover:text-cyan-500/10 transition-colors rotate-12" />
             </div>
-            <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 backdrop-blur-sm rounded-xl border border-green-500/20 p-4 text-center">
-              <p className="text-2xl font-bold text-green-400">
-                {summary.totalMessages}
-              </p>
-              <p className="text-xs text-green-300/70">總留言數</p>
+
+            {/* 總留言數 */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-green-500/20 to-green-600/10 backdrop-blur-sm rounded-xl border border-green-500/20 p-4 text-center group hover:border-green-500/40 transition-all">
+              <div className="relative z-10">
+                <p className="text-2xl font-bold text-green-400">
+                  {summary.totalMessages}
+                </p>
+                <p className="text-xs text-green-300/70">總留言數</p>
+              </div>
+              <MessageSquare className="absolute -right-4 -bottom-4 w-24 h-24 text-green-500/5 group-hover:text-green-500/10 transition-colors rotate-12" />
             </div>
-            <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 backdrop-blur-sm rounded-xl border border-yellow-500/20 p-4 text-center">
-              <p className="text-2xl font-bold text-yellow-400">
-                {summary.totalEmotes}
-              </p>
-              <p className="text-xs text-yellow-300/70">表情符號</p>
+
+            {/* 表情符號 */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 backdrop-blur-sm rounded-xl border border-yellow-500/20 p-4 text-center group hover:border-yellow-500/40 transition-all">
+              <div className="relative z-10">
+                <p className="text-2xl font-bold text-yellow-400">
+                  {summary.totalEmotes}
+                </p>
+                <p className="text-xs text-yellow-300/70">表情符號</p>
+              </div>
+              <Smile className="absolute -right-4 -bottom-4 w-24 h-24 text-yellow-500/5 group-hover:text-yellow-500/10 transition-colors rotate-12" />
             </div>
-            <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 backdrop-blur-sm rounded-xl border border-purple-500/20 p-4 text-center">
-              <p className="text-2xl font-bold text-purple-400">
-                {summary.averageWatchMinutesPerDay}
-              </p>
-              <p className="text-xs text-purple-300/70">日均分鐘</p>
+
+            {/* 日均分鐘 */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-purple-500/20 to-purple-600/10 backdrop-blur-sm rounded-xl border border-purple-500/20 p-4 text-center group hover:border-purple-500/40 transition-all">
+              <div className="relative z-10">
+                <p className="text-2xl font-bold text-purple-400">
+                  {summary.averageWatchMinutesPerDay}
+                </p>
+                <p className="text-xs text-purple-300/70">日均分鐘</p>
+              </div>
+              <Activity className="absolute -right-4 -bottom-4 w-24 h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12" />
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 p-4 text-center">
-              <p className="text-lg font-semibold text-white">
-                {summary.firstWatchDate
-                  ? summary.firstWatchDate.slice(0, 10)
-                  : "-"}
-              </p>
-              <p className="text-xs text-purple-300/50">首次觀看</p>
+
+            {/* 首次觀看 */}
+            <div className="relative overflow-hidden bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 p-4 text-center group hover:border-white/20 transition-all">
+              <div className="relative z-10">
+                <p className="text-lg font-semibold text-white">
+                  {summary.firstWatchDate
+                    ? summary.firstWatchDate.slice(0, 10)
+                    : "-"}
+                </p>
+                <p className="text-xs text-purple-300/50">首次觀看</p>
+              </div>
+              <Calendar className="absolute -right-4 -bottom-4 w-24 h-24 text-white/5 group-hover:text-white/10 transition-colors rotate-12" />
             </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 p-4 text-center">
-              <p className="text-lg font-semibold text-white">
-                {summary.lastWatchDate
-                  ? summary.lastWatchDate.slice(0, 10)
-                  : "-"}
-              </p>
-              <p className="text-xs text-purple-300/50">最後觀看</p>
+
+            {/* 最後觀看 */}
+            <div className="relative overflow-hidden bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 p-4 text-center group hover:border-white/20 transition-all">
+              <div className="relative z-10">
+                <p className="text-lg font-semibold text-white">
+                  {summary.lastWatchDate
+                    ? summary.lastWatchDate.slice(0, 10)
+                    : "-"}
+                </p>
+                <p className="text-xs text-purple-300/50">最後觀看</p>
+              </div>
+              <History className="absolute -right-4 -bottom-4 w-24 h-24 text-white/5 group-hover:text-white/10 transition-colors rotate-12" />
             </div>
           </div>
         </div>
