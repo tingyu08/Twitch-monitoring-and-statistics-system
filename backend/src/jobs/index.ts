@@ -17,6 +17,10 @@ export function startAllJobs(): void {
   const { updateLifetimeStatsJob } = require("./update-lifetime-stats.job");
   updateLifetimeStatsJob();
 
+  // Story 2.5: 資料保留與刪除任務
+  const { dataRetentionJob } = require("./data-retention.job");
+  dataRetentionJob.start();
+
   // 未來可以在這裡添加更多任務
   // startTokenRefreshJob();
   // startStreamerStatusCheckJob();

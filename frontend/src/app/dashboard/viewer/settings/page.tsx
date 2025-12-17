@@ -6,6 +6,99 @@ import { useRouter } from "next/navigation";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { isViewer } from "@/lib/api/auth";
 import { viewerApi } from "@/lib/api/viewer";
+import { httpClient } from "@/lib/api/httpClient";
+
+// 隱私設定類別定義
+const privacyCategories = [
+  {
+    id: "watchTime",
+    title: "觀看時數",
+    description: "收集您的觀看時數統計",
+    settings: [
+      {
+        key: "collectDailyWatchTime",
+        label: "每日觀看時數統計",
+        description: "收集您每天在各頻道的觀看時間",
+        impact: "停用後將無法查看觀看時數趨勢圖",
+      },
+      {
+        key: "collectWatchTimeDistribution",
+        label: "觀看時段分佈",
+        description: "收集您觀看的時段分佈（早/午/晚）",
+        impact: "停用後將無法查看時段分佈統計",
+      },
+      {
+        key: "collectMonthlyAggregates",
+        label: "月度聚合統計",
+        description: "計算月度和年度的觀看總時數",
+        impact: "停用後將無法查看雷達圖中的觀看維度",
+      },
+    ],
+  },
+  {
+    id: "messages",
+    title: "留言與互動",
+    description: "收集您的聊天室互動記錄",
+    settings: [
+      {
+        key: "collectChatMessages",
+        label: "聊天室留言記錄",
+        description: "收集您在聊天室發送的訊息",
+        impact: "停用後將無法查看留言統計",
+      },
+      {
+        key: "collectInteractions",
+        label: "互動統計",
+        description: "收集訂閱、Cheer、Raid 等互動記錄",
+        impact: "停用後將無法查看互動類型分佈",
+      },
+      {
+        key: "collectInteractionFrequency",
+        label: "互動頻率分析",
+        description: "分析您的互動頻率和活躍度",
+        impact: "停用後將無法查看互動頻率圖表",
+      },
+    ],
+  },
+  {
+    id: "badges",
+    title: "成就與徽章",
+    description: "追蹤您的成就徽章進度",
+    settings: [
+      {
+        key: "collectBadgeProgress",
+        label: "成就徽章進度",
+        description: "追蹤各項成就徽章的解鎖進度",
+        impact: "停用後將無法查看成就徽章系統",
+      },
+      {
+        key: "collectFootprintData",
+        label: "足跡總覽資料",
+        description: "收集用於生成觀眾足跡的綜合資料",
+        impact: "停用後將無法使用足跡儀表板",
+      },
+    ],
+  },
+  {
+    id: "analytics",
+    title: "分析與排名",
+    description: "計算您的百分位排名和綜合分析",
+    settings: [
+      {
+        key: "collectRankings",
+        label: "百分位排名",
+        description: "計算您在該頻道觀眾中的排名",
+        impact: "停用後將無法查看排名資訊",
+      },
+      {
+        key: "collectRadarAnalysis",
+        label: "雷達圖綜合分析",
+        description: "生成多維度的觀眾行為分析圖",
+        impact: "停用後將無法查看雷達圖",
+      },
+    ],
+  },
+];
 
 interface DataSummary {
   totalMessages: number;
@@ -17,19 +110,31 @@ interface DataSummary {
   };
 }
 
+interface PrivacySettings {
+  [key: string]: boolean;
+}
+
 export default function ViewerSettingsPage() {
   const router = useRouter();
   const { user, loading, logout } = useAuthSession();
-  const [revoking, setRevoking] = useState(false);
-  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
+  const [revoking, setRevoking] = useState(false); // Kept for legacy compatibility if needed
 
-  // 隱私控制狀態
-  const [pauseCollection, setPauseCollection] = useState(false);
+  // States merged from PrivacySettingsPage
+  const [settings, setSettings] = useState<PrivacySettings>({});
   const [dataSummary, setDataSummary] = useState<DataSummary | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [privacyLoading, setPrivacyLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletionStatus, setDeletionStatus] = useState<{
+    hasPendingDeletion: boolean;
+    remainingDays?: number;
+    scheduledAt?: string;
+  } | null>(null);
+  const [exportStatus, setExportStatus] = useState<{
+    isExporting: boolean;
+    jobId?: string;
+    downloadReady?: boolean;
+  }>({ isExporting: false });
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -41,7 +146,7 @@ export default function ViewerSettingsPage() {
     }
   }, [loading, user, router]);
 
-  // 載入隱私設定
+  // 載入設定
   useEffect(() => {
     if (user && !loading) {
       loadPrivacyData();
@@ -51,16 +156,23 @@ export default function ViewerSettingsPage() {
   const loadPrivacyData = async () => {
     setPrivacyLoading(true);
     try {
-      const [settings, summary] = await Promise.all([
-        viewerApi.getPrivacySettings(),
-        viewerApi.getDataSummary(),
+      // Parallel fetch of settings, summary, and deletion status
+      const [consentData, summary, deletionData] = await Promise.all([
+        httpClient<any>("/api/viewer/privacy/consent").catch(() => null),
+        viewerApi.getDataSummary().catch(() => null),
+        httpClient<any>("/api/viewer/privacy/deletion-status").catch(
+          () => null
+        ),
       ]);
 
-      if (settings) {
-        setPauseCollection(settings.pauseCollection);
+      if (consentData) {
+        setSettings(consentData.settings || {});
       }
       if (summary) {
         setDataSummary(summary);
+      }
+      if (deletionData) {
+        setDeletionStatus(deletionData);
       }
     } catch (error) {
       console.error("Failed to load privacy data:", error);
@@ -69,44 +181,106 @@ export default function ViewerSettingsPage() {
     }
   };
 
-  const handleToggleCollection = async () => {
-    setIsUpdating(true);
-    setMessage(null);
+  // 切換設定
+  const handleToggle = async (key: string) => {
+    const newValue = !settings[key];
+    const newSettings = { ...settings, [key]: newValue };
+    setSettings(newSettings);
+
+    setIsSaving(true);
     try {
-      const result = await viewerApi.updatePrivacySettings(!pauseCollection);
-      if (result?.success) {
-        setPauseCollection(!pauseCollection);
-        setMessage({ type: "success", text: result.message });
-      } else {
-        setMessage({ type: "error", text: "更新失敗，請稍後再試" });
-      }
+      await httpClient("/api/viewer/privacy/consent", {
+        method: "PATCH",
+        body: JSON.stringify({ [key]: newValue }),
+      });
+
+      setMessage({ type: "success", text: "設定已儲存" });
     } catch (error) {
-      setMessage({ type: "error", text: "更新失敗，請稍後再試" });
+      // 回滾
+      setSettings(settings);
+      setMessage({ type: "error", text: "儲存設定失敗，請稍後再試" });
     } finally {
-      setIsUpdating(false);
+      setIsSaving(false);
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
-  const handleClearAllData = async () => {
-    setIsDeleting(true);
-    setMessage(null);
+  // 請求資料匯出
+  const handleExport = async () => {
+    setExportStatus({ isExporting: true });
     try {
-      const result = await viewerApi.clearAllMessages();
-      if (result?.success) {
-        setMessage({
-          type: "success",
-          text: `已刪除 ${result.deletedCount.messages} 則訊息和 ${result.deletedCount.aggregations} 筆統計記錄`,
-        });
-        setShowDeleteConfirm(false);
-        await loadPrivacyData();
-      } else {
-        setMessage({ type: "error", text: "刪除失敗，請稍後再試" });
-      }
+      const data = await httpClient<any>("/api/viewer/privacy/export", {
+        method: "POST",
+      });
+
+      setExportStatus({
+        isExporting: false,
+        jobId: data.jobId,
+        downloadReady: data.status === "completed",
+      });
+      setMessage({ type: "success", text: "資料匯出完成！" });
     } catch (error) {
-      setMessage({ type: "error", text: "刪除失敗，請稍後再試" });
-    } finally {
-      setIsDeleting(false);
+      setExportStatus({ isExporting: false });
+      setMessage({ type: "error", text: "匯出失敗，請稍後再試" });
     }
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  // 下載匯出檔案
+  const handleDownload = () => {
+    if (exportStatus.jobId) {
+      window.open(
+        `/api/viewer/privacy/export/${exportStatus.jobId}/download`,
+        "_blank"
+      );
+    }
+  };
+
+  // 請求刪除帳號 (Replaces Revoke/Clear logic with story 2.5 logic)
+  const handleDeleteAccount = async () => {
+    try {
+      const data = await httpClient<any>("/api/viewer/privacy/delete-account", {
+        method: "POST",
+      });
+
+      setDeletionStatus({
+        hasPendingDeletion: true,
+        remainingDays: 7,
+        scheduledAt: data.scheduledAt,
+      });
+      setShowDeleteModal(false);
+      setMessage({
+        type: "success",
+        text: "刪除請求已建立，您有 7 天可以撤銷",
+      });
+    } catch (error) {
+      setMessage({ type: "error", text: "刪除請求失敗，請稍後再試" });
+    }
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  // 撤銷刪除請求
+  const handleCancelDeletion = async () => {
+    try {
+      await httpClient("/api/viewer/privacy/cancel-deletion", {
+        method: "POST",
+      });
+
+      setDeletionStatus({ hasPendingDeletion: false });
+      setMessage({ type: "success", text: "刪除請求已撤銷" });
+    } catch (error) {
+      setMessage({ type: "error", text: "撤銷失敗，請稍後再試" });
+    }
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleDateString("zh-TW", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
 
   if (loading) {
@@ -122,25 +296,6 @@ export default function ViewerSettingsPage() {
   }
 
   const viewerUser = isViewer(user) ? user : null;
-
-  const handleRevokeAuthorization = async () => {
-    try {
-      setRevoking(true);
-      await logout();
-    } catch (error) {
-      console.error("Failed to revoke authorization:", error);
-      setRevoking(false);
-    }
-  };
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString("zh-TW", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -188,6 +343,28 @@ export default function ViewerSettingsPage() {
           </div>
         )}
 
+        {/* 刪除待處理提示 */}
+        {deletionStatus?.hasPendingDeletion && (
+          <div className="p-4 bg-yellow-900/50 border border-yellow-500 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-yellow-200">
+                  ⚠️ 帳號刪除請求進行中
+                </h3>
+                <p className="text-yellow-200/80 text-sm mt-1">
+                  您的帳號將在 {deletionStatus.remainingDays} 天後被刪除。
+                </p>
+              </div>
+              <button
+                onClick={handleCancelDeletion}
+                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white transition-colors"
+              >
+                撤銷刪除
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Profile Section */}
         <section className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
           <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
@@ -221,50 +398,66 @@ export default function ViewerSettingsPage() {
           </div>
         </section>
 
-        {/* Privacy Settings Section */}
+        {/* Privacy Settings Section (New 2.5 Features) */}
         <section className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
           <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-            隱私設定
+            隱私設定 (GDPR)
           </h2>
-          <div className="space-y-4">
-            {/* 資料收集開關 */}
-            <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
-              <div>
-                <p className="font-medium text-white">資料收集</p>
-                <p className="text-sm text-gray-400">
-                  {pauseCollection
-                    ? "已暫停收集您的聊天互動資料"
-                    : "系統正在記錄您的聊天互動資料"}
-                </p>
-              </div>
-              <button
-                onClick={handleToggleCollection}
-                disabled={isUpdating || privacyLoading}
-                className={`relative w-14 h-8 rounded-full transition-all duration-300 ${
-                  pauseCollection
-                    ? "bg-gray-600"
-                    : "bg-gradient-to-r from-green-500 to-emerald-500"
-                } ${isUpdating || privacyLoading ? "opacity-50" : ""}`}
+          <div className="space-y-6">
+            {privacyCategories.map((category) => (
+              <div
+                key={category.id}
+                className="bg-gray-700/50 rounded-lg p-6 space-y-4 border border-white/5"
               >
-                <span
-                  className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-lg transition-transform duration-300 ${
-                    pauseCollection ? "" : "translate-x-6"
-                  }`}
-                />
-              </button>
-            </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    {category.title}
+                  </h3>
+                  <p className="text-gray-400 text-sm">
+                    {category.description}
+                  </p>
+                </div>
 
-            <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
-              <div>
-                <p className="font-medium text-white">觀看歷史記錄</p>
-                <p className="text-sm text-gray-400">
-                  允許記錄您的觀看時數和歷程
-                </p>
+                <div className="space-y-3">
+                  {category.settings.map((setting) => (
+                    <div
+                      key={setting.key}
+                      className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium text-white">
+                          {setting.label}
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          {setting.description}
+                        </div>
+                        {!settings[setting.key] && (
+                          <div className="text-yellow-400/80 text-xs mt-1">
+                            ⚠️ {setting.impact}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => handleToggle(setting.key)}
+                        disabled={isSaving}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${
+                          settings[setting.key]
+                            ? "bg-purple-600"
+                            : "bg-gray-600"
+                        } ${isSaving ? "opacity-50" : ""}`}
+                      >
+                        <span
+                          className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                            settings[setting.key] ? "left-7" : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <span className="px-3 py-1 bg-green-500/20 text-green-400 text-sm rounded-full border border-green-500/30">
-                啟用中
-              </span>
-            </div>
+            ))}
           </div>
         </section>
 
@@ -305,140 +498,118 @@ export default function ViewerSettingsPage() {
           )}
         </section>
 
-        {/* Data Export Section */}
-        <section className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-            資料管理
+        {/* Data Management Section (Merged with Danger Zone) */}
+        <section className="bg-gray-700/30 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
+          <h2 className="text-xl font-semibold mb-4 text-white">
+            資料管理與危險區域
           </h2>
-          <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
-            <div>
-              <p className="font-medium text-white">匯出我的資料</p>
-              <p className="text-sm text-gray-400">
-                下載您的所有觀看和互動統計資料
-              </p>
-            </div>
-            <button
-              type="button"
-              className="px-4 py-2 text-sm border border-purple-500/50 text-purple-400 rounded-lg hover:bg-purple-500/10 transition-colors"
-              onClick={() => alert("此功能將於 Story 2.5 實作")}
-            >
-              匯出 (JSON)
-            </button>
-          </div>
-        </section>
 
-        {/* Danger Zone */}
-        <section className="bg-red-500/10 backdrop-blur-sm rounded-2xl border border-red-500/20 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-red-400">危險區域</h2>
-          <div className="space-y-4">
-            {/* 清除訊息資料 */}
-            <div className="p-4 bg-red-500/10 rounded-xl border border-red-500/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-red-400">清除所有訊息資料</p>
-                  <p className="text-sm text-red-300/70">
-                    刪除所有聊天記錄和統計資料。此操作無法復原。
-                  </p>
-                </div>
-                {!showDeleteConfirm ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    清除資料
-                  </button>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleClearAllData}
-                      disabled={isDeleting}
-                      className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-                    >
-                      {isDeleting ? "刪除中..." : "確認"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      disabled={isDeleting}
-                      className="px-4 py-2 text-sm border border-gray-500 text-gray-400 rounded-lg hover:bg-white/5 disabled:opacity-50 transition-colors"
-                    >
-                      取消
-                    </button>
-                  </div>
-                )}
+          <div className="space-y-6">
+            {/* Export Data */}
+            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 gap-4">
+              <div>
+                <p className="font-medium text-white">匯出我的資料</p>
+                <p className="text-sm text-gray-400">
+                  下載包含 JSON 和 CSV 格式的完整資料封存檔
+                </p>
               </div>
+              <button
+                onClick={
+                  exportStatus.downloadReady ? handleDownload : handleExport
+                }
+                disabled={exportStatus.isExporting}
+                className={`flex-shrink-0 px-6 py-2 rounded-lg font-medium transition-colors ${
+                  exportStatus.isExporting
+                    ? "bg-gray-600 cursor-not-allowed"
+                    : exportStatus.downloadReady
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                }`}
+              >
+                {exportStatus.isExporting
+                  ? "正在準備匯出..."
+                  : exportStatus.downloadReady
+                  ? "📥 下載資料"
+                  : "📤 匯出資料"}
+              </button>
             </div>
 
-            {/* 撤銷授權 */}
-            <div className="p-4 bg-red-500/10 rounded-xl border border-red-500/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-red-400">撤銷 Twitch 授權</p>
-                  <p className="text-sm text-red-300/70">
-                    這將刪除您的所有資料並登出。此操作無法還原。
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowRevokeConfirm(true)}
-                  className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  撤銷授權
-                </button>
+            {/* Logout */}
+            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 gap-4">
+              <div>
+                <p className="font-medium text-white">登出</p>
+                <p className="text-sm text-gray-400">
+                  登出此帳號，您的資料將會保留
+                </p>
               </div>
-            </div>
-
-            {/* 登出 */}
-            <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">登出</p>
-                  <p className="text-sm text-gray-400">
-                    登出此帳號，您的資料將會保留
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="px-4 py-2 text-sm border border-gray-500 text-gray-400 rounded-lg hover:bg-white/5 transition-colors"
-                >
-                  登出
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {/* Revoke Confirmation Modal */}
-      {showRevokeConfirm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-md mx-4 border border-white/10">
-            <h3 className="text-xl font-semibold mb-4 text-red-400">
-              確認撤銷授權？
-            </h3>
-            <p className="text-gray-300 mb-6">
-              撤銷授權後，您的所有觀看記錄和互動統計將被永久刪除。
-              如果您想繼續使用本平台，需要重新登入並同意隱私條款。
-            </p>
-            <div className="flex gap-4">
               <button
                 type="button"
-                onClick={() => setShowRevokeConfirm(false)}
-                disabled={revoking}
-                className="flex-1 px-4 py-2 border border-gray-500 text-gray-300 rounded-lg hover:bg-white/5 disabled:opacity-50 transition-colors"
+                onClick={logout}
+                className="flex-shrink-0 px-6 py-2 border border-gray-500 text-gray-300 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                登出
+              </button>
+            </div>
+
+            {/* Delete Account (Red Zone) */}
+            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-red-500/10 rounded-xl border border-red-500/20 gap-4">
+              <div>
+                <p className="font-medium text-red-400">刪除我的帳號</p>
+                <p className="text-sm text-red-300/70">
+                  請求永久刪除您的帳號與所有資料（含 7 天冷靜期）
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                disabled={deletionStatus?.hasPendingDeletion}
+                className={`flex-shrink-0 px-6 py-2 rounded-lg font-medium transition-colors ${
+                  deletionStatus?.hasPendingDeletion
+                    ? "bg-gray-600 cursor-not-allowed"
+                    : "bg-red-600 hover:bg-red-700 text-white"
+                }`}
+              >
+                🗑️ 刪除帳號
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* 隱私政策連結 */}
+        <div className="text-center text-gray-400 text-sm">
+          <a
+            href="/privacy-policy"
+            className="text-purple-400 hover:text-purple-300 underline"
+          >
+            查看完整隱私政策
+          </a>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full space-y-4 border border-white/10">
+            <h3 className="text-xl font-bold text-red-400">⚠️ 確認刪除帳號</h3>
+            <div className="space-y-2 text-gray-300">
+              <p>您確定要刪除您的帳號嗎？</p>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                <li>您的所有個人資料將被刪除</li>
+                <li>7 天內可以撤銷此操作</li>
+                <li>7 天後資料將永久匿名化且無法恢復</li>
+              </ul>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-white"
               >
                 取消
               </button>
               <button
-                type="button"
-                onClick={handleRevokeAuthorization}
-                disabled={revoking}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                onClick={handleDeleteAccount}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-white"
               >
-                {revoking ? "處理中..." : "確認撤銷"}
+                確認刪除
               </button>
             </div>
           </div>

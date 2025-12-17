@@ -37,7 +37,7 @@ viewerApiRoutes.get(
   controller.getChannels
 );
 
-// Privacy Control Routes
+// Privacy Control Routes (Legacy)
 viewerApiRoutes.get(
   "/privacy/settings",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
@@ -66,6 +66,63 @@ viewerApiRoutes.delete(
   "/privacy/messages/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
   privacyController.clearChannelMessages.bind(privacyController)
+);
+
+// Story 2.5: Privacy Consent Routes (Fine-grained)
+viewerApiRoutes.get(
+  "/privacy/consent",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.getConsentSettings.bind(privacyController)
+);
+
+viewerApiRoutes.patch(
+  "/privacy/consent",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.updateConsentSettings.bind(privacyController)
+);
+
+viewerApiRoutes.post(
+  "/privacy/consent/accept-all",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.acceptAllConsent.bind(privacyController)
+);
+
+// Story 2.5: Data Export Routes
+viewerApiRoutes.post(
+  "/privacy/export",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.requestExport.bind(privacyController)
+);
+
+viewerApiRoutes.get(
+  "/privacy/export/:jobId",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.getExportStatus.bind(privacyController)
+);
+
+viewerApiRoutes.get(
+  "/privacy/export/:jobId/download",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.downloadExport.bind(privacyController)
+);
+
+// Story 2.5: Account Deletion Routes
+viewerApiRoutes.post(
+  "/privacy/delete-account",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.requestDeleteAccount.bind(privacyController)
+);
+
+viewerApiRoutes.post(
+  "/privacy/cancel-deletion",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.cancelDeletion.bind(privacyController)
+);
+
+viewerApiRoutes.get(
+  "/privacy/deletion-status",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  privacyController.getDeletionStatus.bind(privacyController)
 );
 
 // Lifetime Stats Routes

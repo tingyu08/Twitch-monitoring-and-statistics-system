@@ -31,6 +31,7 @@ model Viewer {
   anonymizedAt DateTime?
   consentedAt  DateTime?
   consentVersion Int?
+  deletedAt    DateTime?                // Story 2.5: 軟刪除時間戳
   twitchTokens TwitchToken[]
   dailyStats   ViewerChannelDailyStat[]
 
@@ -38,6 +39,11 @@ model Viewer {
   messageAggs  ViewerChannelMessageDailyAgg[]
   lifetimeStats ViewerChannelLifetimeStats[]
   dashboardLayouts ViewerDashboardLayout[]
+
+  // Story 2.5: Privacy Control Relations
+  privacyConsent   ViewerPrivacyConsent?
+  deletionRequest  DeletionRequest?
+  exportJobs       ExportJob[]
 
   @@map("viewers")
 }
@@ -279,5 +285,92 @@ model ViewerDashboardLayout {
   @@unique([viewerId, channelId])
   @@index([viewerId])
   @@map("viewer_dashboard_layouts")
+}
+
+// ========== Story 2.5 Privacy Control Models ==========
+
+model ViewerPrivacyConsent {
+  id                           String   @id @default(uuid())
+  viewerId                     String   @unique
+  consentVersion               String   @default("v1.0")
+  consentGivenAt               DateTime @default(now())
+
+  // 觀看時數類別
+  collectDailyWatchTime        Boolean  @default(true)
+  collectWatchTimeDistribution Boolean  @default(true)
+  collectMonthlyAggregates     Boolean  @default(true)
+
+  // 留言與互動類別
+  collectChatMessages          Boolean  @default(true)
+  collectInteractions          Boolean  @default(true)
+  collectInteractionFrequency  Boolean  @default(true)
+
+  // 成就與徽章類別
+  collectBadgeProgress         Boolean  @default(true)
+  collectFootprintData         Boolean  @default(true)
+
+  // 分析與排名類別
+  collectRankings              Boolean  @default(true)
+  collectRadarAnalysis         Boolean  @default(true)
+
+  updatedAt                    DateTime @updatedAt
+  viewer                       Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@map("viewer_privacy_consents")
+}
+
+model DeletionRequest {
+  id                    String   @id @default(uuid())
+  viewerId              String   @unique
+  requestedAt           DateTime @default(now())
+  executionScheduledAt  DateTime
+  status                String   @default("pending") // "pending", "cancelled", "executed"
+
+  viewer                Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@index([executionScheduledAt, status])
+  @@map("deletion_requests")
+}
+
+model ExportJob {
+  id           String    @id @default(uuid())
+  viewerId     String
+  status       String    @default("pending") // "pending", "processing", "completed", "failed"
+  downloadPath String?
+  expiresAt    DateTime?
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+
+  viewer       Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId])
+  @@index([expiresAt])
+  @@map("export_jobs")
+}
+
+model DataRetentionLog {
+  id         String   @id @default(uuid())
+  viewerId   String
+  action     String   // "auto_archive", "auto_delete", "user_delete", "user_cancel"
+  reason     String
+  executedAt DateTime @default(now())
+
+  @@index([viewerId])
+  @@index([executedAt])
+  @@map("data_retention_logs")
+}
+
+model PrivacyAuditLog {
+  id         String   @id @default(uuid())
+  viewerId   String
+  action     String   // "consent_updated", "data_exported", "account_deleted", "deletion_cancelled"
+  details    String   // JSON string
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+
+  @@index([viewerId])
+  @@index([timestamp])
+  @@map("privacy_audit_logs")
 }
 
