@@ -13,7 +13,7 @@ export const TotalMessagesCard = React.forwardRef<
   Props & React.HTMLAttributes<HTMLDivElement>
 >(({ count, chatCount, ...props }, ref) => (
   <DashboardCardWrapper ref={ref} title="總留言數" {...props}>
-    <div className="flex flex-col justify-end h-full">
+    <div className="flex flex-col justify-start">
       <div className="flex items-baseline gap-1">
         <span className="text-3xl lg:text-4xl font-bold text-emerald-400 tracking-tight">
           {count.toLocaleString()}

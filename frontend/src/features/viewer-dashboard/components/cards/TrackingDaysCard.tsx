@@ -1,7 +1,5 @@
 import React from "react";
 import { DashboardCardWrapper } from "../DashboardCardWrapper";
-import { formatDistanceToNow } from "date-fns";
-import { zhTW } from "date-fns/locale";
 
 interface Props {
   days: number;
@@ -23,7 +21,7 @@ export const TrackingDaysCard = React.forwardRef<
 
   return (
     <DashboardCardWrapper ref={ref} title="追蹤天數" {...props}>
-      <div className="flex flex-col justify-end h-full">
+      <div className="flex flex-col justify-start">
         <div className="flex items-baseline gap-1">
           <span className="text-3xl lg:text-4xl font-bold text-indigo-400 tracking-tight">
             {days}

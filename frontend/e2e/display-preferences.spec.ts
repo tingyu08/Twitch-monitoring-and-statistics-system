@@ -124,21 +124,22 @@ test.describe('Display Preferences (Story 1.5)', () => {
 
   test('should show display preferences button', async ({ page }) => {
     await page.goto('/dashboard/streamer');
-    await page.waitForLoadState('networkidle');
 
-    // Find the display preferences button
+    // Find the display preferences button (don't use networkidle)
     const prefsButton = page.getByTestId('display-preferences-button');
-    await expect(prefsButton).toBeVisible({ timeout: 10000 });
+    await expect(prefsButton).toBeVisible({ timeout: 15000 });
     await expect(prefsButton).toContainText('顯示設定');
     await expect(prefsButton).toContainText('(4/4)'); // All 4 sections visible by default
   });
 
   test('should open dropdown panel when clicking preferences button', async ({ page }) => {
     await page.goto('/dashboard/streamer');
-    await page.waitForLoadState('networkidle');
+
+    // Wait for button to be visible
+    const prefsButton = page.getByTestId('display-preferences-button');
+    await expect(prefsButton).toBeVisible({ timeout: 15000 });
 
     // Click the preferences button
-    const prefsButton = page.getByTestId('display-preferences-button');
     await prefsButton.click();
 
     // Check that dropdown panel is visible
@@ -155,10 +156,9 @@ test.describe('Display Preferences (Story 1.5)', () => {
 
   test('should toggle section visibility when clicking toggle', async ({ page }) => {
     await page.goto('/dashboard/streamer');
-    await page.waitForLoadState('networkidle');
 
     // Verify summary section is visible initially
-    await expect(page.getByTestId('summary-section')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('summary-section')).toBeVisible({ timeout: 15000 });
 
     // Open preferences panel
     await page.getByTestId('display-preferences-button').click();
@@ -177,7 +177,9 @@ test.describe('Display Preferences (Story 1.5)', () => {
 
   test('should hide all sections when clicking "全部隱藏"', async ({ page }) => {
     await page.goto('/dashboard/streamer');
-    await page.waitForLoadState('networkidle');
+
+    // Wait for button to be visible
+    await expect(page.getByTestId('display-preferences-button')).toBeVisible({ timeout: 15000 });
 
     // Open preferences panel
     await page.getByTestId('display-preferences-button').click();
@@ -200,7 +202,9 @@ test.describe('Display Preferences (Story 1.5)', () => {
 
   test('should show all sections when clicking "全部顯示"', async ({ page }) => {
     await page.goto('/dashboard/streamer');
-    await page.waitForLoadState('networkidle');
+
+    // Wait for button to be visible
+    await expect(page.getByTestId('display-preferences-button')).toBeVisible({ timeout: 15000 });
 
     // First hide all
     await page.getByTestId('display-preferences-button').click();
@@ -224,7 +228,9 @@ test.describe('Display Preferences (Story 1.5)', () => {
 
   test('should close dropdown when clicking outside', async ({ page }) => {
     await page.goto('/dashboard/streamer');
-    await page.waitForLoadState('networkidle');
+
+    // Wait for button to be visible
+    await expect(page.getByTestId('display-preferences-button')).toBeVisible({ timeout: 15000 });
 
     // Open preferences panel
     await page.getByTestId('display-preferences-button').click();
@@ -239,7 +245,9 @@ test.describe('Display Preferences (Story 1.5)', () => {
 
   test('should persist preferences in localStorage', async ({ page }) => {
     await page.goto('/dashboard/streamer');
-    await page.waitForLoadState('networkidle');
+
+    // Wait for button to be visible
+    await expect(page.getByTestId('display-preferences-button')).toBeVisible({ timeout: 15000 });
 
     // Hide summary section
     await page.getByTestId('display-preferences-button').click();

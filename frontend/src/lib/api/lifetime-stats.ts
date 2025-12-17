@@ -1,4 +1,4 @@
-import { api } from "./index";
+import { httpClient } from "./httpClient";
 
 export interface Badge {
   id: string;
@@ -58,8 +58,8 @@ export const getLifetimeStats = async (
   viewerId: string,
   channelId: string
 ): Promise<LifetimeStatsResponse> => {
-  const { data } = await api.get<LifetimeStatsResponse>(
-    `/viewer/${viewerId}/channels/${channelId}/lifetime-stats`
+  const data = await httpClient<LifetimeStatsResponse>(
+    `/api/viewer/${viewerId}/channels/${channelId}/lifetime-stats`
   );
   return data;
 };

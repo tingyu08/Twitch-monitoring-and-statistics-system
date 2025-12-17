@@ -1,18 +1,12 @@
 "use client";
 
 import { InteractionBreakdown } from "@/lib/api/viewer";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import {
   InteractionDetailModal,
   useInteractionDetailModal,
 } from "./InteractionDetailModal";
+import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 
 interface InteractionBreakdownChartProps {
   data: InteractionBreakdown;
@@ -59,52 +53,47 @@ export function InteractionBreakdownChart({
           <p className="text-sm text-muted-foreground">點擊各類型查看詳情</p>
         </div>
         <div className="p-6 pt-0">
-          <div style={{ width: "100%", height }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                  onClick={handlePieClick}
-                  style={{ cursor: "pointer" }}
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.color}
-                      stroke={entry.color}
-                      className="hover:opacity-80 transition-opacity"
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number) => [
-                    value.toLocaleString(),
-                    "次數",
-                  ]}
-                  contentStyle={{
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                  }}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  onClick={(e) => {
-                    if (typeof e.value === "string") {
-                      openModal(e.value);
-                    }
-                  }}
-                  wrapperStyle={{ cursor: "pointer" }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <SafeResponsiveContainer height={height}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={5}
+                dataKey="value"
+                onClick={handlePieClick}
+                style={{ cursor: "pointer" }}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.color}
+                    stroke={entry.color}
+                    className="hover:opacity-80 transition-opacity"
+                  />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value: number) => [value.toLocaleString(), "次數"]}
+                contentStyle={{
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                }}
+              />
+              <Legend
+                verticalAlign="bottom"
+                height={36}
+                onClick={(e) => {
+                  if (typeof e.value === "string") {
+                    openModal(e.value);
+                  }
+                }}
+                wrapperStyle={{ cursor: "pointer" }}
+              />
+            </PieChart>
+          </SafeResponsiveContainer>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { FootprintDashboard } from "@/features/viewer-dashboard/components/FootprintDashboard";
 import {
   getLifetimeStats,
@@ -13,10 +13,11 @@ import {
 } from "@/lib/api/dashboard-layout";
 import { useAuthSession } from "@/features/auth/AuthContext";
 
-import { isViewer } from "@/lib/api/auth"; // Import isViewer
+import { isViewer } from "@/lib/api/auth";
 
 export default function ViewerFootprintPage() {
   const params = useParams();
+  const router = useRouter();
   const channelId = params.channelId as string;
   const { user, loading: authLoading } = useAuthSession();
 
@@ -27,10 +28,8 @@ export default function ViewerFootprintPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Wait for auth
       if (authLoading) return;
 
-      // Check if user is viewer
       if (!user || !isViewer(user)) {
         setLoading(false);
         return;
@@ -38,7 +37,6 @@ export default function ViewerFootprintPage() {
 
       try {
         setLoading(true);
-        // Note: Backend ignores viewerId in path and uses token, so we can pass 'me' or user.id
         const vId = user.viewerId || "me";
         const [statsData, layoutData] = await Promise.all([
           getLifetimeStats(vId, channelId),
@@ -60,59 +58,83 @@ export default function ViewerFootprintPage() {
 
   if (loading || authLoading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <div className="text-slate-500 animate-pulse">正在載入足跡數據...</div>
-      </div>
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-purple-300 animate-pulse">正在載入足跡數據...</div>
+      </main>
     );
   }
 
   if (!user) {
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <div className="text-slate-500">請先登入</div>
-      </div>
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-purple-300/70">請先登入</div>
+      </main>
     );
   }
 
   if (error || !stats) {
     return (
-      <div className="p-8 text-center mt-10">
-        <h1 className="text-2xl font-bold text-slate-400 mb-2">
+      <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-8">
+        <h1 className="text-2xl font-bold text-purple-300 mb-2">
           無法載入足跡數據
         </h1>
-        <p className="text-slate-500">
+        <p className="text-purple-300/50 mb-4">
           {error || "找不到此頻道的統計資料或資料尚未生成"}
         </p>
         <button
           onClick={() => window.location.reload()}
-          className="mt-4 px-4 py-2 bg-slate-800 text-slate-300 rounded hover:bg-slate-700 transition"
+          className="px-4 py-2 bg-white/10 backdrop-blur-sm text-purple-300 rounded-xl hover:bg-white/20 transition border border-white/10"
         >
           重試
         </button>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="p-4 lg:p-6 max-w-[1600px] mx-auto pb-20">
-      <div className="mb-8 border-b border-slate-800/50 pb-6">
-        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
-          觀眾足跡總覽
-        </h1>
-        <p className="text-slate-400">
-          探索你在{" "}
-          <span className="text-purple-400 font-medium">
+    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      {/* Header Bar */}
+      <header className="border-b border-white/10 backdrop-blur-sm bg-black/20">
+        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-2 text-sm text-purple-300/70">
+          <button
+            onClick={() => router.push("/dashboard/viewer")}
+            className="hover:text-purple-400 transition-colors"
+          >
+            觀眾儀表板
+          </button>
+          <span>/</span>
+          <button
+            onClick={() => router.push(`/dashboard/viewer/${channelId}`)}
+            className="hover:text-purple-400 transition-colors"
+          >
             {stats.channelDisplayName || stats.channelName}
-          </span>{" "}
-          的互動歷程與成就
-        </p>
-      </div>
+          </button>
+          <span>/</span>
+          <span className="text-white">成就足跡</span>
+        </div>
+      </header>
 
-      <FootprintDashboard
-        stats={stats}
-        channelId={channelId}
-        initialLayout={layout}
-      />
-    </div>
+      <div className="p-4 lg:p-6 max-w-[1600px] mx-auto pb-20">
+        {/* Page Header */}
+        <section className="mb-8 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
+          <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-2 tracking-tight">
+            觀眾足跡總覽
+          </h1>
+          <p className="text-purple-300/70">
+            探索你在{" "}
+            <span className="text-purple-400 font-medium">
+              {stats.channelDisplayName || stats.channelName}
+            </span>{" "}
+            的互動歷程與成就
+          </p>
+        </section>
+
+        <FootprintDashboard
+          stats={stats}
+          channelId={channelId}
+          initialLayout={layout}
+        />
+      </div>
+    </main>
   );
 }

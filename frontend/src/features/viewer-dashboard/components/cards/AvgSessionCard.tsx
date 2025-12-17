@@ -12,7 +12,7 @@ export const AvgSessionCard = React.forwardRef<
   Props & React.HTMLAttributes<HTMLDivElement>
 >(({ minutes, ...props }, ref) => (
   <DashboardCardWrapper ref={ref} title="平均每次觀看" {...props}>
-    <div className="flex flex-col justify-end h-full">
+    <div className="flex flex-col justify-start">
       <div className="flex items-baseline gap-1">
         <span className="text-3xl lg:text-4xl font-bold text-teal-400 tracking-tight">
           {minutes}

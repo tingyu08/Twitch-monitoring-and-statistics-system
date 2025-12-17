@@ -13,7 +13,7 @@ export const StreakCard = React.forwardRef<
   Props & React.HTMLAttributes<HTMLDivElement>
 >(({ current, longest, ...props }, ref) => (
   <DashboardCardWrapper ref={ref} title="連續觀看" {...props}>
-    <div className="flex flex-col justify-between h-full py-1">
+    <div className="flex flex-col justify-start gap-2">
       <div>
         <div className="text-xs text-slate-400">當前連續</div>
         <div className="text-2xl lg:text-3xl font-bold text-orange-400 flex items-center gap-2">

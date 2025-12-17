@@ -24,16 +24,32 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 // Default Layout
-const DEFAULT_LAYOUT: Layout[] = [
-  { i: "total-watch-time", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: "total-messages", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: "tracking-days", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: "streak", x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: "radar-chart", x: 0, y: 2, w: 6, h: 4, minW: 4, minH: 4 }, // 6x4
-  { i: "badges", x: 6, y: 2, w: 6, h: 4, minW: 4, minH: 3 }, // 6x4
-  { i: "most-active-month", x: 0, y: 6, w: 4, h: 2, minW: 2, minH: 2 },
-  { i: "ranking", x: 4, y: 6, w: 4, h: 2, minW: 3, minH: 2 },
-  { i: "avg-session", x: 8, y: 6, w: 4, h: 2, minW: 2, minH: 2 },
+// Define a local interface that matches what we need and what react-grid-layout expects
+interface DashboardGridItem {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  maxW?: number;
+  minH?: number;
+  maxH?: number;
+  static?: boolean;
+  isDraggable?: boolean;
+  isResizable?: boolean;
+}
+
+const DEFAULT_LAYOUT: DashboardGridItem[] = [
+  { i: "total-watch-time", x: 0, y: 0, w: 3, h: 1, minW: 2, minH: 1 },
+  { i: "total-messages", x: 3, y: 0, w: 3, h: 1, minW: 2, minH: 1 },
+  { i: "tracking-days", x: 6, y: 0, w: 3, h: 1, minW: 2, minH: 1 },
+  { i: "streak", x: 9, y: 0, w: 3, h: 1, minW: 2, minH: 1 },
+  { i: "radar-chart", x: 0, y: 1, w: 6, h: 3, minW: 4, minH: 2 },
+  { i: "badges", x: 6, y: 1, w: 6, h: 3, minW: 4, minH: 2 },
+  { i: "most-active-month", x: 0, y: 4, w: 4, h: 1, minW: 2, minH: 1 },
+  { i: "ranking", x: 4, y: 4, w: 4, h: 1, minW: 3, minH: 1 },
+  { i: "avg-session", x: 8, y: 4, w: 4, h: 1, minW: 2, minH: 1 },
 ];
 
 interface Props {
@@ -47,11 +63,19 @@ export const FootprintDashboard = ({
   channelId,
   initialLayout,
 }: Props) => {
-  const [layout, setLayout] = useState<Layout[]>(
-    (initialLayout as Layout[])?.length > 0
-      ? (initialLayout as Layout[])
-      : DEFAULT_LAYOUT
-  );
+  // Ensure initialLayout is compatible or fallback to default
+  const [layout, setLayout] = useState<DashboardGridItem[]>(() => {
+    if (
+      initialLayout &&
+      Array.isArray(initialLayout) &&
+      initialLayout.length > 0
+    ) {
+      // Cast the initial layout to Layout[] after validation if needed,
+      // or ensure DashboardLayout type is effectively Layout[]
+      return initialLayout as unknown as DashboardGridItem[];
+    }
+    return DEFAULT_LAYOUT;
+  });
   const [width, setWidth] = useState(1200);
   const [isDraggable, setIsDraggable] = useState(true);
 
@@ -89,33 +113,43 @@ export const FootprintDashboard = ({
   }, []);
 
   // Debounced save
-  const saveLayout = useCallback(
-    debounce(async (newLayout: Layout[]) => {
-      try {
-        const cleanLayout = newLayout.map(
-          ({ i, x, y, w, h, minW, maxW, minH, maxH }) => ({
-            i,
-            x,
-            y,
-            w,
-            h,
-            minW,
-            maxW,
-            minH,
-            maxH,
-          })
-        );
-        await saveDashboardLayout(channelId, cleanLayout);
-      } catch (err) {
-        console.error("Failed to save layout", err);
-      }
-    }, 2000),
+  const saveLayout = useMemo(
+    () =>
+      debounce(async (newLayout: DashboardGridItem[]) => {
+        try {
+          // Clean layout data before saving to avoid circular references or extra junk
+          const cleanLayout = newLayout.map(
+            ({ i, x, y, w, h, minW, maxW, minH, maxH }) => ({
+              i,
+              x,
+              y,
+              w,
+              h,
+              minW,
+              maxW,
+              minH,
+              maxH,
+            })
+          );
+          await saveDashboardLayout(channelId, cleanLayout);
+        } catch (err) {
+          console.error("Failed to save layout", err);
+        }
+      }, 2000),
     [channelId]
   );
 
-  const handleLayoutChange = (newLayout: Layout[]) => {
-    setLayout(newLayout);
-    saveLayout(newLayout);
+  // Cancel debounce on unmount
+  useEffect(() => {
+    return () => {
+      saveLayout.cancel();
+    };
+  }, [saveLayout]);
+
+  const handleLayoutChange = (newLayout: any) => {
+    // Cast incoming layout from library to our type
+    setLayout(newLayout as DashboardGridItem[]);
+    saveLayout(newLayout as DashboardGridItem[]);
   };
 
   const handleReset = async () => {
@@ -128,6 +162,9 @@ export const FootprintDashboard = ({
       }
     }
   };
+
+  // Cast GridLayout to any to bypass incorrect type definitions in this environment
+  const GridLayoutAny = GridLayout as any;
 
   return (
     <div className="space-y-4">
@@ -147,11 +184,11 @@ export const FootprintDashboard = ({
       </div>
 
       <div id="dashboard-container" className="w-full relative min-h-[500px]">
-        <GridLayout
+        <GridLayoutAny
           className="layout"
           layout={layout}
           cols={12}
-          rowHeight={80}
+          rowHeight={100}
           width={width}
           isDraggable={isDraggable}
           isResizable={isDraggable}
@@ -160,44 +197,55 @@ export const FootprintDashboard = ({
           margin={[16, 16]}
           compactType="vertical"
         >
-          <TotalWatchTimeCard
-            key="total-watch-time"
-            minutes={stats.lifetimeStats.watchTime.totalMinutes}
-          />
-          <TotalMessagesCard
-            key="total-messages"
-            count={stats.lifetimeStats.messages.totalMessages}
-            chatCount={stats.lifetimeStats.messages.chatMessages}
-          />
-          <TrackingDaysCard
-            key="tracking-days"
-            days={stats.lifetimeStats.loyalty.trackingDays}
-            startDate={stats.lifetimeStats.watchTime.firstWatchedAt}
-          />
-          <StreakCard
-            key="streak"
-            current={stats.lifetimeStats.loyalty.currentStreakDays}
-            longest={stats.lifetimeStats.loyalty.longestStreakDays}
-          />
+          <div key="total-watch-time" className="h-full">
+            <TotalWatchTimeCard
+              minutes={stats.lifetimeStats.watchTime.totalMinutes}
+            />
+          </div>
+          <div key="total-messages" className="h-full">
+            <TotalMessagesCard
+              count={stats.lifetimeStats.messages.totalMessages}
+              chatCount={stats.lifetimeStats.messages.chatMessages}
+            />
+          </div>
+          <div key="tracking-days" className="h-full">
+            <TrackingDaysCard
+              days={stats.lifetimeStats.loyalty.trackingDays}
+              startDate={stats.lifetimeStats.watchTime.firstWatchedAt}
+            />
+          </div>
+          <div key="streak" className="h-full">
+            <StreakCard
+              current={stats.lifetimeStats.loyalty.currentStreakDays}
+              longest={stats.lifetimeStats.loyalty.longestStreakDays}
+            />
+          </div>
 
-          <RadarChartCard key="radar-chart" scores={stats.radarScores} />
-          <BadgesCard key="badges" badges={stats.badges} />
+          <div key="radar-chart" className="h-full">
+            <RadarChartCard scores={stats.radarScores} />
+          </div>
+          <div key="badges" className="h-full">
+            <BadgesCard badges={stats.badges} />
+          </div>
 
-          <MostActiveMonthCard
-            key="most-active-month"
-            month={stats.lifetimeStats.activity.mostActiveMonth}
-            count={stats.lifetimeStats.activity.mostActiveMonthCount}
-          />
-          <RankingCard
-            key="ranking"
-            watchPercentile={stats.lifetimeStats.rankings.watchTimePercentile}
-            msgPercentile={stats.lifetimeStats.rankings.messagePercentile}
-          />
-          <AvgSessionCard
-            key="avg-session"
-            minutes={stats.lifetimeStats.watchTime.avgSessionMinutes}
-          />
-        </GridLayout>
+          <div key="most-active-month" className="h-full">
+            <MostActiveMonthCard
+              month={stats.lifetimeStats.activity.mostActiveMonth}
+              count={stats.lifetimeStats.activity.mostActiveMonthCount}
+            />
+          </div>
+          <div key="ranking" className="h-full">
+            <RankingCard
+              watchPercentile={stats.lifetimeStats.rankings.watchTimePercentile}
+              msgPercentile={stats.lifetimeStats.rankings.messagePercentile}
+            />
+          </div>
+          <div key="avg-session" className="h-full">
+            <AvgSessionCard
+              minutes={stats.lifetimeStats.watchTime.avgSessionMinutes}
+            />
+          </div>
+        </GridLayoutAny>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { prisma } from '../../db/prisma';
+import { prisma } from "../../db/prisma";
 
 export interface StreamerSummary {
   totalStreamHours: number;
@@ -16,7 +16,7 @@ export interface TimeSeriesDataPoint {
 
 export interface TimeSeriesResponse {
   range: string;
-  granularity: 'day' | 'week';
+  granularity: "day" | "week";
   data: TimeSeriesDataPoint[];
   isEstimated?: boolean;
 }
@@ -43,13 +43,13 @@ export interface HeatmapResponse {
  */
 export async function getStreamerSummary(
   streamerId: string,
-  range: string = '30d'
+  range: string = "30d"
 ): Promise<StreamerSummary> {
   // 1. 解析時間範圍
   const now = new Date();
   let days = 30;
-  if (range === '7d') days = 7;
-  if (range === '90d') days = 90;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
@@ -85,7 +85,10 @@ export async function getStreamerSummary(
 
   // 4. 計算統計數據
   const totalStreamSessions = sessions.length;
-  const totalSeconds = sessions.reduce((sum, s) => sum + (s.durationSeconds || 0), 0);
+  const totalSeconds = sessions.reduce(
+    (sum, s) => sum + (s.durationSeconds || 0),
+    0
+  );
   const totalStreamHours = Math.round((totalSeconds / 3600) * 10) / 10; // 取小數點後一位
   const avgStreamDurationMinutes =
     totalStreamSessions > 0
@@ -110,14 +113,14 @@ export async function getStreamerSummary(
  */
 export async function getStreamerTimeSeries(
   streamerId: string,
-  range: string = '30d',
-  granularity: 'day' | 'week' = 'day'
+  range: string = "30d",
+  granularity: "day" | "week" = "day"
 ): Promise<TimeSeriesResponse> {
   // 1. 解析時間範圍
   const now = new Date();
   let days = 30;
-  if (range === '7d') days = 7;
-  if (range === '90d') days = 90;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
@@ -148,12 +151,12 @@ export async function getStreamerTimeSeries(
       startedAt: true,
     },
     orderBy: {
-      startedAt: 'asc',
+      startedAt: "asc",
     },
   });
 
   // 4. 根據 granularity 彙整資料
-  if (granularity === 'day') {
+  if (granularity === "day") {
     return aggregateByDay(sessions, range, cutoffDate, now);
   } else {
     return aggregateByWeek(sessions, range, cutoffDate, now);
@@ -172,16 +175,18 @@ function aggregateByDay(
   const dataMap = new Map<string, { totalSeconds: number; count: number }>();
 
   // 初始化所有日期為 0
-  const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+  const dayCount = Math.ceil(
+    (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)
+  );
   for (let i = 0; i < dayCount; i++) {
     const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-    const dateKey = date.toISOString().split('T')[0];
+    const dateKey = date.toISOString().split("T")[0];
     dataMap.set(dateKey, { totalSeconds: 0, count: 0 });
   }
 
   // 彙整實際資料
   sessions.forEach((session) => {
-    const dateKey = session.startedAt.toISOString().split('T')[0];
+    const dateKey = session.startedAt.toISOString().split("T")[0];
     const existing = dataMap.get(dateKey) || { totalSeconds: 0, count: 0 };
     existing.totalSeconds += session.durationSeconds || 0;
     existing.count += 1;
@@ -199,7 +204,7 @@ function aggregateByDay(
 
   return {
     range,
-    granularity: 'day',
+    granularity: "day",
     data,
     isEstimated: false,
   };
@@ -222,11 +227,13 @@ function aggregateByWeek(
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 調整至週一
     d.setDate(diff);
-    return d.toISOString().split('T')[0];
+    return d.toISOString().split("T")[0];
   }
 
   // 初始化所有週為 0
-  const weekCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const weekCount = Math.ceil(
+    (endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
+  );
   for (let i = 0; i < weekCount; i++) {
     const date = new Date(startDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
     const weekKey = getWeekStart(date);
@@ -255,7 +262,7 @@ function aggregateByWeek(
 
   return {
     range,
-    granularity: 'week',
+    granularity: "week",
     data,
     isEstimated: false,
   };
@@ -269,13 +276,13 @@ function aggregateByWeek(
  */
 export async function getStreamerHeatmap(
   streamerId: string,
-  range: string = '30d'
+  range: string = "30d"
 ): Promise<HeatmapResponse> {
   // 1. 解析時間範圍
   const now = new Date();
   let days = 30;
-  if (range === '7d') days = 7;
-  if (range === '90d') days = 90;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
@@ -336,9 +343,9 @@ export async function getStreamerHeatmap(
   let minValue = Number.MAX_VALUE;
 
   heatmapMatrix.forEach((value, key) => {
-    const [dayOfWeek, hour] = key.split('-').map(Number);
+    const [dayOfWeek, hour] = key.split("-").map(Number);
     const roundedValue = Math.round(value * 10) / 10;
-    
+
     data.push({
       dayOfWeek,
       hour,

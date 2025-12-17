@@ -13,7 +13,7 @@ export const MostActiveMonthCard = React.forwardRef<
   Props & React.HTMLAttributes<HTMLDivElement>
 >(({ month, count, ...props }, ref) => (
   <DashboardCardWrapper ref={ref} title="最活躍月份" {...props}>
-    <div className="flex flex-col justify-end h-full">
+    <div className="flex flex-col justify-start">
       <div className="text-2xl lg:text-3xl font-bold text-purple-400 tracking-tight mb-1">
         {month || "-"}
       </div>

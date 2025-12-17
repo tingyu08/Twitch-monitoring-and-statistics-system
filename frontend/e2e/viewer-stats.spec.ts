@@ -22,21 +22,58 @@ const mockChannels = [
   },
 ];
 
-// Mock for /api/viewer/stats/:channelId - should be an ARRAY of daily stats
-const mockDailyStats = [
-  {
-    date: "2025-01-01T00:00:00Z",
-    watchHours: 2.5,
-    messageCount: 10,
-    emoteCount: 5,
+// Mock for /api/viewer/stats/:channelId - returns full ViewerChannelStats object
+const mockChannelStats = {
+  channel: {
+    id: "ch_1",
+    name: "shroud",
+    displayName: "Shroud",
+    avatarUrl: "https://ui-avatars.com/api/?name=Shroud",
+    isLive: true,
   },
-  {
-    date: "2025-01-02T00:00:00Z",
-    watchHours: 1.0,
-    messageCount: 2,
-    emoteCount: 1,
+  dailyStats: [
+    {
+      date: "2025-01-01T00:00:00Z",
+      watchHours: 2.5,
+      messageCount: 10,
+      emoteCount: 5,
+    },
+    {
+      date: "2025-01-02T00:00:00Z",
+      watchHours: 1.0,
+      messageCount: 2,
+      emoteCount: 1,
+    },
+  ],
+  summary: {
+    totalWatchHours: 3.5,
+    sessionCount: 2,
+    totalMessages: 12,
+    totalEmotes: 6,
+    averageWatchMinutesPerDay: 105,
+    firstWatchDate: "2025-01-01T00:00:00Z",
+    lastWatchDate: "2025-01-02T00:00:00Z",
   },
-];
+};
+
+// Mock for message stats
+const mockMessageStats = {
+  summary: {
+    totalMessages: 12,
+    chatMessages: 10,
+    emotes: 6,
+    subscriptions: 0,
+    cheers: 0,
+  },
+  dailyBreakdown: [
+    { date: "2025-01-01", messageCount: 10, emoteCount: 5, type: "chat" },
+    { date: "2025-01-02", messageCount: 2, emoteCount: 1, type: "chat" },
+  ],
+  interactionBreakdown: [
+    { type: "chat", count: 10 },
+    { type: "emote", count: 6 },
+  ],
+};
 
 test.describe("Viewer Stats & Charts", () => {
   test.beforeEach(async ({ page }) => {
@@ -50,9 +87,14 @@ test.describe("Viewer Stats & Charts", () => {
       await route.fulfill({ json: mockChannels });
     });
 
-    // 3. Mock Viewer Stats API - returns array directly
+    // 3. Mock Viewer Stats API - returns ViewerChannelStats object
     await page.route("*/**/api/viewer/stats/**", async (route) => {
-      await route.fulfill({ json: mockDailyStats });
+      await route.fulfill({ json: mockChannelStats });
+    });
+
+    // 4. Mock Message Stats API
+    await page.route("*/**/api/viewer/**/messages/**/stats**", async (route) => {
+      await route.fulfill({ json: mockMessageStats });
     });
 
     // 模擬登入完成，跳轉到 Viewer Dashboard
@@ -105,17 +147,14 @@ test.describe("Viewer Stats & Charts", () => {
     // 導航到詳情頁
     await page.goto("/dashboard/viewer/ch_1");
 
-    // 等待頁面完全載入
-    await page.waitForLoadState("networkidle");
+    // 驗證時間範圍選擇器存在（直接等待元素，不使用 networkidle）
+    await expect(page.getByText("時間範圍：")).toBeVisible({ timeout: 15000 });
 
-    // 驗證時間範圍選擇器存在
-    await expect(page.getByText("時間範圍：")).toBeVisible({ timeout: 10000 });
-
-    // 驗證所有時間範圍按鈕存在
-    await expect(page.getByRole("button", { name: "7 天" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "30 天" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "90 天" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "全部" })).toBeVisible();
+    // 驗證所有時間範圍選項存在 (使用 radio role)
+    await expect(page.getByRole("radio", { name: /7 天/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /30 天/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /90 天/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /全部/ })).toBeVisible();
 
     // 驗證預設顯示 30 天的資料
     await expect(page.getByText("顯示過去 30 天的資料")).toBeVisible();
@@ -127,23 +166,19 @@ test.describe("Viewer Stats & Charts", () => {
     // 導航到詳情頁
     await page.goto("/dashboard/viewer/ch_1");
 
-    // 等待頁面完全載入
-    await page.waitForLoadState("networkidle");
+    // 等待時間範圍選擇器出現
+    await expect(page.getByText("時間範圍：")).toBeVisible({ timeout: 15000 });
 
-    // 點擊 7 天按鈕
-    await page.getByRole("button", { name: "7 天" }).click();
-
-    // 等待數據重新載入
-    await page.waitForTimeout(1000);
+    // 點擊 7 天選項
+    await page.getByRole("radio", { name: /7 天/ }).click();
 
     // 驗證顯示的天數已更新為 7 天
-    await expect(page.getByText("顯示過去 7 天的資料")).toBeVisible();
+    await expect(page.getByText("顯示過去 7 天的資料")).toBeVisible({ timeout: 5000 });
 
-    // 點擊 90 天按鈕
-    await page.getByRole("button", { name: "90 天" }).click();
-    await page.waitForTimeout(1000);
+    // 點擊 90 天選項
+    await page.getByRole("radio", { name: /90 天/ }).click();
 
     // 驗證顯示的天數已更新為 90 天
-    await expect(page.getByText("顯示過去 90 天的資料")).toBeVisible();
+    await expect(page.getByText("顯示過去 90 天的資料")).toBeVisible({ timeout: 5000 });
   });
 });

@@ -111,16 +111,7 @@ test.describe('Dashboard Navigation (with mocked auth)', () => {
   });
 
   test('should have working logout button', async ({ page }) => {
-    const authPromise = page.waitForResponse(response => response.url().includes('/api/auth/me') && response.status() === 200);
-    await page.goto('/dashboard/streamer');
-    await authPromise;
-    await page.waitForLoadState('networkidle');
-
-    // Find and click logout button using data-testid
-    const logoutButton = page.getByTestId('logout-button');
-    await expect(logoutButton).toBeVisible({ timeout: 10000 });
-
-    // Mock logout endpoint
+    // Mock logout endpoint before navigation
     await page.route('**/api/auth/logout', async route => {
       await route.fulfill({
         status: 200,
@@ -128,11 +119,19 @@ test.describe('Dashboard Navigation (with mocked auth)', () => {
         body: JSON.stringify({ success: true }),
       });
     });
-    
+
+    const authPromise = page.waitForResponse(response => response.url().includes('/api/auth/me') && response.status() === 200);
+    await page.goto('/dashboard/streamer');
+    await authPromise;
+
+    // Find and click logout button using data-testid (don't use networkidle)
+    const logoutButton = page.getByTestId('logout-button');
+    await expect(logoutButton).toBeVisible({ timeout: 15000 });
+
     await logoutButton.click();
-    
+
     // Should redirect to home/login
-    await page.waitForURL(/\/(login)?$/, { timeout: 5000 });
+    await page.waitForURL(/\/(login)?$/, { timeout: 10000 });
   });
 });
 

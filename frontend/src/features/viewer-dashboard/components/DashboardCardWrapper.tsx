@@ -23,7 +23,7 @@ export const DashboardCardWrapper = React.forwardRef<
       ref={ref}
       style={style}
       className={cn(
-        "bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden flex flex-col shadow-lg transition-shadow hover:shadow-slate-800/50",
+        "h-full bg-slate-900 border border-slate-700/50 rounded-xl overflow-visible flex flex-col shadow-lg transition-shadow hover:shadow-slate-800/50",
         className
       )}
       {...props}
@@ -31,7 +31,7 @@ export const DashboardCardWrapper = React.forwardRef<
       <div className="drag-handle h-6 w-full cursor-grab active:cursor-grabbing bg-slate-800 flex justify-center items-center hover:bg-slate-700/50 transition-colors group">
         <div className="w-8 h-1 bg-slate-600 rounded-full group-hover:bg-slate-500 transition-colors" />
       </div>
-      <div className="flex-1 p-4 overflow-hidden relative flex flex-col">
+      <div className="flex-1 p-4 overflow-visible relative flex flex-col">
         {title && (
           <h3 className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">
             {title}

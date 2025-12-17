@@ -1,7 +1,14 @@
 import type { Request, Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
-import { getStreamerSummary, getStreamerTimeSeries, getStreamerHeatmap } from "./streamer.service";
-import { getSubscriptionTrend, syncSubscriptionSnapshot } from "./subscription-sync.service";
+import {
+  getStreamerSummary,
+  getStreamerTimeSeries,
+  getStreamerHeatmap,
+} from "./streamer.service";
+import {
+  getSubscriptionTrend,
+  syncSubscriptionSnapshot,
+} from "./subscription-sync.service";
 import { streamerLogger } from "../../utils/logger";
 
 export async function getSummaryHandler(
@@ -20,7 +27,9 @@ export async function getSummaryHandler(
 
     // 驗證 range 參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res
+        .status(400)
+        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -51,7 +60,9 @@ export async function getStreamerSummaryByIdHandler(
     }
 
     if (!["7d", "30d", "90d"].includes(range)) {
-      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res
+        .status(400)
+        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -84,19 +95,23 @@ export async function getTimeSeriesHandler(
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res
+        .status(400)
+        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
     if (!["day", "week"].includes(granularity)) {
-      res.status(400).json({ error: "Invalid granularity parameter. Use day or week." });
+      res
+        .status(400)
+        .json({ error: "Invalid granularity parameter. Use day or week." });
       return;
     }
 
     const timeSeries = await getStreamerTimeSeries(
       streamerId,
       range,
-      granularity as 'day' | 'week'
+      granularity as "day" | "week"
     );
     res.json(timeSeries);
   } catch (error) {
@@ -125,7 +140,9 @@ export async function getHeatmapHandler(
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res
+        .status(400)
+        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -157,7 +174,9 @@ export async function getSubscriptionTrendHandler(
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res
+        .status(400)
+        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -192,16 +211,26 @@ export async function syncSubscriptionsHandler(
 
     // 檢查是否是特定的錯誤類型
     if (error instanceof Error) {
-      if (error.message.includes('No channel found')) {
+      if (error.message.includes("No channel found")) {
         res.status(404).json({ error: "Channel not found" });
         return;
       }
-      if (error.message.includes('No Twitch token found')) {
-        res.status(401).json({ error: "Twitch token not found. Please re-authenticate." });
+      if (error.message.includes("No Twitch token found")) {
+        res
+          .status(401)
+          .json({ error: "Twitch token not found. Please re-authenticate." });
         return;
       }
-      if (error.message.includes('Unauthorized') || error.message.includes('Forbidden')) {
-        res.status(403).json({ error: "Unable to access subscription data. Please check permissions." });
+      if (
+        error.message.includes("Unauthorized") ||
+        error.message.includes("Forbidden")
+      ) {
+        res
+          .status(403)
+          .json({
+            error:
+              "Unable to access subscription data. Please check permissions.",
+          });
         return;
       }
     }

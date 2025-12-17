@@ -1,18 +1,10 @@
-﻿import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Playwright E2E 測試配置
  *
- * 支援以下瀏覽器：
- * - Chromium (Chrome/Edge)
- * - Firefox
- * - WebKit (Safari)
- *
- * 執行方式：
- * - 全部瀏覽器：npx playwright test
- * - 僅 Chrome：npx playwright test --project=chromium
- * - 僅 Firefox：npx playwright test --project=firefox
- * - 僅 Safari：npx playwright test --project=webkit
+ * 執行測試：npx playwright test
+ * 使用 Playwright 內建 page.route() 進行 API mock，不需要外部 mock server
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -21,23 +13,24 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: [["html", { outputFolder: "playwright-report" }], ["list"]],
+  // 增加全域 timeout
+  timeout: 60000,
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
-    // 視窗大小
     viewport: { width: 1280, height: 720 },
+    // 更長的 action timeout
+    actionTimeout: 30000,
   },
   projects: [
-    // === 桌面瀏覽器 ===
     {
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
-        // Chrome 特定設定
         launchOptions: {
-          args: ["--disable-web-security"], // 開發環境允許跨域
+          args: ["--disable-web-security"],
         },
       },
     },
@@ -53,21 +46,12 @@ export default defineConfig({
         ...devices["Desktop Safari"],
       },
     },
-
-    // === 行動裝置模擬（可選） ===
-    // {
-    //   name: 'mobile-chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'mobile-safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
   ],
-  // webServer: {
-  //   command: "npm run dev",
-  //   url: "http://localhost:3000",
-  //   reuseExistingServer: !process.env.CI,
-  //   timeout: 120000,
-  // },
+  // 自動啟動 Next.js dev server
+  webServer: {
+    command: "npm run dev:next",
+    url: "http://localhost:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000,
+  },
 });

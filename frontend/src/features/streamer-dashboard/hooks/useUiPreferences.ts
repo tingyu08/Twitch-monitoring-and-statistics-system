@@ -5,12 +5,12 @@
  * Story 1.5: 實況主儀表板 UX 偏好設定
  */
 
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 // localStorage key（包含版本號，方便未來升級）
-const STORAGE_KEY = 'bmad.streamerDashboard.uiPreferences.v1';
+const STORAGE_KEY = "bmad.streamerDashboard.uiPreferences.v1";
 
 /**
  * UI 偏好設定介面
@@ -41,7 +41,7 @@ const DEFAULT_PREFERENCES: UiPreferences = {
  * 從 localStorage 讀取偏好設定
  */
 function loadPreferences(): UiPreferences {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return DEFAULT_PREFERENCES;
   }
 
@@ -53,7 +53,7 @@ function loadPreferences(): UiPreferences {
       return { ...DEFAULT_PREFERENCES, ...parsed };
     }
   } catch (error) {
-    console.warn('Failed to load UI preferences from localStorage:', error);
+    console.warn("Failed to load UI preferences from localStorage:", error);
   }
 
   return DEFAULT_PREFERENCES;
@@ -63,14 +63,14 @@ function loadPreferences(): UiPreferences {
  * 儲存偏好設定到 localStorage
  */
 function savePreferences(preferences: UiPreferences): void {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return;
   }
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
   } catch (error) {
-    console.warn('Failed to save UI preferences to localStorage:', error);
+    console.warn("Failed to save UI preferences to localStorage:", error);
   }
 }
 
@@ -91,7 +91,8 @@ function savePreferences(preferences: UiPreferences): void {
  * ```
  */
 export function useUiPreferences() {
-  const [preferences, setPreferences] = useState<UiPreferences>(DEFAULT_PREFERENCES);
+  const [preferences, setPreferences] =
+    useState<UiPreferences>(DEFAULT_PREFERENCES);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 初始化時從 localStorage 讀取
@@ -112,7 +113,7 @@ export function useUiPreferences() {
    * 切換單一偏好設定
    */
   const togglePreference = useCallback((key: keyof UiPreferences) => {
-    setPreferences(prev => ({
+    setPreferences((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
@@ -121,12 +122,15 @@ export function useUiPreferences() {
   /**
    * 設定單一偏好
    */
-  const setPreference = useCallback((key: keyof UiPreferences, value: boolean) => {
-    setPreferences(prev => ({
-      ...prev,
-      [key]: value,
-    }));
-  }, []);
+  const setPreference = useCallback(
+    (key: keyof UiPreferences, value: boolean) => {
+      setPreferences((prev) => ({
+        ...prev,
+        [key]: value,
+      }));
+    },
+    []
+  );
 
   /**
    * 重置為預設值
@@ -186,27 +190,27 @@ export const PREFERENCE_ITEMS: Array<{
   icon: string;
 }> = [
   {
-    key: 'showSummaryCards',
-    label: '開台統計總覽',
-    description: '總開台時數、場數、平均時長',
-    icon: '📊',
+    key: "showSummaryCards",
+    label: "開台統計總覽",
+    description: "總開台時數、場數、平均時長",
+    icon: "📊",
   },
   {
-    key: 'showTimeSeriesChart',
-    label: '開台時間分析',
-    description: '開台時數與場數趨勢圖',
-    icon: '📈',
+    key: "showTimeSeriesChart",
+    label: "開台時間分析",
+    description: "開台時數與場數趨勢圖",
+    icon: "📈",
   },
   {
-    key: 'showHeatmapChart',
-    label: '開台時段分布',
-    description: '每週開台時段熱力圖',
-    icon: '🗓️',
+    key: "showHeatmapChart",
+    label: "開台時段分布",
+    description: "每週開台時段熱力圖",
+    icon: "🗓️",
   },
   {
-    key: 'showSubscriptionChart',
-    label: '訂閱數趨勢',
-    description: '訂閱總數與淨變化趨勢',
-    icon: '💜',
+    key: "showSubscriptionChart",
+    label: "訂閱數趨勢",
+    description: "訂閱總數與淨變化趨勢",
+    icon: "💜",
   },
 ];

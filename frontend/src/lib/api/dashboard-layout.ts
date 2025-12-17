@@ -1,4 +1,4 @@
-import { api } from "./index";
+import { httpClient } from "./httpClient";
 
 // React Grid Layout Type
 export type DashboardLayout = any[];
@@ -6,8 +6,8 @@ export type DashboardLayout = any[];
 export const getDashboardLayout = async (
   channelId: string
 ): Promise<DashboardLayout | null> => {
-  const { data } = await api.get<{ layout: DashboardLayout }>(
-    `/viewer/dashboard-layout/${channelId}`
+  const data = await httpClient<{ layout: DashboardLayout }>(
+    `/api/viewer/dashboard-layout/${channelId}`
   );
   return data.layout;
 };
@@ -16,11 +16,16 @@ export const saveDashboardLayout = async (
   channelId: string,
   layout: DashboardLayout
 ): Promise<void> => {
-  await api.post("/viewer/dashboard-layout", { channelId, layout });
+  await httpClient("/api/viewer/dashboard-layout", {
+    method: "POST",
+    body: JSON.stringify({ channelId, layout }),
+  });
 };
 
 export const resetDashboardLayout = async (
   channelId: string
 ): Promise<void> => {
-  await api.delete(`/viewer/dashboard-layout/${channelId}`);
+  await httpClient(`/api/viewer/dashboard-layout/${channelId}`, {
+    method: "DELETE",
+  });
 };

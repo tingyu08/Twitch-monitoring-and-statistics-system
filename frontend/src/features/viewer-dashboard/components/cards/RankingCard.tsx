@@ -13,7 +13,7 @@ export const RankingCard = React.forwardRef<
   Props & React.HTMLAttributes<HTMLDivElement>
 >(({ watchPercentile, msgPercentile, ...props }, ref) => (
   <DashboardCardWrapper ref={ref} title="投入排名" {...props}>
-    <div className="flex flex-col gap-2 h-full justify-center">
+    <div className="flex flex-col gap-2 justify-start">
       <div>
         <div className="flex justify-between text-xs text-slate-400 mb-1">
           <span>觀看時長</span>

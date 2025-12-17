@@ -1,10 +1,10 @@
-import { httpClient } from './httpClient';
+import { httpClient } from "./httpClient";
 
 /**
  * 開台統計總覽資料
  */
 export interface StreamerSummary {
-  range: '7d' | '30d' | '90d';
+  range: "7d" | "30d" | "90d";
   totalStreamHours: number;
   totalStreamSessions: number;
   avgStreamDurationMinutes: number;
@@ -17,7 +17,7 @@ export interface StreamerSummary {
  * @returns 開台統計總覽
  */
 export async function getStreamerSummary(
-  range: '7d' | '30d' | '90d' = '30d'
+  range: "7d" | "30d" | "90d" = "30d"
 ): Promise<StreamerSummary> {
   return httpClient<StreamerSummary>(`/api/streamer/me/summary?range=${range}`);
 }
@@ -36,7 +36,7 @@ export interface TimeSeriesDataPoint {
  */
 export interface TimeSeriesResponse {
   range: string;
-  granularity: 'day' | 'week';
+  granularity: "day" | "week";
   data: TimeSeriesDataPoint[];
   isEstimated?: boolean;
 }
@@ -48,8 +48,8 @@ export interface TimeSeriesResponse {
  * @returns 時間序列資料
  */
 export async function getStreamerTimeSeries(
-  range: '7d' | '30d' | '90d' = '30d',
-  granularity: 'day' | 'week' = 'day'
+  range: "7d" | "30d" | "90d" = "30d",
+  granularity: "day" | "week" = "day"
 ): Promise<TimeSeriesResponse> {
   return httpClient<TimeSeriesResponse>(
     `/api/streamer/me/time-series?range=${range}&granularity=${granularity}`
@@ -82,7 +82,7 @@ export interface HeatmapResponse {
  * @returns Heatmap 資料
  */
 export async function getStreamerHeatmap(
-  range: '7d' | '30d' | '90d' = '30d'
+  range: "7d" | "30d" | "90d" = "30d"
 ): Promise<HeatmapResponse> {
   return httpClient<HeatmapResponse>(`/api/streamer/me/heatmap?range=${range}`);
 }
@@ -100,7 +100,7 @@ export interface SubscriptionDataPoint {
  * 訂閱趨勢回應
  */
 export interface SubscriptionTrendResponse {
-  range: '7d' | '30d' | '90d';
+  range: "7d" | "30d" | "90d";
   data: SubscriptionDataPoint[];
   hasExactData: boolean; // 是否為精確資料（總是 false，因為是每日快照）
   isEstimated: boolean; // 是否為估算值（總是 true）
@@ -115,7 +115,7 @@ export interface SubscriptionTrendResponse {
  * @returns 訂閱趨勢資料
  */
 export async function getStreamerSubscriptionTrend(
-  range: '7d' | '30d' | '90d' = '30d'
+  range: "7d" | "30d" | "90d" = "30d"
 ): Promise<SubscriptionTrendResponse> {
   return httpClient<SubscriptionTrendResponse>(
     `/api/streamer/me/subscription-trend?range=${range}`
@@ -129,6 +129,6 @@ export async function getStreamerSubscriptionTrend(
 export async function syncSubscriptions(): Promise<{ message: string }> {
   return httpClient<{ message: string }>(
     `/api/streamer/me/sync-subscriptions`,
-    { method: 'POST' }
+    { method: "POST" }
   );
 }

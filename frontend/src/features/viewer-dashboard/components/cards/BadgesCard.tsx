@@ -13,8 +13,13 @@ export const BadgesCard = React.forwardRef<
   HTMLDivElement,
   Props & React.HTMLAttributes<HTMLDivElement>
 >(({ badges, ...props }, ref) => (
-  <DashboardCardWrapper ref={ref} title="成就徽章" {...props}>
-    <div className="grid grid-cols-4 gap-2 lg:gap-3 p-1 overflow-y-auto max-h-full content-start">
+  <DashboardCardWrapper
+    ref={ref}
+    title="成就徽章"
+    className="overflow-visible"
+    {...props}
+  >
+    <div className="grid grid-cols-4 gap-2 lg:gap-3 p-1 content-start overflow-visible">
       {badges.map((badge) => (
         <BadgeDisplay key={badge.id} badge={badge} size="md" />
       ))}
