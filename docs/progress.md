@@ -1,163 +1,174 @@
-# Project Progress Tracker
+# 專案進度追蹤表
 
-**Last Updated:** 2025-12-17
-**Current Sprint:** Story 2.4 Complete
-**Next Sprint:** Story 2.5 - Privacy & Authorization Controls (GDPR)
-
----
-
-## 🎯 Current Status
-
-**Epic 1 (Streamer Analytics)**: ✅ **100% Complete** (5/5 stories)
-**Epic 2 (Viewer Analytics)**: 🚧 **80% Complete** (4/5 stories)
-**Overall Test Coverage**: ✅ **100% Pass Rate** (230+ tests)
+**最後更新:** 2025-12-17
+**當前衝刺 (Sprint):** Story 2.4 完成
+**下個衝刺:** Story 2.5 - 隱私權與授權控制 (GDPR)
 
 ---
 
-## ✅ Completed Stories
+## 🎯 當前狀態
 
-### Epic 1: Streamer Analytics Dashboard
-
-| Story | Name                             | Status | Completion Date |
-| ----- | -------------------------------- | ------ | --------------- |
-| 1.1   | Streamer Login & Channel Binding | ✅     | 2025-12-09      |
-| 1.2   | Session Stats Overview           | ✅     | 2025-12-09      |
-| 1.3   | Time & Frequency Charts          | ✅     | 2025-12-10      |
-| 1.4   | Subscription Trend (Lite)        | ✅     | 2025-12-10      |
-| 1.5   | Dashboard UX Preferences         | ✅     | 2025-12-11      |
-
-**Key Features Delivered:**
-
-- Twitch OAuth authentication with JWT
-- Summary cards (total hours, sessions, avg duration)
-- Time series charts (viewer trends)
-- Heatmap chart (streaming frequency)
-- Subscription trend chart
-- UI preferences (show/hide sections, localStorage persistence)
-- Dark mode theme
-- Responsive design
+**Epic 1 (實況主分析)**: ✅ **100% 完成** (5/5 stories)
+**Epic 2 (觀眾分析)**: 🚧 **80% 完成** (4/5 stories)
+**整體測試覆蓋率**: ✅ **100% 通過率** (230+ 個測試)
 
 ---
 
-### Epic 2: Viewer Engagement Analytics
+## ✅ 已完成的 Stories
 
-| Story | Name                                    | Status        | Completion Date |
-| ----- | --------------------------------------- | ------------- | --------------- |
-| 2.1   | Viewer Login & Authorization            | ✅            | 2025-12-12      |
-| 2.2   | Watch Time & Interaction Stats          | ✅            | 2025-12-12      |
-| 2.3   | Chat & Interaction Stats (Deep Dive)    | ✅            | 2025-12-16      |
-| 2.4   | Viewer Footprint Overview               | ✅            | 2025-12-16      |
-| 2.5   | Privacy & Authorization Controls (GDPR) | 📝 Spec Ready | Planned         |
+### Epic 1: 實況主分析儀表板
 
-**Story 2.1 - Viewer Login (Completed 2025-12-12)**
+| Story | 名稱                 | 狀態 | 完成日期   |
+| ----- | -------------------- | ---- | ---------- |
+| 1.1   | 實況主登入與頻道綁定 | ✅   | 2025-12-09 |
+| 1.2   | 會話統計總覽         | ✅   | 2025-12-09 |
+| 1.3   | 時間與頻率圖表       | ✅   | 2025-12-10 |
+| 1.4   | 訂閱趨勢 (簡易版)    | ✅   | 2025-12-10 |
+| 1.5   | 儀表板 UX 偏好設定   | ✅   | 2025-12-11 |
 
-- Dual Role mechanism (Streamers automatically get Viewer profile)
-- Consent flow implementation
-- Viewer profile management
-- Backend API: `/api/viewer/consent`
+**已交付關鍵功能:**
 
-**Story 2.2 - Watch Time Stats (Completed 2025-12-12)**
-
-- Frontend: Viewer Dashboard + Channel Detail Page
-- Recharts integration (Line charts, Bar charts)
-- Backend API: `/api/viewer/channels`, `/api/viewer/stats/:channelId`
-- Mock data seeding for development
-- Dark mode premium UI
-- E2E tests validated
-
-**Story 2.3 - Chat & Interaction Stats (Completed 2025-12-16)**
-
-- Twurple Chat Service integration (@twurple/chat)
-- Message Stats Controller & API
-- Interaction Breakdown Pie Chart + Detail Modal
-- Privacy Controls (pause/resume collection, data deletion)
-- Chat Listener Manager (priority-based, auto-stop)
-- Distributed Coordinator for multi-instance support
-- Health Check APIs (`/api/health`, `/api/health/detailed`, `/api/health/distributed`)
-- Daily Message Aggregation Cron Job
-- Performance tests (P95 < 100ms)
-- Unified dark theme settings page
+- Twitch OAuth 認證與 JWT
+- 摘要卡片 (總時數、場次、平均時長)
+- 時間序列圖表 (觀眾趨勢)
+- 熱力圖 (直播頻率)
+- 訂閱趨勢圖表
+- UI 偏好設定 (顯示/隱藏區塊、localStorage 持久化)
+- 深色模式主題
+- 響應式設計
 
 ---
 
-## 🧪 Testing Status
+### Epic 2: 觀眾參與度分析
 
-### Test Coverage Summary (2025-12-17)
+| Story | 名稱                        | 狀態        | 完成日期   |
+| ----- | --------------------------- | ----------- | ---------- |
+| 2.1   | 觀眾登入與授權              | ✅          | 2025-12-12 |
+| 2.2   | 觀看時數與互動統計          | ✅          | 2025-12-12 |
+| 2.3   | 聊天與互動統計 (深度分析)   | ✅          | 2025-12-16 |
+| 2.4   | 觀眾足跡總覽 (互動式儀表板) | ✅          | 2025-12-17 |
+| 2.5   | 隱私權與授權控制 (GDPR)     | 📝 規格完成 | 規劃中     |
 
-| Test Type            | Suites  | Tests    | Pass Rate   | Coverage                              |
-| -------------------- | ------- | -------- | ----------- | ------------------------------------- |
-| **Backend Unit**     | 7+      | 64+      | **100%** ✅ | Auth, Streamer, Viewer modules        |
-| **Frontend Unit**    | 16+     | 109+     | **100%** ✅ | Components, Hooks, Pages              |
-| **E2E (Playwright)** | 10      | 59       | **100%** ✅ | All dashboard flows, Auth, Navigation |
-| **Performance**      | 1       | 3        | **100%** ✅ | Message Stats API                     |
-| **TOTAL**            | **34+** | **235+** | **100%**    | 🎉 All Passing                        |
+**Story 2.1 - 觀眾登入 (完成於 2025-12-12)**
 
-### Recent Test Achievements (2025-12-17)
+- 雙重角色機制 (實況主自動獲得觀眾身份)
+- 同意授權流程實作
+- 觀眾個人資料管理
+- 後端 API: `/api/viewer/consent`
 
-✅ Fixed `requireAuth` middleware mock signature issues
-✅ Fixed frontend async rendering & loading state tests
-✅ Fixed E2E API mock data structure (array vs object)
-✅ Achieved 100% test pass rate across all layers
-✅ Comprehensive E2E coverage for Viewer Footprint Dashboard
-✅ Fixed TimeRangeSelector radio button tests
-✅ Fixed Dashboard Switch Feature tests
-✅ Removed `networkidle` waits for stable E2E tests
+**Story 2.2 - 觀看時數統計 (完成於 2025-12-12)**
 
-**Test Files:**
+- 前端: 觀眾儀表板 + 頻道詳情頁
+- Recharts 整合 (折線圖、長條圖)
+- 後端 API: `/api/viewer/channels`, `/api/viewer/stats/:channelId`
+- 開發用種子數據填充 (Mock data seeding)
+- 深色模式高級 UI
+- E2E 測試驗證通過
 
-- Backend: `auth.middleware.test.ts`, `auth.integration.test.ts`, `viewer.routes.test.ts`, etc.
-- Frontend: `page.test.tsx`, Dashboard component tests, FootprintDashboard tests
+**Story 2.3 - 聊天與互動統計 (完成於 2025-12-16)**
+
+- Twurple 聊天服務整合 (`@twurple/chat`)
+- 訊息統計控制器與 API
+- 互動分佈圓餅圖 + 詳細資訊 Modal
+- 隱私控制 (暫停/恢復收集、資料刪除)
+- 聊天監聽管理器 (優先級管理、自動停止)
+- 分散式協調器 (支援多實例)
+- 健康檢查 API (`/api/health`, `/api/health/detailed`, `/api/health/distributed`)
+- 每日訊息聚合排程任務 (Cron Job)
+- 效能測試 (P95 < 100ms)
+- 統一的深色主題設定頁面
+
+**Story 2.4 - 觀眾足跡總覽 (完成於 2025-12-17)**
+
+- **互動式網格**: 使用 `react-grid-layout` 實現可拖拽、可調整大小的儀表板。
+- **Lifetime Stats**: 後端實作全時段數據聚合與定期 Cron Job 更新。
+- **成就系統**: 15 種成就徽章 (Badge)，包含鎖定/解鎖狀態與精美 Tooltips。
+- **綜合分析**: 6 維度雷達圖 (RadarChart) 展示觀眾投入畫像。
+
+---
+
+## 🧪 測試狀態
+
+### 測試覆蓋率摘要 (2025-12-17)
+
+| 測試類型             | 套件數  | 測試數   | 通過率      | 數蓋範圍                   |
+| -------------------- | ------- | -------- | ----------- | -------------------------- |
+| **後端單元測試**     | 7+      | 64+      | **100%** ✅ | 認證、實況主、觀眾模組     |
+| **前端單元測試**     | 16+     | 109+     | **100%** ✅ | 元件、Hooks、頁面          |
+| **E2E (Playwright)** | 10      | 59       | **100%** ✅ | 所有儀表板流程、認證、導航 |
+| **效能測試**         | 1       | 3        | **100%** ✅ | 訊息統計 API               |
+| **總計**             | **34+** | **235+** | **100%**    | 🎉 全數通過                |
+
+### 近期測試成就 (2025-12-17)
+
+✅ 修復 `requireAuth` 中介層 mock 簽名問題
+✅ 修復前端非同步渲染與載入狀態測試
+✅ 修復 E2E API mock 數據結構 (陣列 vs 物件)
+✅ 達成全層級 100% 測試通過率
+✅ 觀眾足跡儀表板的全面 E2E 覆蓋
+✅ 修復 TimeRangeSelector 選選按鈕測試
+✅ 修復儀表板切換功能測試
+✅ 移除 `networkidle` 等待以獲得更穩定的 E2E 測試
+
+**測試檔案:**
+
+- 後端: `auth.middleware.test.ts`, `auth.integration.test.ts`, `viewer.routes.test.ts` 等
+- 前端: `page.test.tsx`, 儀表板元件測試, 足跡儀表板測試
 - E2E: `viewer-stats.spec.ts`, `viewer-footprint.spec.ts`, `viewer-auth.spec.ts`, `dashboard-navigation.spec.ts`, `display-preferences.spec.ts`, `cross-browser.spec.ts`, `dashboard-charts.spec.ts`
 
 ---
 
-## 🏗️ Technical Architecture
+## 🏗️ 技術架構
 
-### Stack Overview
+### 技術棧概覽
 
-**Frontend:**
+**前端:**
 
 - Next.js 14 (App Router)
 - React 18
 - TypeScript 5.x
 - TailwindCSS
-- Recharts (data visualization)
-- SWR (data fetching)
+- Recharts (資料視覺化)
+- SWR (資料獲取)
+- `react-grid-layout` (拖拽佈局)
 
-**Backend:**
+**後端:**
 
 - Node.js + Express
 - TypeScript
 - Prisma ORM
-- SQLite (development)
+- SQLite (開發環境)
+- `node-cron` (排程任務)
 
-**Authentication:**
+**認證:**
 
 - Twitch OAuth 2.0
 - JWT (httpOnly cookies)
-- Dual Role support (Streamer + Viewer)
+- 雙重角色支援 (實況主 + 觀眾)
 
-**Testing:**
+**測試:**
 
-- Jest (unit & integration)
+- Jest (單元與整合測試)
 - React Testing Library
 - Playwright (E2E)
 
 ---
 
-## 📊 Database Schema
+## 📊 資料庫架構
 
-**7 Core Models:**
+**7 個核心模型:**
 
-1. `Streamer` - Streamer profiles
-2. `Viewer` - Viewer profiles (with consent tracking)
-3. `Channel` - Twitch channels
-4. `StreamSession` - Individual streaming sessions
-5. `ChannelDailyStat` - Daily stats for streamers
-6. `ViewerChannelDailyStat` - Daily watch stats for viewers
-7. `TwitchToken` - OAuth token management
+1. `Streamer` - 實況主資料
+2. `Viewer` - 觀眾資料 (包含同意追蹤)
+3. `Channel` - Twitch 頻道
+4. `StreamSession` - 個別直播場次
+5. `ChannelDailyStat` - 實況主每日統計
+6. `ViewerChannelDailyStat` - 觀眾每日觀看統計
+7. `TwitchToken` - OAuth Token 管理
+8. `ViewerChannelLifetimeStats` - 觀眾全時段聚合數據
+9. `ViewerDashboardLayout` - 觀眾自訂儀表板佈局
 
-**Key Relationships:**
+**關鍵關聯:**
 
 - Streamer ↔ Channel (1:N)
 - Viewer ↔ ViewerChannelDailyStat (1:N)
@@ -165,176 +176,96 @@
 
 ---
 
-## ⚠️ Known Issues
+## ⚠️ 已知問題
 
-### High Priority
+### 高優先級
 
-🟠 **Avatar Loading (CORB Issue)**
+🟠 **頭像載入 (CORB 問題)**
 
-- **Problem:** Twitch CDN blocked by CORB policy in dev environment
-- **Current Fix:** Using `ui-avatars.com` as fallback
-- **Long-term Solution:** Backend proxy or Base64 encoding
-- **Impact:** Development experience only
+- **問題:** 在開發環境中，Twitch CDN 被 CORB 策略阻擋
+- **當前解法:** 使用 `ui-avatars.com` 作為備案，並設定圖片優先級
+- **長期方案:** 後端 Proxy 或 Base64 編碼
+- **影響:** 僅影響開發體驗
 
-🟠 **Mock Data Dependency**
+🟠 **Mock 數據依賴**
 
-- **Problem:** Story 2.2 relies on `seedChannelStats` for demo data
-- **Current State:** Works for development, but lacks real user data
-- **Next Step:** Implement Story 3.3 (Data Collection Worker)
-- **Impact:** Cannot showcase real user behavior
+- **問題:** Story 2.2/2.4 依賴 `seedChannelStats` 產生演示數據
+- **當前狀態:** 開發環境可用，但缺乏真實用戶數據
+- **下一步:** 實作 Story 3.3 (資料收集 Worker)
+- **影響:** 無法展示真實用戶行為
 
-### Medium Priority
+### 中優先級
 
-🟡 **Error Handling Standardization**
+🟡 **錯誤處理標準化**
 
-- API error responses not fully consistent
-- Need unified Error Handler middleware
+- API 錯誤回應格式不完全一致
+- 需要統一的錯誤處理中介層
 
-🟡 **LocalStorage Schema Versioning**
+🟡 **LocalStorage Schema 版本控制**
 
-- Preferences storage lacks version control
-- Risk of errors on future schema changes
-
----
-
-## 📋 Next Steps
-
-### Immediate Actions (This Week)
-
-1. ✅ Complete project status report
-2. 📝 Plan Story 2.3 implementation details
-3. 🔍 Review and update all story documentation
-
-### Short-term Goals (1-2 Weeks)
-
-**Story 2.3: Chat & Interaction Stats**
-
-1. Backend API extension
-   - Add chat classification endpoint
-   - Mock data: Spam, Emotes, Cheers, Normal messages
-2. Frontend charts
-   - Category pie chart
-   - Word frequency list (simpler than full word cloud)
-   - Time distribution chart
-3. E2E test coverage
-
-### Mid-term Goals (1 Month)
-
-**Complete Epic 2 Remaining Stories**
-
-- Story 2.5: Privacy & GDPR Controls (anonymization, data deletion)
-
-### Long-term Goals (2-3 Months)
-
-**Epic 3: Data Collection & Automation**
-
-- Story 3.3: Scheduled data fetching (Cron jobs / Workers)
-- Story 3.4: Webhook integration (Twitch EventSub)
-- Production deployment preparation
-- Performance monitoring & logging system
-
-**Epic 4: Streamer Quick Actions Hub**
-
-- Broadcast settings management
-- Revenue analytics (Subs, Bits)
-- Report export
-
-**Epic 5: Real-time Notifications & Events**
-
-- EventSub Webhook integration
-- Live status notifications
-- Subscription event processing
-- Channel Points tracking
-
-**Epic 6: Advanced Data Collection & Automation**
-
-- Scheduled data workers
-- Historical data aggregation
-- VOD & Clips sync
-- Game/Category analytics
-
-**Epic 7: Community & Moderation Tools**
-
-- Chat monitoring panel
-- Moderation actions
-- Viewer loyalty analytics
-- AutoMod rules
-
-**Epic 8: Stream Control & Predictions**
-
-- Title/Game updates
-- Predictions management
-- Polls management
-- Ad control
-- Stream markers
+- 偏好設定儲存缺乏版本控制
+- 未來 Schema 變更可能有錯誤風險
 
 ---
 
-## 🎯 Project Health Metrics
+## 📋 下一步計劃
 
-### Code Quality
+### 立即行動 (本週)
 
-| Metric                 | Status | Grade | Notes                                   |
-| ---------------------- | ------ | ----- | --------------------------------------- |
-| Test Coverage          | ✅     | A+    | 100% pass rate, 175 tests               |
-| TypeScript Strict Mode | ✅     | A     | Enabled                                 |
-| ESLint Compliance      | ✅     | A     | No errors                               |
-| Documentation          | ✅     | A-    | Stories complete, some API docs missing |
-| Dependency Security    | ✅     | A     | No known vulnerabilities                |
+1. ✅ 完成專案狀態報告
+2. 📝 規劃 Story 2.5 實作細節 (隱私控制)
+3. 🔍 檢視並更新所有 story 文件
 
-### Risk Assessment
+### 短期目標 (1-2 週)
 
-| Risk                        | Level     | Mitigation                   |
-| --------------------------- | --------- | ---------------------------- |
-| Lack of real data source    | 🟡 Medium | Prioritize Story 3.3         |
-| Avatar CORB issues          | 🟡 Medium | Backend proxy implementation |
-| Single developer dependency | 🟠 High   | Enhanced documentation       |
-| SQLite scalability          | 🟢 Low    | Plan PostgreSQL migration    |
+**Story 2.5: 隱私權與授權控制**
 
----
+1. 資料匯出功能 (JSON/CSV)
+2. 資料刪除與匿名化 ("遺忘權")
+3. 同意條款版本管理
 
-## 📚 Documentation
+### 中期目標 (1 個月)
 
-- **User Stories:** `/docs/stories/` (11 story docs)
-- **Progress Tracking:** `PROJECT-STATUS.md`, `docs/progress.md`
-- **API Documentation:** (To be created - consider Swagger/OpenAPI)
-- **README:** Project root with setup instructions
+**Epic 3: 資料收集與自動化**
+
+- Story 3.3: 排程資料抓取 (Cron jobs / Workers)
+- Story 3.4: Webhook 整合 (Twitch EventSub)
+- 生產環境部署準備
+- 效能監控與日誌系統
 
 ---
 
-## 🚀 Production Readiness
+## 🎯 專案健康指標
 
-| Item                    | Status | Notes                            |
-| ----------------------- | ------ | -------------------------------- |
-| Environment Variables   | ⚠️     | Need production config           |
-| Database Migrations     | ✅     | Prisma Migrate ready             |
-| HTTPS/SSL               | ❌     | Need Nginx/Cloudflare setup      |
-| CORS Configuration      | ✅     | Implemented, verify prod domains |
-| Logging System          | ⚠️     | Basic console.log, need Winston  |
-| Error Tracking (Sentry) | ❌     | Not configured                   |
-| Performance Monitoring  | ❌     | Not configured                   |
-| Docker Containerization | ❌     | Need Dockerfile                  |
-| CI/CD Pipeline          | ❌     | Need GitHub Actions              |
-| Backup Strategy         | ❌     | Define database backup process   |
+### 程式品質
 
----
+| 指標                | 狀態 | 評級 | 備註                            |
+| ------------------- | ---- | ---- | ------------------------------- |
+| 測試覆蓋率          | ✅   | A+   | 100% 通過率, 230+ 測試          |
+| TypeScript 嚴格模式 | ✅   | A    | 已啟用                          |
+| ESLint 合規性       | ✅   | A    | 無錯誤                          |
+| 文件                | ✅   | A-   | Stories 完整, 部分 API 文件缺失 |
+| 依賴套件安全性      | ✅   | A    | 無已知漏洞                      |
 
-## 💡 Recent Highlights (2025-12-17)
+### 風險評估
 
-✅ **Story 2.3 Complete** - Chat & Interaction Stats (Deep Dive)
-✅ **Story 2.4 Complete** - Viewer Footprint Overview with interactive dashboard
-✅ **Twurple Integration** - @twurple/chat for real-time message monitoring
-✅ **Privacy Controls** - Pause/resume data collection, data deletion
-✅ **Multi-Instance Support** - Distributed listener coordination
-✅ **Health Check APIs** - System monitoring endpoints
-✅ **Performance Tests** - API P95 < 100ms validated
-✅ **Cron Jobs** - Daily message aggregation
-✅ **Unified Dark Theme** - Settings page matches dashboard style
-✅ **Viewer Footprint Dashboard** - Fully interactive grid with radar chart, badges, and stats
-✅ **E2E Tests Comprehensive** - 59 tests covering all dashboard flows (100% pass rate)
+| 風險             | 等級  | 緩解措施              |
+| ---------------- | ----- | --------------------- |
+| 缺乏真實數據來源 | 🟡 中 | 優先處理 Story 3.3    |
+| 頭像 CORB 問題   | 🟡 中 | 實作後端 Proxy        |
+| 單一開發者依賴   | 🟠 高 | 加強文件撰寫          |
+| SQLite 可擴展性  | 🟢 低 | 規劃遷移至 PostgreSQL |
 
 ---
 
-**Last Review:** 2025-12-17
-**Reviewer:** AI Development Assistant
-**Project Status:** 🟢 Healthy & Ready for Story 2.5 (GDPR Privacy Controls)
+## 📚 文件
+
+- **User Stories:** `/docs/stories/` (11 個 story 文件)
+- **進度追蹤:** `PROJECT-STATUS.md`, `docs/progress.md`
+- **README:** 專案根目錄包含設定說明
+
+---
+
+**最後審閱:** 2025-12-17
+**審閱者:** AI Development Assistant
+**專案狀態:** 🟢 健康且準備好進行 Story 2.5 (GDPR 隱私控制)
