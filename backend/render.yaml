@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: twitch-analytics-backend
+    runtime: node
+    region: singapore # 離台灣最近的區域
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      # Turso 資料庫設定
+      - key: DATABASE_URL
+        sync: false # 設定為 Turso URL (libsql://xxx.turso.io)
+      - key: TURSO_DATABASE_URL
+        sync: false # 與 DATABASE_URL 相同
+      - key: TURSO_AUTH_TOKEN
+        sync: false # Turso 認證 Token
+      # JWT 與認證
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TWITCH_CLIENT_ID
+        sync: false
+      - key: TWITCH_CLIENT_SECRET
+        sync: false
+      - key: TWITCH_CALLBACK_URL
+        sync: false # https://your-app.onrender.com/api/auth/twitch/callback
+      - key: FRONTEND_URL
+        sync: false # Vercel 前端 URL
+      # EventSub 設定
+      - key: EVENTSUB_ENABLED
+        value: "true"
+      - key: EVENTSUB_SECRET
+        generateValue: true
+      - key: EVENTSUB_CALLBACK_URL
+        sync: false # https://your-app.onrender.com
