@@ -28,6 +28,7 @@
     "@twurple/api": "^8.0.2",
     "@twurple/auth": "^8.0.2",
     "@twurple/chat": "^8.0.2",
+    "@twurple/eventsub-http": "^8.0.2",
     "archiver": "^7.0.1",
     "axios": "^1.7.7",
     "cookie-parser": "^1.4.7",

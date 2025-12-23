@@ -51,10 +51,7 @@ export class UnifiedTwitchService {
    * 初始化所有 Twitch 服務
    */
   async initialize(): Promise<void> {
-    logger.info(
-      "Twitch Service",
-      "Initializing unified Twitch service (Twurple)..."
-    );
+    logger.info("Twitch Service", "初始化統一 Twitch 服務 (Twurple)...");
 
     // 初始化聊天服務
     await twurpleChatService.initialize();
@@ -62,18 +59,18 @@ export class UnifiedTwitchService {
     // 測試 Helix API
     const helixHealthy = await twurpleHelixService.healthCheck();
     if (helixHealthy) {
-      logger.info("Twitch Service", "Helix API connection OK (Twurple)");
+      logger.info("Twitch Service", "Helix API 連線正常 (Twurple)");
     } else {
       logger.warn(
         "Twitch Service",
-        "Helix API connection failed - some features may be unavailable"
+        "Helix API 連線失敗 - 部分功能可能無法使用"
       );
     }
 
     // 啟動排程任務
     autoJoinLiveChannelsJob.start();
 
-    logger.info("Twitch Service", "Initialization complete (Twurple)");
+    logger.info("Twitch Service", "服務初始化完成 (Twurple)");
   }
 
   // ========== 頻道資訊 ==========
@@ -86,10 +83,7 @@ export class UnifiedTwitchService {
       // 使用 Twurple Helix API 獲取準確資訊
       const user = await twurpleHelixService.getUserByLogin(channelLogin);
       if (!user) {
-        logger.warn(
-          "Twitch Service",
-          `User not found via Helix: ${channelLogin}`
-        );
+        logger.warn("Twitch Service", `Helix 找不到用戶: ${channelLogin}`);
         return null;
       }
 
@@ -113,7 +107,7 @@ export class UnifiedTwitchService {
     } catch (error) {
       logger.error(
         "Twitch Service",
-        `Failed to get channel info: ${channelLogin}`,
+        `獲取頻道資訊失敗: ${channelLogin}`,
         error
       );
       return null;
@@ -161,7 +155,7 @@ export class UnifiedTwitchService {
     } catch (error) {
       logger.error(
         "Twitch Service",
-        `Failed to get follow info: ${userLogin} -> ${channelLogin}`,
+        `獲取追蹤資訊失敗: ${userLogin} -> ${channelLogin}`,
         error
       );
       return { isFollowing: false };
@@ -190,11 +184,7 @@ export class UnifiedTwitchService {
         viewerAccountAge: accountAge?.age,
       };
     } catch (error) {
-      logger.error(
-        "Twitch Service",
-        `Failed to get viewer-channel relation`,
-        error
-      );
+      logger.error("Twitch Service", `獲取觀眾頻道關係失敗`, error);
       return null;
     }
   }
@@ -241,7 +231,7 @@ export class UnifiedTwitchService {
         result.set(id, liveIds.has(id));
       });
     } catch (error) {
-      logger.error("Twitch Service", "Failed to check live status", error);
+      logger.error("Twitch Service", "檢查直播狀態失敗", error);
       // 全部標記為未知（false）
       channelIds.forEach((id) => result.set(id, false));
     }

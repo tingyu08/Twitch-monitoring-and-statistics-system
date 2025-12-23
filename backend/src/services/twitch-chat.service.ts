@@ -75,7 +75,7 @@ export class TwurpleChatService {
 
       // 設定 Token 刷新回調（刷新後更新資料庫）
       authProvider.onRefresh(async (userId, newTokenData) => {
-        logger.info("Twurple Chat", `Token refreshed for user ${userId}`);
+        logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
 
         // 更新資料庫中的 Token
         await prisma.twitchToken.update({
@@ -109,6 +109,9 @@ export class TwurpleChatService {
       this.chatClient = new ChatClient({
         authProvider,
         channels: [], // 初始為空，稍後動態加入
+        logger: {
+          minLevel: "error", // Suppress "Unrecognized usernotice ID" warnings
+        },
       });
 
       this.setupEventHandlers();
@@ -117,10 +120,10 @@ export class TwurpleChatService {
       this.isConnected = true;
       logger.info(
         "Twurple Chat",
-        `Connected to Twitch Chat as ${tokenRecord.streamer?.displayName} (with auto-refresh)`
+        `已連接至 Twitch Chat: ${tokenRecord.streamer?.displayName} (自動刷新)`
       );
     } catch (error) {
-      logger.error("Twurple Chat", "Failed to connect to Twitch Chat", error);
+      logger.error("Twurple Chat", "連接 Twitch Chat 失敗", error);
       this.isConnected = false;
     }
   }
@@ -157,14 +160,14 @@ export class TwurpleChatService {
     this.chatClient.onDisconnect((manually, reason) => {
       this.isConnected = false;
       if (!manually) {
-        logger.warn("Twurple Chat", `Disconnected: ${reason}`);
+        logger.warn("Twurple Chat", `已斷線: ${reason}`);
       }
     });
 
     // 監聽重連事件
     this.chatClient.onConnect(() => {
       this.isConnected = true;
-      logger.info("Twurple Chat", "Connected/Reconnected");
+      logger.info("Twurple Chat", "已連接/重連");
     });
   }
 
@@ -183,7 +186,7 @@ export class TwurpleChatService {
       if (!this.channels.has(channelName)) {
         await this.chatClient.join(channelName);
         this.channels.add(channelName);
-        logger.info("Twurple Chat", `Joined channel: ${channelName}`);
+        // logger.info("Twurple Chat", `Joined channel: ${channelName}`);
       }
     } catch (error) {
       logger.error(
@@ -206,7 +209,7 @@ export class TwurpleChatService {
       if (this.channels.has(channelName)) {
         await this.chatClient.part(channelName);
         this.channels.delete(channelName);
-        logger.info("Twurple Chat", `Left channel: ${channelName}`);
+        // logger.info("Twurple Chat", `Left channel: ${channelName}`);
       }
     } catch (error) {
       logger.error(
@@ -366,7 +369,7 @@ export class TwurpleChatService {
       this.chatClient.quit();
       this.isConnected = false;
       this.channels.clear();
-      logger.info("Twurple Chat", "Disconnected");
+      logger.info("Twurple Chat", "手動斷線");
     }
   }
 }

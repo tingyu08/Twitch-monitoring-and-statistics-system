@@ -12,13 +12,13 @@
 
 **最新成就 (2025-12-19 ~ 2025-12-23)**:
 
+- ✅ **EventSub Webhook 實現**: 使用 Twurple EventSubMiddleware 實現即時開台/下播通知
+- ✅ **Cloudflare Tunnel 整合**: 開發環境可接收 Twitch EventSub Webhook
+- ✅ **日誌優化與中文化**: 後端日誌全面翻譯為繁體中文，過濾不必要警告
 - ✅ **追蹤同步自動化**: 登入時自動同步 Twitch 追蹤清單，並每小時定時更新
 - ✅ **觀看時間智慧推算**: 根據聊天訊息時間戳自動計算觀看時間（分段計時邏輯）
 - ✅ **即時開台資訊顯示**: 顯示觀眾數、開台時長、遊戲名稱，每 5 秒自動更新
-- ✅ **追蹤時間顯示**: 顯示使用者追蹤每個頻道的日期
-- ✅ **批次查詢優化**: 支援超過 100 個追蹤頻道的開台狀態查詢
 - ✅ **Token 自動刷新**: 聊天服務使用 RefreshingAuthProvider，Token 過期自動刷新並更新資料庫
-- ✅ **假資料完全清除**: 移除所有 Mock Data 程式碼和資料庫記錄
 
 目前專案已完成前兩個 Epic 的所有核心需求，Epic 3 的資料收集基礎架構也大致完成。
 
@@ -40,35 +40,36 @@
 
 #### ✅ Epic 1: 實況主分析儀表板 (已完成)
 
-| Story | 名稱                  | 狀態    | 完成日期   | 關鍵成果                                     |
-| ----- | --------------------- | ------- | ---------- | -------------------------------------------- |
-| 1.1   | 實況主登入與頻道綁定  | ✅ Done | 2025-12-09 | Twitch OAuth, JWT 身份驗證, Dual Role 支援   |
-| 1.2   | 實況主會話統計總覽    | ✅ Done | 2025-12-09 | Summary Cards, 時間範圍切換                  |
-| 1.3   | 實況主時間與頻率圖表  | ✅ Done | 2025-12-10 | TimeSeriesChart, HeatmapChart                |
-| 1.4   | 實況主訂閱趨勢 (Lite) | ✅ Done | 2025-12-10 | SubscriptionTrendChart, 增長率計算           |
-| 1.5   | 儀表板 UX 偏好設定    | ✅ Done | 2025-12-11 | 顯示/隱藏區塊切換, localStorage 持久化       |
+| Story | 名稱                  | 狀態    | 完成日期   | 關鍵成果                                   |
+| ----- | --------------------- | ------- | ---------- | ------------------------------------------ |
+| 1.1   | 實況主登入與頻道綁定  | ✅ Done | 2025-12-09 | Twitch OAuth, JWT 身份驗證, Dual Role 支援 |
+| 1.2   | 實況主會話統計總覽    | ✅ Done | 2025-12-09 | Summary Cards, 時間範圍切換                |
+| 1.3   | 實況主時間與頻率圖表  | ✅ Done | 2025-12-10 | TimeSeriesChart, HeatmapChart              |
+| 1.4   | 實況主訂閱趨勢 (Lite) | ✅ Done | 2025-12-10 | SubscriptionTrendChart, 增長率計算         |
+| 1.5   | 儀表板 UX 偏好設定    | ✅ Done | 2025-12-11 | 顯示/隱藏區塊切換, localStorage 持久化     |
 
 #### ✅ Epic 2: 觀眾參與度分析 (已完成)
 
-| Story | 名稱                        | 狀態    | 完成日期   | 關鍵成果                                          |
-| ----- | --------------------------- | ------- | ---------- | ------------------------------------------------- |
-| 2.1   | 觀眾登入與授權              | ✅ Done | 2025-12-12 | Dual Role 機制, Consent Flow, Viewer Profile      |
-| 2.2   | 觀看時數與互動統計          | ✅ Done | 2025-12-12 | Recharts 可視化, 詳情頁完整實作                   |
-| 2.3   | 聊天與互動統計 (深度分析)   | ✅ Done | 2025-12-16 | Chat Analytics, Privacy Controls, Cron Jobs       |
-| 2.4   | 觀眾足跡總覽 (互動式儀表板) | ✅ Done | 2025-12-17 | Footprint Dashboard, 拖拽佈局, 雷達圖, 徽章系統  |
-| 2.5   | 隱私與授權控制 (GDPR 合規)  | ✅ Done | 2025-12-18 | 細粒度同意設定, 資料匯出, 帳號刪除                |
+| Story | 名稱                        | 狀態    | 完成日期   | 關鍵成果                                        |
+| ----- | --------------------------- | ------- | ---------- | ----------------------------------------------- |
+| 2.1   | 觀眾登入與授權              | ✅ Done | 2025-12-12 | Dual Role 機制, Consent Flow, Viewer Profile    |
+| 2.2   | 觀看時數與互動統計          | ✅ Done | 2025-12-12 | Recharts 可視化, 詳情頁完整實作                 |
+| 2.3   | 聊天與互動統計 (深度分析)   | ✅ Done | 2025-12-16 | Chat Analytics, Privacy Controls, Cron Jobs     |
+| 2.4   | 觀眾足跡總覽 (互動式儀表板) | ✅ Done | 2025-12-17 | Footprint Dashboard, 拖拽佈局, 雷達圖, 徽章系統 |
+| 2.5   | 隱私與授權控制 (GDPR 合規)  | ✅ Done | 2025-12-18 | 細粒度同意設定, 資料匯出, 帳號刪除              |
 
 #### ✅ Epic 3: 資料收集與平台基礎架構 (核心完成)
 
-| 功能                   | 狀態    | 完成日期   | 關鍵成果                                                |
-| ---------------------- | ------- | ---------- | ------------------------------------------------------- |
-| 追蹤同步               | ✅ Done | 2025-12-19 | 登入觸發 + 每小時 Cron Job，自動同步 Twitch 追蹤清單    |
-| 開台狀態監控           | ✅ Done | 2025-12-19 | 批次查詢 Twitch API，支援 >100 頻道，5 分鐘更新         |
-| 聊天監聽               | ✅ Done | 2025-12-19 | Twurple ChatClient，自動加入開台頻道                    |
-| 觀看時間推算           | ✅ Done | 2025-12-19 | 分段計時邏輯（Session-based），基於聊天訊息時間計算     |
-| Token 自動刷新         | ✅ Done | 2025-12-19 | RefreshingAuthProvider，自動刷新並更新資料庫            |
-| 即時資訊顯示           | ✅ Done | 2025-12-19 | 觀眾數、開台時長、遊戲名稱，5 秒輪詢更新                |
-| EventSub (Webhook)     | 🟡 待實作 | -        | 需公開 HTTPS URL，開發環境暫不需要                      |
+| 功能               | 狀態    | 完成日期   | 關鍵成果                                             |
+| ------------------ | ------- | ---------- | ---------------------------------------------------- |
+| 追蹤同步           | ✅ Done | 2025-12-19 | 登入觸發 + 每小時 Cron Job，自動同步 Twitch 追蹤清單 |
+| 開台狀態監控       | ✅ Done | 2025-12-19 | 批次查詢 Twitch API，支援 >100 頻道，5 分鐘更新      |
+| 聊天監聽           | ✅ Done | 2025-12-19 | Twurple ChatClient，自動加入開台頻道                 |
+| 觀看時間推算       | ✅ Done | 2025-12-19 | 分段計時邏輯（Session-based），基於聊天訊息時間計算  |
+| Token 自動刷新     | ✅ Done | 2025-12-19 | RefreshingAuthProvider，自動刷新並更新資料庫         |
+| 即時資訊顯示       | ✅ Done | 2025-12-19 | 觀眾數、開台時長、遊戲名稱，5 秒輪詢更新             |
+| EventSub (Webhook) | ✅ Done | 2025-12-23 | Twurple EventSubMiddleware + Cloudflare Tunnel       |
+| 日誌優化與中文化   | ✅ Done | 2025-12-23 | 後端日誌全面翻譯為繁體中文，過濾不必要警告           |
 
 ---
 
@@ -76,11 +77,12 @@
 
 ### 2.1 新增核心服務
 
-| 服務                   | 檔案                         | 功能                                    |
-| ---------------------- | ---------------------------- | --------------------------------------- |
-| WatchTimeService       | `watch-time.service.ts`      | 根據聊天訊息計算觀看時間                |
-| SyncUserFollowsJob     | `sync-user-follows.job.ts`   | 同步使用者 Twitch 追蹤清單              |
-| TwurpleChatService     | `twitch-chat.service.ts`     | 聊天監聽（已改用 RefreshingAuthProvider）|
+| 服務                   | 檔案                          | 功能                                      |
+| ---------------------- | ----------------------------- | ----------------------------------------- |
+| WatchTimeService       | `watch-time.service.ts`       | 根據聊天訊息計算觀看時間                  |
+| SyncUserFollowsJob     | `sync-user-follows.job.ts`    | 同步使用者 Twitch 追蹤清單                |
+| TwurpleChatService     | `twitch-chat.service.ts`      | 聊天監聽（已改用 RefreshingAuthProvider） |
+| TwurpleEventSubService | `twurple-eventsub.service.ts` | EventSub Webhook 即時事件接收             |
 
 ### 2.2 資料流更新
 
@@ -100,6 +102,16 @@
 Token 過期 → 自動用 refresh_token 刷新 → 更新資料庫 → 繼續運作
 ```
 
+### 2.4 EventSub Webhook 機制 (New)
+
+```
+後端啟動 → Twurple EventSubMiddleware 應用 → 訂閱所有監控頻道
+    ↓
+頻道開台 → Twitch 發送 Webhook → EventSub 處理 → 更新 StreamSession
+    ↓
+頻道下播 → Twitch 發送 Webhook → EventSub 處理 → 結束 StreamSession
+```
+
 ---
 
 ## 三、測試覆蓋度
@@ -115,26 +127,24 @@ Token 過期 → 自動用 refresh_token 刷新 → 更新資料庫 → 繼續�
 
 ## 四、已知問題與待辦
 
-### 4.1 High Priority
+### 4.1 Low Priority
 
-- 🟠 **EventSub 整合**: 目前使用輪詢，未來可改用 Webhook 減少 API 呼叫
-
-### 4.2 Low Priority
-
-- 🟡 **EVENTSUB_CALLBACK_URL 警告**: 開發環境正常，正式環境需配置
 - 🟡 **效能優化**: 超過 300 個追蹤頻道時，每次輪詢需 4 次 API 呼叫
+- 🟡 **前端即時推送**: 可考慮用 WebSocket 替代前端輪詢（非必要）
 
 ---
 
 ## 五、下一步計劃
 
 1. **正式部署準備**
-   - 配置 HTTPS 與公開 Callback URL
-   - 實作 EventSub Webhook 接收
 
-2. **功能擴展**
+   - 配置正式環境的 HTTPS Callback URL
+   - 設定生產環境資料庫
+
+2. **功能擴展 (可選)**
    - 統計圖表：觀看時間趨勢
    - 頻道比較：同時段觀看分布
+   - WebSocket 前端即時推送（如需替代輪詢）
 
 ---
 
@@ -147,5 +157,7 @@ Token 過期 → 自動用 refresh_token 刷新 → 更新資料庫 → 繼續�
 - ✅ 智慧推算觀看時間
 - ✅ 即時顯示開台資訊（觀眾數、時長、遊戲）
 - ✅ Token 自動刷新，無需手動維護
+- ✅ EventSub Webhook 即時接收開台/下播事件
+- ✅ 日誌全面中文化，控制台輸出乾淨
 
 專案已進入**可用狀態**，可開始正式使用。

@@ -71,8 +71,11 @@ class TwurpleHelixService {
   private getApiClient(): ApiClient {
     if (!this.apiClient) {
       const authProvider = twurpleAuthService.getAppAuthProvider();
-      this.apiClient = new ApiClient({ authProvider });
-      logger.info("Twurple Helix", "API Client initialized");
+      this.apiClient = new ApiClient({
+        authProvider,
+        logger: { minLevel: "error" }, // 隱藏 rate-limit 警告
+      });
+      logger.info("Twurple Helix", "Twurple Helix API 客戶端初始化完成");
     }
     return this.apiClient;
   }
@@ -100,7 +103,7 @@ class TwurpleHelixService {
         createdAt: user.creationDate,
       };
     } catch (error) {
-      logger.error("Twurple Helix", `Failed to get user: ${login}`, error);
+      logger.error("Twurple Helix", `獲取用戶失敗: ${login}`, error);
       return null;
     }
   }
@@ -126,7 +129,7 @@ class TwurpleHelixService {
         createdAt: user.creationDate,
       };
     } catch (error) {
-      logger.error("Twurple Helix", `Failed to get user by ID: ${id}`, error);
+      logger.error("Twurple Helix", `透過 ID 獲取用戶失敗: ${id}`, error);
       return null;
     }
   }
@@ -137,7 +140,10 @@ class TwurpleHelixService {
   async getUsersByIds(ids: string[]): Promise<TwitchUser[]> {
     if (ids.length === 0) return [];
     if (ids.length > 100) {
-      logger.warn("Twurple Helix", "getUsersByIds: Truncating to 100 users");
+      logger.warn(
+        "Twurple Helix",
+        "getUsersByIds: 請求超過 100 個用戶，已截斷"
+      );
       ids = ids.slice(0, 100);
     }
 
@@ -157,7 +163,7 @@ class TwurpleHelixService {
         createdAt: user.creationDate,
       }));
     } catch (error) {
-      logger.error("Twurple Helix", "Failed to get users by IDs", error);
+      logger.error("Twurple Helix", "批量獲取用戶失敗", error);
       return [];
     }
   }
@@ -185,7 +191,7 @@ class TwurpleHelixService {
     } catch (error) {
       logger.error(
         "Twurple Helix",
-        `Failed to get channel: ${broadcasterId}`,
+        `獲取頻道資訊失敗: ${broadcasterId}`,
         error
       );
       return null;
@@ -219,7 +225,7 @@ class TwurpleHelixService {
         isMature: stream.isMature,
       };
     } catch (error) {
-      logger.error("Twurple Helix", `Failed to get stream: ${userId}`, error);
+      logger.error("Twurple Helix", `獲取直播狀態失敗: ${userId}`, error);
       return null;
     }
   }
@@ -253,7 +259,7 @@ class TwurpleHelixService {
         isMature: stream.isMature,
       }));
     } catch (error) {
-      logger.error("Twurple Helix", "Failed to get streams by user IDs", error);
+      logger.error("Twurple Helix", "批量獲取直播狀態失敗", error);
       return [];
     }
   }
@@ -280,7 +286,7 @@ class TwurpleHelixService {
     } catch (error) {
       logger.error(
         "Twurple Helix",
-        `Failed to get follower count: ${broadcasterId}`,
+        `獲取追蹤者數量失敗: ${broadcasterId}`,
         error
       );
       return 0;
@@ -310,7 +316,10 @@ class TwurpleHelixService {
           clientId,
           userAccessToken
         );
-        api = new ApiClient({ authProvider: userAuthProvider });
+        api = new ApiClient({
+          authProvider: userAuthProvider,
+          logger: { minLevel: "error" }, // 隱藏 rate-limit 警告
+        });
       } else {
         // 回退到 App Token（但通常不會成功，因為需要 user:read:follows）
         api = this.getApiClient();
@@ -332,15 +341,11 @@ class TwurpleHelixService {
 
       logger.info(
         "Twurple Helix",
-        `Fetched ${results.length} followed channels for user ${userId}`
+        `已獲取 ${results.length} 個追蹤頻道 (User ID: ${userId})`
       );
       return results;
     } catch (error) {
-      logger.error(
-        "Twurple Helix",
-        `Failed to get followed channels for user: ${userId}`,
-        error
-      );
+      logger.error("Twurple Helix", `獲取用戶追蹤列表失敗: ${userId}`, error);
       return [];
     }
   }

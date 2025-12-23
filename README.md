@@ -38,12 +38,13 @@
 
 ### 🤖 自動化資料收集 (New)
 
-| 功能               | 說明                                               |
-| ------------------ | -------------------------------------------------- |
-| **自動追蹤同步**   | 登入即自動同步 Twitch 追蹤清單，並每小時背景更新   |
-| **即時開台監控**   | 精確監測追蹤頻道的開台狀態、觀眾數與遊戲分類       |
-| **觀看時間推算**   | 透過聊天室活動智慧推算實際觀看時數（分段計時邏輯） |
-| **Token 自動刷新** | 實作 RefreshingAuthProvider，自動維護長期連線      |
+| 功能                 | 說明                                                  |
+| -------------------- | ----------------------------------------------------- |
+| **自動追蹤同步**     | 登入即自動同步 Twitch 追蹤清單，並每小時背景更新      |
+| **即時開台監控**     | 精確監測追蹤頻道的開台狀態、觀眾數與遊戲分類          |
+| **觀看時間推算**     | 透過聊天室活動智慧推算實際觀看時數（分段計時邏輯）    |
+| **Token 自動刷新**   | 實作 RefreshingAuthProvider，自動維護長期連線         |
+| **EventSub Webhook** | 使用 Twurple EventSubMiddleware 即時接收開台/下播事件 |
 
 ### 🔐 認證與安全
 
@@ -154,7 +155,7 @@
 | 2.4   | 足跡總覽儀表板        | ✅   | 2025-12-17 |
 | 2.5   | 隱私與授權控制 (GDPR) | ✅   | 2025-12-17 |
 
-### Epic 3: 資料收集與自動化 🏗️ 90%
+### Epic 3: 資料收集與自動化 ✅ 100%
 
 | Story | 名稱                 | 狀態 | 完成日期   |
 | ----- | -------------------- | ---- | ---------- |
@@ -164,12 +165,12 @@
 | 3.4   | 觀看時間智慧推算     | ✅   | 2025-12-22 |
 | 3.5   | 聊天室訊息監聽與存儲 | ✅   | 2025-12-22 |
 | 3.6   | 背景排程與錯誤處理   | ✅   | 2025-12-23 |
+| 3.7   | EventSub Webhook     | ✅   | 2025-12-23 |
 
-### 未來規劃
+### 未來規劃 (可選)
 
-- **Epic 4**: EventSub Webhooks (即時事件推送替代輪詢)
-- **Epic 5**: 實況主快速操作工具 (Mod 相關)
-- **Epic 6**: 即時通知系統 (WebSocket)
+- **Epic 4**: 實況主快速操作工具 (Mod 相關)
+- **Epic 5**: WebSocket 即時推送 (替代前端輪詢，非必要)
 
 ---
 
@@ -323,7 +324,44 @@ npm run dev
 # 應用運行於 http://localhost:3000
 ```
 
-### 6. 開始使用
+### 6. 啟動 Cloudflare Tunnel (EventSub 測試用)
+
+若需測試 EventSub Webhook，需要一個公開的 HTTPS URL。使用 Cloudflare Tunnel 可快速生成臨時網址：
+
+**下載 cloudflared**
+
+從 [Cloudflare 官方](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) 下載對應平台的 `cloudflared` 執行檔，放置於專案根目錄。
+
+**啟動 Tunnel** (Terminal 3)
+
+```bash
+# Windows
+.\cloudflared.exe tunnel --url http://localhost:4000
+
+# macOS / Linux
+./cloudflared tunnel --url http://localhost:4000
+```
+
+啟動後會顯示類似以下輸出：
+
+```
+Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):
+https://random-name-here.trycloudflare.com
+```
+
+**設定環境變數**
+
+將生成的 URL 填入 `backend/.env`：
+
+```env
+EVENTSUB_ENABLED=true
+EVENTSUB_SECRET=your_random_secret_string
+EVENTSUB_CALLBACK_URL=https://random-name-here.trycloudflare.com
+```
+
+> ⚠️ 注意：每次重啟 Cloudflare Tunnel 會生成新的 URL，需重新更新 `.env` 並重啟後端。
+
+### 7. 開始使用
 
 1. 訪問 http://localhost:3000
 2. 點擊「使用 Twitch 登入」

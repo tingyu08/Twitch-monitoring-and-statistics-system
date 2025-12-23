@@ -121,18 +121,19 @@ router.post(
   }
 );
 
+import { twurpleEventSubService } from "../services/twurple-eventsub.service";
+
 /**
  * GET /eventsub/status
  * 檢查 EventSub 服務狀態 (開發用)
  */
 router.get("/status", (_req: Request, res: Response) => {
-  const status = {
-    enabled: !!process.env.EVENTSUB_SECRET,
-    callbackUrl: process.env.EVENTSUB_CALLBACK_URL || "Not configured",
-    supportedEvents: Object.values(EVENTSUB_TYPES),
-  };
-
-  res.json(status);
+  const status = twurpleEventSubService.getStatus();
+  res.json({
+    ...status,
+    enabled: process.env.EVENTSUB_ENABLED === "true",
+    callbackUrl: process.env.EVENTSUB_CALLBACK_URL,
+  });
 });
 
 export const eventSubRoutes = router;

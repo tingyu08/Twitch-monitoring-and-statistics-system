@@ -51,11 +51,11 @@ export class ChatListenerManager {
    * 啟動管理器
    */
   public async start(): Promise<void> {
-    logger.info("ListenerManager", "Starting Chat Listener Manager");
+    logger.info("ListenerManager", "正在啟動聊天室監聽管理器");
 
     // 如果啟用分佈式模式，啟動協調器
     if (ENABLE_DISTRIBUTED_MODE) {
-      logger.info("ListenerManager", "Distributed mode enabled");
+      logger.info("ListenerManager", "分佈式模式已啟用");
       await distributedCoordinator.start();
     }
 
@@ -67,7 +67,7 @@ export class ChatListenerManager {
    * 停止管理器
    */
   public stop(): void {
-    logger.info("ListenerManager", "Stopping Chat Listener Manager");
+    logger.info("ListenerManager", "正在停止聊天室監聽管理器");
 
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
@@ -110,7 +110,7 @@ export class ChatListenerManager {
       if (!removed) {
         logger.warn(
           "ListenerManager",
-          `Cannot add channel ${normalizedName}: limit reached (${MAX_CHANNELS_PER_INSTANCE})`
+          `無法加入頻道 ${normalizedName}: 達到上限 (${MAX_CHANNELS_PER_INSTANCE})`
         );
         return false;
       }
@@ -128,17 +128,13 @@ export class ChatListenerManager {
         viewerCount: 0,
       });
 
-      logger.info(
-        "ListenerManager",
-        `Added channel: ${normalizedName} (total: ${this.channels.size})`
-      );
+      // logger.info(
+      //   "ListenerManager",
+      //   `Added channel: ${normalizedName} (total: ${this.channels.size})`
+      // );
       return true;
     } catch (error) {
-      logger.error(
-        "ListenerManager",
-        `Failed to add channel: ${normalizedName}`,
-        error
-      );
+      logger.error("ListenerManager", `加入頻道失敗: ${normalizedName}`, error);
       return false;
     }
   }
@@ -152,10 +148,10 @@ export class ChatListenerManager {
     if (this.channels.has(normalizedName)) {
       await twurpleChatService.leaveChannel(normalizedName);
       this.channels.delete(normalizedName);
-      logger.info(
-        "ListenerManager",
-        `Removed channel: ${normalizedName} (total: ${this.channels.size})`
-      );
+      // logger.info(
+      //   "ListenerManager",
+      //   `Removed channel: ${normalizedName} (total: ${this.channels.size})`
+      // );
     }
   }
 
@@ -245,21 +241,18 @@ export class ChatListenerManager {
       // 移除無活動頻道
       for (const name of channelsToRemove) {
         this.stopListening(name);
-        logger.info(
-          "ListenerManager",
-          `Auto-stopped inactive channel: ${name}`
-        );
+        logger.info("ListenerManager", `自動停止非活躍頻道: ${name}`);
       }
 
       if (channelsToRemove.length > 0) {
         logger.info(
           "ListenerManager",
-          `Health check: removed ${channelsToRemove.length} inactive channels`
+          `健康檢查: 已移除 ${channelsToRemove.length} 個非活躍頻道`
         );
       }
     } catch (error) {
       this.isHealthy = false;
-      logger.error("ListenerManager", "Health check failed", error);
+      logger.error("ListenerManager", "健康檢查失敗", error);
     }
   }
 

@@ -42,9 +42,9 @@ interface PerformanceStats {
 
 // 預設配置
 const DEFAULT_CONFIG = {
-  slowThreshold: 200, // 慢速請求閾值 (ms)
+  slowThreshold: 1000, // 慢速請求閾值 (ms)
   maxMetricsHistory: 1000, // 最多保存多少個請求記錄
-  enableLogging: true,
+  enableLogging: false, // 關閉日誌輸出
 };
 
 class PerformanceMonitor {

@@ -9,8 +9,8 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 
-// 每 15 分鐘同步一次
-const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "*/15 * * * *";
+// 每小時同步一次 (作為 EventSub 的備援與數據補全)
+const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "0 * * * *";
 
 export interface ChannelStatsSyncResult {
   synced: number;
@@ -82,7 +82,7 @@ export class ChannelStatsSyncJob {
       }
 
       // Update daily stats
-      console.log("[DEBUG] Calling updateDailyStats...");
+      // console.log("[DEBUG] Calling updateDailyStats...");
       result.dailyStatsUpdated = await this.updateDailyStats();
 
       console.log(
@@ -149,11 +149,11 @@ export class ChannelStatsSyncJob {
       }
     }
 
-    console.log(
-      `INFO: Synced: ${channel.channelName} (${
-        channelInfo.isLive ? "LIVE" : "OFFLINE"
-      })`
-    );
+    // console.log(
+    //   `INFO: Synced: ${channel.channelName} (${
+    //     channelInfo.isLive ? "LIVE" : "OFFLINE"
+    //   })`
+    // );
   }
 
   /**
@@ -163,7 +163,7 @@ export class ChannelStatsSyncJob {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    console.log("[DEBUG] updateDailyStats: Fetching sessions...");
+    // console.log("[DEBUG] updateDailyStats: Fetching sessions...");
     // Get all finished sessions for today
     const todaySessions = await prisma.streamSession.findMany({
       where: {
@@ -178,9 +178,9 @@ export class ChannelStatsSyncJob {
       },
     });
 
-    console.log(
-      `[DEBUG] updateDailyStats found ${todaySessions.length} sessions.`
-    );
+    // console.log(
+    //   `[DEBUG] updateDailyStats found ${todaySessions.length} sessions.`
+    // );
 
     // Group by channel
     const channelStats = new Map<
@@ -194,9 +194,9 @@ export class ChannelStatsSyncJob {
     >();
 
     for (const session of todaySessions) {
-      console.log(
-        `[DEBUG] Processing session for channelId: ${session.channelId}`
-      );
+      // console.log(
+      //   `[DEBUG] Processing session for channelId: ${session.channelId}`
+      // );
       const existing = channelStats.get(session.channelId) || {
         streamSeconds: 0,
         streamCount: 0,
@@ -217,14 +217,14 @@ export class ChannelStatsSyncJob {
 
     // Update or create daily stats
     let updated = 0;
-    console.log(`[DEBUG] Updating stats for ${channelStats.size} channels.`);
+    // console.log(`[DEBUG] Updating stats for ${channelStats.size} channels.`);
     for (const [channelId, stats] of channelStats) {
       const avgViewers =
         stats.streamCount > 0
           ? Math.round(stats.totalViewers / stats.streamCount)
           : null;
 
-      console.log(`[DEBUG] Upserting stats for channel: ${channelId}`);
+      // console.log(`[DEBUG] Upserting stats for channel: ${channelId}`);
       await prisma.channelDailyStat.upsert({
         where: {
           channelId_date: {

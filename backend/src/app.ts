@@ -43,8 +43,17 @@ class App {
       })
     );
 
-    // 2. 解析 JSON Body
-    this.express.use(express.json());
+    // 2. 解析 JSON Body (排除 EventSub 路徑，因為 Twurple 需要 raw body)
+    this.express.use(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (req: any, res: any, next: any) => {
+        if (req.path.startsWith("/api/eventsub")) {
+          next();
+        } else {
+          express.json()(req, res, next);
+        }
+      }
+    );
 
     // 3. 解析 Cookies (處理 httpOnly cookie 必備)
     this.express.use(cookieParser());

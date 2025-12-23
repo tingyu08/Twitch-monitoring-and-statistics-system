@@ -54,8 +54,8 @@ export class AutoJoinLiveChannelsJob {
 
       // 2. 批量檢查直播狀態 (每次 100 個)
       const batchSize = 100;
-      let liveCount = 0;
-      let joinedCount = 0;
+      // let liveCount = 0;
+      // let joinedCount = 0;
 
       for (let i = 0; i < monitoredChannels.length; i += batchSize) {
         const batch = monitoredChannels.slice(i, i + batchSize);
@@ -73,18 +73,15 @@ export class AutoJoinLiveChannelsJob {
             const isLive = !!stream;
 
             if (isLive) {
-              liveCount++;
+              // liveCount++;
 
               // 加入聊天室監聽
-              const joined = await chatListenerManager.requestListen(
-                channel.channelName,
-                {
-                  isLive: true,
-                  priority: 10, // Live 頻道優先級較高
-                }
-              );
+              await chatListenerManager.requestListen(channel.channelName, {
+                isLive: true,
+                priority: 10, // Live 頻道優先級較高
+              });
 
-              if (joined) joinedCount++;
+              // if (joined) joinedCount++;
 
               // 避免觸發 Twurple JOIN rate limiter warning (20/10s)
               // (User requested to remove delay and accept warning)
@@ -139,10 +136,10 @@ export class AutoJoinLiveChannelsJob {
         }
       }
 
-      logger.info(
-        "Jobs",
-        `✅ 直播檢查完成: 發現 ${liveCount} 個直播中, 加入 ${joinedCount} 個聊天室`
-      );
+      // logger.info(
+      //   "Jobs",
+      //   `✅ 直播檢查完成: 發現 ${liveCount} 個直播中, 加入 ${joinedCount} 個聊天室`
+      // );
     } catch (error) {
       logger.error("Jobs", "❌ Auto Join Job 執行失敗", error);
     } finally {
