@@ -121,6 +121,26 @@ model ModerationAction {
 
 ---
 
+### Story 7.6 – 惡意攻擊自動防護 (Hate Raid Protection)
+
+- **As a** 實況主
+- **I want** 系統能偵測並阻擋惡意洗頻攻擊
+- **So that** 我的直播聊天室不會被機器人癱瘓
+
+**應用與 UI**：
+
+- **異常流量警示**：當 10 秒內追蹤數暴增 50+，儀表板顯示紅色警報。
+- **一鍵防禦 (Shields Up)**：只需按一鍵，自動開啟「訂閱者模式」、「慢速模式」、「表情符號限定模式」。
+- **攻擊者清單**：自動列出可疑的洗頻帳號，提供「批次 Ban」按鈕。
+
+**技術需求**：
+
+- 監聽 `channel.follow` 事件 (檢測 Follow Bot)
+- Chat Client 流量分析
+- 呼叫 `chatClient.ban()` 與 `updateChatSettings()`
+
+---
+
 ## 3. 技術架構
 
 ### 3.1 新增 API 端點
@@ -131,6 +151,7 @@ POST   /api/moderation/ban          - 封鎖用戶
 POST   /api/moderation/timeout      - 禁言用戶
 DELETE /api/moderation/ban/:userId  - 解除封鎖
 GET    /api/moderation/actions      - 版主操作記錄
+POST   /api/moderation/shield-mode  - 開啟/關閉盾牌模式
 
 GET    /api/analytics/top-viewers   - 忠誠觀眾排行
 GET    /api/analytics/viewer/:id    - 單一觀眾詳細資訊

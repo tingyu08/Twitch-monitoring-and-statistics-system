@@ -141,6 +141,7 @@ export default function StreamerDashboard() {
     <div
       className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white"
       data-testid="dashboard-container"
+      data-loaded="true"
     >
       {/* Header Bar */}
       <header className="border-b border-white/10 backdrop-blur-sm bg-black/20 sticky top-0 z-10">

@@ -52,6 +52,14 @@ export interface TwitchChannel {
   title: string;
 }
 
+// Story 3.6: 用戶追蹤的頻道資訊
+export interface FollowedChannel {
+  broadcasterId: string;
+  broadcasterLogin: string;
+  broadcasterName: string;
+  followedAt: Date;
+}
+
 // ========== 服務實作 ==========
 
 class TwurpleHelixService {
@@ -276,6 +284,64 @@ class TwurpleHelixService {
         error
       );
       return 0;
+    }
+  }
+
+  // ========== Story 3.6: 用戶追蹤頻道 ==========
+
+  /**
+   * 獲取用戶追蹤的頻道列表 (使用分頁)
+   * 需要 user:read:follows scope
+   * @param userId Twitch User ID
+   * @param userAccessToken 用戶的 Access Token (需有 user:read:follows scope)
+   */
+  async getFollowedChannels(
+    userId: string,
+    userAccessToken?: string
+  ): Promise<FollowedChannel[]> {
+    try {
+      let api: ApiClient;
+
+      // 如果有用戶 Token，使用用戶的 Auth Provider
+      if (userAccessToken) {
+        const { StaticAuthProvider } = await import("@twurple/auth");
+        const clientId = twurpleAuthService.getClientId();
+        const userAuthProvider = new StaticAuthProvider(
+          clientId,
+          userAccessToken
+        );
+        api = new ApiClient({ authProvider: userAuthProvider });
+      } else {
+        // 回退到 App Token（但通常不會成功，因為需要 user:read:follows）
+        api = this.getApiClient();
+      }
+
+      const results: FollowedChannel[] = [];
+
+      // 使用 Twurple 的分頁器獲取所有追蹤的頻道
+      const paginator = api.channels.getFollowedChannelsPaginated(userId);
+
+      for await (const follow of paginator) {
+        results.push({
+          broadcasterId: follow.broadcasterId,
+          broadcasterLogin: follow.broadcasterName.toLowerCase(),
+          broadcasterName: follow.broadcasterDisplayName,
+          followedAt: follow.followDate,
+        });
+      }
+
+      logger.info(
+        "Twurple Helix",
+        `Fetched ${results.length} followed channels for user ${userId}`
+      );
+      return results;
+    } catch (error) {
+      logger.error(
+        "Twurple Helix",
+        `Failed to get followed channels for user: ${userId}`,
+        error
+      );
+      return [];
     }
   }
 

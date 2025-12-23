@@ -1,4 +1,5 @@
 import { prisma } from "../../db/prisma";
+import { twurpleHelixService } from "../../services/twitch-helix.service";
 
 export async function recordConsent(viewerId: string, consentVersion = 1) {
   return prisma.viewer.update({
@@ -93,208 +94,6 @@ export async function getChannelStats(
   };
 }
 
-// 開發用 Mock 資料映射，確保與前端一致
-const MOCK_CHANNEL_MAP: Record<
-  string,
-  { name: string; display: string; avatarUrl: string; isLive: boolean }
-> = {
-  ch_1: {
-    name: "shroud",
-    display: "Shroud",
-    avatarUrl: "https://ui-avatars.com/api/?name=Shroud&background=random",
-    isLive: true,
-  },
-  ch_2: {
-    name: "pokimane",
-    display: "Pokimane",
-    avatarUrl: "https://ui-avatars.com/api/?name=Pokimane&background=random",
-    isLive: false,
-  },
-  ch_3: {
-    name: "xqcow",
-    display: "xQc",
-    avatarUrl: "https://ui-avatars.com/api/?name=xQc&background=random",
-    isLive: true,
-  },
-  ch_4: {
-    name: "lilypichu",
-    display: "LilyPichu",
-    avatarUrl: "https://ui-avatars.com/api/?name=LilyPichu&background=random",
-    isLive: false,
-  },
-  ch_5: {
-    name: "disguisedtoast",
-    display: "DisguisedToast",
-    avatarUrl:
-      "https://ui-avatars.com/api/?name=DisguisedToast&background=random",
-    isLive: false,
-  },
-};
-
-/**
- * 確保頻道存在 (Helper for seeding)
- * 如果頻道不存在，會嘗試建立它；如果存在，更新其資訊以匹配 Mock Map
- */
-async function ensureChannelExists(channelId: string) {
-  const mockInfo = MOCK_CHANNEL_MAP[channelId] || {
-    name: `mock_channel_${channelId}`,
-    display: `Mock Channel ${channelId}`,
-    avatarUrl: `https://ui-avatars.com/api/?name=Mock&background=random`,
-    isLive: false, // Default for non-mapped channels
-  };
-
-  // 1. 確保 Streamer 存在並更新資訊
-  // 為了簡化，我們為每個 mock channel 創建一個專屬 streamer，或者重用已有的
-  // 這裡我們假設每個 channelId 對應一個 Unique Streamer (為了名稱正確)
-  const twitchUserId = `mock_streamer_${channelId}`; // Unique ID per channel
-
-  const streamer = await prisma.streamer.upsert({
-    where: { twitchUserId },
-    update: {
-      displayName: mockInfo.display,
-      // 強制更新頭像，確保舊資料也能獲得新頭像
-      avatarUrl: mockInfo.avatarUrl,
-    },
-    create: {
-      twitchUserId,
-      displayName: mockInfo.display,
-      email: `${mockInfo.name}@example.com`,
-      avatarUrl: mockInfo.avatarUrl,
-    },
-  });
-
-  // 2. 確保 Channel 存在並更新
-  await prisma.channel.upsert({
-    where: { id: channelId },
-    update: {
-      channelName: mockInfo.name,
-      streamerId: streamer.id, // 確保關聯到正確的 named streamer
-    },
-    create: {
-      id: channelId,
-      streamerId: streamer.id,
-      twitchChannelId: `mock_twitch_${channelId}`,
-      channelName: mockInfo.name,
-      channelUrl: `https://twitch.tv/${mockInfo.name}`,
-    },
-  });
-}
-
-/**
- * [DEBUG ONLY] 為特定頻道的觀眾生成測試用種子數據
- * 這樣我們在沒有真實 Worker 的情況下也能展示 Story 2.2 的圖表
- */
-export async function seedChannelStats(viewerId: string, channelId: string) {
-  // 0. 重要：確保 DB 中有這個 Channel，否則會報 Foreign Key Error
-  await ensureChannelExists(channelId);
-
-  const daysToSeed = 30;
-  const now = new Date();
-
-  // 檢查 Story 2.2 數據
-  const stats = await prisma.viewerChannelDailyStat.findMany({
-    where: { viewerId, channelId },
-    select: { watchSeconds: true },
-  });
-
-  const hasValidData =
-    stats.length >= 10 && stats.reduce((sum, s) => sum + s.watchSeconds, 0) > 0;
-
-  // 只有當完全沒有數據時才重新 Seed，或者如果我們想強制添加 Message Stats，可以檢查 Message Agg
-  const messageAggs = await prisma.viewerChannelMessageDailyAgg.findMany({
-    where: { viewerId, channelId },
-  });
-
-  if (hasValidData && messageAggs.length > 0) {
-    return;
-  }
-
-  const promises = [];
-  for (let i = 0; i < daysToSeed; i++) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    date.setHours(0, 0, 0, 0);
-
-    // 隨機生成一些合理的數據
-    // Story 2.2 Stats
-    const hasData = Math.random() > 0.2; // 80% 機率有數據
-    const watchSeconds = hasData
-      ? Math.floor(Math.random() * 4 * 3600) + 300
-      : 0; // 至少 5 分鐘
-    const messageCount = hasData
-      ? Math.floor((watchSeconds / 60) * (Math.random() * 2))
-      : 0; // 每分鐘約 0-2 則留言
-    const emoteCount = hasData ? Math.floor(messageCount * 0.4) : 0;
-
-    // Story 2.2
-    promises.push(
-      prisma.viewerChannelDailyStat.upsert({
-        where: {
-          viewerId_channelId_date: {
-            viewerId,
-            channelId,
-            date,
-          },
-        },
-        update: {
-          watchSeconds,
-          messageCount,
-          emoteCount,
-        },
-        create: {
-          viewerId,
-          channelId,
-          date,
-          watchSeconds,
-          messageCount,
-          emoteCount,
-        },
-      })
-    );
-
-    // Story 2.3: Message Agg Stats
-    // 生成更詳細的互動數據
-    const chatMessages = Math.floor(messageCount * 0.8);
-    const cheers = Math.random() > 0.9 ? Math.floor(Math.random() * 5) : 0;
-    const subscriptions = Math.random() > 0.95 ? 1 : 0;
-    const raids = Math.random() > 0.98 ? 1 : 0;
-    const totalBits = cheers * 100;
-
-    promises.push(
-      prisma.viewerChannelMessageDailyAgg.upsert({
-        where: {
-          viewerId_channelId_date: {
-            viewerId,
-            channelId,
-            date,
-          },
-        },
-        update: {
-          totalMessages: messageCount, // 保持與 DailyStat 一致
-          chatMessages,
-          cheers,
-          subscriptions,
-          raids,
-          totalBits,
-        },
-        create: {
-          viewerId,
-          channelId,
-          date,
-          totalMessages: messageCount,
-          chatMessages,
-          cheers,
-          subscriptions,
-          raids,
-          totalBits,
-        },
-      })
-    );
-  }
-
-  await Promise.all(promises);
-}
-
 /**
  * 獲取觀眾有互動紀錄的所有頻道列表 (用於首頁)
  */
@@ -317,34 +116,134 @@ export async function getFollowedChannels(viewerId: string) {
     },
   });
 
-  // 2. 填充頻道詳細資訊
-  const results = await Promise.all(
-    stats.map(async (stat) => {
-      const channel = await prisma.channel.findUnique({
-        where: { id: stat.channelId },
-        include: { streamer: true },
-      });
+  // 2. 獲取 Story 3.6 同步的外部追蹤頻道
+  const follows = await prisma.userFollow.findMany({
+    where: {
+      userId: viewerId,
+      userType: "viewer",
+    },
+    select: {
+      channelId: true,
+      followedAt: true,
+    },
+  });
 
-      if (!channel) return null;
-
-      // 使用 Mock Map 中的固定 Live 狀態，保持前後端一致
-      const mockInfo = MOCK_CHANNEL_MAP[stat.channelId];
-      const isLive = mockInfo ? mockInfo.isLive : false;
-
-      return {
-        id: channel.id,
-        channelName: channel.channelName, // Username (e.g. "shroud")
-        displayName: channel.streamer?.displayName || channel.channelName, // Display Name (e.g. "Shroud")
-        avatarUrl: channel.streamer?.avatarUrl || "",
-        category: "Just Chatting",
-        isLive,
-        tags: ["中文", "遊戲"],
-        lastWatched: stat._max.date?.toISOString() ?? null,
-        totalWatchMinutes: Math.floor((stat._sum.watchSeconds || 0) / 60),
-        messageCount: stat._sum.messageCount ?? 0, // 新增
-      };
-    })
+  // 3. 合併頻道 ID 列表 (去重)
+  const statsChannelIds = new Set(stats.map((s) => s.channelId));
+  const followChannelIds = new Set(follows.map((f) => f.channelId));
+  const allChannelIds = Array.from(
+    new Set([...statsChannelIds, ...followChannelIds])
   );
 
-  return results.filter((r) => r !== null);
+  if (allChannelIds.length === 0) {
+    return [];
+  }
+
+  // 4. 批量查詢頻道詳細資訊
+  const channels = await prisma.channel.findMany({
+    where: {
+      id: { in: allChannelIds },
+    },
+    include: {
+      streamer: true,
+      // 檢查是否有進行中的實況 (endedAt 為 null)
+      streamSessions: {
+        where: {
+          endedAt: null,
+        },
+        take: 1,
+      },
+    },
+  });
+
+  // 建立 Stats Map 以便快速查找
+  const statsMap = new Map(stats.map((s) => [s.channelId, s]));
+
+  // 5. 從 Twitch API 獲取所有開台頻道的即時資訊（觀眾數、開台時間）
+  // 注意: Twitch API 一次最多查詢 100 個，需要分批處理
+  const twitchChannelIds = channels.map((ch) => ch.twitchChannelId);
+  let liveStreamsMap = new Map<
+    string,
+    { viewerCount: number; startedAt: Date; gameName: string }
+  >();
+
+  try {
+    // 分批處理（每批最多 100 個）
+    const BATCH_SIZE = 100;
+    const allLiveStreams: Awaited<
+      ReturnType<typeof twurpleHelixService.getStreamsByUserIds>
+    > = [];
+
+    for (let i = 0; i < twitchChannelIds.length; i += BATCH_SIZE) {
+      const batch = twitchChannelIds.slice(i, i + BATCH_SIZE);
+      const batchStreams = await twurpleHelixService.getStreamsByUserIds(batch);
+      allLiveStreams.push(...batchStreams);
+    }
+
+    liveStreamsMap = new Map(
+      allLiveStreams.map((s) => [
+        s.userId,
+        {
+          viewerCount: s.viewerCount,
+          startedAt: s.startedAt,
+          gameName: s.gameName,
+        },
+      ])
+    );
+  } catch {
+    // 如果 API 失敗，繼續使用 DB 資料
+  }
+
+  // 建立 Follows Map 以便查找追蹤時間
+  const followsMap = new Map(follows.map((f) => [f.channelId, f.followedAt]));
+
+  // 6. 轉換為前端格式
+  const results = channels.map((channel) => {
+    const stat = statsMap.get(channel.id);
+    const liveInfo = liveStreamsMap.get(channel.twitchChannelId);
+    const followedAt = followsMap.get(channel.id);
+
+    // 使用 Twitch API 的即時狀態
+    const isLive = !!liveInfo;
+
+    return {
+      id: channel.id,
+      channelName: channel.channelName,
+      displayName: channel.streamer?.displayName || channel.channelName,
+      avatarUrl: channel.streamer?.avatarUrl || "",
+      category: liveInfo?.gameName || "Just Chatting",
+      isLive,
+      viewerCount: liveInfo?.viewerCount ?? null,
+      streamStartedAt: liveInfo?.startedAt?.toISOString() ?? null,
+      followedAt: followedAt?.toISOString() ?? null,
+      tags: ["中文", "遊戲"],
+      // 如果有統計數據則顯示最後觀看時間，否則顯示 null
+      lastWatched: stat?._max.date?.toISOString() ?? null,
+      totalWatchMinutes: Math.floor((stat?._sum.watchSeconds || 0) / 60),
+      messageCount: stat?._sum.messageCount ?? 0,
+      isExternal: channel.source === "external", // Optional: 標記來源
+    };
+  });
+
+  // 排序優先順序：
+  // 1. 開台中 (isLive) 的頻道優先
+  // 2. 有看過的排前面 (依最後觀看時間)
+  // 3. 沒看過的排後面 (依名稱)
+  return results.sort((a, b) => {
+    // 優先顯示開台中的頻道
+    if (a.isLive && !b.isLive) return -1;
+    if (!a.isLive && b.isLive) return 1;
+
+    // 都開台或都沒開台時，依最後觀看時間排序
+    if (a.lastWatched && b.lastWatched) {
+      return (
+        new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime()
+      );
+    }
+    if (a.lastWatched) return -1;
+    if (b.lastWatched) return 1;
+
+    // 都沒看過時，依名稱排序
+    return a.displayName.localeCompare(b.displayName);
+  });
 }

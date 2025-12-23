@@ -39,6 +39,14 @@ export default [
     },
   },
   {
+    // 對測試檔案和 Seed 檔案放寬規則
+    files: ['**/__tests__/**/*.ts', 'prisma/seed.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
+  {
     ignores: [
       'dist/**',
       'node_modules/**',

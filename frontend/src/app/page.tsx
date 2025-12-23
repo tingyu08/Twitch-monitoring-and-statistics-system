@@ -4,7 +4,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, Suspense } from "react";
 import { useAuthSession } from "@/features/auth/AuthContext";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
 function LandingPageContent() {
   const searchParams = useSearchParams();
@@ -20,7 +21,7 @@ function LandingPageContent() {
   }, [loading, user, router]);
 
   const handleLogin = () => {
-    // 預設以實況主流程登入；進入儀表板後可切換到觀眾並重新登入授權
+    // 統一登入：一次授權即可同時存取實況主與觀眾功能
     window.location.href = `${API_BASE_URL}/auth/twitch/login`;
   };
 
@@ -76,11 +77,13 @@ function LandingPageContent() {
 
 export default function LandingPage() {
   return (
-    <Suspense fallback={
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-600">載入中...</p>
-      </main>
-    }>
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center">
+          <p className="text-gray-600">載入中...</p>
+        </main>
+      }
+    >
       <LandingPageContent />
     </Suspense>
   );

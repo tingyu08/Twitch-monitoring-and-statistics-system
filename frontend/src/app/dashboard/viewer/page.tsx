@@ -7,6 +7,21 @@ import { useAuthSession } from "@/features/auth/AuthContext";
 import { viewerApi, type FollowedChannel } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
 
+// 計算並格式化開台時長
+function formatStreamDuration(startedAt: string): string {
+  const start = new Date(startedAt);
+  const now = new Date();
+  const diffMs = now.getTime() - start.getTime();
+
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
 export default function ViewerDashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuthSession();
@@ -25,24 +40,30 @@ export default function ViewerDashboardPage() {
       return;
     }
 
-    if (isViewer(user) && !user.consentedAt) {
-      router.push("/auth/viewer/consent");
-      return;
-    }
+    // (Consent check removed for unified login)
 
     loadChannels();
+
+    // Polling every 5 seconds for real-time updates
+    const interval = setInterval(() => {
+      loadChannels(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [authLoading, user, router]);
 
-  const loadChannels = async () => {
+  const loadChannels = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await viewerApi.getFollowedChannels();
       setChannels(data);
-      setFilteredChannels(data);
+      // 只有當 search query 為空時才更新 filteredChannels，或者我們重新過濾
+      // 為簡單起見，這裡直接更新，下一個 useEffect 會處理過濾
     } catch (err) {
-      setError(err instanceof Error ? err.message : "載入頻道失敗");
+      if (!silent)
+        setError(err instanceof Error ? err.message : "載入頻道失敗");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -251,13 +272,37 @@ export default function ViewerDashboardPage() {
                     <p className="text-sm text-purple-300/50 font-mono">
                       @{channel.channelName}
                     </p>
+                    {channel.isLive && channel.category && (
+                      <p className="text-xs text-purple-400/70 mt-0.5 truncate max-w-[180px]">
+                        🎮 {channel.category}
+                      </p>
+                    )}
                     {channel.isLive && (
-                      <span className="inline-block mt-1 text-[10px] uppercase tracking-wider text-red-400 font-bold bg-red-500/20 px-1.5 py-0.5 rounded">
-                        LIVE
-                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] uppercase tracking-wider text-red-400 font-bold bg-red-500/20 px-1.5 py-0.5 rounded">
+                          LIVE
+                        </span>
+                        {channel.viewerCount !== null && (
+                          <span className="text-[10px] text-purple-300/70">
+                            {channel.viewerCount.toLocaleString()} 觀眾
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
+
+                {/* 開台時間顯示 (僅開台時) */}
+                {channel.isLive && channel.streamStartedAt && (
+                  <div className="mb-3 px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-red-300/70">開台時間</span>
+                      <span className="text-red-400 font-mono">
+                        {formatStreamDuration(channel.streamStartedAt)}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-3 border border-blue-500/20">
@@ -275,13 +320,23 @@ export default function ViewerDashboardPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-300/50 flex justify-between items-center">
-                  <span>最後觀看</span>
-                  <span className="text-purple-300 font-medium">
-                    {channel.lastWatched
-                      ? channel.lastWatched.split("T")[0]
-                      : "N/A"}
-                  </span>
+                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-300/50 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span>最後觀看</span>
+                    <span className="text-purple-300 font-medium">
+                      {channel.lastWatched
+                        ? channel.lastWatched.split("T")[0]
+                        : "N/A"}
+                    </span>
+                  </div>
+                  {channel.followedAt && (
+                    <div className="flex justify-between items-center">
+                      <span>追蹤於</span>
+                      <span className="text-purple-300 font-medium">
+                        {channel.followedAt.split("T")[0]}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </button>
             ))}

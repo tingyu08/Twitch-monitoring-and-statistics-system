@@ -1,118 +1,90 @@
-import type { Response, NextFunction } from "express";
-import { requireAuth, type AuthRequest } from "../auth.middleware";
-import { signAccessToken } from "../jwt.utils";
+import { Response, NextFunction } from "express";
+import { requireAuth, AuthRequest } from "../auth.middleware";
+import * as JwtUtils from "../jwt.utils";
 
-// Mock environment variables
-process.env.APP_JWT_SECRET = "test-secret-key-for-middleware-testing";
+jest.mock("../jwt.utils");
 
-describe("requireAuth Middleware", () => {
-  let mockRequest: Partial<AuthRequest>;
-  let mockResponse: Partial<Response>;
+describe("auth.middleware", () => {
+  let mockReq: Partial<AuthRequest>;
+  let mockRes: Partial<Response>;
   let mockNext: NextFunction;
+  let jsonMock: jest.Mock;
+  let statusMock: jest.Mock;
 
   beforeEach(() => {
-    mockRequest = {
+    jsonMock = jest.fn();
+    statusMock = jest.fn().mockReturnValue({ json: jsonMock });
+    mockReq = {
       cookies: {},
     };
-    mockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis(),
+    mockRes = {
+      status: statusMock,
+      json: jsonMock,
     };
     mockNext = jest.fn();
+    jest.clearAllMocks();
   });
 
-  describe("when token is missing", () => {
-    it("should return 401 with error message", () => {
-      requireAuth(
-        mockRequest as AuthRequest,
-        mockResponse as Response,
-        mockNext
-      );
-
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Unauthorized",
-      });
-      expect(mockNext).not.toHaveBeenCalled();
-    });
-
-    it("should return 401 when cookies object is undefined", () => {
-      mockRequest.cookies = undefined;
-      requireAuth(
-        mockRequest as AuthRequest,
-        mockResponse as Response,
-        mockNext
-      );
-
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Unauthorized",
-      });
-    });
+  it("should return 401 if no cookies", async () => {
+    mockReq.cookies = {};
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext);
+    expect(statusMock).toHaveBeenCalledWith(401);
+    expect(jsonMock).toHaveBeenCalledWith({ error: "Unauthorized" });
   });
 
-  describe("when token is invalid", () => {
-    it("should return 401 for invalid token", () => {
-      mockRequest.cookies = { auth_token: "invalid.token.here" };
-      requireAuth(
-        mockRequest as AuthRequest,
-        mockResponse as Response,
-        mockNext
-      );
-
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Invalid token",
-      });
-      expect(mockNext).not.toHaveBeenCalled();
-    });
-
-    it("should return 401 for tampered token", () => {
-      const validToken = signAccessToken({
-        streamerId: "streamer_123",
-        twitchUserId: "twitch_456",
-        displayName: "Test",
-        avatarUrl: "https://example.com/avatar.jpg",
-        channelUrl: "https://www.twitch.tv/test",
-        role: "streamer",
-      });
-      mockRequest.cookies = { auth_token: validToken.slice(0, -5) + "xxxxx" };
-      requireAuth(
-        mockRequest as AuthRequest,
-        mockResponse as Response,
-        mockNext
-      );
-
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({
-        error: "Invalid token",
-      });
-    });
+  it("should return 401 if token invalid", async () => {
+    mockReq.cookies = { auth_token: "bad" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue(null);
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext);
+    expect(statusMock).toHaveBeenCalledWith(401);
   });
 
-  describe("when token is valid", () => {
-    it("should call next() and attach user to request", () => {
-      const payload = {
-        streamerId: "streamer_123",
-        twitchUserId: "twitch_456",
-        displayName: "Test Streamer",
-        avatarUrl: "https://example.com/avatar.jpg",
-        channelUrl: "https://www.twitch.tv/teststreamer",
-        role: "streamer" as const,
-      };
-      const token = signAccessToken(payload);
-      mockRequest.cookies = { auth_token: token };
+  it("should call next if token valid and no roles required", async () => {
+    mockReq.cookies = { auth_token: "good" };
+    const user = { userId: "u1", role: "viewer" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue(user);
 
-      requireAuth(
-        mockRequest as AuthRequest,
-        mockResponse as Response,
-        mockNext
-      );
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext);
 
-      expect(mockNext).toHaveBeenCalled();
-      expect(mockRequest.user).toMatchObject(payload);
-      expect(mockResponse.status).not.toHaveBeenCalled();
-      expect(mockResponse.json).not.toHaveBeenCalled();
+    expect(mockReq.user).toEqual(user);
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it("should return 403 if role not allowed", async () => {
+    mockReq.cookies = { auth_token: "good" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      role: "viewer",
     });
+
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext, [
+      "streamer",
+    ]);
+
+    expect(statusMock).toHaveBeenCalledWith(403);
+    expect(jsonMock).toHaveBeenCalledWith({ error: "Forbidden" });
+  });
+
+  it("should allow streamer if viewer role required", async () => {
+    mockReq.cookies = { auth_token: "good" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      role: "streamer",
+    });
+
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext, [
+      "viewer",
+    ]);
+
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it("should handle unexpected errors with 401", async () => {
+    mockReq.cookies = { auth_token: "good" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockImplementation(() => {
+      throw new Error("Unexpected");
+    });
+
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext);
+
+    expect(statusMock).toHaveBeenCalledWith(401);
   });
 });

@@ -3,6 +3,11 @@
  */
 
 import { startMessageAggregationJob } from "./aggregate-daily-messages.job";
+import { updateLifetimeStatsJob } from "./update-lifetime-stats.job";
+import { dataRetentionJob } from "./data-retention.job";
+import { streamStatusJob } from "./stream-status.job";
+import { channelStatsSyncJob } from "./channel-stats-sync.job";
+import { syncUserFollowsJob } from "./sync-user-follows.job";
 
 /**
  * 啟動所有定時任務
@@ -14,16 +19,19 @@ export function startAllJobs(): void {
   startMessageAggregationJob();
 
   // 全時段統計聚合任務
-  const { updateLifetimeStatsJob } = require("./update-lifetime-stats.job");
   updateLifetimeStatsJob();
 
   // Story 2.5: 資料保留與刪除任務
-  const { dataRetentionJob } = require("./data-retention.job");
   dataRetentionJob.start();
 
-  // 未來可以在這裡添加更多任務
-  // startTokenRefreshJob();
-  // startStreamerStatusCheckJob();
+  // Story 3.3: 開播狀態輪詢任務
+  streamStatusJob.start();
+
+  // Story 3.3: 頻道統計同步任務
+  channelStatsSyncJob.start();
+
+  // Story 3.6: 使用者追蹤同步任務
+  syncUserFollowsJob.start();
 
   console.log("✅ [Jobs] 所有定時任務已啟動");
 }

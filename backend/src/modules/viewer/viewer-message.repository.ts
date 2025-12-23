@@ -41,34 +41,15 @@ export class ViewerMessageRepository {
       }
 
       // 2. 查找對應的 Channel
-      // 注意：這裡假設 Channel 已經存在於我們的 DB。如果監聽功能啟動，通常意味著 Channel 已經建立。
-      // 為了效能，這裡應該要有緩存，但現在先查 DB。
-      const channel = await prisma.channel.findUnique({
-        where: { twitchChannelId: channelName }, // 假設 twitchChannelId 存的是 username/login name
+      let targetChannelId: string | null = null;
+
+      const ch = await prisma.channel.findFirst({
+        where: { channelName: channelName },
       });
-
-      // 如果是用 twitchChannelId 找不到，嘗試用 channelName 找 (如果 schema 定義不同)
-      // 根據 schema: twitchChannelId 是 @unique String
-
-      // TODO: 我們的 schema data seeding 並沒有嚴格保證 twitchChannelId 格式。
-      // 在 Story 2.2 seeding 中，twitchChannelId 是 'mock_twitch_ch_1'
-      // 在真實環境，這應該是 Twitch 的 numeric user ID 還是 login name?
-      // 通常 IRC channel name 是 login name (e.g. 'shroud').
-      // 我們需要確認 Channel model 的 twitchChannelId 存什麼。
-      // 假設它存的是 login name。
-
-      let targetChannelId: string | null = channel?.id || null;
+      targetChannelId = ch?.id || null;
 
       if (!targetChannelId) {
-        // Fallback: 嘗試用 channelName 查找
-        const ch = await prisma.channel.findFirst({
-          where: { channelName: channelName },
-        });
-        targetChannelId = ch?.id || null;
-      }
-
-      if (!targetChannelId) {
-        // logger.warn('ViewerMessage', `Channel not found: ${channelName}`);
+        // logger.warn("ViewerMessage", `Channel not found: ${channelName}`);
         return;
       }
 
@@ -127,6 +108,44 @@ export class ViewerMessageRepository {
           totalBits: message.bits > 0 ? { increment: message.bits } : undefined,
         },
       });
+
+      // 同步更新 ViewerChannelDailyStat (Format that Dashboard uses)
+      await prisma.viewerChannelDailyStat.upsert({
+        where: {
+          viewerId_channelId_date: {
+            viewerId: viewer.id,
+            channelId: targetChannelId,
+            date: date,
+          },
+        },
+        create: {
+          viewerId: viewer.id,
+          channelId: targetChannelId,
+          date: date,
+          messageCount: 1,
+          emoteCount: message.emotes ? message.emotes.length : 0,
+          watchSeconds: 0, // Will be calculated by watch-time.service
+        },
+        update: {
+          messageCount: { increment: 1 },
+          emoteCount: message.emotes
+            ? { increment: message.emotes.length }
+            : undefined,
+        },
+      });
+
+      // 5. 觸發觀看時間重新計算（非同步，不阻塞訊息儲存）
+      import("../../services/watch-time.service").then(
+        ({ updateViewerWatchTime }) => {
+          updateViewerWatchTime(
+            viewer.id,
+            targetChannelId,
+            message.timestamp
+          ).catch((err) =>
+            logger.error("ViewerMessage", "Failed to update watch time", err)
+          );
+        }
+      );
     } catch (error) {
       logger.error("ViewerMessage", "Error saving message", error);
     }

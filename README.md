@@ -54,10 +54,10 @@
 │  │ Streamer    │  │ Viewer      │  │ Privacy Settings    │  │
 │  │ Dashboard   │  │ Dashboard   │  │ & Consent           │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-│         │                │                    │              │
-│         └────────────────┼────────────────────┘              │
-│                          ▼                                   │
-│               SWR (Data Fetching & Caching)                  │
+│         │                │                    │             │
+│         └────────────────┼────────────────────┘             │
+│                          ▼                                  │
+│               SWR (Data Fetching & Caching)                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │ HTTPS
                            ▼
@@ -67,10 +67,10 @@
 │  │ Auth Module │  │ Streamer    │  │ Viewer Module       │  │
 │  │ (OAuth/JWT) │  │ Module      │  │ (Stats/Privacy)     │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-│         │                │                    │              │
-│         └────────────────┼────────────────────┘              │
-│                          ▼                                   │
-│               Prisma ORM + SQLite                            │
+│         │                │                    │             │
+│         └────────────────┼────────────────────┘             │
+│                          ▼                                  │
+│               Prisma ORM + SQLite                           │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │ 17+ Models: Streamer, Viewer, Channel, Stats,        │   │
 │  │ LifetimeStats, Privacy, ExportJob, AuditLog...       │   │

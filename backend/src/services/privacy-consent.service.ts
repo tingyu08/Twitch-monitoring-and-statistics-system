@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "../db/prisma";
-import type { ViewerPrivacyConsent, Prisma } from "@prisma/client";
+import type { ViewerPrivacyConsent } from "@prisma/client";
 
 // 隱私設定類別
 export type PrivacyCategory =

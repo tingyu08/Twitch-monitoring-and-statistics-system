@@ -12,7 +12,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: [["html", { outputFolder: "playwright-report" }], ["list"]],
+  reporter: process.env.CI ? [["list"], ["github"]] : "list",
   // 增加全域 timeout
   timeout: 60000,
   use: {

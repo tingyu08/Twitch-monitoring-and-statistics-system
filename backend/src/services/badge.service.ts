@@ -1,3 +1,5 @@
+import type { ViewerChannelLifetimeStats } from "@prisma/client";
+
 export interface Badge {
   id: string;
   name: string;
@@ -8,9 +10,19 @@ export interface Badge {
   description?: string;
 }
 
+interface BadgeDefinition {
+  id: string;
+  name: string;
+  category: "watch-time" | "interaction" | "loyalty" | "streak";
+  thresholdMinutes?: number;
+  thresholdMessages?: number;
+  thresholdDays?: number;
+  thresholdStreak?: number;
+}
+
 export class BadgeService {
   // 定義徽章規則
-  private readonly BADGES = [
+  private readonly BADGES: BadgeDefinition[] = [
     // 觀看時數 (Minutes)
     {
       id: "newcomer",
@@ -107,7 +119,7 @@ export class BadgeService {
     },
   ];
 
-  public checkBadges(stats: any): Badge[] {
+  public checkBadges(stats: ViewerChannelLifetimeStats): Badge[] {
     const badges: Badge[] = [];
 
     for (const def of this.BADGES) {
@@ -119,19 +131,19 @@ export class BadgeService {
       switch (def.category) {
         case "watch-time":
           currentValue = stats.totalWatchTimeMinutes;
-          targetValue = (def as any).thresholdMinutes;
+          targetValue = def.thresholdMinutes || 0;
           break;
         case "interaction":
           currentValue = stats.totalMessages;
-          targetValue = (def as any).thresholdMessages;
+          targetValue = def.thresholdMessages || 0;
           break;
         case "loyalty":
           currentValue = stats.trackingDays;
-          targetValue = (def as any).thresholdDays;
+          targetValue = def.thresholdDays || 0;
           break;
         case "streak":
           currentValue = stats.longestStreakDays;
-          targetValue = (def as any).thresholdStreak;
+          targetValue = def.thresholdStreak || 0;
           break;
       }
 
@@ -152,7 +164,7 @@ export class BadgeService {
       badges.push({
         id: def.id,
         name: def.name,
-        category: def.category as any,
+        category: def.category,
         progress,
         unlockedAt: unlocked ? stats.updatedAt : undefined,
       });

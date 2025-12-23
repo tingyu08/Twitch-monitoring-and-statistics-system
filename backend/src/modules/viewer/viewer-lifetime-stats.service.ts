@@ -1,7 +1,7 @@
 import { prisma } from "../../db/prisma";
 import { badgeService } from "../../services/badge.service";
 import { lifetimeStatsAggregator } from "../../services/lifetime-stats-aggregator.service";
-import { logger } from "../../utils/logger";
+import type { ViewerChannelLifetimeStats } from "@prisma/client";
 
 export class ViewerLifetimeStatsService {
   async getStats(viewerId: string, channelId: string) {
@@ -80,7 +80,7 @@ export class ViewerLifetimeStatsService {
   // 但為了避免 type error (因為 stat type inference)，我會在下一步 Controller 中處理，或者這裡用 any or cast.
   // 正確做法：修改 include。
 
-  private calculateRadarScores(stats: any) {
+  private calculateRadarScores(stats: ViewerChannelLifetimeStats) {
     // 1. 觀看時長（滿分 500 小時）
     const watchTimeScore = Math.min(
       100,

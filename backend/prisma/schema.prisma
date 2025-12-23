@@ -50,20 +50,24 @@ model Viewer {
 
 model Channel {
   id              String                   @id @default(uuid())
-  streamerId      String
+  streamerId      String?                  // Optional for external channels
   twitchChannelId String                   @unique
   channelName     String
   channelUrl      String?
+  isMonitored     Boolean                  @default(true)   // Story 3.6: 是否監控中
+  isLive          Boolean                  @default(false)  // New: 直播狀態
+  source          String                   @default("platform") // Story 3.6: "platform" | "external"
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
   dailyStats      ChannelDailyStat[]
-  streamer        Streamer                 @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamer        Streamer?                @relation(fields: [streamerId], references: [id], onDelete: Cascade)
   streamSessions  StreamSession[]
   viewerStats     ViewerChannelDailyStat[]
   viewerMessages  ViewerChannelMessage[]
   viewerMessageAggs ViewerChannelMessageDailyAgg[]
   viewerLifetimeStats ViewerChannelLifetimeStats[]
   viewerDashboardLayouts ViewerDashboardLayout[]
+  userFollows     UserFollow[]             // Story 3.6: 追蹤此頻道的用戶
 
   @@map("channels")
 }
@@ -221,6 +225,24 @@ model ChannelListenerLock {
   @@index([instanceId])
   @@index([lastHeartbeat])
   @@map("channel_listener_locks")
+}
+
+// ========== Story 3.6 User Follows ==========
+
+model UserFollow {
+  id         String   @id @default(uuid())
+  userId     String   // Can be streamerId or viewerId
+  userType   String   // "streamer" | "viewer"
+  channelId  String
+  followedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelId])
+  @@index([userId])
+  @@index([channelId])
+  @@map("user_follows")
 }
 
 // ========== Story 2.4 Models ==========

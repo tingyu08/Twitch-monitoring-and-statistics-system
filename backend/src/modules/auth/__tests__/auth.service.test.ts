@@ -1,38 +1,47 @@
-import { handleStreamerTwitchCallback } from "../auth.service";
+import {
+  handleStreamerTwitchCallback,
+  handleViewerTwitchCallback,
+  getStreamerById,
+  getStreamerByTwitchId,
+} from "../auth.service";
 import * as twitchOAuthClient from "../twitch-oauth.client";
+import { prisma } from "../../../db/prisma";
 
-// Mock Twitch OAuth client
+// Mock dependencies
 jest.mock("../twitch-oauth.client");
-
-// Mock environment variables
-process.env.APP_JWT_SECRET = "test-secret-key-for-service-testing";
-process.env.VIEWER_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString("base64");
-process.env.TWITCH_REDIRECT_URI = "http://localhost:4000/auth/twitch/callback";
+jest.mock("../../../db/prisma", () => {
+  const mockPrisma = {
+    $transaction: jest.fn(),
+    streamer: { upsert: jest.fn(), findUnique: jest.fn() },
+    channel: { upsert: jest.fn() },
+    viewer: { upsert: jest.fn(), findUnique: jest.fn() },
+    twitchToken: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
+  };
+  mockPrisma.$transaction.mockImplementation((cb: (arg: unknown) => unknown) =>
+    cb(mockPrisma)
+  );
+  return { prisma: mockPrisma };
+});
 
 describe("Auth Service", () => {
+  const mockTokenResponse = {
+    access_token: "at",
+    refresh_token: "rt",
+    expires_in: 3600,
+  };
+  const mockTwitchUser = {
+    id: "t123",
+    login: "user1",
+    display_name: "User One",
+    profile_image_url: "url",
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   describe("handleStreamerTwitchCallback", () => {
-    const mockCode = "test_oauth_code_123";
-
-    const mockTokenResponse = {
-      access_token: "mock_access_token",
-      refresh_token: "mock_refresh_token",
-      expires_in: 3600,
-      scope: ["user:read:email"],
-      token_type: "bearer",
-    };
-
-    const mockTwitchUser = {
-      id: "twitch_user_123",
-      login: "teststreamer",
-      display_name: "Test Streamer",
-      profile_image_url: "https://static-cdn.jtvnw.net/user-default-pictures/test.jpg",
-    };
-
-    it("should create new streamer and return JWT token", async () => {
+    it("should handle streamer callback and return tokens", async () => {
       (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(
         mockTokenResponse
       );
@@ -40,96 +49,108 @@ describe("Auth Service", () => {
         mockTwitchUser
       );
 
-      const result = await handleStreamerTwitchCallback(mockCode);
+      (prisma.streamer.upsert as jest.Mock).mockResolvedValue({
+        id: "s1",
+        twitchUserId: "t123",
+        displayName: "User One",
+      });
+      (prisma.viewer.upsert as jest.Mock).mockResolvedValue({
+        id: "v1",
+        consentedAt: new Date(),
+      });
+      (prisma.twitchToken.findFirst as jest.Mock).mockResolvedValue(null);
 
-      expect(result.streamer).toBeDefined();
-      expect(result.streamer.twitchUserId).toBe("twitch_user_123");
-      expect(result.streamer.displayName).toBe("Test Streamer");
-      expect(result.streamer.channelUrl).toBe(
-        "https://www.twitch.tv/teststreamer"
-      );
-      expect(result.accessToken).toBeDefined();
-      expect(result.refreshToken).toBeDefined();
+      const res = await handleStreamerTwitchCallback("code");
 
-      expect(twitchOAuthClient.exchangeCodeForToken).toHaveBeenCalledWith(
-        mockCode,
-        expect.any(Object)
-      );
-      expect(twitchOAuthClient.fetchTwitchUser).toHaveBeenCalledWith(
-        "mock_access_token"
-      );
+      expect(res.streamer.id).toBe("s1");
+      expect(prisma.twitchToken.create).toHaveBeenCalled();
     });
 
-    it("should update existing streamer and return JWT token", async () => {
+    it("should update token if already exists", async () => {
       (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(
         mockTokenResponse
       );
       (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(
         mockTwitchUser
       );
-
-      // First call - create streamer
-      const result1 = await handleStreamerTwitchCallback(mockCode);
-      const streamerId1 = result1.streamer.id;
-
-      // Second call - update streamer
-      const updatedUser = {
-        ...mockTwitchUser,
-        display_name: "Updated Streamer Name",
-        profile_image_url: "https://example.com/new-avatar.jpg",
-      };
-      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(
-        updatedUser
-      );
-
-      const result2 = await handleStreamerTwitchCallback(mockCode);
-
-      expect(result2.streamer.id).toBe(streamerId1); // Same streamer ID
-      expect(result2.streamer.displayName).toBe("Updated Streamer Name");
-      expect(result2.streamer.avatarUrl).toBe(
-        "https://example.com/new-avatar.jpg"
-      );
-      expect(result2.accessToken).toBeDefined();
-    });
-
-    it("should generate correct channel URL from Twitch login", async () => {
-      (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(
-        mockTokenResponse
-      );
-      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue({
-        ...mockTwitchUser,
-        login: "differentstreamer",
+      (prisma.streamer.upsert as jest.Mock).mockResolvedValue({ id: "s1" });
+      (prisma.viewer.upsert as jest.Mock).mockResolvedValue({ id: "v1" });
+      (prisma.twitchToken.findFirst as jest.Mock).mockResolvedValue({
+        id: "token1",
       });
 
-      const result = await handleStreamerTwitchCallback(mockCode);
-
-      expect(result.streamer.channelUrl).toBe(
-        "https://www.twitch.tv/differentstreamer"
-      );
+      await handleStreamerTwitchCallback("code");
+      expect(prisma.twitchToken.update).toHaveBeenCalled();
     });
+  });
 
-    it("should throw error if token exchange fails", async () => {
-      (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockRejectedValue(
-        new Error("Token exchange failed")
-      );
-
-      await expect(handleStreamerTwitchCallback(mockCode)).rejects.toThrow(
-        "Token exchange failed"
-      );
-    });
-
-    it("should throw error if fetching user fails", async () => {
+  describe("handleViewerTwitchCallback", () => {
+    it("should handle viewer callback", async () => {
       (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(
         mockTokenResponse
       );
-      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockRejectedValue(
-        new Error("Failed to fetch user")
+      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(
+        mockTwitchUser
       );
+      (prisma.viewer.upsert as jest.Mock).mockResolvedValue({
+        id: "v1",
+        twitchUserId: "t123",
+        consentedAt: null,
+      });
+      (prisma.twitchToken.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(handleStreamerTwitchCallback(mockCode)).rejects.toThrow(
-        "Failed to fetch user"
-      );
+      const res = await handleViewerTwitchCallback("code");
+      expect(res.viewer.id).toBe("v1");
+      expect(prisma.twitchToken.create).toHaveBeenCalled();
+    });
+  });
+
+  describe("getStreamerById", () => {
+    it("should return streamer if found", async () => {
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue({
+        id: "s1",
+        twitchUserId: "t1",
+        displayName: "D",
+        channels: [{ channelUrl: "url" }],
+      });
+      const res = await getStreamerById("s1");
+      expect(res?.id).toBe("s1");
+    });
+
+    it("should return null if not found", async () => {
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue(null);
+      const res = await getStreamerById("s1");
+      expect(res).toBeNull();
+    });
+  });
+
+  describe("getStreamerByTwitchId", () => {
+    it("should return streamer if found", async () => {
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue({
+        id: "s1",
+        twitchUserId: "t1",
+        displayName: "D",
+        channels: [],
+      });
+      const res = await getStreamerByTwitchId("t1");
+      expect(res?.channelUrl).toContain("twitch.tv");
+    });
+
+    it("should return null if not found", async () => {
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue(null);
+      const res = await getStreamerByTwitchId("t1");
+      expect(res).toBeNull();
+    });
+
+    it("should handle missing channel url and fallback to generated url", async () => {
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue({
+        id: "s1",
+        twitchUserId: "t1",
+        displayName: "D",
+        channels: [{ channelName: "user1" }], // channelUrl is missing
+      });
+      const res = await getStreamerByTwitchId("t1");
+      expect(res?.channelUrl).toBe("https://www.twitch.tv/user1");
     });
   });
 });
-

@@ -8,7 +8,7 @@ export class DashboardLayoutService {
     return layout ? JSON.parse(layout.layout) : null;
   }
 
-  async saveLayout(viewerId: string, channelId: string, layout: any) {
+  async saveLayout(viewerId: string, channelId: string, layout: unknown) {
     const layoutStr = JSON.stringify(layout);
     return prisma.viewerDashboardLayout.upsert({
       where: { viewerId_channelId: { viewerId, channelId } },
@@ -28,9 +28,8 @@ export class DashboardLayoutService {
       return await prisma.viewerDashboardLayout.delete({
         where: { viewerId_channelId: { viewerId, channelId } },
       });
-    } catch (error) {
-      // Ignore record not found error
-      return null;
+    } catch {
+      throw new Error("Invalid layout format");
     }
   }
 }

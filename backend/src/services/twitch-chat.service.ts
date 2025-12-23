@@ -14,65 +14,111 @@ import {
   ChatSubGiftInfo,
   UserNotice,
 } from "@twurple/chat";
-import { StaticAuthProvider } from "@twurple/auth";
+import { RefreshingAuthProvider } from "@twurple/auth";
 import { logger } from "../utils/logger";
 import { viewerMessageRepository } from "../modules/viewer/viewer-message.repository";
-
-// ========== 類型定義 ==========
-
-interface ChatConfig {
-  username: string;
-  token: string;
-}
+import { prisma } from "../db/prisma";
+import { decryptToken, encryptToken } from "../utils/crypto.utils";
 
 // ========== 服務實作 ==========
 
 export class TwurpleChatService {
   private chatClient: ChatClient | null = null;
-  private readonly config: ChatConfig;
   private channels: Set<string> = new Set();
   private isConnected = false;
 
-  constructor() {
-    this.config = {
-      username: process.env.TWITCH_BOT_USERNAME || "",
-      token: process.env.TWITCH_BOT_OAUTH_TOKEN || "",
-    };
-  }
+  constructor() {}
 
   /**
    * 初始化並連接到 Twitch 聊天
    */
   public async initialize(): Promise<void> {
-    if (!this.config.username || !this.config.token) {
-      logger.warn(
-        "Twurple Chat",
-        "Missing TWITCH_BOT_USERNAME or TWITCH_BOT_OAUTH_TOKEN. Chat listener disabled."
-      );
-      return;
-    }
-
-    // 移除 token 前綴 "oauth:" 如果存在
-    const cleanToken = this.config.token.replace(/^oauth:/i, "");
-
-    // 建立 Auth Provider
-    const authProvider = new StaticAuthProvider(
-      process.env.TWITCH_CLIENT_ID || "",
-      cleanToken
-    );
-
-    // 建立 Chat Client
-    this.chatClient = new ChatClient({
-      authProvider,
-      channels: [], // 初始為空，稍後動態加入
-    });
-
-    this.setupEventHandlers();
-
     try {
+      // 從資料庫獲取第一個有 Token 的使用者（通常是您自己）
+      const tokenRecord = await prisma.twitchToken.findFirst({
+        where: {
+          refreshToken: { not: null },
+        },
+        include: {
+          streamer: true,
+        },
+      });
+
+      if (!tokenRecord || !tokenRecord.refreshToken) {
+        logger.warn(
+          "Twurple Chat",
+          "No user token found in database. Please login first. Chat listener disabled."
+        );
+        return;
+      }
+
+      const clientId = process.env.TWITCH_CLIENT_ID || "";
+      const clientSecret = process.env.TWITCH_CLIENT_SECRET || "";
+
+      if (!clientId || !clientSecret) {
+        logger.warn(
+          "Twurple Chat",
+          "Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET. Chat listener disabled."
+        );
+        return;
+      }
+
+      // 解密 Token
+      const accessToken = decryptToken(tokenRecord.accessToken);
+      const refreshToken = decryptToken(tokenRecord.refreshToken);
+
+      // 建立 RefreshingAuthProvider（自動刷新 Token）
+      const authProvider = new RefreshingAuthProvider({
+        clientId,
+        clientSecret,
+      });
+
+      // 設定 Token 刷新回調（刷新後更新資料庫）
+      authProvider.onRefresh(async (userId, newTokenData) => {
+        logger.info("Twurple Chat", `Token refreshed for user ${userId}`);
+
+        // 更新資料庫中的 Token
+        await prisma.twitchToken.update({
+          where: { id: tokenRecord.id },
+          data: {
+            accessToken: encryptToken(newTokenData.accessToken),
+            refreshToken: newTokenData.refreshToken
+              ? encryptToken(newTokenData.refreshToken)
+              : tokenRecord.refreshToken,
+            expiresAt: newTokenData.expiresIn
+              ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+              : null,
+          },
+        });
+      });
+
+      // 添加使用者的 Token
+      await authProvider.addUserForToken(
+        {
+          accessToken,
+          refreshToken,
+          expiresIn: tokenRecord.expiresAt
+            ? Math.floor((tokenRecord.expiresAt.getTime() - Date.now()) / 1000)
+            : null,
+          obtainmentTimestamp: tokenRecord.updatedAt.getTime(),
+        },
+        ["chat"]
+      );
+
+      // 建立 Chat Client
+      this.chatClient = new ChatClient({
+        authProvider,
+        channels: [], // 初始為空，稍後動態加入
+      });
+
+      this.setupEventHandlers();
+
       await this.chatClient.connect();
       this.isConnected = true;
-      logger.info("Twurple Chat", "Connected to Twitch Chat");
+      logger.info(
+        "Twurple Chat",
+        `Connected to Twitch Chat as ${tokenRecord.streamer?.displayName} (with auto-refresh)`
+      );
     } catch (error) {
       logger.error("Twurple Chat", "Failed to connect to Twitch Chat", error);
       this.isConnected = false;

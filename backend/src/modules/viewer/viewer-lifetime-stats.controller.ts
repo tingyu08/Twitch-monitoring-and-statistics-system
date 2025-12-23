@@ -2,11 +2,18 @@ import { Request, Response } from "express";
 import { viewerLifetimeStatsService } from "./viewer-lifetime-stats.service";
 import { logger } from "../../utils/logger";
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    viewerId: string;
+    [key: string]: unknown;
+  };
+}
+
 export class ViewerLifetimeStatsController {
   public getLifetimeStats = async (req: Request, res: Response) => {
     try {
       const { channelId } = req.params;
-      const viewerId = (req as any).user?.viewerId; // From auth middleware
+      const viewerId = (req as AuthenticatedRequest).user?.viewerId; // From auth middleware
 
       if (!viewerId) {
         return res.status(401).json({ error: "Unauthorized" });

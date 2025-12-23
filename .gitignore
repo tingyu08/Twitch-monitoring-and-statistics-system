@@ -73,3 +73,9 @@ Desktop.ini
 
 # 其他
 .bmad-core/
+
+# Playwright
+playwright-report/
+test-results/
+frontend/playwright-report/
+frontend/test-results/

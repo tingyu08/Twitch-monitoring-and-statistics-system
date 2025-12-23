@@ -1,9 +1,6 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
-import {
-  handleStreamerTwitchCallback,
-  handleViewerTwitchCallback,
-} from "./auth.service";
+import { handleStreamerTwitchCallback } from "./auth.service";
 import { TwitchOAuthClient } from "./twitch-oauth.client";
 import {
   signAccessToken,
@@ -20,7 +17,6 @@ interface AuthenticatedRequest extends Request {
 }
 
 const STREAMER_STATE_COOKIE = "twitch_auth_state";
-const VIEWER_STATE_COOKIE = "twitch_viewer_auth_state";
 
 const DEFAULT_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -50,9 +46,13 @@ function clearAuthCookies(res: Response) {
   res.clearCookie("refresh_token", DEFAULT_COOKIE_OPTIONS);
 }
 
-const twitchClient = new TwitchOAuthClient();
-
 export class AuthController {
+  private twitchClient: TwitchOAuthClient;
+
+  constructor(client?: TwitchOAuthClient) {
+    this.twitchClient = client || new TwitchOAuthClient();
+  }
+
   // 登入：產生 State 並導向 Twitch
   public login = async (req: Request, res: Response) => {
     try {
@@ -65,36 +65,31 @@ export class AuthController {
         maxAge: 5 * 60 * 1000,
       });
 
-      // 3. 取得帶有 State 的授權 URL
-      const authUrl = twitchClient.getOAuthUrl(state, {
+      // 3. 取得帶有 State 的授權 URL (統一登入：請求所有權限)
+      const authUrl = this.twitchClient.getOAuthUrl(state, {
         redirectUri: env.twitchRedirectUri,
+        // 統一登入：合併實況主 + 觀眾所需的所有權限
+        scopes: [
+          // 實況主權限
+          "user:read:email",
+          "channel:read:subscriptions",
+          "analytics:read:games",
+          "analytics:read:extensions",
+          // 觀眾權限
+          "chat:read",
+          "chat:edit",
+          "user:read:follows", // Story 3.6: 追蹤同步
+          "user:read:subscriptions",
+          "user:read:blocked_users",
+          "user:manage:blocked_users",
+          "whispers:read",
+        ],
       });
 
       // 4. 導向
       res.redirect(authUrl);
     } catch (error) {
       authLogger.error("Login Redirect Error:", error);
-      res.status(500).json({ message: "Internal Server Error" });
-    }
-  };
-
-  // Viewer 登入
-  public viewerLogin = async (_req: Request, res: Response) => {
-    try {
-      const state = crypto.randomBytes(16).toString("hex");
-      res.cookie(VIEWER_STATE_COOKIE, state, {
-        ...DEFAULT_COOKIE_OPTIONS,
-        maxAge: 5 * 60 * 1000,
-      });
-
-      const authUrl = twitchClient.getOAuthUrl(state, {
-        redirectUri: env.twitchViewerRedirectUri,
-        scopes: ["user:read:email", "chat:read"],
-      });
-
-      res.redirect(authUrl);
-    } catch (error) {
-      authLogger.error("Viewer Login Redirect Error:", error);
       res.status(500).json({ message: "Internal Server Error" });
     }
   };
@@ -139,51 +134,6 @@ export class AuthController {
     } catch (error) {
       console.error("[AuthCallbackError] Detailed error:", error);
       authLogger.error("Twitch Callback Error:", error);
-      res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
-    }
-  };
-
-  // Viewer Callback：驗證 State 並處理登入
-  public viewerCallback = async (req: Request, res: Response) => {
-    try {
-      const code = req.query.code as string;
-      const state = req.query.state as string;
-      const error = req.query.error as string;
-      const error_description = req.query.error_description as string;
-
-      if (error) {
-        authLogger.warn(
-          `Viewer Twitch Auth Error: ${error} - ${error_description}`
-        );
-        return res.redirect(`${env.frontendUrl}/auth/error?reason=${error}`);
-      }
-
-      const storedState = req.cookies[VIEWER_STATE_COOKIE];
-      if (!state || !storedState || state !== storedState) {
-        authLogger.error("Viewer CSRF State Mismatch");
-        return res
-          .status(403)
-          .json({ message: "Invalid state parameter (CSRF detected)" });
-      }
-
-      res.clearCookie(VIEWER_STATE_COOKIE);
-
-      if (!code) {
-        return res.status(400).json({ message: "Authorization code missing" });
-      }
-
-      const { viewer, accessToken, refreshToken } =
-        await handleViewerTwitchCallback(code);
-
-      setAuthCookies(res, accessToken, refreshToken);
-
-      if (!viewer.consentedAt) {
-        return res.redirect(`${env.frontendUrl}/auth/viewer/consent`);
-      }
-
-      res.redirect(`${env.frontendUrl}/dashboard/viewer`);
-    } catch (error) {
-      authLogger.error("Viewer Twitch Callback Error:", error);
       res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
     }
   };

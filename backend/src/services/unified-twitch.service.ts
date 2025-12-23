@@ -13,6 +13,7 @@ import { twurpleChatService } from "./twitch-chat.service";
 import { twurpleHelixService } from "./twitch-helix.service";
 import { decApiService } from "./decapi.service";
 import { twurpleAuthService } from "./twurple-auth.service";
+import { autoJoinLiveChannelsJob } from "../jobs/auto-join-live-channels.job";
 import { logger } from "../utils/logger";
 
 // ========== 類型定義 ==========
@@ -68,6 +69,9 @@ export class UnifiedTwitchService {
         "Helix API connection failed - some features may be unavailable"
       );
     }
+
+    // 啟動排程任務
+    autoJoinLiveChannelsJob.start();
 
     logger.info("Twitch Service", "Initialization complete (Twurple)");
   }
@@ -243,6 +247,13 @@ export class UnifiedTwitchService {
     }
 
     return result;
+  }
+
+  /**
+   * 批量獲取直播狀態詳細資訊
+   */
+  async getStreamsByUserIds(userIds: string[]) {
+    return twurpleHelixService.getStreamsByUserIds(userIds);
   }
 
   // ========== 服務狀態 ==========

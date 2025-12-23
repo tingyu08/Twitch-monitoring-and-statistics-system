@@ -2,7 +2,6 @@ import type { Response } from "express";
 import {
   recordConsent,
   getChannelStats,
-  seedChannelStats,
   getFollowedChannels,
 } from "./viewer.service";
 import type { AuthRequest } from "../auth/auth.middleware";
@@ -74,10 +73,6 @@ export class ViewerController {
     }
 
     try {
-      // DEV ONLY: Seed data if missing
-      // 在生產環境中，這應該移除，數據應由 Worker 定時寫入
-      await seedChannelStats(req.user.viewerId, channelId);
-
       const stats = await getChannelStats(
         req.user.viewerId,
         channelId,
@@ -112,34 +107,9 @@ export class ViewerController {
     }
 
     try {
-      // 這裡也可以加入 seedChannelStats 檢查，但為了效能先省略，
-      // 假設只有 user 點進詳情頁時才生成數據。
-      // 或者：如果列表為空，我們可以自動為 user seed 一些演示頻道？
-      // 這對於 Demo 很有幫助：
+      // 獲取用戶追蹤的頻道 (真實資料)
       const channels = await getFollowedChannels(req.user.viewerId);
-
-      if (channels.length === 0) {
-        // Auto-seed for demo (optional, but good for user experience)
-        await seedChannelStats(req.user.viewerId, "ch_1");
-        // Re-fetch
-        return res.json(await getFollowedChannels(req.user.viewerId));
-      }
-
-      // HOTFIX: 強制覆寫 Mock Channels 的 Avatar URL，避免前端 CORB 問題
-      // 這確保即使 DB 裡存的是舊的 Twitch URL，前端也能拿到新的 ui-avatars
-      const patchedChannels = channels.map((ch) => {
-        if (ch.id.startsWith("ch_")) {
-          return {
-            ...ch,
-            avatarUrl: `https://ui-avatars.com/api/?name=${
-              ch.displayName || ch.channelName
-            }&background=random`,
-          };
-        }
-        return ch;
-      });
-
-      return res.json(patchedChannels);
+      return res.json(channels);
     } catch (err) {
       console.error("Error getting viewer channels:", err);
       return res.status(500).json({ error: "Internal Server Error" });

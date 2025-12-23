@@ -7,6 +7,8 @@ import {
 import { prisma } from "../../db/prisma";
 import { encryptToken } from "../../utils/crypto.utils";
 import { env } from "../../config/env";
+import { logger } from "../../utils/logger";
+import { triggerFollowSyncForUser } from "../../jobs/sync-user-follows.job";
 
 // Streamer 介面（與 Prisma model 對應）
 export interface Streamer {
@@ -71,12 +73,19 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
       },
     });
 
+    logger.info(
+      "Auth",
+      `Processing unified login for: ${user.display_name} (${user.id})`
+    );
+
     // 同時 Check/Create Viewer record (實況主也是觀眾)
     const viewerRecord = await tx.viewer.upsert({
       where: { twitchUserId: user.id },
       update: {
         displayName: user.display_name,
         avatarUrl: user.profile_image_url,
+        // 確保 Unified Login 時更新 Consent 時間
+        consentedAt: new Date(),
       },
       create: {
         twitchUserId: user.id,
@@ -88,6 +97,8 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
         consentVersion: 1,
       },
     });
+
+    logger.info("Auth", `Viewer record upserted: ${viewerRecord.id}`);
 
     const encryptedAccess = encryptToken(tokenData.access_token);
     const encryptedRefresh = tokenData.refresh_token
@@ -113,8 +124,22 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
       accessToken: encryptedAccess,
       refreshToken: encryptedRefresh,
       expiresAt,
-      // 合併 Scopes: user:read:email (Streamer) + chat:read (Viewer Future)
-      scopes: JSON.stringify(["user:read:email", "chat:read"]),
+      // 統一登入：合併實況主 + 觀眾所需的所有權限
+      scopes: JSON.stringify([
+        // 實況主權限
+        "user:read:email",
+        "channel:read:subscriptions",
+        "analytics:read:games",
+        "analytics:read:extensions",
+        // 觀眾權限
+        "chat:read",
+        "chat:edit",
+        "user:read:follows", // Story 3.6: 追蹤同步
+        "user:read:subscriptions",
+        "user:read:blocked_users",
+        "user:manage:blocked_users",
+        "whispers:read",
+      ]),
     };
 
     if (existingToken) {
@@ -150,100 +175,18 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   const accessToken = signAccessToken(jwtPayload);
   const refreshToken = signRefreshToken(jwtPayload);
 
+  // 非同步觸發追蹤名單同步（不阻塞登入流程）
+  triggerFollowSyncForUser(
+    result.viewerRecord.id,
+    tokenData.access_token
+  ).catch((err: unknown) =>
+    logger.error("Auth", "Follow sync failed after login", err)
+  );
+
   return { streamer, accessToken, refreshToken };
 }
 
-export async function handleViewerTwitchCallback(code: string): Promise<{
-  viewer: {
-    id: string;
-    twitchUserId: string;
-    displayName: string;
-    avatarUrl: string;
-    consentedAt: Date | null;
-  };
-  accessToken: string;
-  refreshToken: string;
-}> {
-  const tokenData = await exchangeCodeForToken(code, {
-    redirectUri: env.twitchViewerRedirectUri,
-  });
-
-  const user = await fetchTwitchUser(tokenData.access_token);
-
-  const result = await prisma.$transaction(async (tx) => {
-    const viewerRecord = await tx.viewer.upsert({
-      where: { twitchUserId: user.id },
-      update: {
-        displayName: user.display_name,
-        avatarUrl: user.profile_image_url,
-      },
-      create: {
-        twitchUserId: user.id,
-        displayName: user.display_name,
-        avatarUrl: user.profile_image_url,
-      },
-    });
-
-    const encryptedAccess = encryptToken(tokenData.access_token);
-    const encryptedRefresh = tokenData.refresh_token
-      ? encryptToken(tokenData.refresh_token)
-      : null;
-
-    const expiresAt = tokenData.expires_in
-      ? new Date(Date.now() + tokenData.expires_in * 1000)
-      : null;
-
-    const existingToken = await tx.twitchToken.findFirst({
-      where: {
-        ownerType: "viewer",
-        viewerId: viewerRecord.id,
-      },
-    });
-
-    const data = {
-      ownerType: "viewer" as const,
-      viewerId: viewerRecord.id,
-      accessToken: encryptedAccess,
-      refreshToken: encryptedRefresh,
-      expiresAt,
-      scopes: JSON.stringify(["user:read:email", "chat:read"]),
-    };
-
-    if (existingToken) {
-      await tx.twitchToken.update({ where: { id: existingToken.id }, data });
-    } else {
-      await tx.twitchToken.create({ data });
-    }
-
-    return viewerRecord;
-  });
-
-  const viewer = {
-    id: result.id,
-    twitchUserId: result.twitchUserId,
-    displayName: result.displayName ?? "",
-    avatarUrl: result.avatarUrl ?? "",
-    consentedAt: result.consentedAt ?? null,
-    consentVersion: result.consentVersion ?? null,
-  };
-
-  const jwtPayload: Omit<JWTPayload, "tokenType"> = {
-    viewerId: viewer.id,
-    twitchUserId: viewer.twitchUserId,
-    displayName: viewer.displayName,
-    avatarUrl: viewer.avatarUrl,
-    consentedAt: viewer.consentedAt
-      ? viewer.consentedAt.toISOString?.() ?? String(viewer.consentedAt)
-      : null,
-    consentVersion: viewer.consentVersion ?? null,
-    role: "viewer",
-  };
-
-  const accessToken = signAccessToken(jwtPayload);
-  const refreshToken = signRefreshToken(jwtPayload);
-
-  return { viewer, accessToken, refreshToken };
-}
+// (handleViewerTwitchCallback removed)
 
 /**
  * 根據 Streamer ID 取得 Streamer 資訊

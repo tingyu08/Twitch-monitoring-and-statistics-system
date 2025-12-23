@@ -12,18 +12,25 @@ const oauthRouter = Router();
 oauthRouter.get("/login", authController.login);
 oauthRouter.get("/callback", authController.twitchCallback);
 
-const viewerOauthRouter = Router();
-viewerOauthRouter.get("/login", authController.viewerLogin);
-viewerOauthRouter.get("/callback", authController.viewerCallback);
-
 // API 路由（需要認證）
 const apiRouter = Router();
-apiRouter.get("/me", (req, res, next) => requireAuth(req, res, next), getMeHandler);
-apiRouter.post("/logout", (req, res, next) => requireAuth(req, res, next), logoutHandler);
+apiRouter.get(
+  "/me",
+  (req, res, next) => requireAuth(req, res, next),
+  getMeHandler
+);
+apiRouter.post(
+  "/logout",
+  (req, res, next) => requireAuth(req, res, next),
+  logoutHandler
+);
 apiRouter.post("/refresh", authController.refresh);
 
 // Handler 函數（保留原有函數供測試使用）
-export async function getMeHandler(req: AuthRequest, res: Response): Promise<void> {
+export async function getMeHandler(
+  req: AuthRequest,
+  res: Response
+): Promise<void> {
   try {
     let consentedAt: string | null = null;
     let consentVersion: number | null = null;
@@ -53,7 +60,10 @@ export async function getMeHandler(req: AuthRequest, res: Response): Promise<voi
   }
 }
 
-export async function logoutHandler(req: AuthRequest, res: Response): Promise<void> {
+export async function logoutHandler(
+  req: AuthRequest,
+  res: Response
+): Promise<void> {
   res.clearCookie("auth_token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -68,9 +78,13 @@ export async function logoutHandler(req: AuthRequest, res: Response): Promise<vo
   });
 
   if (req.user?.role === "viewer" && req.user.viewerId) {
-    await prisma.twitchToken.deleteMany({ where: { viewerId: req.user.viewerId } });
+    await prisma.twitchToken.deleteMany({
+      where: { viewerId: req.user.viewerId },
+    });
   } else if (req.user?.role === "streamer" && req.user.streamerId) {
-    await prisma.twitchToken.deleteMany({ where: { streamerId: req.user.streamerId } });
+    await prisma.twitchToken.deleteMany({
+      where: { streamerId: req.user.streamerId },
+    });
   }
 
   res.json({ message: "Logged out successfully" });
@@ -79,5 +93,4 @@ export async function logoutHandler(req: AuthRequest, res: Response): Promise<vo
 // 匯出路由和函數供測試使用
 export { requireAuth };
 export const oauthRoutes = oauthRouter;
-export const viewerOauthRoutes = viewerOauthRouter;
 export const apiRoutes = apiRouter;

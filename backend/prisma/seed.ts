@@ -649,9 +649,9 @@ async function main() {
   console.log("📊 計算 Lifetime Stats...");
 
   // 動態導入 Service 避免頂層 await 或環境問題
-  const {
-    lifetimeStatsAggregator,
-  } = require("../src/services/lifetime-stats-aggregator.service");
+  const { lifetimeStatsAggregator } = await import(
+    "../src/services/lifetime-stats-aggregator.service"
+  );
 
   // 為主要測試觀眾 (Viewer) 和 Mock 頻道聚合數據
   if (yourViewer) {
