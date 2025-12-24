@@ -55,7 +55,10 @@ router.post(
 
       // 處理訂閱撤銷通知
       if (messageType === EVENTSUB_MESSAGE_TYPE.REVOCATION) {
-        const subscription = req.body.subscription;
+        const subscription = req.body.subscription as {
+          type: string;
+          status: string;
+        };
         console.warn(
           `⚠️ EventSub 訂閱已撤銷: ${subscription.type} (${subscription.status})`
         );
@@ -65,7 +68,7 @@ router.post(
 
       // 處理一般通知
       if (messageType === EVENTSUB_MESSAGE_TYPE.NOTIFICATION) {
-        const notification = req.body as EventSubNotification;
+        const notification = req.body as unknown as EventSubNotification;
         const eventType = notification.subscription.type;
 
         console.log(`📩 收到 EventSub 事件: ${eventType}`);

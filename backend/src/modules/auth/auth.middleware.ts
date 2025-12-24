@@ -1,19 +1,9 @@
-import type {
-  Request,
-  Response,
-  NextFunction,
-  ParamsDictionary,
-  Query,
-} from "express-serve-static-core";
+import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, type JWTPayload, type UserRole } from "./jwt.utils";
 
 // 擴展 Express Request 類型以包含 user 資訊
-export interface AuthRequest {
+export interface AuthRequest extends Request {
   user?: JWTPayload;
-  params: ParamsDictionary;
-  query: Query;
-  body: unknown;
-  cookies: Record<string, string>;
 }
 
 export const requireAuth = async (
