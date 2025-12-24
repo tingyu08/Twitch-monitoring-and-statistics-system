@@ -2,8 +2,13 @@ import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, type JWTPayload, type UserRole } from "./jwt.utils";
 
 // 擴展 Express Request 類型以包含 user 資訊
+// 注意：顯式聲明所有屬性以確保生產環境相容性
 export interface AuthRequest extends Request {
   user?: JWTPayload;
+  // Express Request 屬性 (顯式聲明以確保類型解析)
+  params: Record<string, string>;
+  query: Record<string, string | string[] | undefined>;
+  body: unknown;
 }
 
 export const requireAuth = async (
