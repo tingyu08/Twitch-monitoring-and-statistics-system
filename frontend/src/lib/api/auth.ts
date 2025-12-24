@@ -35,14 +35,37 @@ export function isViewer(user: UserInfo): user is ViewerInfo {
   );
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+
 export async function getMe(): Promise<UserInfo> {
-  // 使用 Next.js API route 作為代理，避免跨域 Cookie 問題
-  // 這樣前端和後端就在同一個域名下，Cookie 會自動傳遞
-  return httpClient<UserInfo>("/api/auth/me");
+  // 直接調用後端 API，使用 credentials: include 發送跨域 cookie
+  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export async function logout(): Promise<{ message: string }> {
-  return httpClient<{ message: string }>("/api/auth/logout", {
+  const response = await fetch(`${API_BASE_URL}/api/auth/logout`, {
     method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  return response.json();
 }
