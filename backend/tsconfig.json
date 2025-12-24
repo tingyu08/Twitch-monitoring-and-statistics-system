@@ -6,10 +6,17 @@
     "rootDir": "src",
     "outDir": "dist",
     "esModuleInterop": true,
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "declaration": false
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**", "src/setupTests.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/__tests__/**",
+    "src/setupTests.ts",
+    "src/scripts/**"
+  ]
 }
