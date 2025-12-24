@@ -20,8 +20,8 @@ const STREAMER_STATE_COOKIE = "twitch_auth_state";
 
 const DEFAULT_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: env.nodeEnv === "production",
-  sameSite: "lax" as const,
+  secure: env.nodeEnv === "production", // HTTPS required for sameSite=none
+  sameSite: (env.nodeEnv === "production" ? "none" : "lax") as "none" | "lax",
   path: "/",
 };
 
