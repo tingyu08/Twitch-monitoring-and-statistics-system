@@ -467,61 +467,67 @@ export async function triggerFollowSyncForUser(
       if (existingFollow) {
         existingFollowMap.delete(follow.broadcasterId);
       } else {
-        // 新追蹤：確保頻道存在
-        let channel = await prisma.channel.findUnique({
-          where: { twitchChannelId: follow.broadcasterId },
-        });
-
-        if (!channel) {
-          // 獲取頭像等資訊
-          let avatarUrl = "";
-          let displayName = follow.broadcasterLogin;
-          try {
-            const userInfo = await twurpleHelixService.getUserById(
-              follow.broadcasterId
-            );
-            if (userInfo) {
-              avatarUrl = userInfo.profileImageUrl || "";
-              displayName = userInfo.displayName || follow.broadcasterLogin;
-            }
-          } catch {
-            // ignore
+        // 新追蹤：確保頻道存在（使用 upsert 防止競爭條件）
+        // 獲取頭像等資訊
+        let avatarUrl = "";
+        let displayName = follow.broadcasterLogin;
+        try {
+          const userInfo = await twurpleHelixService.getUserById(
+            follow.broadcasterId
+          );
+          if (userInfo) {
+            avatarUrl = userInfo.profileImageUrl || "";
+            displayName = userInfo.displayName || follow.broadcasterLogin;
           }
-
-          // 建立或獲取 Streamer 記錄
-          let streamer = await prisma.streamer.findUnique({
-            where: { twitchUserId: follow.broadcasterId },
-          });
-
-          if (!streamer) {
-            streamer = await prisma.streamer.create({
-              data: {
-                twitchUserId: follow.broadcasterId,
-                displayName,
-                avatarUrl,
-              },
-            });
-          }
-
-          // 建立頻道
-          channel = await prisma.channel.create({
-            data: {
-              twitchChannelId: follow.broadcasterId,
-              channelName: follow.broadcasterLogin,
-              channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
-              source: "external",
-              isMonitored: true,
-              streamerId: streamer.id,
-            },
-          });
+        } catch {
+          // ignore
         }
 
-        // 建立追蹤記錄
-        await prisma.userFollow.create({
-          data: {
+        // 建立或獲取 Streamer 記錄（使用 upsert）
+        const streamer = await prisma.streamer.upsert({
+          where: { twitchUserId: follow.broadcasterId },
+          create: {
+            twitchUserId: follow.broadcasterId,
+            displayName,
+            avatarUrl,
+          },
+          update: {
+            displayName,
+            avatarUrl,
+          },
+        });
+
+        // 建立或獲取頻道（使用 upsert 防止 UNIQUE 約束錯誤）
+        const channel = await prisma.channel.upsert({
+          where: { twitchChannelId: follow.broadcasterId },
+          create: {
+            twitchChannelId: follow.broadcasterId,
+            channelName: follow.broadcasterLogin,
+            channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
+            source: "external",
+            isMonitored: true,
+            streamerId: streamer.id,
+          },
+          update: {
+            channelName: follow.broadcasterLogin,
+          },
+        });
+
+        // 建立追蹤記錄（使用 upsert 防止重複）
+        await prisma.userFollow.upsert({
+          where: {
+            userId_channelId: {
+              userId: viewerId,
+              channelId: channel.id,
+            },
+          },
+          create: {
             userId: viewerId,
             userType: "viewer",
             channelId: channel.id,
+            followedAt: follow.followedAt,
+          },
+          update: {
             followedAt: follow.followedAt,
           },
         });
