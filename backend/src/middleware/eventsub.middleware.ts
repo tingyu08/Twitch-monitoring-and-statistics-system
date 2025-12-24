@@ -150,4 +150,5 @@ export function verifyEventSubSignature(
  */
 export interface EventSubRequest extends Request {
   eventsubMessageType?: string;
+  body: Record<string, unknown>;
 }
