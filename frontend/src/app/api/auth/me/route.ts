@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiLogger } from "@/lib/logger";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+// 強制動態渲染（因為使用 request.headers）
+export const dynamic = "force-dynamic";
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
 export async function GET(request: NextRequest) {
   try {
     // 從請求 header 中取得 Cookie（正確的方式）
     const cookieHeader = request.headers.get("cookie") || "";
-    
+
     apiLogger.debug("Forwarding /auth/me request");
-    apiLogger.debug(`Cookie header: ${cookieHeader ? 'present' : 'missing'}`);
-    
+    apiLogger.debug(`Cookie header: ${cookieHeader ? "present" : "missing"}`);
+
     // 轉發請求到後端，並帶上 Cookie
     const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
       method: "GET",

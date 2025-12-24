@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiLogger } from "@/lib/logger";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+// 強制動態渲染（因為使用 request.headers）
+export const dynamic = "force-dynamic";
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
 /**
  * Helper to get cookies as a proper header string
@@ -24,15 +28,15 @@ export async function GET(
     const pathString = path.join("/");
     const searchParams = request.nextUrl.searchParams.toString();
     const queryString = searchParams ? `?${searchParams}` : "";
-    
+
     const backendUrl = `${BACKEND_URL}/api/streamer/me/${pathString}${queryString}`;
-    
+
     // 從請求 header 中取得 Cookie（這是正確的方式）
     const cookieHeader = getCookieHeader(request);
-    
+
     apiLogger.debug(`Proxying request to: ${backendUrl}`);
-    apiLogger.debug(`Cookie header: ${cookieHeader ? 'present' : 'missing'}`);
-    
+    apiLogger.debug(`Cookie header: ${cookieHeader ? "present" : "missing"}`);
+
     // 轉發請求到後端，並帶上 Cookie
     const response = await fetch(backendUrl, {
       method: "GET",
@@ -63,12 +67,12 @@ export async function POST(
     const { path } = await params;
     const pathString = path.join("/");
     const backendUrl = `${BACKEND_URL}/api/streamer/me/${pathString}`;
-    
+
     const cookieHeader = getCookieHeader(request);
     const body = await request.json().catch(() => null);
-    
+
     apiLogger.debug(`Proxying POST request to: ${backendUrl}`);
-    
+
     const response = await fetch(backendUrl, {
       method: "POST",
       headers: {
