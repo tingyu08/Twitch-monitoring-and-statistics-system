@@ -4,7 +4,7 @@
   "main": "dist/app.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "npx prisma generate && tsc -p tsconfig.json && npx prisma db push --accept-data-loss",
+    "build": "npx prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
