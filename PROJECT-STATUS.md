@@ -211,7 +211,220 @@ Token 過期 → 自動用 refresh_token 刷新 → 更新資料庫 → 繼續�
 
 ---
 
-## 七、結論
+## 七、專案架構詳情
+
+### 7.1 後端服務層 (15 個核心服務)
+
+| 服務檔案                               | 功能說明                          |
+| -------------------------------------- | --------------------------------- |
+| `twitch-chat.service.ts`               | Twurple ChatClient 聊天監聽       |
+| `twurple-eventsub.service.ts`          | EventSub Webhook 即時事件接收     |
+| `twurple-auth.service.ts`              | RefreshingAuthProvider Token 管理 |
+| `watch-time.service.ts`                | 觀看時間智慧推算（分段計時）      |
+| `twitch-helix.service.ts`              | Twitch Helix API 封裝             |
+| `unified-twitch.service.ts`            | 統一 Twitch 服務介面              |
+| `account-deletion.service.ts`          | GDPR 帳號刪除流程                 |
+| `data-export.service.ts`               | 資料匯出 ZIP 打包                 |
+| `privacy-consent.service.ts`           | 隱私同意管理                      |
+| `badge.service.ts`                     | 成就徽章系統                      |
+| `lifetime-stats-aggregator.service.ts` | 累積統計聚合                      |
+| `decapi.service.ts`                    | DecAPI 追蹤時間查詢               |
+| `chat-listener-manager.ts`             | 聊天監聽器管理                    |
+| `distributed-coordinator.ts`           | 分佈式協調（多實例支援）          |
+| `eventsub.service.ts`                  | EventSub 訂閱管理                 |
+
+### 7.2 排程任務 (8 個 Cron Jobs)
+
+| Job 檔案                          | 執行頻率   | 功能說明                   |
+| --------------------------------- | ---------- | -------------------------- |
+| `sync-user-follows.job.ts`        | 每小時     | 同步使用者 Twitch 追蹤清單 |
+| `stream-status.job.ts`            | 每 5 分鐘  | 檢查頻道開台狀態           |
+| `auto-join-live-channels.job.ts`  | 每 2 分鐘  | 自動加入開台頻道聊天室     |
+| `channel-stats-sync.job.ts`       | 每 15 分鐘 | 同步頻道統計資料           |
+| `update-lifetime-stats.job.ts`    | 每小時     | 更新觀眾累積統計           |
+| `aggregate-daily-messages.job.ts` | 每日凌晨   | 聚合每日聊天訊息統計       |
+| `data-retention.job.ts`           | 每日凌晨   | 執行資料保留策略           |
+| `index.ts`                        | -          | Job 統一調度入口           |
+
+### 7.3 資料模型 (14+ Models)
+
+| Model 名稱                   | 用途             |
+| ---------------------------- | ---------------- |
+| `Streamer`                   | 實況主資料       |
+| `Viewer`                     | 觀眾資料         |
+| `Channel`                    | 頻道資料         |
+| `StreamSession`              | 直播場次記錄     |
+| `ChannelDailyStats`          | 頻道每日統計     |
+| `ViewerChannelDailyStat`     | 觀眾每日觀看統計 |
+| `ViewerChannelMessage`       | 觀眾聊天訊息     |
+| `ViewerChannelLifetimeStats` | 觀眾累積統計     |
+| `ViewerDashboardLayout`      | 儀表板佈局設定   |
+| `UserFollow`                 | 使用者追蹤清單   |
+| `TwitchToken`                | OAuth Token 儲存 |
+| `ViewerPrivacyConsent`       | 隱私同意設定     |
+| `DeletionRequest`            | 帳號刪除請求     |
+| `ExportJob`                  | 資料匯出任務     |
+| `PrivacyAuditLog`            | 隱私操作審計日誌 |
+
+### 7.4 前端頁面結構
+
+```
+frontend/src/app/
+├── page.tsx                    # 首頁（登入入口）
+├── auth/callback/              # OAuth 回調頁
+├── dashboard/
+│   ├── streamer/               # 實況主儀表板
+│   │   └── page.tsx           # 會話統計、趨勢圖表、熱力圖
+│   └── viewer/                 # 觀眾儀表板
+│       ├── page.tsx           # 追蹤頻道列表、開台狀態
+│       ├── [channelId]/       # 頻道詳情頁
+│       ├── footprint/         # 足跡總覽（雷達圖、徽章）
+│       └── settings/          # 隱私設定（GDPR 控制）
+├── settings/                   # 一般設定
+└── privacy-policy/             # 隱私政策頁
+```
+
+---
+
+## 八、關鍵文件索引
+
+### 8.1 核心程式碼
+
+| 類別     | 路徑                                          | 說明                   |
+| -------- | --------------------------------------------- | ---------------------- |
+| 後端入口 | `backend/src/server.ts`                       | Express 伺服器啟動     |
+| 後端應用 | `backend/src/app.ts`                          | Express 中介軟體配置   |
+| 認證服務 | `backend/src/modules/auth/auth.service.ts`    | OAuth 登入邏輯         |
+| 認證控制 | `backend/src/modules/auth/auth.controller.ts` | Cookie 設置 (sameSite) |
+| 前端認證 | `frontend/src/lib/api/auth.ts`                | 前端認證 API 調用      |
+| 資料庫   | `backend/prisma/schema.prisma`                | Prisma Schema 定義     |
+| Turso    | `backend/prisma/turso_schema.sql`             | Turso 手動 Schema      |
+
+### 8.2 配置文件
+
+| 檔案                          | 說明                    |
+| ----------------------------- | ----------------------- |
+| `backend/prisma.config.ts`    | Prisma 7 Turso 連線配置 |
+| `backend/render.yaml`         | Render 部署配置         |
+| `frontend/next.config.mjs`    | Next.js 配置            |
+| `frontend/tailwind.config.js` | TailwindCSS 配置        |
+
+### 8.3 文件目錄
+
+| 目錄                 | 內容                            |
+| -------------------- | ------------------------------- |
+| `docs/stories/`      | 12 份 User Story 詳細規格       |
+| `docs/architecture/` | 系統架構設計文件                |
+| `docs/qa/`           | QA 報告與除錯紀錄               |
+| `.github/`           | GitHub Actions、Issue Templates |
+
+---
+
+## 九、環境變數配置
+
+### 9.1 Render 後端環境變數
+
+```env
+# 資料庫 (Turso)
+DATABASE_URL=libsql://twitch-analytics-tingyu08.aws-ap-northeast-1.turso.io
+TURSO_AUTH_TOKEN=eyJxxxx...
+
+# Twitch OAuth
+TWITCH_CLIENT_ID=your_client_id
+TWITCH_CLIENT_SECRET=your_client_secret
+TWITCH_REDIRECT_URI=https://twitch-monitoring-and-statistics-system.onrender.com/auth/twitch/callback
+
+# JWT
+JWT_SECRET=your_jwt_secret
+
+# CORS
+FRONTEND_URL=https://twitch-monitoring-and-statistics-sy.vercel.app
+
+# 伺服器
+PORT=10000
+NODE_ENV=production
+
+# EventSub (可選)
+EVENTSUB_ENABLED=true
+EVENTSUB_SECRET=your_eventsub_secret
+```
+
+### 9.2 Vercel 前端環境變數
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://twitch-monitoring-and-statistics-system.onrender.com
+```
+
+### 9.3 本地開發環境變數
+
+**backend/.env**
+
+```env
+DATABASE_URL="file:./dev.db"
+TWITCH_CLIENT_ID=your_client_id
+TWITCH_CLIENT_SECRET=your_client_secret
+TWITCH_REDIRECT_URI=http://localhost:4000/auth/twitch/callback
+JWT_SECRET=dev_secret
+FRONTEND_URL=http://localhost:3000
+PORT=4000
+NODE_ENV=development
+```
+
+**frontend/.env.local**
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+```
+
+---
+
+## 十、依賴版本清單
+
+### 10.1 後端核心依賴
+
+| 套件                     | 版本    | 用途             |
+| ------------------------ | ------- | ---------------- |
+| `express`                | 4.19.2  | HTTP 框架        |
+| `prisma`                 | 7.1.0   | ORM              |
+| `@prisma/client`         | 7.1.0   | Prisma 客戶端    |
+| `@prisma/adapter-libsql` | 7.1.0   | Turso 連接適配器 |
+| `@libsql/client`         | 0.15.15 | LibSQL 客戶端    |
+| `@twurple/api`           | 8.0.2   | Twitch Helix API |
+| `@twurple/auth`          | 8.0.2   | Twitch 認證      |
+| `@twurple/chat`          | 8.0.2   | Twitch 聊天      |
+| `@twurple/eventsub-http` | 8.0.2   | EventSub Webhook |
+| `jsonwebtoken`           | 9.0.2   | JWT 簽發驗證     |
+| `node-cron`              | 4.2.1   | 排程任務         |
+| `archiver`               | 7.0.1   | ZIP 打包         |
+| `typescript`             | 5.6.3   | TypeScript 編譯  |
+
+### 10.2 前端核心依賴
+
+| 套件                | 版本    | 用途         |
+| ------------------- | ------- | ------------ |
+| `next`              | 14.2.33 | React 框架   |
+| `react`             | 18.3.1  | UI 函式庫    |
+| `react-dom`         | 18.3.1  | React DOM    |
+| `typescript`        | 5.6.3   | TypeScript   |
+| `tailwindcss`       | 3.4.14  | CSS 框架     |
+| `recharts`          | 3.5.1   | 圖表視覺化   |
+| `swr`               | 2.3.7   | 資料獲取快取 |
+| `react-grid-layout` | 2.1.0   | 拖拽網格佈局 |
+| `lucide-react`      | 0.561.0 | 圖示庫       |
+| `date-fns`          | 4.1.0   | 日期處理     |
+
+### 10.3 測試工具
+
+| 工具                     | 版本   | 用途           |
+| ------------------------ | ------ | -------------- |
+| `jest`                   | 29.7.0 | 單元測試框架   |
+| `@testing-library/react` | 16.1.0 | React 元件測試 |
+| `@playwright/test`       | 1.57.0 | E2E 測試       |
+| `supertest`              | 7.0.0  | API 測試       |
+
+---
+
+## 十一、結論
 
 截至 2025-12-25，專案已成功**部署至生產環境**，完成 **Epic 1、Epic 2 全部功能**，以及 **Epic 3 的核心資料收集架構**。系統現在可以：
 

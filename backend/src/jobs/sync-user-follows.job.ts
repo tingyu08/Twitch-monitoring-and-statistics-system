@@ -415,6 +415,7 @@ export const syncUserFollowsJob = new SyncUserFollowsJob();
 
 /**
  * 為單一使用者觸發追蹤名單同步（登入時使用）
+ * 優化版本：限制同步數量、跳過不必要API、批次處理
  * @param viewerId - Viewer ID
  * @param accessToken - 使用者的 Twitch Access Token (已解密)
  */
@@ -422,6 +423,11 @@ export async function triggerFollowSyncForUser(
   viewerId: string,
   accessToken: string
 ): Promise<void> {
+  // 限制最多同步頻道數（避免記憶體過載）
+  const MAX_SYNC_CHANNELS = 100;
+  // 批次處理大小（每處理 N 個頻道休息一下讓 GC 工作）
+  const BATCH_SIZE = 20;
+
   try {
     logger.info("Jobs", `🔄 登入後同步使用者追蹤名單: ${viewerId}`);
 
@@ -437,10 +443,20 @@ export async function triggerFollowSyncForUser(
     }
 
     // 呼叫 Twurple API 獲取追蹤清單
-    const followedChannels = await twurpleHelixService.getFollowedChannels(
+    const allFollowedChannels = await twurpleHelixService.getFollowedChannels(
       viewer.twitchUserId,
       accessToken
     );
+
+    // 限制同步數量
+    const followedChannels = allFollowedChannels.slice(0, MAX_SYNC_CHANNELS);
+
+    if (allFollowedChannels.length > MAX_SYNC_CHANNELS) {
+      logger.warn(
+        "Jobs",
+        `追蹤頻道數 ${allFollowedChannels.length} 超過限制，僅同步前 ${MAX_SYNC_CHANNELS} 個`
+      );
+    }
 
     logger.info("Jobs", `取得 ${followedChannels.length} 個追蹤的頻道`);
 
@@ -450,7 +466,10 @@ export async function triggerFollowSyncForUser(
         userId: viewerId,
         userType: "viewer",
       },
-      include: { channel: true },
+      select: {
+        id: true,
+        channel: { select: { twitchChannelId: true } },
+      },
     });
 
     const existingFollowMap = new Map(
@@ -459,29 +478,17 @@ export async function triggerFollowSyncForUser(
 
     let created = 0;
     let removed = 0;
+    let processed = 0;
 
-    // 處理每個追蹤的頻道
+    // 處理每個追蹤的頻道（批次處理）
     for (const follow of followedChannels) {
       const existingFollow = existingFollowMap.get(follow.broadcasterId);
 
       if (existingFollow) {
         existingFollowMap.delete(follow.broadcasterId);
       } else {
-        // 新追蹤：確保頻道存在（使用 upsert 防止競爭條件）
-        // 獲取頭像等資訊
-        let avatarUrl = "";
-        let displayName = follow.broadcasterLogin;
-        try {
-          const userInfo = await twurpleHelixService.getUserById(
-            follow.broadcasterId
-          );
-          if (userInfo) {
-            avatarUrl = userInfo.profileImageUrl || "";
-            displayName = userInfo.displayName || follow.broadcasterLogin;
-          }
-        } catch {
-          // ignore
-        }
+        // 新追蹤：使用 broadcasterLogin 作為名稱（跳過額外API調用以節省配額）
+        const displayName = follow.broadcasterLogin;
 
         // 建立或獲取 Streamer 記錄（使用 upsert）
         const streamer = await prisma.streamer.upsert({
@@ -489,12 +496,9 @@ export async function triggerFollowSyncForUser(
           create: {
             twitchUserId: follow.broadcasterId,
             displayName,
-            avatarUrl,
+            avatarUrl: "", // 跳過頭像獲取，後續可在開台時更新
           },
-          update: {
-            displayName,
-            avatarUrl,
-          },
+          update: {},
         });
 
         // 建立或獲取頻道（使用 upsert 防止 UNIQUE 約束錯誤）
@@ -532,6 +536,13 @@ export async function triggerFollowSyncForUser(
           },
         });
         created++;
+      }
+
+      processed++;
+
+      // 每處理 BATCH_SIZE 個頻道，等待一下讓系統喘息
+      if (processed % BATCH_SIZE === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
