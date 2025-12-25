@@ -34,7 +34,7 @@ interface ListenerStats {
 
 // ========== 配置常數 ==========
 
-const MAX_CHANNELS_PER_INSTANCE = 20; // 降低以減少記憶體使用 (Render 免費版 512MB)
+const MAX_CHANNELS_PER_INSTANCE = 50; // 監聽所有開台頻道
 const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘 (減少系統開銷)
 const INACTIVE_TIMEOUT_MS = 30 * 60 * 1000; // 30 分鐘無活動自動停止
 const ENABLE_DISTRIBUTED_MODE = process.env.ENABLE_DISTRIBUTED_MODE === "true";
