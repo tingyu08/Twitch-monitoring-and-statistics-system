@@ -8,9 +8,21 @@
 ![Node.js](https://img.shields.io/badge/Node.js-43853D?style=flat-square&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-404D59?style=flat-square&logo=express&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=flat-square&logo=prisma&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-07405E?style=flat-square&logo=sqlite&logoColor=white)
+![Turso](https://img.shields.io/badge/Turso-4FF8D2?style=flat-square&logo=turso&logoColor=black)
 ![Playwright](https://img.shields.io/badge/Playwright-45ba4b?style=flat-square&logo=playwright&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-235%2B_Passing-brightgreen?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Production-success?style=flat-square)
+
+---
+
+## 🌐 線上 Demo
+
+| 服務            | 網址                                                                                                                         |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 🖥️ **前端應用** | [https://twitch-monitoring-and-statistics-sy.vercel.app](https://twitch-monitoring-and-statistics-sy.vercel.app)             |
+| 🔌 **後端 API** | [https://twitch-monitoring-and-statistics-system.onrender.com](https://twitch-monitoring-and-statistics-system.onrender.com) |
+
+> 📝 **注意**: 首次載入可能需要 30 秒左右（Render 免費版會休眠）
 
 ---
 
@@ -80,7 +92,7 @@
 │         │                │                    │             │
 │         └────────────────┼────────────────────┘             │
 │                          ▼                                  │
-│               Prisma ORM + SQLite                           │
+│               Prisma ORM + Turso (Cloud)                   │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │ 17+ Models: Streamer, Viewer, Channel, Stats,        │   │
 │  │ LifetimeStats, Privacy, ExportJob, AuditLog...       │   │
@@ -92,6 +104,7 @@
               │   Twitch API (Twurple)  │
               │   • Helix API           │
               │   • Chat (IRC)          │
+              │   • EventSub Webhook    │
               │   • DecAPI (Followage)  │
               └─────────────────────────┘
 ```
@@ -111,16 +124,16 @@
 
 ### 後端技術棧
 
-| 技術            | 版本   | 用途              |
-| --------------- | ------ | ----------------- |
-| Node.js         | 20.x   | 執行環境          |
-| Express         | 4.19.2 | HTTP 框架         |
-| TypeScript      | 5.6.3  | 類型安全          |
-| Prisma          | 7.1.0  | ORM               |
-| SQLite (LibSQL) | -      | 資料庫            |
-| Twurple         | 8.0.2  | Twitch API 客戶端 |
-| node-cron       | 4.2.1  | 排程任務          |
-| Archiver        | 7.0.1  | 資料匯出 ZIP 打包 |
+| 技術           | 版本   | 用途              |
+| -------------- | ------ | ----------------- |
+| Node.js        | 20.x   | 執行環境          |
+| Express        | 4.19.2 | HTTP 框架         |
+| TypeScript     | 5.6.3  | 類型安全          |
+| Prisma         | 7.1.0  | ORM               |
+| Turso (LibSQL) | -      | 雲端邊緣資料庫    |
+| Twurple        | 8.0.2  | Twitch API 客戶端 |
+| node-cron      | 4.2.1  | 排程任務          |
+| Archiver       | 7.0.1  | 資料匯出 ZIP 打包 |
 
 ### 測試工具
 
