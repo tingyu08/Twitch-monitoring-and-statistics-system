@@ -42,19 +42,17 @@ function setAuthCookies(
 }
 
 function clearAuthCookies(res: Response) {
-  // 跨域環境下，clearCookie 可能失效
-  // 改用設置空值且立即過期的 Cookie 來清除
-  const expireOptions = {
-    httpOnly: true,
-    secure: env.nodeEnv === "production",
-    sameSite: (env.nodeEnv === "production" ? "none" : "lax") as "none" | "lax",
-    path: "/",
-    maxAge: 0, // 立即過期
-    expires: new Date(0), // 過期時間設為 1970
-  };
+  // 跨域環境下需要手動設置 Set-Cookie 標頭來確保 Cookie 被清除
+  // 設置過期時間為過去的時間，並確保所有屬性與設置時一致
+  const isProduction = env.nodeEnv === "production";
+  const cookieOptions = `Path=/; HttpOnly; ${
+    isProduction ? "Secure; SameSite=None" : "SameSite=Lax"
+  }; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 
-  res.cookie("auth_token", "", expireOptions);
-  res.cookie("refresh_token", "", expireOptions);
+  res.setHeader("Set-Cookie", [
+    `auth_token=; ${cookieOptions}`,
+    `refresh_token=; ${cookieOptions}`,
+  ]);
 }
 
 export class AuthController {
