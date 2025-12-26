@@ -1,7 +1,20 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from "react";
-import { getMe, logout as apiLogout, type UserInfo, isStreamer as checkIsStreamer, isViewer as checkIsViewer } from "@/lib/api/auth";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useMemo,
+  type ReactNode,
+} from "react";
+import {
+  getMe,
+  logout as apiLogout,
+  type UserInfo,
+  isStreamer as checkIsStreamer,
+  isViewer as checkIsViewer,
+} from "@/lib/api/auth";
 import { authLogger } from "@/lib/logger";
 
 interface AuthContextType {
@@ -40,10 +53,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiLogout();
       setUser(null);
       setError(null);
-      // 導向首頁
-      window.location.href = "/";
+
+      // 清除所有 localStorage 快取
+      localStorage.clear();
+
+      // 清除 sessionStorage
+      sessionStorage.clear();
+
+      // 強制刷新並導向首頁（使用 replace 避免返回按鈕問題）
+      window.location.replace("/");
     } catch (err) {
       authLogger.error("Logout failed:", err);
+      // 即使登出 API 失敗，也清除本地狀態並導向首頁
+      setUser(null);
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.replace("/");
     }
   };
 
@@ -51,7 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, []);
 
-  const isStreamer = useMemo(() => user !== null && checkIsStreamer(user), [user]);
+  const isStreamer = useMemo(
+    () => user !== null && checkIsStreamer(user),
+    [user]
+  );
   const isViewer = useMemo(() => user !== null && checkIsViewer(user), [user]);
 
   return (

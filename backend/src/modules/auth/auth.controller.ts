@@ -42,8 +42,16 @@ function setAuthCookies(
 }
 
 function clearAuthCookies(res: Response) {
-  res.clearCookie("auth_token", DEFAULT_COOKIE_OPTIONS);
-  res.clearCookie("refresh_token", DEFAULT_COOKIE_OPTIONS);
+  // 清除 Cookie 時需要使用與設置時相同的選項
+  const clearOptions = {
+    httpOnly: true,
+    secure: env.nodeEnv === "production",
+    sameSite: (env.nodeEnv === "production" ? "none" : "lax") as "none" | "lax",
+    path: "/",
+  };
+
+  res.clearCookie("auth_token", clearOptions);
+  res.clearCookie("refresh_token", clearOptions);
 }
 
 export class AuthController {
