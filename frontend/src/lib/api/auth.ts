@@ -55,7 +55,8 @@ export async function getMe(): Promise<UserInfo> {
 }
 
 export async function logout(): Promise<{ message: string }> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/logout`, {
+  // 使用 Next.js API 代理路由來處理登出，避免跨域 Cookie 問題
+  const response = await fetch("/api/auth/logout", {
     method: "POST",
     credentials: "include",
     headers: {
