@@ -49,27 +49,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    console.log("[Logout] Starting logout process...");
     try {
       await apiLogout();
-      setUser(null);
-      setError(null);
-
-      // 清除所有 localStorage 快取
-      localStorage.clear();
-
-      // 清除 sessionStorage
-      sessionStorage.clear();
-
-      // 強制刷新並導向首頁（使用 replace 避免返回按鈕問題）
-      window.location.replace("/");
+      console.log("[Logout] API call successful");
     } catch (err) {
-      authLogger.error("Logout failed:", err);
-      // 即使登出 API 失敗，也清除本地狀態並導向首頁
-      setUser(null);
+      console.error("[Logout] API call failed:", err);
+    }
+
+    // 無論 API 成功或失敗，都執行清理
+    setUser(null);
+    setError(null);
+
+    // 清除所有 localStorage 和 sessionStorage
+    try {
       localStorage.clear();
       sessionStorage.clear();
-      window.location.replace("/");
+      console.log("[Logout] Storage cleared");
+    } catch (e) {
+      console.error("[Logout] Failed to clear storage:", e);
     }
+
+    // 使用 setTimeout 確保狀態更新完成後再跳轉
+    console.log("[Logout] Redirecting to home...");
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 100);
   };
 
   useEffect(() => {
