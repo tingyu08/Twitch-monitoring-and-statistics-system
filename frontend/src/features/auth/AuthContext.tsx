@@ -70,11 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("[Logout] Failed to clear storage:", e);
     }
 
-    // 使用 setTimeout 確保狀態更新完成後再跳轉
+    // 使用完整 URL 跳轉，並延遲確保 Cookie 清除完成
     console.log("[Logout] Redirecting to home...");
     setTimeout(() => {
-      window.location.href = "/";
-    }, 100);
+      // 使用完整 URL 而非相對路徑
+      const homeUrl = window.location.origin + "/";
+      console.log("[Logout] Navigating to:", homeUrl);
+      window.location.assign(homeUrl);
+    }, 500); // 增加延遲到 500ms
   };
 
   useEffect(() => {
