@@ -415,7 +415,7 @@ export const syncUserFollowsJob = new SyncUserFollowsJob();
 
 /**
  * 為單一使用者觸發追蹤名單同步（登入時使用）
- * 優化版本：限制同步數量、跳過不必要API、批次處理
+ * 同步所有追蹤頻道，使用批次處理避免記憶體過載
  * @param viewerId - Viewer ID
  * @param accessToken - 使用者的 Twitch Access Token (已解密)
  */
@@ -423,8 +423,6 @@ export async function triggerFollowSyncForUser(
   viewerId: string,
   accessToken: string
 ): Promise<void> {
-  // 限制最多同步頻道數（避免記憶體過載）
-  const MAX_SYNC_CHANNELS = 100;
   // 批次處理大小（每處理 N 個頻道休息一下讓 GC 工作）
   const BATCH_SIZE = 20;
 
@@ -442,21 +440,11 @@ export async function triggerFollowSyncForUser(
       return;
     }
 
-    // 呼叫 Twurple API 獲取追蹤清單
-    const allFollowedChannels = await twurpleHelixService.getFollowedChannels(
+    // 呼叫 Twurple API 獲取所有追蹤清單（不限制數量）
+    const followedChannels = await twurpleHelixService.getFollowedChannels(
       viewer.twitchUserId,
       accessToken
     );
-
-    // 限制同步數量
-    const followedChannels = allFollowedChannels.slice(0, MAX_SYNC_CHANNELS);
-
-    if (allFollowedChannels.length > MAX_SYNC_CHANNELS) {
-      logger.warn(
-        "Jobs",
-        `追蹤頻道數 ${allFollowedChannels.length} 超過限制，僅同步前 ${MAX_SYNC_CHANNELS} 個`
-      );
-    }
 
     logger.info("Jobs", `取得 ${followedChannels.length} 個追蹤的頻道`);
 
