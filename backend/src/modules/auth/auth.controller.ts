@@ -42,16 +42,19 @@ function setAuthCookies(
 }
 
 function clearAuthCookies(res: Response) {
-  // 清除 Cookie 時需要使用與設置時相同的選項
-  const clearOptions = {
+  // 跨域環境下，clearCookie 可能失效
+  // 改用設置空值且立即過期的 Cookie 來清除
+  const expireOptions = {
     httpOnly: true,
     secure: env.nodeEnv === "production",
     sameSite: (env.nodeEnv === "production" ? "none" : "lax") as "none" | "lax",
     path: "/",
+    maxAge: 0, // 立即過期
+    expires: new Date(0), // 過期時間設為 1970
   };
 
-  res.clearCookie("auth_token", clearOptions);
-  res.clearCookie("refresh_token", clearOptions);
+  res.cookie("auth_token", "", expireOptions);
+  res.cookie("refresh_token", "", expireOptions);
 }
 
 export class AuthController {
