@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { viewerApi, type FollowedChannel } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
+
+// 每頁顯示的頻道數量
+const CHANNELS_PER_PAGE = 25;
 
 // 計算並格式化開台時長
 function formatStreamDuration(startedAt: string): string {
@@ -32,6 +35,10 @@ export default function ViewerDashboardPage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 分頁狀態
+  const [currentPage, setCurrentPage] = useState(1);
+  const lastNotifiedChannelsRef = useRef<string>("");
 
   useEffect(() => {
     if (authLoading) return;
@@ -67,6 +74,7 @@ export default function ViewerDashboardPage() {
     }
   };
 
+  // 過濾頻道
   useEffect(() => {
     if (searchQuery.trim()) {
       const lowerQuery = searchQuery.toLowerCase();
@@ -77,13 +85,58 @@ export default function ViewerDashboardPage() {
             ch.displayName.toLowerCase().includes(lowerQuery)
         )
       );
+      // 搜尋時重置到第一頁
+      setCurrentPage(1);
     } else {
       setFilteredChannels(channels);
     }
   }, [searchQuery, channels]);
 
+  // 計算分頁
+  const totalPages = Math.ceil(filteredChannels.length / CHANNELS_PER_PAGE);
+  const startIndex = (currentPage - 1) * CHANNELS_PER_PAGE;
+  const endIndex = startIndex + CHANNELS_PER_PAGE;
+  const currentPageChannels = filteredChannels.slice(startIndex, endIndex);
+
+  // 通知後端監聽當前頁面的開台頻道
+  const notifyListenChannels = useCallback(
+    async (channelsToListen: FollowedChannel[]) => {
+      const liveChannels = channelsToListen
+        .filter((ch) => ch.isLive)
+        .map((ch) => ({ channelName: ch.channelName, isLive: true }));
+
+      // 建立唯一識別碼避免重複通知
+      const channelKey = liveChannels
+        .map((ch) => ch.channelName)
+        .sort()
+        .join(",");
+      if (channelKey === lastNotifiedChannelsRef.current) {
+        return; // 相同的頻道列表，不重複通知
+      }
+      lastNotifiedChannelsRef.current = channelKey;
+
+      if (liveChannels.length > 0) {
+        await viewerApi.setListenChannels(liveChannels);
+      }
+    },
+    []
+  );
+
+  // 當頁面變更時通知後端
+  useEffect(() => {
+    if (currentPageChannels.length > 0) {
+      notifyListenChannels(currentPageChannels);
+    }
+  }, [currentPage, currentPageChannels, notifyListenChannels]);
+
   const handleChannelClick = (channelId: string) => {
     router.push(`/dashboard/viewer/${channelId}`);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // 滾動到頂部
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   if (authLoading || loading) {
@@ -192,9 +245,15 @@ export default function ViewerDashboardPage() {
 
         {/* 搜尋與標題 */}
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-            已追蹤的頻道
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+              已追蹤的頻道
+            </h2>
+            <span className="text-sm text-purple-300/60">
+              ({filteredChannels.length} 個頻道
+              {totalPages > 1 ? ` · 第 ${currentPage}/${totalPages} 頁` : ""})
+            </span>
+          </div>
           <div className="relative">
             <input
               id="channel-search-input"
@@ -243,104 +302,164 @@ export default function ViewerDashboardPage() {
             )}
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filteredChannels.map((channel) => (
-              <button
-                key={channel.id}
-                type="button"
-                onClick={() => handleChannelClick(channel.id)}
-                className="group bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/20 hover:-translate-y-1 hover:bg-white/15"
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="relative">
-                    <Image
-                      src={channel.avatarUrl}
-                      alt={channel.displayName}
-                      width={60}
-                      height={60}
-                      className="w-14 h-14 rounded-full object-cover border-2 border-white/20 group-hover:border-purple-500 transition-colors"
-                      unoptimized
-                    />
-                    {channel.isLive && (
-                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-slate-800 animate-pulse" />
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-white group-hover:text-purple-300 transition-colors">
-                      {channel.displayName}
-                    </h3>
-                    <p className="text-sm text-purple-300/50 font-mono">
-                      @{channel.channelName}
-                    </p>
-                    {channel.isLive && channel.category && (
-                      <p className="text-xs text-purple-400/70 mt-0.5 truncate max-w-[180px]">
-                        🎮 {channel.category}
+          <>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {currentPageChannels.map((channel) => (
+                <button
+                  key={channel.id}
+                  type="button"
+                  onClick={() => handleChannelClick(channel.id)}
+                  className="group bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/20 hover:-translate-y-1 hover:bg-white/15"
+                >
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="relative">
+                      <Image
+                        src={channel.avatarUrl}
+                        alt={channel.displayName}
+                        width={60}
+                        height={60}
+                        className="w-14 h-14 rounded-full object-cover border-2 border-white/20 group-hover:border-purple-500 transition-colors"
+                        unoptimized
+                      />
+                      {channel.isLive && (
+                        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-slate-800 animate-pulse" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-white group-hover:text-purple-300 transition-colors">
+                        {channel.displayName}
+                      </h3>
+                      <p className="text-sm text-purple-300/50 font-mono">
+                        @{channel.channelName}
                       </p>
-                    )}
-                    {channel.isLive && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] uppercase tracking-wider text-red-400 font-bold bg-red-500/20 px-1.5 py-0.5 rounded">
-                          LIVE
-                        </span>
-                        {channel.viewerCount !== null && (
-                          <span className="text-[10px] text-purple-300/70">
-                            {channel.viewerCount.toLocaleString()} 觀眾
+                      {channel.isLive && channel.category && (
+                        <p className="text-xs text-purple-400/70 mt-0.5 truncate max-w-[180px]">
+                          🎮 {channel.category}
+                        </p>
+                      )}
+                      {channel.isLive && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] uppercase tracking-wider text-red-400 font-bold bg-red-500/20 px-1.5 py-0.5 rounded">
+                            LIVE
                           </span>
-                        )}
+                          {channel.viewerCount !== null && (
+                            <span className="text-[10px] text-purple-300/70">
+                              {channel.viewerCount.toLocaleString()} 觀眾
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 開台時間顯示 (僅開台時) */}
+                  {channel.isLive && channel.streamStartedAt && (
+                    <div className="mb-3 px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-red-300/70">開台時間</span>
+                        <span className="text-red-400 font-mono">
+                          {formatStreamDuration(channel.streamStartedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-3 border border-blue-500/20">
+                      <p className="text-blue-300/70 text-xs mb-1">觀看時數</p>
+                      <p className="font-semibold text-blue-400 text-lg">
+                        {(channel.totalWatchMinutes / 60).toFixed(1)}{" "}
+                        <span className="text-xs text-blue-400/60">h</span>
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-xl p-3 border border-green-500/20">
+                      <p className="text-green-300/70 text-xs mb-1">留言數</p>
+                      <p className="font-semibold text-green-400 text-lg">
+                        {channel.messageCount}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-300/50 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span>最後觀看</span>
+                      <span className="text-purple-300 font-medium">
+                        {channel.lastWatched
+                          ? channel.lastWatched.split("T")[0]
+                          : "N/A"}
+                      </span>
+                    </div>
+                    {channel.followedAt && (
+                      <div className="flex justify-between items-center">
+                        <span>追蹤於</span>
+                        <span className="text-purple-300 font-medium">
+                          {channel.followedAt.split("T")[0]}
+                        </span>
                       </div>
                     )}
                   </div>
+                </button>
+              ))}
+            </div>
+
+            {/* 分頁導航 */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-purple-300 transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← 上一頁
+                </button>
+
+                <div className="flex gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      // 顯示前3頁、後3頁、當前頁附近3頁
+                      if (page <= 3) return true;
+                      if (page >= totalPages - 2) return true;
+                      if (Math.abs(page - currentPage) <= 1) return true;
+                      return false;
+                    })
+                    .map((page, index, arr) => (
+                      <>
+                        {index > 0 && arr[index - 1] !== page - 1 && (
+                          <span
+                            key={`ellipsis-${page}`}
+                            className="px-2 text-purple-300/50"
+                          >
+                            ...
+                          </span>
+                        )}
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => handlePageChange(page)}
+                          className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
+                            currentPage === page
+                              ? "bg-purple-600 text-white shadow-lg shadow-purple-900/30"
+                              : "bg-white/10 text-purple-300 hover:bg-white/20 border border-white/10"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </>
+                    ))}
                 </div>
 
-                {/* 開台時間顯示 (僅開台時) */}
-                {channel.isLive && channel.streamStartedAt && (
-                  <div className="mb-3 px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-red-300/70">開台時間</span>
-                      <span className="text-red-400 font-mono">
-                        {formatStreamDuration(channel.streamStartedAt)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-3 border border-blue-500/20">
-                    <p className="text-blue-300/70 text-xs mb-1">觀看時數</p>
-                    <p className="font-semibold text-blue-400 text-lg">
-                      {(channel.totalWatchMinutes / 60).toFixed(1)}{" "}
-                      <span className="text-xs text-blue-400/60">h</span>
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-xl p-3 border border-green-500/20">
-                    <p className="text-green-300/70 text-xs mb-1">留言數</p>
-                    <p className="font-semibold text-green-400 text-lg">
-                      {channel.messageCount}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-300/50 space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span>最後觀看</span>
-                    <span className="text-purple-300 font-medium">
-                      {channel.lastWatched
-                        ? channel.lastWatched.split("T")[0]
-                        : "N/A"}
-                    </span>
-                  </div>
-                  {channel.followedAt && (
-                    <div className="flex justify-between items-center">
-                      <span>追蹤於</span>
-                      <span className="text-purple-300 font-medium">
-                        {channel.followedAt.split("T")[0]}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-purple-300 transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  下一頁 →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>

@@ -4,6 +4,8 @@ import { requireAuth } from "../auth/auth.middleware";
 
 import { ViewerMessageStatsController } from "./viewer-message-stats.controller";
 import { ViewerPrivacyController } from "./viewer-privacy.controller";
+import { chatListenerManager } from "../../services/chat-listener-manager";
+import type { AuthRequest } from "../auth/auth.middleware";
 
 const controller = new ViewerController();
 const messageStatsController = new ViewerMessageStatsController();
@@ -149,6 +151,49 @@ viewerApiRoutes.delete(
   "/dashboard-layout/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
   dashboardLayoutController.resetLayout
+);
+
+// 設定監聽頻道（前端分頁換頁時調用）
+viewerApiRoutes.post(
+  "/listen-channels",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  async (req: AuthRequest, res) => {
+    try {
+      const { channels } = req.body as {
+        channels: Array<{ channelName: string; isLive: boolean }>;
+      };
+
+      if (!channels || !Array.isArray(channels)) {
+        return res.status(400).json({ error: "channels array is required" });
+      }
+
+      // 只處理開台的頻道
+      const liveChannels = channels.filter((ch) => ch.isLive);
+
+      // 請求監聽這些頻道
+      const results = await Promise.all(
+        liveChannels.map((ch) =>
+          chatListenerManager.requestListen(ch.channelName, {
+            isLive: true,
+            priority: 10, // 用戶正在查看的頁面優先級最高
+          })
+        )
+      );
+
+      const successCount = results.filter((r) => r).length;
+
+      return res.json({
+        success: true,
+        message: `正在監聽 ${successCount}/${liveChannels.length} 個開台頻道`,
+        listening: liveChannels
+          .filter((_, i) => results[i])
+          .map((ch) => ch.channelName),
+      });
+    } catch (error) {
+      console.error("Error setting listen channels:", error);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
 );
 
 export { viewerApiRoutes };

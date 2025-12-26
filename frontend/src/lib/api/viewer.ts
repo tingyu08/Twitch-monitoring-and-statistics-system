@@ -338,4 +338,30 @@ export const viewerApi = {
       return null;
     }
   },
+
+  /**
+   * 設定要監聽的頻道（分頁換頁時調用）
+   */
+  async setListenChannels(
+    channels: Array<{ channelName: string; isLive: boolean }>
+  ): Promise<{
+    success: boolean;
+    message: string;
+    listening: string[];
+  } | null> {
+    try {
+      return await httpClient<{
+        success: boolean;
+        message: string;
+        listening: string[];
+      }>("/api/viewer/listen-channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channels }),
+      });
+    } catch (err) {
+      console.warn("Failed to set listen channels", err);
+      return null;
+    }
+  },
 };
