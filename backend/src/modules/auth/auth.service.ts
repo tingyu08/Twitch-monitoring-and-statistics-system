@@ -163,6 +163,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
     role: "streamer", // 保持 role 為 streamer，但在 middleware 允許其存取 viewer 資源
     consentedAt: result.viewerRecord.consentedAt?.toISOString() ?? null,
     consentVersion: result.viewerRecord.consentVersion ?? null,
+    tokenVersion: result.viewerRecord.tokenVersion, // 用於 Token 失效機制
   };
 
   const accessToken = signAccessToken(jwtPayload);

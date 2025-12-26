@@ -13,6 +13,7 @@ export interface JWTPayload {
   channelUrl?: string;
   consentedAt?: string | null;
   consentVersion?: number | null;
+  tokenVersion?: number; // 用於 Token 失效機制
   role: UserRole;
   tokenType: TokenType;
 }
@@ -20,19 +21,30 @@ export interface JWTPayload {
 const ACCESS_EXPIRES_IN = "1h"; // Story 2.1 要求
 const REFRESH_EXPIRES_IN = "7d";
 
-export function signAccessToken(payload: Omit<JWTPayload, "tokenType">): string {
+export function signAccessToken(
+  payload: Omit<JWTPayload, "tokenType">
+): string {
   return jwt.sign({ ...payload, tokenType: "access" as const }, env.jwtSecret, {
     expiresIn: ACCESS_EXPIRES_IN,
   });
 }
 
-export function signRefreshToken(payload: Omit<JWTPayload, "tokenType">): string {
-  return jwt.sign({ ...payload, tokenType: "refresh" as const }, env.jwtSecret, {
-    expiresIn: REFRESH_EXPIRES_IN,
-  });
+export function signRefreshToken(
+  payload: Omit<JWTPayload, "tokenType">
+): string {
+  return jwt.sign(
+    { ...payload, tokenType: "refresh" as const },
+    env.jwtSecret,
+    {
+      expiresIn: REFRESH_EXPIRES_IN,
+    }
+  );
 }
 
-function verifyToken(token: string, expectedType: TokenType): JWTPayload | null {
+function verifyToken(
+  token: string,
+  expectedType: TokenType
+): JWTPayload | null {
   try {
     const decoded = jwt.verify(token, env.jwtSecret) as JWTPayload;
     if (decoded.tokenType !== expectedType) return null;

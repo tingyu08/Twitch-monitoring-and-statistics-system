@@ -25,6 +25,7 @@ model Viewer {
   twitchUserId String                   @unique
   displayName  String?
   avatarUrl    String?
+  tokenVersion Int                      @default(0)  // 用於 Token 失效機制
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
   isAnonymized Boolean                  @default(false)

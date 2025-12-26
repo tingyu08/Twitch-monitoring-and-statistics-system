@@ -6,10 +6,12 @@ import {
   signAccessToken,
   signRefreshToken,
   verifyRefreshToken,
+  verifyAccessToken,
   type JWTPayload,
 } from "./jwt.utils";
 import { env } from "../../config/env";
 import { authLogger } from "../../utils/logger";
+import { prisma } from "../../db/prisma";
 
 // 擴展 Express Request 類型以支援 user 屬性
 interface AuthenticatedRequest extends Request {
@@ -160,6 +162,27 @@ export class AuthController {
   };
 
   public logout = async (req: Request, res: Response) => {
+    try {
+      // 從 cookie 中讀取 token 並解碼
+      const token = req.cookies?.auth_token;
+      if (token) {
+        const decoded = verifyRefreshToken(token) || verifyAccessToken(token);
+        if (decoded?.viewerId) {
+          // 增加 tokenVersion 使舊 Token 失效
+          await prisma.viewer.update({
+            where: { id: decoded.viewerId },
+            data: { tokenVersion: { increment: 1 } },
+          });
+          console.log(
+            `[Logout] Incremented tokenVersion for viewer ${decoded.viewerId}`
+          );
+        }
+      }
+    } catch (error) {
+      console.error("[Logout] Error incrementing tokenVersion:", error);
+      // 即使失敗也繼續清除 Cookie
+    }
+
     clearAuthCookies(res);
     return res.status(200).json({ message: "Logged out successfully" });
   };
