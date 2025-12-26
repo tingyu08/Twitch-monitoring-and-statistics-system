@@ -43,16 +43,21 @@ function setAuthCookies(
 
 function clearAuthCookies(res: Response) {
   // 跨域環境下需要手動設置 Set-Cookie 標頭來確保 Cookie 被清除
-  // 設置過期時間為過去的時間，並確保所有屬性與設置時一致
+  // 使用 res.cookie 並確保所有選項與設置時完全一致
   const isProduction = env.nodeEnv === "production";
-  const cookieOptions = `Path=/; HttpOnly; ${
-    isProduction ? "Secure; SameSite=None" : "SameSite=Lax"
-  }; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 
-  res.setHeader("Set-Cookie", [
-    `auth_token=; ${cookieOptions}`,
-    `refresh_token=; ${cookieOptions}`,
-  ]);
+  // 選項必須與設置時相同
+  const expireOptions = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? ("none" as const) : ("lax" as const),
+    path: "/",
+    maxAge: -1, // 負數表示立即刪除
+  };
+
+  // 設置空值並過期
+  res.cookie("auth_token", "deleted", expireOptions);
+  res.cookie("refresh_token", "deleted", expireOptions);
 }
 
 export class AuthController {
