@@ -4,8 +4,8 @@ services:
     runtime: node
     region: singapore # 離台灣最近的區域
     plan: free
-    buildCommand: npm install && npx prisma db push --accept-data-loss && npm run build
-    startCommand: npm run start
+    buildCommand: npm install && npm run build
+    startCommand: npx prisma db push --accept-data-loss && npm run start
     healthCheckPath: /api/health
     envVars:
       # 基本設定
