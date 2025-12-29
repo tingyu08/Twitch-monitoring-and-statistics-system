@@ -146,6 +146,16 @@ export class ViewerMessageRepository {
           );
         }
       );
+
+      // 6. 觸發 WebSocket 廣播 (即時更新)
+      // 我們只廣播必要的增量資訊來減少頻寬
+      const { webSocketGateway } = await import(
+        "../../services/websocket.gateway"
+      );
+      webSocketGateway.broadcastChannelStats(targetChannelId, {
+        channelId: targetChannelId,
+        messageCount: 1, // 表示這是一條新消息，前端累加
+      });
     } catch (error) {
       logger.error("ViewerMessage", "Error saving message", error);
     }

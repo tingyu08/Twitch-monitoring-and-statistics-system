@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { viewerApi, type FollowedChannel } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
+import { useSocket } from "@/lib/socket";
 
 // 每頁顯示的頻道數量
 const CHANNELS_PER_PAGE = 24;
@@ -40,6 +41,8 @@ export default function ViewerDashboardPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const lastNotifiedChannelsRef = useRef<string>("");
 
+  const { socket, connected: socketConnected } = useSocket();
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -51,13 +54,37 @@ export default function ViewerDashboardPage() {
 
     loadChannels();
 
-    // Polling every 3 seconds for near-real-time updates
-    const interval = setInterval(() => {
-      loadChannels(true);
-    }, 3000);
+    // WebSocket 即時更新邏輯
+    if (socket && socketConnected) {
+      const handleUpdate = (data: {
+        channelId: string;
+        messageCount: number;
+      }) => {
+        setChannels((prev) =>
+          prev.map((ch) => {
+            if (ch.id === data.channelId) {
+              return {
+                ...ch,
+                messageCount: ch.messageCount + data.messageCount,
+              };
+            }
+            return ch;
+          })
+        );
+      };
 
-    return () => clearInterval(interval);
-  }, [authLoading, user, router]);
+      socket.on("stats-update", handleUpdate);
+      return () => {
+        socket.off("stats-update", handleUpdate);
+      };
+    } else {
+      // 如果沒有 WebSocket，使用 3 秒輪詢作為備援
+      const interval = setInterval(() => {
+        loadChannels(true);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [authLoading, user, router, socket, socketConnected]);
 
   const loadChannels = async (silent = false) => {
     try {

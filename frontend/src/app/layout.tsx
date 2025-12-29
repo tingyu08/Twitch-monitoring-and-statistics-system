@@ -18,15 +18,21 @@ export const metadata = {
   description: "Streamer Analytics Dashboard",
 };
 
+import { SocketProvider } from "@/features/socket/SocketProvider";
+
+// ... existing imports ...
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-Hant">
       <body>
         <AuthProvider>
-          {children}
-          <Suspense fallback={null}>
-            <ConsentBannerWrapper />
-          </Suspense>
+          <SocketProvider>
+            {children}
+            <Suspense fallback={null}>
+              <ConsentBannerWrapper />
+            </Suspense>
+          </SocketProvider>
         </AuthProvider>
       </body>
     </html>

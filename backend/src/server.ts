@@ -8,16 +8,23 @@ console.warn = (...args: unknown[]) => {
   originalWarn.apply(console, args);
 };
 
+import http from "http";
 import app from "./app";
 import { unifiedTwitchService } from "./services/unified-twitch.service";
 import { chatListenerManager } from "./services/chat-listener-manager";
+import { webSocketGateway } from "./services/websocket.gateway";
 import { startAllJobs } from "./jobs";
 import { twurpleEventSubService } from "./services/twurple-eventsub.service";
 import { logger } from "./utils/logger";
 
 const PORT = process.env.PORT || 4000;
 
-app.listen(PORT, async () => {
+const httpServer = http.createServer(app);
+
+// 初始化 WebSocket
+webSocketGateway.initialize(httpServer);
+
+httpServer.listen(PORT, async () => {
   console.log(`伺服器運行於 http://localhost:${PORT}`);
 
   // 延遲初始化：使用 setImmediate 避免啟動時記憶體峰值
