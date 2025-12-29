@@ -81,13 +81,8 @@ export class ViewerController {
         endDate
       );
 
-      // 效能監控日誌
+      // 效能監控：僅記錄慢查詢 (> 200ms)
       const duration = Date.now() - requestStart;
-      console.log(
-        `[API Performance] GET /viewer/stats/${channelId} - ${duration}ms`
-      );
-
-      // 效能警告
       if (duration > 200) {
         console.warn(
           `[API Performance Warning] Slow query: ${duration}ms for channel ${channelId}`

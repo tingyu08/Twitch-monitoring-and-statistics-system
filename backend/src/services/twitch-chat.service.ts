@@ -235,10 +235,6 @@ export class TwurpleChatService {
     msg: ChatMessage
   ): void {
     const channelName = channel.replace(/^#/, "");
-    logger.info(
-      "Twurple Chat",
-      `Received message in ${channelName} from ${user}: ${text}`
-    );
 
     try {
       // 從 Twurple ChatMessage 轉換為我們的格式
