@@ -161,12 +161,17 @@ export class AuthController {
 
     // 當前端查詢個人資料時，順便確保該使用者的聊天室已被監聽
     // 這是一個保險機制，確保即時互動能被記錄
-    if (req.user.displayName) {
-      import("../../services/twitch-chat.service").then(
-        ({ twurpleChatService }) => {
-          twurpleChatService.joinChannel(req.user.displayName).catch(() => {});
-        }
-      );
+    // 注意：必須使用英文 login (從 channelUrl 提取)，而非中文 displayName
+    if (req.user.channelUrl) {
+      // 例如：https://www.twitch.tv/capookawaii -> capookawaii
+      const channelLogin = req.user.channelUrl.split("/").pop();
+      if (channelLogin) {
+        import("../../services/twitch-chat.service").then(
+          ({ twurpleChatService }) => {
+            twurpleChatService.joinChannel(channelLogin).catch(() => {});
+          }
+        );
+      }
     }
 
     return res.json({ user: req.user });

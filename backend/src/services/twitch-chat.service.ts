@@ -40,7 +40,11 @@ export class TwurpleChatService {
           refreshToken: { not: null },
         },
         include: {
-          streamer: true,
+          streamer: {
+            include: {
+              channels: true, // 需要獲取頻道的英文 channelName
+            },
+          },
         },
       });
 
@@ -124,8 +128,10 @@ export class TwurpleChatService {
       );
 
       // 自動加入自己的頻道（即使未開台也能監聽）
-      if (tokenRecord.streamer?.displayName) {
-        await this.joinChannel(tokenRecord.streamer.displayName);
+      // 注意：必須使用英文 channelName (login)，而非中文 displayName
+      const channelName = tokenRecord.streamer?.channels?.[0]?.channelName;
+      if (channelName) {
+        await this.joinChannel(channelName);
       }
     } catch (error) {
       logger.error("Twurple Chat", "連接 Twitch Chat 失敗", error);
