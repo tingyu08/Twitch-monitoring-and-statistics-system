@@ -11,19 +11,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuthSession();
 
   useEffect(() => {
-    // 只有登入用戶才連線 Socket
+    // 1. 如果沒有使用者，清空狀態並返回
     if (!user) {
-      if (socket) {
-        socket.disconnect();
-        setSocket(null);
-        setConnected(false);
-      }
+      setSocket(null);
+      setConnected(false);
       return;
     }
 
-    // 如果已經有 socket 且已連接，不重複連線
-    if (socket && socket.connected) return;
-
+    // 2. 建立新連線 (使用局部變數，不依賴 state)
     const newSocket = socketService.connect();
 
     if (newSocket) {
@@ -43,6 +38,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       setSocket(newSocket);
 
+      // 3. Cleanup: 當 user 改變或組件卸載時，斷開這個特定的連線
       return () => {
         newSocket.disconnect();
       };
