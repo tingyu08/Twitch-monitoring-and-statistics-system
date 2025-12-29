@@ -158,6 +158,17 @@ export class AuthController {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
+    // 當前端查詢個人資料時，順便確保該使用者的聊天室已被監聽
+    // 這是一個保險機制，確保即時互動能被記錄
+    if (req.user.displayName) {
+      import("../../services/twitch-chat.service").then(
+        ({ twurpleChatService }) => {
+          twurpleChatService.joinChannel(req.user.displayName).catch(() => {});
+        }
+      );
+    }
+
     return res.json({ user: req.user });
   };
 
