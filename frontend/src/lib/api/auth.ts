@@ -37,7 +37,11 @@ export function isViewer(user: UserInfo): user is ViewerInfo {
 
 export async function getMe(): Promise<UserInfo> {
   // 使用 httpClient 以獲得超時保護
-  return httpClient<{ user: UserInfo }>("/api/auth/me").then((res) => res.user);
+  const response = await httpClient<{ user: UserInfo }>("/api/auth/me");
+  if (!response || !response.user) {
+    throw new Error("Invalid response from server");
+  }
+  return response.user;
 }
 
 export async function logout(): Promise<{ message: string }> {
