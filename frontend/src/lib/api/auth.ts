@@ -35,23 +35,9 @@ export function isViewer(user: UserInfo): user is ViewerInfo {
   );
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-
 export async function getMe(): Promise<UserInfo> {
-  // 直接調用後端 API，使用 credentials: include 發送跨域 cookie
-  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-    method: "GET",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-
-  return response.json();
+  // 使用 httpClient 以獲得超時保護
+  return httpClient<{ user: UserInfo }>("/api/auth/me").then((res) => res.user);
 }
 
 export async function logout(): Promise<{ message: string }> {
