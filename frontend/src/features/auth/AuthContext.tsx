@@ -53,9 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setError(null);
 
-    // 清除所有 localStorage 和 sessionStorage
+    // 清除所有 localStorage 和 sessionStorage，但保留 logout_pending
     try {
       localStorage.clear();
+      localStorage.setItem("logout_pending", "true");
       sessionStorage.clear();
     } catch {
       // 忽略錯誤

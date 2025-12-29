@@ -36,6 +36,22 @@ export function isViewer(user: UserInfo): user is ViewerInfo {
 }
 
 export async function getMe(): Promise<UserInfo> {
+  // 如果正在登出過程中，阻止自動登入並嘗試完成登出
+  if (
+    typeof window !== "undefined" &&
+    localStorage.getItem("logout_pending") === "true"
+  ) {
+    // 嘗試再次調用登出以確保後端 Token 失效
+    try {
+      await logout();
+      // 如果登出成功（Token 失效），清除標誌
+      localStorage.removeItem("logout_pending");
+    } catch {
+      // 如果登出失敗，保持標誌，繼續視為未登入
+    }
+    throw new Error("Logging out");
+  }
+
   // 使用 httpClient 以獲得超時保護
   const response = await httpClient<UserInfo | { user: UserInfo }>(
     "/api/auth/me"

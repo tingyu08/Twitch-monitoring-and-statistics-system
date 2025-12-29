@@ -21,6 +21,10 @@ function LandingPageContent() {
   }, [loading, user, router]);
 
   const handleLogin = () => {
+    // 清除登出標誌，允許重新登入
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("logout_pending");
+    }
     // 統一登入：一次授權即可同時存取實況主與觀眾功能
     window.location.href = `${API_BASE_URL}/auth/twitch/login`;
   };
