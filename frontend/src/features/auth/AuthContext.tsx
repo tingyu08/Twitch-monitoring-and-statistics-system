@@ -49,13 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    try {
-      await apiLogout();
-    } catch (err) {
-      console.error("[Logout] API call failed:", err);
-    }
-
-    // 無論 API 成功或失敗，都執行清理
+    // 先執行本地清理，確保 UI 立即響應
     setUser(null);
     setError(null);
 
@@ -63,19 +57,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.clear();
       sessionStorage.clear();
-      console.log("[Logout] Storage cleared");
-    } catch (e) {
-      console.error("[Logout] Failed to clear storage:", e);
+    } catch {
+      // 忽略錯誤
     }
 
-    // 使用完整 URL 跳轉，並延遲確保 Cookie 清除完成
-    console.log("[Logout] Redirecting to home...");
-    setTimeout(() => {
-      // 使用完整 URL 而非相對路徑
-      const homeUrl = window.location.origin + "/";
-      console.log("[Logout] Navigating to:", homeUrl);
-      window.location.assign(homeUrl);
-    }, 500); // 增加延遲到 500ms
+    // 非同步調用後端登出 API（設置 3 秒超時）
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout")), 3000)
+    );
+
+    try {
+      await Promise.race([apiLogout(), timeoutPromise]);
+    } catch {
+      // 即使 API 調用失敗或超時，也繼續跳轉
+    }
+
+    // 跳轉到首頁
+    window.location.href = "/";
   };
 
   useEffect(() => {
