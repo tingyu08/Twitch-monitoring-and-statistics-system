@@ -163,26 +163,18 @@ export class AuthController {
 
   public logout = async (req: Request, res: Response) => {
     try {
-      // 從 cookie 中讀取 token 並解碼
+      // 從 cookie 中讀取 token 並解碼，增加 tokenVersion 使舊 Token 失效
       const token = req.cookies?.auth_token;
-      console.log("[Logout] Token present:", !!token);
       if (token) {
-        // auth_token 是 access token，所以先用 verifyAccessToken
         const decoded = verifyAccessToken(token);
-        console.log("[Logout] Token decoded:", !!decoded, decoded?.viewerId);
         if (decoded?.viewerId) {
-          // 增加 tokenVersion 使舊 Token 失效
-          const result = await prisma.viewer.update({
+          await prisma.viewer.update({
             where: { id: decoded.viewerId },
             data: { tokenVersion: { increment: 1 } },
           });
-          console.log(
-            `[Logout] Incremented tokenVersion for viewer ${decoded.viewerId}, new version: ${result.tokenVersion}`
-          );
         }
       }
-    } catch (error) {
-      console.error("[Logout] Error incrementing tokenVersion:", error);
+    } catch {
       // 即使失敗也繼續清除 Cookie
     }
 

@@ -36,27 +36,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      console.log("[Auth] fetchUser: Starting...");
       setLoading(true);
       setError(null);
       const userData = await getMe();
-      console.log("[Auth] fetchUser: Got user data", userData);
       setUser(userData);
     } catch (err) {
-      console.log("[Auth] fetchUser: Error caught", err);
       setError(err instanceof Error ? err.message : "Failed to fetch user");
       setUser(null);
     } finally {
-      console.log("[Auth] fetchUser: Setting loading to false");
       setLoading(false);
     }
   };
 
   const logout = async () => {
-    console.log("[Logout] Starting logout process...");
     try {
       await apiLogout();
-      console.log("[Logout] API call successful");
     } catch (err) {
       console.error("[Logout] API call failed:", err);
     }

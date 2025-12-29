@@ -60,20 +60,14 @@ export default function ViewerDashboardPage() {
   }, [authLoading, user, router]);
 
   const loadChannels = async (silent = false) => {
-    console.log("[Dashboard] loadChannels: Starting, silent =", silent);
     try {
       if (!silent) setLoading(true);
       const data = await viewerApi.getFollowedChannels();
-      console.log("[Dashboard] loadChannels: Got", data.length, "channels");
       setChannels(data);
-      // 只有當 search query 為空時才更新 filteredChannels，或者我們重新過濾
-      // 為簡單起見，這裡直接更新，下一個 useEffect 會處理過濾
     } catch (err) {
-      console.error("[Dashboard] loadChannels: Error", err);
       if (!silent)
         setError(err instanceof Error ? err.message : "載入頻道失敗");
     } finally {
-      console.log("[Dashboard] loadChannels: Setting loading to false");
       if (!silent) setLoading(false);
     }
   };

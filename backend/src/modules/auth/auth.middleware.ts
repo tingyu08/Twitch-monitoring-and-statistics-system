@@ -27,7 +27,6 @@ export const requireAuth = async (
 
     const decoded = verifyAccessToken(token);
     if (!decoded) {
-      console.log("[Auth] Token verification failed");
       return res.status(401).json({ error: "Invalid token" });
     }
 
@@ -38,18 +37,9 @@ export const requireAuth = async (
         select: { tokenVersion: true },
       });
 
-      console.log(
-        `[Auth] TokenVersion check: token=${decoded.tokenVersion}, db=${viewer?.tokenVersion}`
-      );
-
       if (!viewer || viewer.tokenVersion !== decoded.tokenVersion) {
-        console.log("[Auth] Token version mismatch, user logged out");
         return res.status(401).json({ error: "Token expired" });
       }
-    } else {
-      console.log(
-        `[Auth] Skipping tokenVersion check: viewerId=${decoded.viewerId}, tokenVersion=${decoded.tokenVersion}`
-      );
     }
 
     (req as AuthRequest).user = decoded;
