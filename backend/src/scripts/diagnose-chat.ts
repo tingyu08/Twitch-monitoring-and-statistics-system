@@ -1,7 +1,6 @@
 import { prisma } from "../db/prisma";
 import { twurpleChatService } from "../services/twitch-chat.service";
 import { chatListenerManager } from "../services/chat-listener-manager";
-import { logger } from "../utils/logger";
 import dotenv from "dotenv";
 
 dotenv.config();

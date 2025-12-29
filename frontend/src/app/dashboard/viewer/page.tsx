@@ -51,10 +51,10 @@ export default function ViewerDashboardPage() {
 
     loadChannels();
 
-    // Polling every 5 seconds for real-time updates
+    // Polling every 3 seconds for near-real-time updates
     const interval = setInterval(() => {
       loadChannels(true);
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [authLoading, user, router]);
