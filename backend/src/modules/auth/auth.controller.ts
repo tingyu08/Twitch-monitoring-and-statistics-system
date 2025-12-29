@@ -165,16 +165,19 @@ export class AuthController {
     try {
       // 從 cookie 中讀取 token 並解碼
       const token = req.cookies?.auth_token;
+      console.log("[Logout] Token present:", !!token);
       if (token) {
-        const decoded = verifyRefreshToken(token) || verifyAccessToken(token);
+        // auth_token 是 access token，所以先用 verifyAccessToken
+        const decoded = verifyAccessToken(token);
+        console.log("[Logout] Token decoded:", !!decoded, decoded?.viewerId);
         if (decoded?.viewerId) {
           // 增加 tokenVersion 使舊 Token 失效
-          await prisma.viewer.update({
+          const result = await prisma.viewer.update({
             where: { id: decoded.viewerId },
             data: { tokenVersion: { increment: 1 } },
           });
           console.log(
-            `[Logout] Incremented tokenVersion for viewer ${decoded.viewerId}`
+            `[Logout] Incremented tokenVersion for viewer ${decoded.viewerId}, new version: ${result.tokenVersion}`
           );
         }
       }
