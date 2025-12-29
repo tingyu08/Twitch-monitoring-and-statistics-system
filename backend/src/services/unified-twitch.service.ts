@@ -14,6 +14,7 @@ import { twurpleHelixService } from "./twitch-helix.service";
 import { decApiService } from "./decapi.service";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { autoJoinLiveChannelsJob } from "../jobs/auto-join-live-channels.job";
+import { watchTimeIncrementJob } from "../jobs/watch-time-increment.job";
 import { logger } from "../utils/logger";
 
 // ========== 類型定義 ==========
@@ -69,6 +70,7 @@ export class UnifiedTwitchService {
 
     // 啟動排程任務
     autoJoinLiveChannelsJob.start();
+    watchTimeIncrementJob.start();
 
     logger.info("Twitch Service", "服務初始化完成 (Twurple)");
   }
