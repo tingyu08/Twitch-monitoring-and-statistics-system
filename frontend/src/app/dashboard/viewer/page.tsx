@@ -77,12 +77,6 @@ export default function ViewerDashboardPage() {
       return () => {
         socket.off("stats-update", handleUpdate);
       };
-    } else {
-      // 如果沒有 WebSocket，使用 3 秒輪詢作為備援
-      const interval = setInterval(() => {
-        loadChannels(true);
-      }, 3000);
-      return () => clearInterval(interval);
     }
   }, [authLoading, user, router, socket, socketConnected]);
 
