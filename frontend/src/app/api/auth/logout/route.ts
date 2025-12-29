@@ -9,17 +9,32 @@ const BACKEND_URL =
 
 export async function POST(request: NextRequest) {
   try {
-    // 從請求中取得 Cookie
-    const cookies = request.cookies.toString();
+    // 從請求中取得 Cookie 並正確格式化
+    const authToken = request.cookies.get("auth_token")?.value;
+    const refreshToken = request.cookies.get("refresh_token")?.value;
+
+    // 構建 Cookie 字串
+    const cookieParts: string[] = [];
+    if (authToken) cookieParts.push(`auth_token=${authToken}`);
+    if (refreshToken) cookieParts.push(`refresh_token=${refreshToken}`);
+    const cookieString = cookieParts.join("; ");
+
+    console.log("[Logout Proxy] auth_token present:", !!authToken);
+    console.log(
+      "[Logout Proxy] Forwarding to backend with cookies:",
+      !!cookieString
+    );
 
     // 轉發請求到後端，並帶上 Cookie
     const response = await fetch(`${BACKEND_URL}/api/auth/logout`, {
       method: "POST",
       headers: {
-        Cookie: cookies, // 手動轉發 Cookie
+        Cookie: cookieString,
         "Content-Type": "application/json",
       },
     });
+
+    console.log("[Logout Proxy] Backend response status:", response.status);
 
     let data = { message: "Logged out successfully" };
     try {
