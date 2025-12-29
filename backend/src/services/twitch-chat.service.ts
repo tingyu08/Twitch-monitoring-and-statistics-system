@@ -122,6 +122,11 @@ export class TwurpleChatService {
         "Twurple Chat",
         `已連接至 Twitch Chat: ${tokenRecord.streamer?.displayName} (自動刷新)`
       );
+
+      // 自動加入自己的頻道（即使未開台也能監聽）
+      if (tokenRecord.streamer?.displayName) {
+        await this.joinChannel(tokenRecord.streamer.displayName);
+      }
     } catch (error) {
       logger.error("Twurple Chat", "連接 Twitch Chat 失敗", error);
       this.isConnected = false;
@@ -230,6 +235,10 @@ export class TwurpleChatService {
     msg: ChatMessage
   ): void {
     const channelName = channel.replace(/^#/, "");
+    logger.info(
+      "Twurple Chat",
+      `Received message in ${channelName} from ${user}: ${text}`
+    );
 
     try {
       // 從 Twurple ChatMessage 轉換為我們的格式
