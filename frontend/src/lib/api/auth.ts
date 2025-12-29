@@ -55,12 +55,10 @@ export async function getMe(): Promise<UserInfo> {
 }
 
 export async function logout(): Promise<{ message: string }> {
-  // 直接調用後端 API，確保 Cookie 被正確發送
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-
-  const response = await fetch(`${API_BASE_URL}/api/auth/logout`, {
+  // 調用 Next.js 代理路由，確保 Cookie 被正確清除
+  // 不再直接調用後端，因為跨域 Cookie 清除在某些瀏覽器環境下不穩定
+  const response = await fetch("/api/auth/logout", {
     method: "POST",
-    credentials: "include", // 這會發送跨域 Cookie
     headers: {
       "Content-Type": "application/json",
     },
