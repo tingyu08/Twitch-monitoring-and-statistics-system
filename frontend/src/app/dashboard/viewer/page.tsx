@@ -8,7 +8,7 @@ import { viewerApi, type FollowedChannel } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
 
 // 每頁顯示的頻道數量
-const CHANNELS_PER_PAGE = 25;
+const CHANNELS_PER_PAGE = 24;
 
 // 計算並格式化開台時長
 function formatStreamDuration(startedAt: string): string {
