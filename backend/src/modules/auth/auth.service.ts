@@ -177,6 +177,17 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
     logger.error("Auth", "Follow sync failed after login", err)
   );
 
+  // 非同步觸發聊天室服務重新初始化（不阻塞登入流程）
+  import("../../services/twitch-chat.service").then(
+    ({ twurpleChatService }) => {
+      twurpleChatService
+        .initialize()
+        .catch((err: unknown) =>
+          logger.error("Auth", "Chat service reinit failed after login", err)
+        );
+    }
+  );
+
   return { streamer, accessToken, refreshToken };
 }
 
