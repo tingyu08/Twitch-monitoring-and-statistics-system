@@ -221,7 +221,7 @@ export class StreamStatusJob {
   }
 
   /**
-   * 建立新的 StreamSession
+   * 建立新的 StreamSession（使用 upsert 防止重複）
    */
   private async createStreamSession(
     channel: { id: string; channelName: string },
@@ -233,8 +233,12 @@ export class StreamStatusJob {
       startedAt: Date;
     }
   ): Promise<void> {
-    await prisma.streamSession.create({
-      data: {
+    // 使用 upsert 防止 UNIQUE constraint 錯誤
+    await prisma.streamSession.upsert({
+      where: {
+        twitchStreamId: stream.id,
+      },
+      create: {
         channelId: channel.id,
         twitchStreamId: stream.id,
         startedAt: stream.startedAt,
@@ -242,6 +246,15 @@ export class StreamStatusJob {
         category: stream.gameName,
         avgViewers: stream.viewerCount,
         peakViewers: stream.viewerCount,
+      },
+      update: {
+        // 如果已存在，更新資訊
+        title: stream.title,
+        category: stream.gameName,
+        peakViewers: {
+          // 只更新峰值如果當前更高
+          set: stream.viewerCount,
+        },
       },
     });
 
