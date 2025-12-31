@@ -169,11 +169,19 @@ export class StreamStatusJob {
    * Story 3.6: 現在包含 platform 與 external 頻道，只要 isMonitored=true
    */
   private async getActiveChannels() {
+    // 診斷：檢查總頻道數與監控頻道數
+    const totalChannels = await prisma.channel.count();
+    const monitoredChannels = await prisma.channel.count({
+      where: { isMonitored: true },
+    });
+    console.log(
+      `📊 頻道統計: 總共 ${totalChannels} 個頻道, 其中 ${monitoredChannels} 個正在監控`
+    );
+
     return prisma.channel.findMany({
       where: {
         isMonitored: true,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any,
+      },
       select: {
         id: true,
         twitchChannelId: true,
