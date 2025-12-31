@@ -9,8 +9,8 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 
-// 每 6 分鐘執行一次
-const WATCH_TIME_INCREMENT_CRON = "*/6 * * * *";
+// 每 6 分鐘執行，在第 4 分鐘觸發（錯開其他 Jobs）
+const WATCH_TIME_INCREMENT_CRON = "0 4-59/6 * * * *";
 
 // 每次增加的秒數：0.1 小時 = 6 分鐘 = 360 秒
 const INCREMENT_SECONDS = 360;

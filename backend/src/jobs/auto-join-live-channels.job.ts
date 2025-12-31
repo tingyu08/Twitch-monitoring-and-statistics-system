@@ -4,11 +4,15 @@ import { twurpleHelixService } from "../services/twitch-helix.service";
 import { chatListenerManager } from "../services/chat-listener-manager";
 import { logger } from "../utils/logger";
 
-// 每 5 分鐘執行一次
-const CHECK_LIVE_CRON = process.env.CHECK_LIVE_CRON || "*/5 * * * *";
+// 每 5 分鐘執行，在第 2 分鐘觸發（錯開 Stream Status Job）
+const CHECK_LIVE_CRON = process.env.CHECK_LIVE_CRON || "0 2-59/5 * * * *";
+
+// 超時時間（毫秒）- 2 分鐘
+const JOB_TIMEOUT_MS = 2 * 60 * 1000;
 
 export class AutoJoinLiveChannelsJob {
   private isRunning = false;
+  private timeoutHandle: NodeJS.Timeout | null = null;
 
   start(): void {
     logger.info(

@@ -9,11 +9,14 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 
-// 每 5 分鐘執行
-const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "*/5 * * * *";
+// 每 5 分鐘執行（第 0 秒觸發）
+const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
 
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
+
+// 超時時間（毫秒）- 3 分鐘
+const JOB_TIMEOUT_MS = 3 * 60 * 1000;
 
 export interface StreamStatusResult {
   checked: number;
@@ -25,6 +28,7 @@ export interface StreamStatusResult {
 
 export class StreamStatusJob {
   private isRunning = false;
+  private timeoutHandle: NodeJS.Timeout | null = null;
 
   /**
    * 啟動 Cron Job
@@ -38,7 +42,7 @@ export class StreamStatusJob {
   }
 
   /**
-   * 執行開播狀態檢查
+   * 執行開播狀態檢查（含超時機制）
    */
   async execute(): Promise<StreamStatusResult> {
     if (this.isRunning) {
@@ -53,7 +57,15 @@ export class StreamStatusJob {
     }
 
     this.isRunning = true;
+    const startTime = Date.now();
     console.log("📡 開始檢查開播狀態...");
+
+    // 設定超時保護
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      this.timeoutHandle = setTimeout(() => {
+        reject(new Error(`Job 超時 (>${JOB_TIMEOUT_MS / 1000}秒)`));
+      }, JOB_TIMEOUT_MS);
+    });
 
     const result: StreamStatusResult = {
       checked: 0,
@@ -64,58 +76,12 @@ export class StreamStatusJob {
     };
 
     try {
-      // 1. 獲取所有需要監控的頻道
-      const channels = await this.getActiveChannels();
-      result.checked = channels.length;
+      // 使用 Promise.race 實現超時
+      await Promise.race([this.doExecute(result), timeoutPromise]);
 
-      if (channels.length === 0) {
-        console.log("ℹ️ 沒有需要監控的頻道");
-        return result;
-      }
-
-      // 2. 批次查詢開播狀態
-      const twitchChannelIds = channels.map((c) => c.twitchChannelId);
-      const liveStreams = await this.fetchStreamStatuses(twitchChannelIds);
-
-      // 建立 lookup map
-      const liveStreamMap = new Map(liveStreams.map((s) => [s.userId, s]));
-
-      // 3. 處理每個頻道的狀態變化
-      for (const channel of channels) {
-        const stream = liveStreamMap.get(channel.twitchChannelId);
-        const isLive = !!stream;
-
-        // 檢查是否有進行中的 session
-        const activeSession = await prisma.streamSession.findFirst({
-          where: {
-            channelId: channel.id,
-            endedAt: null,
-          },
-          orderBy: { startedAt: "desc" },
-        });
-
-        if (isLive && stream && !activeSession) {
-          // 新開播：建立 session
-          await this.createStreamSession(channel, stream);
-          result.newSessions++;
-          result.online++;
-        } else if (isLive && stream && activeSession) {
-          // 持續開播：更新 session 資訊
-          await this.updateStreamSession(activeSession.id, stream);
-          result.online++;
-        } else if (!isLive && activeSession) {
-          // 已下播：結束 session
-          await this.endStreamSession(activeSession.id);
-          result.endedSessions++;
-          result.offline++;
-        } else {
-          // 未開播且無進行中 session
-          result.offline++;
-        }
-      }
-
+      const duration = Date.now() - startTime;
       console.log(
-        `✅ Stream Status Job 完成: ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
+        `✅ Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
       );
 
       return result;
@@ -123,7 +89,78 @@ export class StreamStatusJob {
       console.error("❌ Stream Status Job 執行失敗:", error);
       throw error;
     } finally {
+      if (this.timeoutHandle) {
+        clearTimeout(this.timeoutHandle);
+        this.timeoutHandle = null;
+      }
       this.isRunning = false;
+    }
+  }
+
+  /**
+   * 實際執行邏輯（優化版：批次查詢避免 N+1）
+   */
+  private async doExecute(result: StreamStatusResult): Promise<void> {
+    // 1. 獲取所有需要監控的頻道
+    const channels = await this.getActiveChannels();
+    result.checked = channels.length;
+
+    if (channels.length === 0) {
+      console.log("ℹ️ 沒有需要監控的頻道");
+      return;
+    }
+
+    // 2. 批次查詢開播狀態
+    const twitchChannelIds = channels.map((c) => c.twitchChannelId);
+    const liveStreams = await this.fetchStreamStatuses(twitchChannelIds);
+    const liveStreamMap = new Map(liveStreams.map((s) => [s.userId, s]));
+
+    // 診斷日誌：顯示監控頻道數和直播中頻道
+    console.log(
+      `📊 正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`
+    );
+    if (liveStreams.length > 0) {
+      console.log(
+        `🔴 直播中: ${liveStreams.map((s) => s.userName).join(", ")}`
+      );
+    }
+
+    // 3. 【優化】一次查詢所有 active sessions，避免 N+1
+    const channelIds = channels.map((c) => c.id);
+    const activeSessions = await prisma.streamSession.findMany({
+      where: {
+        channelId: { in: channelIds },
+        endedAt: null,
+      },
+    });
+    const activeSessionMap = new Map(
+      activeSessions.map((s) => [s.channelId, s])
+    );
+
+    // 4. 處理每個頻道的狀態變化
+    for (const channel of channels) {
+      const stream = liveStreamMap.get(channel.twitchChannelId);
+      const isLive = !!stream;
+      const activeSession = activeSessionMap.get(channel.id);
+
+      if (isLive && stream && !activeSession) {
+        // 新開播：建立 session
+        await this.createStreamSession(channel, stream);
+        result.newSessions++;
+        result.online++;
+      } else if (isLive && stream && activeSession) {
+        // 持續開播：更新 session 資訊
+        await this.updateStreamSession(activeSession.id, stream);
+        result.online++;
+      } else if (!isLive && activeSession) {
+        // 已下播：結束 session
+        await this.endStreamSession(activeSession.id);
+        result.endedSessions++;
+        result.offline++;
+      } else {
+        // 未開播且無進行中 session
+        result.offline++;
+      }
     }
   }
 
