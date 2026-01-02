@@ -150,7 +150,7 @@ export default function StreamerDashboard() {
       <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 md:py-8">
         {/* User Header Section */}
         <section
-          className="mb-6 sm:mb-8 md:mb-10 bg-white/10 dark:bg-dark-card backdrop-blur-sm rounded-xl sm:rounded-2xl border border-white/10 dark:border-dark-border p-4 sm:p-6"
+          className="mb-6 sm:mb-8 md:mb-10 theme-header-card p-4 sm:p-6"
           data-testid="dashboard-header"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
@@ -168,13 +168,13 @@ export default function StreamerDashboard() {
               )}
               <div>
                 <h1
-                  className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400"
+                  className="text-xl sm:text-2xl md:text-3xl font-bold theme-text-primary"
                   data-testid="dashboard-title"
                 >
                   實況主儀表板
                 </h1>
                 <p
-                  className="text-sm sm:text-base text-purple-300/70 mt-0.5 sm:mt-1"
+                  className="text-sm sm:text-base theme-text-secondary mt-0.5 sm:mt-1"
                   data-testid="user-greeting"
                 >
                   歡迎回來，{user?.displayName || "實況主"}
@@ -213,10 +213,10 @@ export default function StreamerDashboard() {
         {/* Story 1.3: 時間與頻率圖表 */}
         {uiPrefs.showTimeSeriesChart && (
           <div className="mb-8" data-testid="timeseries-section">
-            <div className="bg-white/10 backdrop-blur-sm p-4 sm:p-6 rounded-2xl border border-white/10">
+            <div className="theme-card p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <h2
-                  className="text-lg sm:text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400"
+                  className="text-lg sm:text-xl font-semibold theme-text-primary"
                   data-testid="timeseries-title"
                 >
                   開台時間分析
@@ -229,7 +229,7 @@ export default function StreamerDashboard() {
                     onChange={(e) =>
                       setChartRange(e.target.value as "7d" | "30d" | "90d")
                     }
-                    className="px-3 py-1.5 bg-white/10 border border-white/10 rounded-lg text-sm text-white"
+                    className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
                     data-testid="chart-range-select"
                   >
                     <option value="7d">最近 7 天</option>
@@ -243,7 +243,7 @@ export default function StreamerDashboard() {
                     onChange={(e) =>
                       setGranularity(e.target.value as "day" | "week")
                     }
-                    className="px-3 py-1.5 bg-white/10 border border-white/10 rounded-lg text-sm text-white"
+                    className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
                     data-testid="chart-granularity-select"
                   >
                     <option value="day">依日</option>
@@ -287,9 +287,9 @@ export default function StreamerDashboard() {
         {/* Story 1.3: 熱力圖 */}
         {uiPrefs.showHeatmapChart && (
           <div className="mb-8" data-testid="heatmap-section">
-            <div className="bg-white/10 backdrop-blur-sm p-4 sm:p-6 rounded-2xl border border-white/10">
+            <div className="theme-card p-4 sm:p-6">
               <h2
-                className="text-lg sm:text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-6"
+                className="text-lg sm:text-xl font-semibold theme-text-primary mb-6"
                 data-testid="heatmap-title"
               >
                 開台時段分布
@@ -326,9 +326,9 @@ export default function StreamerDashboard() {
         {/* Story 1.4: 訂閱趨勢 */}
         {uiPrefs.showSubscriptionChart && (
           <div className="mb-8" data-testid="subscription-section">
-            <div className="bg-white/10 backdrop-blur-sm p-4 sm:p-6 rounded-2xl border border-white/10">
+            <div className="theme-card p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                <h2 className="text-lg sm:text-xl font-semibold theme-text-primary">
                   訂閱數趨勢
                 </h2>
                 <select
@@ -338,7 +338,7 @@ export default function StreamerDashboard() {
                   onChange={(e) =>
                     setSubsChartRange(e.target.value as ChartRange)
                   }
-                  className="px-3 py-1.5 bg-white/10 border border-white/10 rounded-lg text-sm text-white"
+                  className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
                 >
                   <option value="7d">最近 7 天</option>
                   <option value="30d">最近 30 天</option>
@@ -389,34 +389,34 @@ export default function StreamerDashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* 基本資料卡片 */}
-          <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
-            <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+          <div className="theme-card p-6">
+            <h2 className="text-xl font-semibold mb-4 theme-text-primary">
               帳戶資訊
             </h2>
             <div className="space-y-3">
-              <div className="flex justify-between border-b border-white/10 pb-2">
-                <span className="text-purple-300/70">顯示名稱</span>
-                <span className="text-white">{user?.displayName}</span>
+              <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
+                <span className="theme-text-secondary">顯示名稱</span>
+                <span className="theme-text-primary">{user?.displayName}</span>
               </div>
-              <div className="flex justify-between border-b border-white/10 pb-2">
-                <span className="text-purple-300/70">Twitch ID</span>
-                <span className="text-xs font-mono text-purple-300/50">
+              <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
+                <span className="theme-text-secondary">Twitch ID</span>
+                <span className="text-xs font-mono theme-text-muted">
                   {user?.twitchUserId}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-white/10 pb-2">
-                <span className="text-purple-300/70">系統 ID</span>
-                <span className="text-xs font-mono text-purple-300/50">
+              <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
+                <span className="theme-text-secondary">系統 ID</span>
+                <span className="text-xs font-mono theme-text-muted">
                   {user?.streamerId}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-white/10 pb-2">
-                <span className="text-purple-300/70">頻道連結</span>
+              <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
+                <span className="theme-text-secondary">頻道連結</span>
                 <a
                   href={user?.channelUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-purple-400 hover:text-purple-300 text-sm truncate max-w-[200px]"
+                  className="text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 text-sm truncate max-w-[200px]"
                 >
                   {user?.channelUrl}
                 </a>
@@ -425,15 +425,15 @@ export default function StreamerDashboard() {
           </div>
 
           {/* 功能區塊 */}
-          <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/10">
-            <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+          <div className="theme-card p-6">
+            <h2 className="text-xl font-semibold mb-4 theme-text-primary">
               快速功能
             </h2>
             <div className="space-y-3">
               <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2 px-4 rounded-xl transition duration-200 font-medium">
                 管理實況設定
               </button>
-              <button className="w-full bg-white/10 hover:bg-white/20 text-white py-2 px-4 rounded-xl transition duration-200 border border-white/10">
+              <button className="w-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 theme-text-primary py-2 px-4 rounded-xl transition duration-200 border border-purple-200 dark:border-white/10">
                 查看收益分析
               </button>
             </div>

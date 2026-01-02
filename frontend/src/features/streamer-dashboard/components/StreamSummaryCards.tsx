@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { getStreamerSummary, type StreamerSummary } from '@/lib/api/streamer';
-import { StatCard } from './StatCard';
-import { DateRangePicker } from './DateRangePicker';
-import { apiLogger } from '@/lib/logger';
+import { useState, useEffect } from "react";
+import { getStreamerSummary, type StreamerSummary } from "@/lib/api/streamer";
+import { StatCard } from "./StatCard";
+import { DateRangePicker } from "./DateRangePicker";
+import { apiLogger } from "@/lib/logger";
 
-type DateRange = '7d' | '30d' | '90d';
+type DateRange = "7d" | "30d" | "90d";
 
 export function StreamSummaryCards() {
-  const [range, setRange] = useState<DateRange>('30d');
+  const [range, setRange] = useState<DateRange>("30d");
   const [summary, setSummary] = useState<StreamerSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +22,8 @@ export function StreamSummaryCards() {
         const data = await getStreamerSummary(range);
         setSummary(data);
       } catch (err) {
-        apiLogger.error('Failed to fetch summary:', err);
-        setError(err instanceof Error ? err.message : '載入統計資料失敗');
+        apiLogger.error("Failed to fetch summary:", err);
+        setError(err instanceof Error ? err.message : "載入統計資料失敗");
       } finally {
         setLoading(false);
       }
@@ -34,7 +34,7 @@ export function StreamSummaryCards() {
 
   if (error) {
     return (
-      <div 
+      <div
         className="bg-red-900/20 border border-red-700 rounded-lg p-6"
         role="alert"
         aria-live="assertive"
@@ -47,14 +47,19 @@ export function StreamSummaryCards() {
   return (
     <section className="space-y-6" aria-label="開台統計總覽">
       {/* 時間範圍選擇器 */}
-      <div className="flex justify-between items-center">
-        <h2 id="stats-heading" className="text-2xl font-bold text-purple-300">開台統計總覽</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2
+          id="stats-heading"
+          className="text-2xl font-bold theme-text-primary"
+        >
+          開台統計總覽
+        </h2>
         <DateRangePicker selectedRange={range} onRangeChange={setRange} />
       </div>
 
       {/* Summary Cards */}
       {loading ? (
-        <div 
+        <div
           className="grid grid-cols-1 md:grid-cols-3 gap-6"
           role="status"
           aria-busy="true"
@@ -63,7 +68,7 @@ export function StreamSummaryCards() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 animate-pulse"
+              className="theme-card p-6 animate-pulse"
               aria-hidden="true"
             >
               <div className="h-4 bg-gray-700 rounded w-24 mb-4"></div>
@@ -78,9 +83,11 @@ export function StreamSummaryCards() {
         summary.totalStreamSessions === 0 &&
         summary.totalStreamHours === 0 &&
         summary.avgStreamDurationMinutes === 0 ? (
-          <div className="bg-gray-800 p-12 rounded-lg shadow-lg border border-gray-700 text-center">
-            <p className="text-gray-400 text-lg">暫無統計資料</p>
-            <p className="text-gray-500 text-sm mt-2">開始直播後即可查看統計數據</p>
+          <div className="theme-card p-12 text-center">
+            <p className="theme-text-secondary text-lg">暫無統計資料</p>
+            <p className="theme-text-muted text-sm mt-2">
+              開始直播後即可查看統計數據
+            </p>
             {summary.isEstimated && (
               <p className="text-yellow-500 text-xs mt-4 px-3 py-1 bg-yellow-900/20 border border-yellow-700 rounded inline-block">
                 ⚠️ 資料可能尚未同步完成
@@ -93,14 +100,18 @@ export function StreamSummaryCards() {
               title="總開台時數"
               value={summary.totalStreamHours}
               unit="小時"
-              subtitle={`在過去 ${range === '7d' ? '7' : range === '30d' ? '30' : '90'} 天內`}
+              subtitle={`在過去 ${
+                range === "7d" ? "7" : range === "30d" ? "30" : "90"
+              } 天內`}
               isEstimated={summary.isEstimated}
             />
             <StatCard
               title="總開台場數"
               value={summary.totalStreamSessions}
               unit="場"
-              subtitle={`在過去 ${range === '7d' ? '7' : range === '30d' ? '30' : '90'} 天內`}
+              subtitle={`在過去 ${
+                range === "7d" ? "7" : range === "30d" ? "30" : "90"
+              } 天內`}
               isEstimated={summary.isEstimated}
             />
             <StatCard
@@ -113,9 +124,11 @@ export function StreamSummaryCards() {
           </div>
         )
       ) : (
-        <div className="bg-gray-800 p-12 rounded-lg shadow-lg border border-gray-700 text-center">
-          <p className="text-gray-400 text-lg">暫無統計資料</p>
-          <p className="text-gray-500 text-sm mt-2">開始直播後即可查看統計數據</p>
+        <div className="theme-card p-12 text-center">
+          <p className="theme-text-secondary text-lg">暫無統計資料</p>
+          <p className="theme-text-muted text-sm mt-2">
+            開始直播後即可查看統計數據
+          </p>
         </div>
       )}
     </section>

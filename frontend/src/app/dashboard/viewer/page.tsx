@@ -180,7 +180,7 @@ export default function ViewerDashboardPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 md:py-8">
         {/* User Header - 響應式設計 */}
-        <section className="mb-6 sm:mb-8 md:mb-10 bg-white/10 dark:bg-dark-card backdrop-blur-sm rounded-xl sm:rounded-2xl border border-white/10 dark:border-dark-border p-4 sm:p-6">
+        <section className="mb-6 sm:mb-8 md:mb-10 theme-header-card p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
             <div className="flex items-center gap-3 sm:gap-5">
               {viewerUser?.avatarUrl && (
@@ -194,10 +194,10 @@ export default function ViewerDashboardPage() {
                 />
               )}
               <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold theme-text-primary">
                   歡迎回來，{viewerUser?.displayName || "觀眾"}
                 </h1>
-                <p className="text-sm sm:text-base text-purple-300/70 mt-0.5 sm:mt-1">
+                <p className="text-sm sm:text-base theme-text-secondary mt-0.5 sm:mt-1">
                   追蹤你的觀看數據與互動紀錄
                 </p>
               </div>
@@ -207,7 +207,7 @@ export default function ViewerDashboardPage() {
               <button
                 type="button"
                 onClick={() => router.push("/dashboard/viewer/settings")}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-purple-300 transition-colors border border-white/10 flex items-center gap-2"
+                className="px-4 py-2 rounded-lg bg-white/50 hover:bg-white/80 dark:bg-white/10 dark:hover:bg-white/20 text-sm theme-text-secondary transition-colors border border-purple-200 dark:border-white/10 flex items-center gap-2"
               >
                 <svg
                   className="w-4 h-4"
@@ -233,7 +233,7 @@ export default function ViewerDashboardPage() {
               <button
                 type="button"
                 onClick={logout}
-                className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-sm text-red-300 transition-colors border border-red-500/20"
+                className="px-4 py-2 rounded-lg bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30 text-sm text-red-700 dark:text-red-300 transition-colors border border-red-200 dark:border-red-500/20"
               >
                 登出
               </button>
@@ -244,10 +244,10 @@ export default function ViewerDashboardPage() {
         {/* 搜尋與標題 */}
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+            <h2 className="text-xl font-semibold theme-text-primary">
               已追蹤的頻道
             </h2>
-            <span className="text-sm text-purple-300/60">
+            <span className="text-sm theme-text-muted">
               ({filteredChannels.length} 個頻道
               {totalPages > 1 ? ` · 第 ${currentPage}/${totalPages} 頁` : ""})
             </span>
@@ -260,10 +260,10 @@ export default function ViewerDashboardPage() {
               placeholder="搜尋頻道..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-64 px-4 py-2 bg-white/10 border border-white/10 rounded-xl text-white placeholder-purple-300/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all backdrop-blur-sm"
+              className="w-full sm:w-64 px-4 py-2 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-xl theme-text-primary placeholder-purple-400 dark:placeholder-purple-300/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all backdrop-blur-sm"
             />
             <svg
-              className="absolute right-3 top-2.5 h-5 w-5 text-purple-300/50"
+              className="absolute right-3 top-2.5 h-5 w-5 text-purple-400 dark:text-purple-300/50"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -286,8 +286,8 @@ export default function ViewerDashboardPage() {
 
         {/* 頻道列表 */}
         {filteredChannels.length === 0 ? (
-          <div className="text-center py-20 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 border-dashed">
-            <p className="text-purple-300/70 mb-4 text-lg">
+          <div className="text-center py-20 bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 border-dashed">
+            <p className="text-purple-800/80 dark:text-purple-300/70 mb-4 text-lg">
               {searchQuery ? "找不到符合的頻道" : "您尚未追蹤任何頻道"}
             </p>
             {!searchQuery && (
@@ -307,7 +307,7 @@ export default function ViewerDashboardPage() {
                   key={channel.id}
                   type="button"
                   onClick={() => handleChannelClick(channel.id)}
-                  className="group bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/20 hover:-translate-y-1 hover:bg-white/15"
+                  className="group bg-white/40 dark:bg-white/10 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/10 hover:-translate-y-1 hover:bg-white/50 dark:hover:bg-white/15"
                 >
                   <div className="flex items-center gap-4 mb-4">
                     <div className="relative">
@@ -324,10 +324,10 @@ export default function ViewerDashboardPage() {
                       )}
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg text-white group-hover:text-purple-300 transition-colors">
+                      <h3 className="font-bold text-lg text-purple-900 dark:text-white group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors">
                         {channel.displayName}
                       </h3>
-                      <p className="text-sm text-purple-300/50 font-mono">
+                      <p className="text-sm text-purple-800/60 dark:text-purple-300/50 font-mono">
                         @{channel.channelName}
                       </p>
                       {channel.isLive && channel.category && (
@@ -341,7 +341,7 @@ export default function ViewerDashboardPage() {
                             LIVE
                           </span>
                           {channel.viewerCount !== null && (
-                            <span className="text-[10px] text-purple-300/70">
+                            <span className="text-[10px] text-purple-800/70 dark:text-purple-300/70">
                               {channel.viewerCount.toLocaleString()} 觀眾
                             </span>
                           )}
@@ -363,25 +363,31 @@ export default function ViewerDashboardPage() {
                   )}
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-3 border border-blue-500/20">
-                      <p className="text-blue-300/70 text-xs mb-1">觀看時數</p>
-                      <p className="font-semibold text-blue-400 text-lg">
+                    <div className="bg-blue-600/5 dark:bg-blue-500/10 rounded-xl p-3 border border-blue-200 dark:border-blue-500/20">
+                      <p className="text-blue-800 dark:text-blue-300/70 text-xs mb-1">
+                        觀看時數
+                      </p>
+                      <p className="font-semibold text-blue-900 dark:text-blue-400 text-lg">
                         {(channel.totalWatchMinutes / 60).toFixed(1)}{" "}
-                        <span className="text-xs text-blue-400/60">h</span>
+                        <span className="text-xs text-blue-700/60 dark:text-blue-400/60">
+                          h
+                        </span>
                       </p>
                     </div>
-                    <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-xl p-3 border border-green-500/20">
-                      <p className="text-green-300/70 text-xs mb-1">留言數</p>
-                      <p className="font-semibold text-green-400 text-lg">
+                    <div className="bg-green-600/5 dark:bg-green-500/10 rounded-xl p-3 border border-green-200 dark:border-green-500/20">
+                      <p className="text-green-800 dark:text-green-300/70 text-xs mb-1">
+                        留言數
+                      </p>
+                      <p className="font-semibold text-green-900 dark:text-green-400 text-lg">
                         {channel.messageCount}
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-white/10 text-xs text-purple-300/50 space-y-1">
+                  <div className="mt-4 pt-3 border-t border-purple-200 dark:border-white/10 text-xs text-purple-800/60 dark:text-purple-300/50 space-y-1">
                     <div className="flex justify-between items-center">
                       <span>最後觀看</span>
-                      <span className="text-purple-300 font-medium">
+                      <span className="text-purple-900 dark:text-purple-300 font-medium">
                         {channel.lastWatched
                           ? channel.lastWatched.split("T")[0]
                           : "N/A"}
@@ -390,7 +396,7 @@ export default function ViewerDashboardPage() {
                     {channel.followedAt && (
                       <div className="flex justify-between items-center">
                         <span>追蹤於</span>
-                        <span className="text-purple-300 font-medium">
+                        <span className="text-purple-900 dark:text-purple-300 font-medium">
                           {channel.followedAt.split("T")[0]}
                         </span>
                       </div>

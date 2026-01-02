@@ -67,8 +67,30 @@
 /* ========== 通用樣式類別 ========== */
 @layer components {
   /* 卡片樣式 */
+  /* 卡片樣式 */
+  /* 卡片樣式 */
   .theme-card {
-    @apply bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg;
+    /* 淺色：背景更透(40%)，邊框加深(purple-300) */
+    @apply bg-white/40 dark:bg-white/10 backdrop-blur-md border border-purple-300 dark:border-white/10 rounded-2xl shadow-sm hover:border-purple-400 transition-colors;
+  }
+
+  /* 頂部歡迎卡片樣式 (更強的玻璃感) */
+  .theme-header-card {
+    /* 淺色：背景半透(60%)，邊框加深(purple-300) */
+    @apply bg-white/60 dark:bg-white/5 backdrop-blur-md border border-purple-300 dark:border-white/10 rounded-2xl shadow-sm;
+  }
+
+  /* 文字顏色工具 */
+  .theme-text-primary {
+    @apply text-purple-900 dark:text-white font-bold;
+  }
+
+  .theme-text-secondary {
+    @apply text-purple-800 dark:text-purple-300/80;
+  }
+
+  .theme-text-muted {
+    @apply text-purple-700/60 dark:text-purple-300/50;
   }
 
   /* 按鈕樣式 */

@@ -1,4 +1,4 @@
-type DateRange = '7d' | '30d' | '90d';
+type DateRange = "7d" | "30d" | "90d";
 
 interface DateRangePickerProps {
   selectedRange: DateRange;
@@ -6,30 +6,31 @@ interface DateRangePickerProps {
 }
 
 const rangeOptions: { value: DateRange; label: string }[] = [
-  { value: '7d', label: '最近 7 天' },
-  { value: '30d', label: '最近 30 天' },
-  { value: '90d', label: '最近 90 天' },
+  { value: "7d", label: "最近 7 天" },
+  { value: "30d", label: "最近 30 天" },
+  { value: "90d", label: "最近 90 天" },
 ];
 
-export function DateRangePicker({ selectedRange, onRangeChange }: DateRangePickerProps) {
+export function DateRangePicker({
+  selectedRange,
+  onRangeChange,
+}: DateRangePickerProps) {
   return (
-    <div 
-      className="flex gap-2" 
-      role="group" 
-      aria-label="選擇時間範圍"
-    >
+    <div className="flex gap-2" role="group" aria-label="選擇時間範圍">
       {rangeOptions.map((option) => (
         <button
           key={option.value}
           onClick={() => onRangeChange(option.value)}
           aria-pressed={selectedRange === option.value}
-          aria-label={`${option.label}${selectedRange === option.value ? '，目前已選擇' : ''}`}
+          aria-label={`${option.label}${
+            selectedRange === option.value ? "，目前已選擇" : ""
+          }`}
           className={`
-            px-4 py-2 rounded-lg font-medium transition-all
+            px-4 py-2 rounded-lg font-medium transition-all text-sm sm:text-base
             ${
               selectedRange === option.value
-                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ? "bg-purple-600 text-white shadow-lg shadow-purple-500/50"
+                : "bg-white/50 dark:bg-gray-700 theme-text-secondary dark:text-gray-300 hover:bg-white/80 dark:hover:bg-gray-600 border border-purple-200 dark:border-transparent"
             }
           `}
         >

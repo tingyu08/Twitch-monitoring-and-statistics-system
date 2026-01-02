@@ -25,15 +25,15 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
   };
 
   return (
-    <header className="border-b border-white/10 dark:border-dark-border backdrop-blur-sm bg-black/20 dark:bg-dark-card/80 sticky top-0 z-50">
+    <header className="border-b border-purple-300 dark:border-white/10 backdrop-blur-md bg-white/70 dark:bg-black/20 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           {/* Logo / Dashboard Label */}
           <div className="flex items-center gap-3">
-            <span className="text-xs text-purple-300/70 dark:text-purple-400/70 font-mono tracking-wider hidden sm:block">
+            <span className="text-xs text-purple-900 dark:text-purple-400/70 font-mono tracking-wider hidden sm:block font-bold">
               {isStreamer ? "STREAMER DASHBOARD" : "VIEWER DASHBOARD"}
             </span>
-            <span className="text-xs text-purple-300/70 dark:text-purple-400/70 font-mono tracking-wider sm:hidden">
+            <span className="text-xs text-purple-900 dark:text-purple-400/70 font-mono tracking-wider sm:hidden font-bold">
               {isStreamer ? "實況主" : "觀眾"}
             </span>
           </div>
@@ -41,14 +41,14 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-4">
             {/* Role Switcher */}
-            <div className="flex bg-white/10 dark:bg-dark-hover rounded-lg p-1 border border-white/10 dark:border-dark-border">
+            <div className="flex bg-purple-100/50 dark:bg-dark-hover rounded-lg p-1 border border-purple-300 dark:border-dark-border">
               <button
                 type="button"
                 onClick={() => !isViewer && router.push("/dashboard/viewer")}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                   isViewer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
-                    : "text-purple-300 hover:text-white hover:bg-white/10"
+                    : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
                 }`}
               >
                 觀眾
@@ -61,7 +61,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                   isStreamer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
-                    : "text-purple-300 hover:text-white hover:bg-white/10"
+                    : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
                 }`}
               >
                 實況主
@@ -76,7 +76,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg bg-white/10 dark:bg-dark-hover text-purple-300 hover:text-white transition-colors"
+            className="md:hidden p-2 rounded-lg bg-purple-100/50 dark:bg-dark-hover text-purple-900 dark:text-purple-300 hover:bg-purple-200 dark:hover:text-white transition-colors"
             aria-label="開啟選單"
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -85,11 +85,11 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden mt-4 pb-4 border-t border-white/10 dark:border-dark-border pt-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="md:hidden mt-4 pb-4 border-t border-purple-300 dark:border-dark-border pt-4 animate-in slide-in-from-top-2 duration-200">
             <div className="space-y-3">
               {/* Role Switcher - Mobile */}
               <div className="flex flex-col gap-2">
-                <p className="text-xs text-purple-300/50 uppercase tracking-wider mb-1">
+                <p className="text-xs text-purple-900/50 dark:text-purple-300/50 uppercase tracking-wider mb-1">
                   切換角色
                 </p>
                 <button
@@ -100,14 +100,14 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   }}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all ${
                     isViewer
-                      ? "bg-purple-600/30 text-purple-300 border border-purple-500/50"
-                      : "bg-white/5 text-purple-300/70 hover:bg-white/10"
+                      ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
+                      : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
                   }`}
                 >
                   <User size={18} />
                   <span>觀眾儀表板</span>
                   {isViewer && (
-                    <span className="ml-auto text-xs bg-purple-500 px-2 py-0.5 rounded">
+                    <span className="ml-auto text-xs bg-purple-500 text-white px-2 py-0.5 rounded">
                       目前
                     </span>
                   )}
@@ -120,14 +120,14 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   }}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all ${
                     isStreamer
-                      ? "bg-purple-600/30 text-purple-300 border border-purple-500/50"
-                      : "bg-white/5 text-purple-300/70 hover:bg-white/10"
+                      ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
+                      : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
                   }`}
                 >
                   <LayoutDashboard size={18} />
                   <span>實況主儀表板</span>
                   {isStreamer && (
-                    <span className="ml-auto text-xs bg-purple-500 px-2 py-0.5 rounded">
+                    <span className="ml-auto text-xs bg-purple-500 text-white px-2 py-0.5 rounded">
                       目前
                     </span>
                   )}
@@ -135,8 +135,8 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
               </div>
 
               {/* Theme Switcher - Mobile */}
-              <div className="pt-3 border-t border-white/10">
-                <p className="text-xs text-purple-300/50 uppercase tracking-wider mb-2">
+              <div className="pt-3 border-t border-purple-300 dark:border-white/10">
+                <p className="text-xs text-purple-900/50 dark:text-purple-300/50 uppercase tracking-wider mb-2">
                   外觀設定
                 </p>
                 <div className="flex justify-center">
@@ -145,7 +145,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
               </div>
 
               {/* Settings & Logout - Mobile */}
-              <div className="pt-3 border-t border-white/10 space-y-2">
+              <div className="pt-3 border-t border-purple-300 dark:border-white/10 space-y-2">
                 {isViewer && (
                   <button
                     type="button"
@@ -153,7 +153,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                       router.push("/dashboard/viewer/settings");
                       setMobileMenuOpen(false);
                     }}
-                    className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-white/5 text-purple-300/70 hover:bg-white/10 transition-all"
+                    className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10 transition-all"
                   >
                     <Settings size={18} />
                     <span>帳號設定</span>
@@ -162,7 +162,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-all"
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-red-100/30 dark:bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-100/50 dark:hover:bg-red-500/20 transition-all"
                 >
                   <LogOut size={18} />
                   <span>登出</span>
