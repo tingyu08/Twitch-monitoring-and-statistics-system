@@ -65,7 +65,23 @@
     "firstWatch": "首次觀看",
     "lastWatch": "最後觀看",
     "watchHours": "觀看時數",
-    "messageCount": "留言數"
+    "messageCount": "留言數",
+    "summary": "觀看統計摘要",
+    "chatAnalysis": "聊天互動分析",
+    "watchTrend": "觀看時數趨勢",
+    "allData": "全部資料",
+    "pastDays": "過去 {days} 天"
+  },
+  "channel": {
+    "backToDashboard": "返回儀表板",
+    "goToWatch": "前往觀看",
+    "viewFootprint": "查看成就足跡",
+    "noData": "無法載入資料",
+    "comingSoon": "更多深度分析功能，即將登場",
+    "detailedHistory": "詳細觀看記錄",
+    "wordCloud": "詞彙雲分析",
+    "milestone": "訂閱里程碑",
+    "loyalty": "忠誠度徽章"
   },
   "timeRange": {
     "label": "時間範圍：",

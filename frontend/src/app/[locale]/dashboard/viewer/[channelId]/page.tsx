@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
+import { useTranslations, useLocale } from "next-intl";
 import {
   Clock,
   Eye,
@@ -41,6 +42,8 @@ import {
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 
 export default function ViewerChannelStatsPage() {
+  const t = useTranslations();
+  const locale = useLocale();
   const params = useParams<{ channelId: string }>();
   const channelId = params?.channelId;
   const router = useRouter();
@@ -142,14 +145,14 @@ export default function ViewerChannelStatsPage() {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center theme-text-primary">
         <p className="text-red-500 dark:text-red-400 mb-6 text-xl">
-          {error || "無法載入資料"}
+          {error || t("channel.noData")}
         </p>
         <button
           type="button"
           onClick={() => router.push("/dashboard/viewer")}
           className="px-6 py-2 theme-btn-primary rounded-xl transition-colors"
         >
-          返回儀表板
+          {t("channel.backToDashboard")}
         </button>
       </main>
     );
@@ -173,7 +176,7 @@ export default function ViewerChannelStatsPage() {
             onClick={() => router.push("/dashboard/viewer")}
             className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
           >
-            觀眾儀表板
+            {t("nav.viewerDashboard")}
           </button>
           <span>/</span>
           <span className="theme-text-primary">{channel.displayName}</span>
@@ -214,7 +217,7 @@ export default function ViewerChannelStatsPage() {
                   rel="noopener noreferrer"
                   className="theme-text-secondary text-sm flex items-center gap-1 hover:underline hover:text-purple-600 dark:hover:text-purple-300 transition-colors w-fit"
                 >
-                  前往觀看
+                  {t("channel.goToWatch")}
                   <svg
                     className="w-3 h-3"
                     fill="none"
@@ -239,7 +242,7 @@ export default function ViewerChannelStatsPage() {
               className="px-5 py-2.5 theme-btn-primary rounded-xl shadow-lg shadow-purple-900/20 font-bold transition-all transform hover:-translate-y-1 hover:shadow-purple-900/40 flex items-center gap-2 border border-white/10"
             >
               <span className="text-xl">🏆</span>
-              查看成就足跡
+              {t("channel.viewFootprint")}
             </button>
           </div>
         </section>
@@ -254,9 +257,9 @@ export default function ViewerChannelStatsPage() {
           />
           <span className="text-sm theme-text-muted">
             {timeRange === "custom" && customRange ? (
-              <>自訂範圍：{getDisplayDays()} 天</>
+              <>{t("timeRange.customRange", { days: getDisplayDays() })}</>
             ) : (
-              <>顯示過去 {getDisplayDays()} 天的資料</>
+              <>{t("timeRange.showingDays", { days: getDisplayDays() })}</>
             )}
           </span>
         </div>
@@ -264,7 +267,7 @@ export default function ViewerChannelStatsPage() {
         {/* 觀看統計摘要 */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold theme-text-gradient mb-4">
-            觀看統計摘要
+            {t("stats.summary")}
           </h2>
 
           <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
@@ -275,7 +278,7 @@ export default function ViewerChannelStatsPage() {
                   {summary.totalWatchHours}
                 </p>
                 <p className="text-xs text-blue-600/70 dark:text-blue-300/70">
-                  總觀看時數
+                  {t("stats.totalWatchHours")}
                 </p>
               </div>
               <Clock className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-blue-500/5 group-hover:text-blue-500/10 transition-colors rotate-12 hidden sm:block" />
@@ -288,7 +291,7 @@ export default function ViewerChannelStatsPage() {
                   {summary.sessionCount}
                 </p>
                 <p className="text-xs text-cyan-600/70 dark:text-cyan-300/70">
-                  觀看次數
+                  {t("stats.watchCount")}
                 </p>
               </div>
               <Eye className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-cyan-500/5 group-hover:text-cyan-500/10 transition-colors rotate-12 hidden sm:block" />
@@ -301,7 +304,7 @@ export default function ViewerChannelStatsPage() {
                   {summary.totalMessages}
                 </p>
                 <p className="text-xs text-green-600/70 dark:text-green-300/70">
-                  總留言數
+                  {t("stats.totalMessages")}
                 </p>
               </div>
               <MessageSquare className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-green-500/5 group-hover:text-green-500/10 transition-colors rotate-12 hidden sm:block" />
@@ -314,7 +317,7 @@ export default function ViewerChannelStatsPage() {
                   {summary.totalEmotes}
                 </p>
                 <p className="text-xs text-yellow-600/70 dark:text-yellow-300/70">
-                  表情符號
+                  {t("stats.emotes")}
                 </p>
               </div>
               <Smile className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-yellow-500/5 group-hover:text-yellow-500/10 transition-colors rotate-12 hidden sm:block" />
@@ -327,7 +330,7 @@ export default function ViewerChannelStatsPage() {
                   {summary.averageWatchMinutesPerDay}
                 </p>
                 <p className="text-xs text-purple-600/70 dark:text-purple-300/70">
-                  日均分鐘
+                  {t("stats.dailyAvgMinutes")}
                 </p>
               </div>
               <Activity className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12 hidden sm:block" />
@@ -341,7 +344,9 @@ export default function ViewerChannelStatsPage() {
                     ? summary.firstWatchDate.slice(0, 10)
                     : "-"}
                 </p>
-                <p className="text-xs theme-text-muted">首次觀看</p>
+                <p className="text-xs theme-text-muted">
+                  {t("stats.firstWatch")}
+                </p>
               </div>
               <Calendar className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
@@ -354,7 +359,9 @@ export default function ViewerChannelStatsPage() {
                     ? summary.lastWatchDate.slice(0, 10)
                     : "-"}
                 </p>
-                <p className="text-xs theme-text-muted">最後觀看</p>
+                <p className="text-xs theme-text-muted">
+                  {t("stats.lastWatch")}
+                </p>
               </div>
               <History className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
@@ -365,7 +372,7 @@ export default function ViewerChannelStatsPage() {
         {messageStats && (
           <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h2 className="text-lg font-semibold theme-text-gradient mb-4">
-              聊天互動分析
+              {t("stats.chatAnalysis")}
             </h2>
 
             <MessageStatsSummary summary={messageStats.summary} />
@@ -386,10 +393,10 @@ export default function ViewerChannelStatsPage() {
         {/* 觀看時數趨勢圖 */}
         <div className="theme-card p-6 mb-8">
           <h2 className="text-lg font-semibold mb-6 theme-text-gradient">
-            觀看時數趨勢
+            {t("stats.watchTrend")}
             {timeRange === "all"
-              ? "（全部資料）"
-              : `（過去 ${getDisplayDays()} 天）`}
+              ? `（${t("stats.allData")}）`
+              : `（${t("stats.pastDays", { days: getDisplayDays() })}）`}
           </h2>
           <div className="h-80">
             <SafeResponsiveContainer>
@@ -447,20 +454,20 @@ export default function ViewerChannelStatsPage() {
         {/* 未來功能預留區 */}
         <div className="mt-8 p-6 theme-card border-2 border-dashed border-purple-200 dark:border-white/20 text-center">
           <h3 className="theme-text-secondary font-medium mb-3">
-            更多深度分析功能，即將登場
+            {t("channel.comingSoon")}
           </h3>
           <div className="flex flex-wrap justify-center gap-4 text-sm theme-text-muted">
             <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              詳細觀看記錄
+              {t("channel.detailedHistory")}
             </span>
             <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              詞彙雲分析
+              {t("channel.wordCloud")}
             </span>
             <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              訂閱里程碑
+              {t("channel.milestone")}
             </span>
             <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              忠誠度徽章
+              {t("channel.loyalty")}
             </span>
           </div>
         </div>

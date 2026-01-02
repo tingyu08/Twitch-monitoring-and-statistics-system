@@ -65,7 +65,23 @@
     "firstWatch": "First Watch",
     "lastWatch": "Last Watch",
     "watchHours": "Watch Hours",
-    "messageCount": "Messages"
+    "messageCount": "Messages",
+    "summary": "Watch Statistics Summary",
+    "chatAnalysis": "Chat Interaction Analysis",
+    "watchTrend": "Watch Hours Trend",
+    "allData": "All Data",
+    "pastDays": "Past {days} days"
+  },
+  "channel": {
+    "backToDashboard": "Back to Dashboard",
+    "goToWatch": "Go to Watch",
+    "viewFootprint": "View Achievement Footprint",
+    "noData": "Unable to load data",
+    "comingSoon": "More in-depth analytics features coming soon",
+    "detailedHistory": "Detailed Watch History",
+    "wordCloud": "Word Cloud Analysis",
+    "milestone": "Subscription Milestones",
+    "loyalty": "Loyalty Badges"
   },
   "timeRange": {
     "label": "Time Range:",
