@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { ThemeToggle, ThemeToggleSimple } from "@/features/theme";
+import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { Menu, X, User, Settings, LogOut, LayoutDashboard } from "lucide-react";
 
 interface DashboardHeaderProps {
@@ -67,6 +68,9 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 實況主
               </button>
             </div>
+
+            {/* Language Switcher */}
+            <LocaleSwitcher />
 
             {/* Theme Toggle */}
             <ThemeToggle size="sm" />
@@ -134,12 +138,13 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 </button>
               </div>
 
-              {/* Theme Switcher - Mobile */}
+              {/* Theme & Language Switcher - Mobile */}
               <div className="pt-3 border-t border-purple-300 dark:border-white/10">
                 <p className="text-xs text-purple-900/50 dark:text-purple-300/50 uppercase tracking-wider mb-2">
                   外觀設定
                 </p>
-                <div className="flex justify-center">
+                <div className="flex justify-center items-center gap-4">
+                  <LocaleSwitcher />
                   <ThemeToggle />
                 </div>
               </div>
