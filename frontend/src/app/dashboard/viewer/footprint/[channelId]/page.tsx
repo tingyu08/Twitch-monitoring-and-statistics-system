@@ -116,13 +116,13 @@ export default function ViewerFootprintPage() {
         </div>
       </header>
 
-      <div className="p-4 lg:p-6 max-w-[1600px] mx-auto pb-20">
+      <div className="p-3 sm:p-4 lg:p-6 max-w-[1600px] mx-auto pb-20">
         {/* Page Header */}
-        <section className="mb-8 theme-header-card p-6">
-          <h1 className="text-3xl theme-text-gradient mb-2 tracking-tight">
+        <section className="mb-6 sm:mb-8 theme-header-card p-4 sm:p-6">
+          <h1 className="text-2xl sm:text-3xl theme-text-gradient mb-2 tracking-tight">
             觀眾足跡總覽
           </h1>
-          <p className="theme-text-secondary">
+          <p className="theme-text-secondary text-sm sm:text-base">
             探索你在{" "}
             <span className="theme-text-primary font-medium">
               {stats.channelDisplayName || stats.channelName}

@@ -168,8 +168,8 @@ export const FootprintDashboard = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center px-1">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 px-1">
+        <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
           <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
             你的 {stats.channelDisplayName || stats.channelName} 足跡
           </span>
@@ -177,7 +177,7 @@ export const FootprintDashboard = ({
 
         <button
           onClick={handleReset}
-          className="text-xs text-slate-500 hover:text-white transition-colors px-3 py-1 rounded-full border border-slate-700 hover:bg-slate-800"
+          className="text-xs text-slate-500 hover:text-white transition-colors px-3 py-1.5 rounded-full border border-slate-700 hover:bg-slate-800 self-start sm:self-auto"
         >
           重置佈局
         </button>

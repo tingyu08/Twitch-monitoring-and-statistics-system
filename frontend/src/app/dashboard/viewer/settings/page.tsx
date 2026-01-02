@@ -366,30 +366,30 @@ export default function ViewerSettingsPage() {
         )}
 
         {/* Profile Section */}
-        <section className="theme-card p-6">
-          <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
+        <section className="theme-card p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 theme-text-gradient">
             個人資料
           </h2>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
             {viewerUser?.avatarUrl && (
               <Image
                 src={viewerUser.avatarUrl}
                 alt={viewerUser.displayName}
                 width={80}
                 height={80}
-                className="w-20 h-20 rounded-full border-4 border-purple-500/50 object-cover ring-4 ring-purple-500/20"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 sm:border-4 border-purple-500/50 object-cover ring-2 sm:ring-4 ring-purple-500/20 flex-shrink-0"
                 unoptimized
               />
             )}
-            <div>
-              <p className="text-xl font-medium theme-text-primary">
+            <div className="min-w-0">
+              <p className="text-lg sm:text-xl font-medium theme-text-primary truncate">
                 {viewerUser?.displayName}
               </p>
-              <p className="theme-text-secondary">
+              <p className="theme-text-secondary text-sm sm:text-base truncate">
                 Twitch ID: {viewerUser?.twitchUserId}
               </p>
               {viewerUser?.consentedAt && (
-                <p className="text-sm theme-text-muted mt-1">
+                <p className="text-xs sm:text-sm theme-text-muted mt-1">
                   同意隱私條款於：
                   {new Date(viewerUser.consentedAt).toLocaleDateString("zh-TW")}
                 </p>
@@ -422,9 +422,9 @@ export default function ViewerSettingsPage() {
                   {category.settings.map((setting) => (
                     <div
                       key={setting.key}
-                      className="flex items-center justify-between p-3 bg-white dark:bg-black/20 rounded-lg border border-purple-100 dark:border-white/5 shadow-sm"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white dark:bg-black/20 rounded-lg border border-purple-100 dark:border-white/5 shadow-sm gap-3"
                     >
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="font-medium theme-text-primary">
                           {setting.label}
                         </div>
@@ -441,7 +441,7 @@ export default function ViewerSettingsPage() {
                       <button
                         onClick={() => handleToggle(setting.key)}
                         disabled={isSaving}
-                        className={`relative w-12 h-6 rounded-full transition-colors ${
+                        className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 self-end sm:self-center ${
                           settings[setting.key]
                             ? "bg-purple-600"
                             : "bg-gray-400 dark:bg-gray-600"
@@ -469,30 +469,34 @@ export default function ViewerSettingsPage() {
           {privacyLoading ? (
             <p className="theme-text-muted">載入中...</p>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl border border-blue-500/20 text-center">
-                <p className="text-2xl font-bold text-blue-400">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <div className="p-3 sm:p-4 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl border border-blue-500/20 text-center">
+                <p className="text-xl sm:text-2xl font-bold text-blue-400">
                   {dataSummary?.totalMessages.toLocaleString() ?? "-"}
                 </p>
-                <p className="text-sm text-blue-300/70">總訊息數</p>
+                <p className="text-xs sm:text-sm text-blue-300/70">總訊息數</p>
               </div>
-              <div className="p-4 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl border border-purple-500/20 text-center">
-                <p className="text-2xl font-bold text-purple-400">
+              <div className="p-3 sm:p-4 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl border border-purple-500/20 text-center">
+                <p className="text-xl sm:text-2xl font-bold text-purple-400">
                   {dataSummary?.channelCount ?? "-"}
                 </p>
-                <p className="text-sm text-purple-300/70">追蹤頻道</p>
+                <p className="text-xs sm:text-sm text-purple-300/70">
+                  追蹤頻道
+                </p>
               </div>
-              <div className="p-4 bg-gradient-to-br from-pink-500/20 to-pink-600/10 rounded-xl border border-pink-500/20 text-center">
-                <p className="text-sm font-medium text-pink-400">
+              <div className="p-3 sm:p-4 bg-gradient-to-br from-pink-500/20 to-pink-600/10 rounded-xl border border-pink-500/20 text-center">
+                <p className="text-xs sm:text-sm font-medium text-pink-400">
                   {formatDate(dataSummary?.dateRange.oldest ?? null)}
                 </p>
-                <p className="text-sm text-pink-300/70">最早記錄</p>
+                <p className="text-xs sm:text-sm text-pink-300/70">最早記錄</p>
               </div>
-              <div className="p-4 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 rounded-xl border border-emerald-500/20 text-center">
-                <p className="text-sm font-medium text-emerald-400">
+              <div className="p-3 sm:p-4 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 rounded-xl border border-emerald-500/20 text-center">
+                <p className="text-xs sm:text-sm font-medium text-emerald-400">
                   {formatDate(dataSummary?.dateRange.newest ?? null)}
                 </p>
-                <p className="text-sm text-emerald-300/70">最近記錄</p>
+                <p className="text-xs sm:text-sm text-emerald-300/70">
+                  最近記錄
+                </p>
               </div>
             </div>
           )}
