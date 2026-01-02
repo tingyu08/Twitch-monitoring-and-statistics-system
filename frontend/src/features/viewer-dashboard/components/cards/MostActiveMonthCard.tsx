@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 import { DashboardCardWrapper } from "../DashboardCardWrapper";
 
 interface Props {
@@ -11,14 +12,20 @@ interface Props {
 export const MostActiveMonthCard = React.forwardRef<
   HTMLDivElement,
   Props & React.HTMLAttributes<HTMLDivElement>
->(({ month, count, ...props }, ref) => (
-  <DashboardCardWrapper ref={ref} title="最活躍月份" {...props}>
-    <div className="flex flex-col justify-start">
-      <div className="text-2xl lg:text-3xl font-bold text-purple-400 tracking-tight mb-1">
-        {month || "-"}
+>(({ month, count, ...props }, ref) => {
+  const t = useTranslations("footprint");
+
+  return (
+    <DashboardCardWrapper ref={ref} title={t("mostActiveMonth")} {...props}>
+      <div className="flex flex-col justify-start">
+        <div className="text-2xl lg:text-3xl font-bold text-purple-400 tracking-tight mb-1">
+          {month || "-"}
+        </div>
+        <div className="text-xs text-slate-500">
+          {t("activeDays", { count })}
+        </div>
       </div>
-      <div className="text-xs text-slate-500">活躍 {count} 天</div>
-    </div>
-  </DashboardCardWrapper>
-));
+    </DashboardCardWrapper>
+  );
+});
 MostActiveMonthCard.displayName = "MostActiveMonthCard";

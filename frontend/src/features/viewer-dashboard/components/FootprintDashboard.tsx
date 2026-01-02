@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import GridLayout, { Layout } from "react-grid-layout";
 import debounce from "lodash.debounce";
 import { LifetimeStatsResponse } from "@/lib/api/lifetime-stats";
@@ -63,6 +64,7 @@ export const FootprintDashboard = ({
   channelId,
   initialLayout,
 }: Props) => {
+  const t = useTranslations();
   // Ensure initialLayout is compatible or fallback to default
   const [layout, setLayout] = useState<DashboardGridItem[]>(() => {
     if (
@@ -153,7 +155,7 @@ export const FootprintDashboard = ({
   };
 
   const handleReset = async () => {
-    if (confirm("確定要重置儀表板佈局嗎？")) {
+    if (confirm(t("footprint.confirmReset"))) {
       try {
         await resetDashboardLayout(channelId);
         setLayout(DEFAULT_LAYOUT);
@@ -171,7 +173,9 @@ export const FootprintDashboard = ({
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 px-1">
         <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
           <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            你的 {stats.channelDisplayName || stats.channelName} 足跡
+            {t("footprint.yourFootprint", {
+              channel: stats.channelDisplayName || stats.channelName,
+            })}
           </span>
         </h2>
 
@@ -179,7 +183,7 @@ export const FootprintDashboard = ({
           onClick={handleReset}
           className="text-xs text-slate-500 hover:text-white transition-colors px-3 py-1.5 rounded-full border border-slate-700 hover:bg-slate-800 self-start sm:self-auto"
         >
-          重置佈局
+          {t("footprint.resetLayout")}
         </button>
       </div>
 

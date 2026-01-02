@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { FootprintDashboard } from "@/features/viewer-dashboard/components/FootprintDashboard";
 import {
   getLifetimeStats,
@@ -16,6 +17,7 @@ import { useAuthSession } from "@/features/auth/AuthContext";
 import { isViewer } from "@/lib/api/auth";
 
 export default function ViewerFootprintPage() {
+  const t = useTranslations();
   const params = useParams();
   const router = useRouter();
   const channelId = params.channelId as string;
@@ -60,7 +62,7 @@ export default function ViewerFootprintPage() {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <div className="theme-text-secondary animate-pulse">
-          正在載入足跡數據...
+          {t("common.loading")}
         </div>
       </main>
     );
@@ -69,7 +71,7 @@ export default function ViewerFootprintPage() {
   if (!user) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <div className="text-purple-300/70">請先登入</div>
+        <div className="text-purple-300/70">{t("common.login")}</div>
       </main>
     );
   }
@@ -78,16 +80,14 @@ export default function ViewerFootprintPage() {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center theme-text-primary p-8">
         <h1 className="text-2xl font-bold theme-text-secondary mb-2">
-          無法載入足跡數據
+          {t("channel.noData")}
         </h1>
-        <p className="theme-text-muted mb-4">
-          {error || "找不到此頻道的統計資料或資料尚未生成"}
-        </p>
+        <p className="theme-text-muted mb-4">{error || t("channel.noData")}</p>
         <button
           onClick={() => window.location.reload()}
           className="px-4 py-2 theme-btn-primary rounded-xl transition"
         >
-          重試
+          {t("common.retry")}
         </button>
       </main>
     );
@@ -102,7 +102,7 @@ export default function ViewerFootprintPage() {
             onClick={() => router.push("/dashboard/viewer")}
             className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
           >
-            觀眾儀表板
+            {t("nav.viewerDashboard")}
           </button>
           <span>/</span>
           <button
@@ -112,7 +112,9 @@ export default function ViewerFootprintPage() {
             {stats.channelDisplayName || stats.channelName}
           </button>
           <span>/</span>
-          <span className="theme-text-primary">成就足跡</span>
+          <span className="theme-text-primary">
+            {t("channel.viewFootprint")}
+          </span>
         </div>
       </header>
 
@@ -120,14 +122,12 @@ export default function ViewerFootprintPage() {
         {/* Page Header */}
         <section className="mb-6 sm:mb-8 theme-header-card p-4 sm:p-6">
           <h1 className="text-2xl sm:text-3xl theme-text-gradient mb-2 tracking-tight">
-            觀眾足跡總覽
+            {t("footprint.title")}
           </h1>
           <p className="theme-text-secondary text-sm sm:text-base">
-            探索你在{" "}
-            <span className="theme-text-primary font-medium">
-              {stats.channelDisplayName || stats.channelName}
-            </span>{" "}
-            的互動歷程與成就
+            {t("footprint.subtitle", {
+              channel: stats.channelDisplayName || stats.channelName,
+            })}
           </p>
         </section>
 

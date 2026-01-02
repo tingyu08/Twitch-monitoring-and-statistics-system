@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { DashboardCardWrapper } from "../DashboardCardWrapper";
 import {
   Radar,
@@ -27,21 +28,27 @@ export const RadarChartCard = React.forwardRef<
   HTMLDivElement,
   Props & React.HTMLAttributes<HTMLDivElement>
 >(({ scores, ...props }, ref) => {
+  const t = useTranslations("footprint");
+
   // Transform scores object to array format for Recharts
   const data = useMemo(
     () => [
-      { subject: "觀看時長", A: scores.watchTime, fullMark: 100 },
-      { subject: "互動頻率", A: scores.interaction, fullMark: 100 },
-      { subject: "忠誠度", A: scores.loyalty, fullMark: 100 },
-      { subject: "活躍度", A: scores.activity, fullMark: 100 },
-      { subject: "貢獻值", A: scores.contribution, fullMark: 100 },
-      { subject: "社群參與", A: scores.community, fullMark: 100 },
+      { subject: t("radar.watchTime"), A: scores.watchTime, fullMark: 100 },
+      { subject: t("radar.interaction"), A: scores.interaction, fullMark: 100 },
+      { subject: t("radar.loyalty"), A: scores.loyalty, fullMark: 100 },
+      { subject: t("radar.activity"), A: scores.activity, fullMark: 100 },
+      {
+        subject: t("radar.contribution"),
+        A: scores.contribution,
+        fullMark: 100,
+      },
+      { subject: t("radar.community"), A: scores.community, fullMark: 100 },
     ],
-    [scores]
+    [scores, t]
   );
 
   return (
-    <DashboardCardWrapper ref={ref} title="投入分析" {...props}>
+    <DashboardCardWrapper ref={ref} title={t("engagementAnalysis")} {...props}>
       <SafeResponsiveContainer className="w-full h-full min-h-[200px]">
         <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
           <PolarGrid stroke="#334155" />
@@ -56,7 +63,7 @@ export const RadarChartCard = React.forwardRef<
             axisLine={false}
           />
           <Radar
-            name="我的分數"
+            name={t("radar.myScore")}
             dataKey="A"
             stroke="#8b5cf6"
             strokeWidth={2}
