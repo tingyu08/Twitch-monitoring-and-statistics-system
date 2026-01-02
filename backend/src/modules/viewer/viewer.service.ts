@@ -227,23 +227,19 @@ export async function getFollowedChannels(viewerId: string) {
 
   // 排序優先順序：
   // 1. 開台中 (isLive) 的頻道優先
-  // 2. 在同分類中，依最後觀看時間排序（常看的優先）
-  // 3. 沒看過的排後面 (依名稱)
+  // 2. 在同分類中，依總觀看時數排序（看最久的優先）
+  // 3. 觀看時數相同時，依名稱排序
   return results.sort((a, b) => {
     // 優先顯示開台中的頻道
     if (a.isLive && !b.isLive) return -1;
     if (!a.isLive && b.isLive) return 1;
 
-    // 在同分類內（都開台或都未開台），依最後觀看時間排序
-    if (a.lastWatched && b.lastWatched) {
-      return (
-        new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime()
-      );
+    // 在同分類內（都開台或都未開台），依總觀看時數排序
+    if (a.totalWatchMinutes !== b.totalWatchMinutes) {
+      return b.totalWatchMinutes - a.totalWatchMinutes;
     }
-    if (a.lastWatched) return -1;
-    if (b.lastWatched) return 1;
 
-    // 都沒看過時，依名稱排序
+    // 觀看時數相同時，依名稱排序
     return a.displayName.localeCompare(b.displayName);
   });
 }
