@@ -45,51 +45,59 @@ export function TimeRangeSelector({
 
   return (
     <div
-      className="flex items-center gap-3 flex-wrap"
+      className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
       role="group"
       aria-label="時間範圍選擇"
     >
-      <span id="time-range-label" className="text-sm theme-text-secondary">
+      {/* 標籤 - 手機上獨立一行 */}
+      <span
+        id="time-range-label"
+        className="text-sm theme-text-secondary whitespace-nowrap"
+      >
         時間範圍：
       </span>
-      <div
-        className="flex bg-white dark:bg-[#1a1b26] rounded-lg p-1 border border-purple-200 dark:border-white/5"
-        role="radiogroup"
-        aria-labelledby="time-range-label"
-      >
-        {RANGE_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={currentRange === option.value}
-            onClick={() => onRangeChange(option.value)}
-            disabled={disabled}
-            aria-label={`顯示${option.label}的資料${
-              currentRange === option.value ? "，目前已選擇" : ""
-            }`}
-            className={`
-              px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200
-              ${
-                currentRange === option.value
-                  ? "bg-purple-600 text-white shadow-sm shadow-purple-900/20"
-                  : "text-purple-700 dark:text-gray-400 hover:text-purple-900 dark:hover:text-white hover:bg-purple-50 dark:hover:bg-white/5"
-              }
-              ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-            `}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
 
-      {/* 自訂日期選擇器 */}
-      {onCustomRangeChange && (
-        <DateRangePicker
-          onRangeSelect={handleCustomRangeSelect}
-          disabled={disabled}
-        />
-      )}
+      {/* 按鈕群組 - 手機上可換行 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          className="flex bg-white dark:bg-[#1a1b26] rounded-lg p-0.5 sm:p-1 border border-purple-200 dark:border-white/5"
+          role="radiogroup"
+          aria-labelledby="time-range-label"
+        >
+          {RANGE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={currentRange === option.value}
+              onClick={() => onRangeChange(option.value)}
+              disabled={disabled}
+              aria-label={`顯示${option.label}的資料${
+                currentRange === option.value ? "，目前已選擇" : ""
+              }`}
+              className={`
+                px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all duration-200
+                ${
+                  currentRange === option.value
+                    ? "bg-purple-600 text-white shadow-sm shadow-purple-900/20"
+                    : "text-purple-700 dark:text-gray-400 hover:text-purple-900 dark:hover:text-white hover:bg-purple-50 dark:hover:bg-white/5"
+                }
+                ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+              `}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 自訂日期選擇器 */}
+        {onCustomRangeChange && (
+          <DateRangePicker
+            onRangeSelect={handleCustomRangeSelect}
+            disabled={disabled}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -269,94 +269,94 @@ export default function ViewerChannelStatsPage() {
 
           <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
             {/* 總觀看時數 */}
-            <div className="relative overflow-hidden bg-blue-50 dark:bg-blue-500/10 backdrop-blur-sm rounded-xl border border-blue-200 dark:border-blue-500/20 p-4 text-center group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all">
+            <div className="relative overflow-hidden bg-blue-50 dark:bg-blue-500/10 backdrop-blur-sm rounded-xl border border-blue-200 dark:border-blue-500/20 p-3 sm:p-4 text-center group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                <p className="text-xl sm:text-2xl font-bold text-blue-700 dark:text-blue-400">
                   {summary.totalWatchHours}
                 </p>
                 <p className="text-xs text-blue-600/70 dark:text-blue-300/70">
                   總觀看時數
                 </p>
               </div>
-              <Clock className="absolute -right-4 -bottom-4 w-24 h-24 text-blue-500/5 group-hover:text-blue-500/10 transition-colors rotate-12" />
+              <Clock className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-blue-500/5 group-hover:text-blue-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
 
             {/* 觀看次數 */}
-            <div className="relative overflow-hidden bg-cyan-50 dark:bg-cyan-500/10 backdrop-blur-sm rounded-xl border border-cyan-200 dark:border-cyan-500/20 p-4 text-center group hover:border-cyan-400 dark:hover:border-cyan-500/40 transition-all">
+            <div className="relative overflow-hidden bg-cyan-50 dark:bg-cyan-500/10 backdrop-blur-sm rounded-xl border border-cyan-200 dark:border-cyan-500/20 p-3 sm:p-4 text-center group hover:border-cyan-400 dark:hover:border-cyan-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-400">
+                <p className="text-xl sm:text-2xl font-bold text-cyan-700 dark:text-cyan-400">
                   {summary.sessionCount}
                 </p>
                 <p className="text-xs text-cyan-600/70 dark:text-cyan-300/70">
                   觀看次數
                 </p>
               </div>
-              <Eye className="absolute -right-4 -bottom-4 w-24 h-24 text-cyan-500/5 group-hover:text-cyan-500/10 transition-colors rotate-12" />
+              <Eye className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-cyan-500/5 group-hover:text-cyan-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
 
             {/* 總留言數 */}
-            <div className="relative overflow-hidden bg-green-50 dark:bg-green-500/10 backdrop-blur-sm rounded-xl border border-green-200 dark:border-green-500/20 p-4 text-center group hover:border-green-400 dark:hover:border-green-500/40 transition-all">
+            <div className="relative overflow-hidden bg-green-50 dark:bg-green-500/10 backdrop-blur-sm rounded-xl border border-green-200 dark:border-green-500/20 p-3 sm:p-4 text-center group hover:border-green-400 dark:hover:border-green-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                <p className="text-xl sm:text-2xl font-bold text-green-700 dark:text-green-400">
                   {summary.totalMessages}
                 </p>
                 <p className="text-xs text-green-600/70 dark:text-green-300/70">
                   總留言數
                 </p>
               </div>
-              <MessageSquare className="absolute -right-4 -bottom-4 w-24 h-24 text-green-500/5 group-hover:text-green-500/10 transition-colors rotate-12" />
+              <MessageSquare className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-green-500/5 group-hover:text-green-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
 
             {/* 表情符號 */}
-            <div className="relative overflow-hidden bg-yellow-50 dark:bg-yellow-500/10 backdrop-blur-sm rounded-xl border border-yellow-200 dark:border-yellow-500/20 p-4 text-center group hover:border-yellow-400 dark:hover:border-yellow-500/40 transition-all">
+            <div className="relative overflow-hidden bg-yellow-50 dark:bg-yellow-500/10 backdrop-blur-sm rounded-xl border border-yellow-200 dark:border-yellow-500/20 p-3 sm:p-4 text-center group hover:border-yellow-400 dark:hover:border-yellow-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+                <p className="text-xl sm:text-2xl font-bold text-yellow-700 dark:text-yellow-400">
                   {summary.totalEmotes}
                 </p>
                 <p className="text-xs text-yellow-600/70 dark:text-yellow-300/70">
                   表情符號
                 </p>
               </div>
-              <Smile className="absolute -right-4 -bottom-4 w-24 h-24 text-yellow-500/5 group-hover:text-yellow-500/10 transition-colors rotate-12" />
+              <Smile className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-yellow-500/5 group-hover:text-yellow-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
 
             {/* 日均分鐘 */}
-            <div className="relative overflow-hidden bg-purple-50 dark:bg-purple-500/10 backdrop-blur-sm rounded-xl border border-purple-200 dark:border-purple-500/20 p-4 text-center group hover:border-purple-400 dark:hover:border-purple-500/40 transition-all">
+            <div className="relative overflow-hidden bg-purple-50 dark:bg-purple-500/10 backdrop-blur-sm rounded-xl border border-purple-200 dark:border-purple-500/20 p-3 sm:p-4 text-center group hover:border-purple-400 dark:hover:border-purple-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">
+                <p className="text-xl sm:text-2xl font-bold text-purple-700 dark:text-purple-400">
                   {summary.averageWatchMinutesPerDay}
                 </p>
                 <p className="text-xs text-purple-600/70 dark:text-purple-300/70">
                   日均分鐘
                 </p>
               </div>
-              <Activity className="absolute -right-4 -bottom-4 w-24 h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12" />
+              <Activity className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
 
             {/* 首次觀看 */}
-            <div className="relative overflow-hidden theme-card p-4 text-center group hover:border-purple-400 transition-all">
+            <div className="relative overflow-hidden theme-card p-3 sm:p-4 text-center group hover:border-purple-400 transition-all">
               <div className="relative z-10">
-                <p className="text-lg font-semibold theme-text-primary">
+                <p className="text-base sm:text-lg font-semibold theme-text-primary">
                   {summary.firstWatchDate
                     ? summary.firstWatchDate.slice(0, 10)
                     : "-"}
                 </p>
                 <p className="text-xs theme-text-muted">首次觀看</p>
               </div>
-              <Calendar className="absolute -right-4 -bottom-4 w-24 h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12" />
+              <Calendar className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
 
             {/* 最後觀看 */}
-            <div className="relative overflow-hidden theme-card p-4 text-center group hover:border-purple-400 transition-all">
+            <div className="relative overflow-hidden theme-card p-3 sm:p-4 text-center group hover:border-purple-400 transition-all">
               <div className="relative z-10">
-                <p className="text-lg font-semibold theme-text-primary">
+                <p className="text-base sm:text-lg font-semibold theme-text-primary">
                   {summary.lastWatchDate
                     ? summary.lastWatchDate.slice(0, 10)
                     : "-"}
                 </p>
                 <p className="text-xs theme-text-muted">最後觀看</p>
               </div>
-              <History className="absolute -right-4 -bottom-4 w-24 h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12" />
+              <History className="absolute -right-4 -bottom-4 w-20 h-20 sm:w-24 sm:h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12 hidden sm:block" />
             </div>
           </div>
         </div>
