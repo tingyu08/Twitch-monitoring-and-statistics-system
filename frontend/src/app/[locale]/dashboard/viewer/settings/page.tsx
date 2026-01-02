@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { isViewer } from "@/lib/api/auth";
 import { viewerApi } from "@/lib/api/viewer";
@@ -115,6 +116,8 @@ interface PrivacySettings {
 }
 
 export default function ViewerSettingsPage() {
+  const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
   const { user, loading, logout } = useAuthSession();
   const [revoking, setRevoking] = useState(false); // Kept for legacy compatibility if needed
@@ -286,7 +289,9 @@ export default function ViewerSettingsPage() {
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse theme-text-secondary">載入中...</div>
+        <div className="animate-pulse theme-text-secondary">
+          {t("common.loading")}
+        </div>
       </main>
     );
   }
@@ -320,10 +325,10 @@ export default function ViewerSettingsPage() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            返回儀表板
+            {t("settings.backToDashboard")}
           </button>
           <h1 className="text-lg font-semibold theme-text-gradient">
-            帳號設定
+            {t("settings.title")}
           </h1>
           <div className="w-24" />
         </div>
@@ -368,7 +373,7 @@ export default function ViewerSettingsPage() {
         {/* Profile Section */}
         <section className="theme-card p-4 sm:p-6">
           <h2 className="text-lg sm:text-xl font-semibold mb-4 theme-text-gradient">
-            個人資料
+            {t("settings.profile")}
           </h2>
           <div className="flex items-center gap-4 sm:gap-6">
             {viewerUser?.avatarUrl && (
@@ -401,7 +406,7 @@ export default function ViewerSettingsPage() {
         {/* Privacy Settings Section (New 2.5 Features) */}
         <section className="theme-card p-6">
           <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
-            隱私設定 (GDPR)
+            {t("settings.privacy.title")}
           </h2>
           <div className="space-y-6">
             {privacyCategories.map((category) => (
@@ -464,38 +469,42 @@ export default function ViewerSettingsPage() {
         {/* Data Summary Section */}
         <section className="theme-card p-6">
           <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
-            您的資料統計
+            {t("settings.dataSummary.title")}
           </h2>
           {privacyLoading ? (
-            <p className="theme-text-muted">載入中...</p>
+            <p className="theme-text-muted">{t("common.loading")}</p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               <div className="p-3 sm:p-4 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl border border-blue-500/20 text-center">
                 <p className="text-xl sm:text-2xl font-bold text-blue-400">
                   {dataSummary?.totalMessages.toLocaleString() ?? "-"}
                 </p>
-                <p className="text-xs sm:text-sm text-blue-300/70">總訊息數</p>
+                <p className="text-xs sm:text-sm text-blue-300/70">
+                  {t("settings.dataSummary.totalMessages")}
+                </p>
               </div>
               <div className="p-3 sm:p-4 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-xl border border-purple-500/20 text-center">
                 <p className="text-xl sm:text-2xl font-bold text-purple-400">
                   {dataSummary?.channelCount ?? "-"}
                 </p>
                 <p className="text-xs sm:text-sm text-purple-300/70">
-                  追蹤頻道
+                  {t("settings.dataSummary.followedChannels")}
                 </p>
               </div>
               <div className="p-3 sm:p-4 bg-gradient-to-br from-pink-500/20 to-pink-600/10 rounded-xl border border-pink-500/20 text-center">
                 <p className="text-xs sm:text-sm font-medium text-pink-400">
                   {formatDate(dataSummary?.dateRange.oldest ?? null)}
                 </p>
-                <p className="text-xs sm:text-sm text-pink-300/70">最早記錄</p>
+                <p className="text-xs sm:text-sm text-pink-300/70">
+                  {t("settings.dataSummary.oldestRecord")}
+                </p>
               </div>
               <div className="p-3 sm:p-4 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 rounded-xl border border-emerald-500/20 text-center">
                 <p className="text-xs sm:text-sm font-medium text-emerald-400">
                   {formatDate(dataSummary?.dateRange.newest ?? null)}
                 </p>
                 <p className="text-xs sm:text-sm text-emerald-300/70">
-                  最近記錄
+                  {t("settings.dataSummary.newestRecord")}
                 </p>
               </div>
             </div>
@@ -505,16 +514,18 @@ export default function ViewerSettingsPage() {
         {/* Data Management Section (Merged with Danger Zone) */}
         <section className="bg-purple-100/30 dark:bg-gray-700/30 backdrop-blur-sm rounded-2xl border border-purple-200 dark:border-white/10 p-6">
           <h2 className="text-xl font-semibold mb-4 theme-text-primary">
-            資料管理與危險區域
+            {t("settings.dataManagement.title")}
           </h2>
 
           <div className="space-y-6">
             {/* Export Data */}
             <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/50 dark:bg-white/5 rounded-xl border border-purple-100 dark:border-white/5 gap-4">
               <div>
-                <p className="font-medium theme-text-primary">匯出我的資料</p>
+                <p className="font-medium theme-text-primary">
+                  {t("settings.dataManagement.export")}
+                </p>
                 <p className="text-sm theme-text-muted">
-                  下載包含 JSON 和 CSV 格式的完整資料封存檔
+                  {t("settings.dataManagement.exportDesc")}
                 </p>
               </div>
               <button
@@ -531,19 +542,21 @@ export default function ViewerSettingsPage() {
                 }`}
               >
                 {exportStatus.isExporting
-                  ? "正在準備匯出..."
+                  ? t("settings.dataManagement.exporting")
                   : exportStatus.downloadReady
-                  ? "📥 下載資料"
-                  : "📤 匯出資料"}
+                  ? `📥 ${t("settings.dataManagement.download")}`
+                  : `📤 ${t("settings.dataManagement.exportButton")}`}
               </button>
             </div>
 
             {/* Logout */}
             <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/50 dark:bg-white/5 rounded-xl border border-purple-100 dark:border-white/5 gap-4">
               <div>
-                <p className="font-medium theme-text-primary">登出</p>
+                <p className="font-medium theme-text-primary">
+                  {t("common.logout")}
+                </p>
                 <p className="text-sm theme-text-muted">
-                  登出此帳號，您的資料將會保留
+                  {t("settings.dataManagement.logoutDesc")}
                 </p>
               </div>
               <button
@@ -551,7 +564,7 @@ export default function ViewerSettingsPage() {
                 onClick={logout}
                 className="flex-shrink-0 px-6 py-2 border border-purple-300 dark:border-gray-500 text-purple-700 dark:text-gray-300 rounded-lg hover:bg-purple-50 dark:hover:bg-white/5 transition-colors"
               >
-                登出
+                {t("common.logout")}
               </button>
             </div>
 
@@ -559,10 +572,10 @@ export default function ViewerSettingsPage() {
             <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-200 dark:border-red-500/20 gap-4">
               <div>
                 <p className="font-medium text-red-600 dark:text-red-400">
-                  刪除我的帳號
+                  {t("settings.dataManagement.delete")}
                 </p>
                 <p className="text-sm text-red-500/70 dark:text-red-300/70">
-                  請求永久刪除您的帳號與所有資料（含 7 天冷靜期）
+                  {t("settings.dataManagement.deleteDesc")}
                 </p>
               </div>
               <button
@@ -574,7 +587,7 @@ export default function ViewerSettingsPage() {
                     : "bg-red-600 hover:bg-red-700 text-white"
                 }`}
               >
-                🗑️ 刪除帳號
+                🗑️ {t("settings.dataManagement.deleteButton")}
               </button>
             </div>
           </div>
@@ -586,7 +599,7 @@ export default function ViewerSettingsPage() {
             href="/privacy-policy"
             className="text-purple-400 hover:text-purple-300 underline"
           >
-            查看完整隱私政策
+            {t("settings.privacyPolicy")}
           </a>
         </div>
       </div>
@@ -609,13 +622,13 @@ export default function ViewerSettingsPage() {
                 onClick={() => setShowDeleteModal(false)}
                 className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-white"
               >
-                取消
+                {t("common.cancel")}
               </button>
               <button
                 onClick={handleDeleteAccount}
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-white"
               >
-                確認刪除
+                {t("settings.deleteModal.confirmButton")}
               </button>
             </div>
           </div>
