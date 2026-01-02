@@ -1,3 +1,17 @@
+// ========== Sentry 初始化（必須在最開始）==========
+import * as Sentry from "@sentry/node";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+    // 過濾不需要追蹤的錯誤
+    ignoreErrors: ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND"],
+  });
+  console.log("✅ Sentry 錯誤追蹤已啟用");
+}
+
 // 過濾 Twurple rate-limiter 警告（來自底層套件，無法通過 logger 配置隱藏）
 const originalWarn = console.warn;
 console.warn = (...args: unknown[]) => {

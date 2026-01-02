@@ -1,8 +1,10 @@
+import { withSentryConfig } from "@sentry/nextjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // E2E Test Configuration - rewrites to mock server on port 4001
   async rewrites() {
-    const apiUrl = process.env.E2E_API_URL || 'http://localhost:4000';
+    const apiUrl = process.env.E2E_API_URL || "http://localhost:4000";
     return {
       beforeFiles: [
         {
@@ -19,10 +21,10 @@ const nextConfig = {
         },
       ],
       afterFiles: [
-         {
-            source: "/api/:path*",
-            destination: `${apiUrl}/api/:path*`,
-         },
+        {
+          source: "/api/:path*",
+          destination: `${apiUrl}/api/:path*`,
+        },
       ],
       fallback: [],
     };
@@ -43,4 +45,31 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry 配置選項
+const sentryWebpackPluginOptions = {
+  // 靜默模式（不顯示詳細日誌）
+  silent: true,
+
+  // 組織和專案名稱（從環境變數讀取）
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // 自動上傳 Source Maps
+  widenClientFileUpload: true,
+
+  // 隱藏 Source Maps（不公開給用戶）
+  hideSourceMaps: true,
+
+  // 禁用遙測
+  disableLogger: true,
+
+  // 自動檢測和追蹤
+  automaticVercelMonitors: true,
+};
+
+// 只有在配置了 Sentry DSN 時才啟用
+const config = process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
+  : nextConfig;
+
+export default config;

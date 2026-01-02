@@ -25,6 +25,7 @@
     "@libsql/client": "^0.15.15",
     "@prisma/adapter-libsql": "^7.1.0",
     "@prisma/client": "^7.1.0",
+    "@sentry/node": "^10.32.1",
     "@twurple/api": "^8.0.2",
     "@twurple/auth": "^8.0.2",
     "@twurple/chat": "^8.0.2",

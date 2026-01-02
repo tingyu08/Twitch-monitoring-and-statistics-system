@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import * as Sentry from "@sentry/node";
 import { oauthRoutes, apiRoutes } from "./modules/auth/auth.routes";
 import { streamerRoutes } from "./modules/streamer/streamer.routes";
 import { viewerApiRoutes } from "./modules/viewer/viewer.routes";
@@ -9,9 +11,6 @@ import { performanceMonitor } from "./utils/performance-monitor";
 import { performanceRoutes } from "./modules/admin/performance.routes";
 import { healthRoutes } from "./modules/admin/health.routes";
 import twitchRoutes from "./routes/twitch.routes";
-import helmet from "helmet";
-
-// ... previous imports ...
 import { eventSubRoutes } from "./routes/eventsub.routes";
 
 class App {
@@ -88,6 +87,11 @@ class App {
     this.express.get("/", (req, res) => {
       res.send("Streamer Backend is running!");
     });
+
+    // Sentry 錯誤處理中間件（必須在所有路由之後）
+    if (process.env.SENTRY_DSN) {
+      Sentry.setupExpressErrorHandler(this.express);
+    }
   }
 }
 
