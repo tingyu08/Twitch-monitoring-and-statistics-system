@@ -16,7 +16,9 @@
     "viewerDashboard": "Viewer Dashboard",
     "streamerDashboard": "Streamer Dashboard",
     "settings": "Account Settings",
-    "appearance": "Appearance"
+    "appearance": "Appearance",
+    "switchRole": "Switch Role",
+    "current": "Current"
   },
   "home": {
     "title": "Twitch Monitoring & Analytics Platform",
@@ -39,13 +41,20 @@
     "pageInfo": "Page {current}/{total}",
     "searchPlaceholder": "Search channels...",
     "noChannels": "No channels found matching the criteria",
+    "noFollowedChannels": "You haven't followed any channels yet",
+    "exploreStreamers": "Start exploring streamers",
     "watchNow": "Watch Now",
     "goToWatch": "Go to Watch",
     "viewFootprint": "View Achievement Footprint",
     "lastWatched": "Last Watched",
     "followedAt": "Followed At",
     "live": "LIVE",
-    "viewers": "{count} viewers"
+    "viewers": "{count} viewers",
+    "streamDuration": "Stream Duration",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "roleViewer": "Viewer",
+    "roleStreamer": "Streamer"
   },
   "stats": {
     "totalWatchHours": "Total Watch Hours",

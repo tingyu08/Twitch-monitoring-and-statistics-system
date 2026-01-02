@@ -295,14 +295,16 @@ export default function ViewerDashboardPage() {
         {filteredChannels.length === 0 ? (
           <div className="text-center py-20 bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 border-dashed">
             <p className="text-purple-800/80 dark:text-purple-300/70 mb-4 text-lg">
-              {searchQuery ? t("viewer.noChannels") : "您尚未追蹤任何頻道"}
+              {searchQuery
+                ? t("viewer.noChannels")
+                : t("viewer.noFollowedChannels")}
             </p>
             {!searchQuery && (
               <button
                 type="button"
                 className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all font-medium shadow-lg shadow-purple-900/30"
               >
-                開始探索實況主
+                {t("viewer.exploreStreamers")}
               </button>
             )}
           </div>
@@ -395,7 +397,9 @@ export default function ViewerDashboardPage() {
                   {channel.isLive && channel.streamStartedAt && (
                     <div className="mb-3 px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-red-300/70">開台時間</span>
+                        <span className="text-red-300/70">
+                          {t("viewer.streamDuration")}
+                        </span>
                         <span className="text-red-400 font-mono">
                           {formatStreamDuration(channel.streamStartedAt)}
                         </span>
@@ -456,7 +460,7 @@ export default function ViewerDashboardPage() {
                   disabled={currentPage === 1}
                   className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-purple-300 transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ← 上一頁
+                  ← {t("viewer.prevPage")}
                 </button>
 
                 <div className="flex gap-1">
@@ -500,7 +504,7 @@ export default function ViewerDashboardPage() {
                   disabled={currentPage === totalPages}
                   className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-purple-300 transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  下一頁 →
+                  {t("viewer.nextPage")} →
                 </button>
               </div>
             )}

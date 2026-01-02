@@ -16,7 +16,9 @@
     "viewerDashboard": "觀眾儀表板",
     "streamerDashboard": "實況主儀表板",
     "settings": "帳號設定",
-    "appearance": "外觀設定"
+    "appearance": "外觀設定",
+    "switchRole": "切換角色",
+    "current": "目前"
   },
   "home": {
     "title": "Twitch 實況監控與統計平台",
@@ -39,13 +41,20 @@
     "pageInfo": "第 {current}/{total} 頁",
     "searchPlaceholder": "搜尋頻道...",
     "noChannels": "找不到符合條件的頻道",
+    "noFollowedChannels": "您尚未追蹤任何頻道",
+    "exploreStreamers": "開始探索實況主",
     "watchNow": "立即觀看",
     "goToWatch": "前往觀看",
     "viewFootprint": "查看成就足跡",
     "lastWatched": "最後觀看",
     "followedAt": "追蹤於",
     "live": "LIVE",
-    "viewers": "{count} 觀眾"
+    "viewers": "{count} 觀眾",
+    "streamDuration": "開台時間",
+    "prevPage": "上一頁",
+    "nextPage": "下一頁",
+    "roleViewer": "觀眾",
+    "roleStreamer": "實況主"
   },
   "stats": {
     "totalWatchHours": "總觀看時數",

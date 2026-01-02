@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { ThemeToggle, ThemeToggleSimple } from "@/features/theme";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
@@ -12,6 +13,7 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
+  const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuthSession();
@@ -35,7 +37,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
               {isStreamer ? "STREAMER DASHBOARD" : "VIEWER DASHBOARD"}
             </span>
             <span className="text-xs text-purple-900 dark:text-purple-400/70 font-mono tracking-wider sm:hidden font-bold">
-              {isStreamer ? "實況主" : "觀眾"}
+              {isStreamer ? t("viewer.roleStreamer") : t("viewer.roleViewer")}
             </span>
           </div>
 
@@ -52,7 +54,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                     : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
                 }`}
               >
-                觀眾
+                {t("viewer.roleViewer")}
               </button>
               <button
                 type="button"
@@ -65,7 +67,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                     : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
                 }`}
               >
-                實況主
+                {t("viewer.roleStreamer")}
               </button>
             </div>
 
@@ -94,7 +96,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
               {/* Role Switcher - Mobile */}
               <div className="flex flex-col gap-2">
                 <p className="text-xs text-purple-900/50 dark:text-purple-300/50 uppercase tracking-wider mb-1">
-                  切換角色
+                  {t("nav.switchRole")}
                 </p>
                 <button
                   type="button"
@@ -109,10 +111,10 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   }`}
                 >
                   <User size={18} />
-                  <span>觀眾儀表板</span>
+                  <span>{t("nav.viewerDashboard")}</span>
                   {isViewer && (
                     <span className="ml-auto text-xs bg-purple-500 text-white px-2 py-0.5 rounded">
-                      目前
+                      {t("nav.current")}
                     </span>
                   )}
                 </button>
@@ -129,10 +131,10 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   }`}
                 >
                   <LayoutDashboard size={18} />
-                  <span>實況主儀表板</span>
+                  <span>{t("nav.streamerDashboard")}</span>
                   {isStreamer && (
                     <span className="ml-auto text-xs bg-purple-500 text-white px-2 py-0.5 rounded">
-                      目前
+                      {t("nav.current")}
                     </span>
                   )}
                 </button>
@@ -141,7 +143,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
               {/* Theme & Language Switcher - Mobile */}
               <div className="pt-3 border-t border-purple-300 dark:border-white/10">
                 <p className="text-xs text-purple-900/50 dark:text-purple-300/50 uppercase tracking-wider mb-2">
-                  外觀設定
+                  {t("nav.appearance")}
                 </p>
                 <div className="flex justify-center items-center gap-4">
                   <LocaleSwitcher />
@@ -161,7 +163,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                     className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10 transition-all"
                   >
                     <Settings size={18} />
-                    <span>帳號設定</span>
+                    <span>{t("nav.settings")}</span>
                   </button>
                 )}
                 <button
@@ -170,7 +172,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-red-100/30 dark:bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-100/50 dark:hover:bg-red-500/20 transition-all"
                 >
                   <LogOut size={18} />
-                  <span>登出</span>
+                  <span>{t("common.logout")}</span>
                 </button>
               </div>
             </div>
