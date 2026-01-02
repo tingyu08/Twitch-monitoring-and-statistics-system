@@ -168,7 +168,7 @@ export default function StreamerDashboard() {
               )}
               <div>
                 <h1
-                  className="text-xl sm:text-2xl md:text-3xl font-bold theme-text-primary"
+                  className="text-xl sm:text-2xl md:text-3xl theme-text-gradient"
                   data-testid="dashboard-title"
                 >
                   實況主儀表板
@@ -216,7 +216,7 @@ export default function StreamerDashboard() {
             <div className="theme-card p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <h2
-                  className="text-lg sm:text-xl font-semibold theme-text-primary"
+                  className="text-lg sm:text-xl font-semibold theme-text-gradient"
                   data-testid="timeseries-title"
                 >
                   開台時間分析
@@ -289,7 +289,7 @@ export default function StreamerDashboard() {
           <div className="mb-8" data-testid="heatmap-section">
             <div className="theme-card p-4 sm:p-6">
               <h2
-                className="text-lg sm:text-xl font-semibold theme-text-primary mb-6"
+                className="text-lg sm:text-xl font-semibold theme-text-gradient mb-6"
                 data-testid="heatmap-title"
               >
                 開台時段分布
@@ -328,7 +328,7 @@ export default function StreamerDashboard() {
           <div className="mb-8" data-testid="subscription-section">
             <div className="theme-card p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <h2 className="text-lg sm:text-xl font-semibold theme-text-primary">
+                <h2 className="text-lg sm:text-xl font-semibold theme-text-gradient">
                   訂閱數趨勢
                 </h2>
                 <select
@@ -390,7 +390,7 @@ export default function StreamerDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* 基本資料卡片 */}
           <div className="theme-card p-6">
-            <h2 className="text-xl font-semibold mb-4 theme-text-primary">
+            <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
               帳戶資訊
             </h2>
             <div className="space-y-3">
@@ -426,7 +426,7 @@ export default function StreamerDashboard() {
 
           {/* 功能區塊 */}
           <div className="theme-card p-6">
-            <h2 className="text-xl font-semibold mb-4 theme-text-primary">
+            <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
               快速功能
             </h2>
             <div className="space-y-3">

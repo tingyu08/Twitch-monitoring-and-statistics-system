@@ -48,10 +48,7 @@ export function StreamSummaryCards() {
     <section className="space-y-6" aria-label="開台統計總覽">
       {/* 時間範圍選擇器 */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2
-          id="stats-heading"
-          className="text-2xl font-bold theme-text-primary"
-        >
+        <h2 id="stats-heading" className="text-2xl theme-text-gradient">
           開台統計總覽
         </h2>
         <DateRangePicker selectedRange={range} onRangeChange={setRange} />

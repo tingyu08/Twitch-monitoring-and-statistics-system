@@ -76,26 +76,36 @@
 
   /* 頂部歡迎卡片樣式 (更強的玻璃感) */
   .theme-header-card {
-    /* 淺色：背景半透(60%)，邊框加深(purple-300) */
-    @apply bg-white/60 dark:bg-white/5 backdrop-blur-md border border-purple-300 dark:border-white/10 rounded-2xl shadow-sm;
+    /* 淺色：背景半透(60%)，邊框加深(purple-300)；深色：還原至 10% 透明度以提升亮度 */
+    @apply bg-white/60 dark:bg-white/10 backdrop-blur-md border border-purple-300 dark:border-white/10 rounded-2xl shadow-sm;
   }
 
   /* 文字顏色工具 */
   .theme-text-primary {
-    @apply text-purple-900 dark:text-white font-bold;
+    @apply text-purple-900 dark:text-purple-50 font-bold;
   }
 
   .theme-text-secondary {
-    @apply text-purple-800 dark:text-purple-300/80;
+    @apply text-purple-800 dark:text-purple-200;
   }
 
   .theme-text-muted {
-    @apply text-purple-700/60 dark:text-purple-300/50;
+    @apply text-purple-700/60 dark:text-purple-300/60;
   }
 
-  /* 按鈕樣式 */
+  /* 漸層標題文字 (還原設計) */
+  .theme-text-gradient {
+    @apply text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-400 font-bold;
+  }
+
+  /* 按鈕樣式 (還原為紫粉色漸層) */
   .theme-btn-primary {
-    @apply bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition;
+    @apply bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold shadow-md hover:shadow-lg transition;
+  }
+
+  /* 頁面主背景 (還原深色漸層 - 移除透明度限制) */
+  .theme-main-bg {
+    @apply min-h-screen bg-gray-50 dark:bg-[#0f0e17] dark:bg-gradient-to-br dark:from-slate-900 dark:via-purple-900 dark:to-slate-900;
   }
 
   .theme-btn-secondary {
@@ -117,7 +127,7 @@
   }
 
   .theme-text-muted {
-    @apply text-gray-500 dark:text-gray-500;
+    @apply text-gray-600/60 dark:text-purple-400;
   }
 }
 

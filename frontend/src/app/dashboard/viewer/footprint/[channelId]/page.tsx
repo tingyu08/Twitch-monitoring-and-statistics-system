@@ -58,8 +58,10 @@ export default function ViewerFootprintPage() {
 
   if (loading || authLoading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <div className="text-purple-300 animate-pulse">正在載入足跡數據...</div>
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="theme-text-secondary animate-pulse">
+          正在載入足跡數據...
+        </div>
       </main>
     );
   }
@@ -74,16 +76,16 @@ export default function ViewerFootprintPage() {
 
   if (error || !stats) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-8">
-        <h1 className="text-2xl font-bold text-purple-300 mb-2">
+      <main className="min-h-screen flex flex-col items-center justify-center theme-text-primary p-8">
+        <h1 className="text-2xl font-bold theme-text-secondary mb-2">
           無法載入足跡數據
         </h1>
-        <p className="text-purple-300/50 mb-4">
+        <p className="theme-text-muted mb-4">
           {error || "找不到此頻道的統計資料或資料尚未生成"}
         </p>
         <button
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-white/10 backdrop-blur-sm text-purple-300 rounded-xl hover:bg-white/20 transition border border-white/10"
+          className="px-4 py-2 theme-btn-primary rounded-xl transition"
         >
           重試
         </button>
@@ -92,37 +94,37 @@ export default function ViewerFootprintPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <main className="theme-main-bg theme-text-primary">
       {/* Header Bar */}
-      <header className="border-b border-white/10 backdrop-blur-sm bg-black/20">
-        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-2 text-sm text-purple-300/70">
+      <header className="border-b border-purple-300 dark:border-white/10 backdrop-blur-md bg-white/70 dark:bg-black/20 sticky top-0 z-40">
+        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-2 text-sm theme-text-secondary">
           <button
             onClick={() => router.push("/dashboard/viewer")}
-            className="hover:text-purple-400 transition-colors"
+            className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
           >
             觀眾儀表板
           </button>
           <span>/</span>
           <button
             onClick={() => router.push(`/dashboard/viewer/${channelId}`)}
-            className="hover:text-purple-400 transition-colors"
+            className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
           >
             {stats.channelDisplayName || stats.channelName}
           </button>
           <span>/</span>
-          <span className="text-white">成就足跡</span>
+          <span className="theme-text-primary">成就足跡</span>
         </div>
       </header>
 
       <div className="p-4 lg:p-6 max-w-[1600px] mx-auto pb-20">
         {/* Page Header */}
-        <section className="mb-8 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-          <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-2 tracking-tight">
+        <section className="mb-8 theme-header-card p-6">
+          <h1 className="text-3xl theme-text-gradient mb-2 tracking-tight">
             觀眾足跡總覽
           </h1>
-          <p className="text-purple-300/70">
+          <p className="theme-text-secondary">
             探索你在{" "}
-            <span className="text-purple-400 font-medium">
+            <span className="theme-text-primary font-medium">
               {stats.channelDisplayName || stats.channelName}
             </span>{" "}
             的互動歷程與成就

@@ -194,7 +194,7 @@ export default function ViewerDashboardPage() {
                 />
               )}
               <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold theme-text-primary">
+                <h1 className="text-xl sm:text-2xl md:text-3xl theme-text-gradient">
                   歡迎回來，{viewerUser?.displayName || "觀眾"}
                 </h1>
                 <p className="text-sm sm:text-base theme-text-secondary mt-0.5 sm:mt-1">
@@ -244,10 +244,10 @@ export default function ViewerDashboardPage() {
         {/* 搜尋與標題 */}
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold theme-text-primary">
+            <h2 className="text-xl font-semibold theme-text-gradient">
               已追蹤的頻道
             </h2>
-            <span className="text-sm theme-text-muted">
+            <span className="text-sm text-purple-600/60 dark:text-purple-500">
               ({filteredChannels.length} 個頻道
               {totalPages > 1 ? ` · 第 ${currentPage}/${totalPages} 頁` : ""})
             </span>
@@ -303,11 +303,17 @@ export default function ViewerDashboardPage() {
           <>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {currentPageChannels.map((channel) => (
-                <button
+                <div
                   key={channel.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleChannelClick(channel.id)}
-                  className="group bg-white/40 dark:bg-white/10 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/10 hover:-translate-y-1 hover:bg-white/50 dark:hover:bg-white/15"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      handleChannelClick(channel.id);
+                    }
+                  }}
+                  className="group cursor-pointer bg-white/40 dark:bg-white/10 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/10 hover:-translate-y-1 hover:bg-white/50 dark:hover:bg-white/15"
                 >
                   <div className="flex items-center gap-4 mb-4">
                     <div className="relative">
@@ -327,9 +333,35 @@ export default function ViewerDashboardPage() {
                       <h3 className="font-bold text-lg text-purple-900 dark:text-white group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors">
                         {channel.displayName}
                       </h3>
-                      <p className="text-sm text-purple-800/60 dark:text-purple-300/50 font-mono">
-                        @{channel.channelName}
-                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm text-purple-800/60 dark:text-purple-300/50 font-mono">
+                          @{channel.channelName}
+                        </p>
+                        {channel.isLive && (
+                          <a
+                            href={`https://twitch.tv/${channel.channelName}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs text-purple-500 hover:text-purple-700 dark:text-purple-400 dark:hover:text-white hover:underline flex items-center gap-0.5 transition-colors z-10 relative"
+                          >
+                            立即觀看
+                            <svg
+                              className="w-3 h-3"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                              />
+                            </svg>
+                          </a>
+                        )}
+                      </div>
                       {channel.isLive && channel.category && (
                         <p className="text-xs text-purple-400/70 mt-0.5 truncate max-w-[180px]">
                           🎮 {channel.category}
@@ -402,7 +434,7 @@ export default function ViewerDashboardPage() {
                       </div>
                     )}
                   </div>
-                </button>
+                </div>
               ))}
             </div>
 

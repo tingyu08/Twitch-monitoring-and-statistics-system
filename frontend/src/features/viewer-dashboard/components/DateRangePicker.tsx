@@ -60,16 +60,19 @@ export function DateRangePicker({
         aria-haspopup="dialog"
         aria-label={
           range?.from && range?.to
-            ? `已選擇日期範圍：${format(range.from, "MM/dd")} 至 ${format(range.to, "MM/dd")}，點擊更改`
+            ? `已選擇日期範圍：${format(range.from, "MM/dd")} 至 ${format(
+                range.to,
+                "MM/dd"
+              )}，點擊更改`
             : "選擇自訂日期範圍"
         }
         className={`
           px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200
-          border border-gray-600 bg-gray-800/50
+          border
           ${
             range?.from && range?.to
-              ? "text-purple-300 border-purple-500"
-              : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+              ? "bg-purple-600 border-purple-600 text-white shadow-md"
+              : "bg-white dark:bg-white/5 border-purple-200 dark:border-white/10 text-purple-700 dark:text-gray-400 hover:text-purple-900 dark:hover:text-white hover:bg-purple-50 dark:hover:bg-white/10"
           }
           ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         `}
@@ -100,43 +103,37 @@ export function DateRangePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-2 right-0 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4">
+        <div className="absolute z-50 mt-2 right-0 bg-white dark:bg-[#1a1b26] border border-purple-200 dark:border-white/10 rounded-lg shadow-xl p-4">
           <style>
             {`
               .rdp {
                 --rdp-cell-size: 36px;
-                --rdp-accent-color: #a855f7;
-                --rdp-background-color: #1f2937;
-                color: #f3f4f6;
+                --rdp-accent-color: #9333ea;
+                --rdp-background-color: transparent;
+                margin: 0;
               }
+              /* 淺色模式預設 */
+              .rdp { color: #4b5563; }
+              .rdp-button:hover:not([disabled]):not(.rdp-day_selected) { background-color: #f3f4f6; }
+              .rdp-caption_label { color: #111827; font-weight: 600; }
+              .rdp-head_cell { color: #6b7280; font-weight: 500; }
+              .rdp-day_selected { color: white; }
+              
+              /* 深色模式適配 */
+              :global(.dark) .rdp { color: #e5e7eb; }
+              :global(.dark) .rdp-button:hover:not([disabled]):not(.rdp-day_selected) { background-color: #374151; }
+              :global(.dark) .rdp-caption_label { color: #f3f4f6; }
+              :global(.dark) .rdp-head_cell { color: #9ca3af; }
+
               .rdp-day_selected:not([disabled]) {
-                background-color: #a855f7 !important;
+                background-color: var(--rdp-accent-color) !important;
                 color: white !important;
               }
-              .rdp-day_selected:hover:not([disabled]) {
-                background-color: #9333ea !important;
-              }
-              .rdp-day:hover:not([disabled]):not(.rdp-day_selected) {
-                background-color: #374151;
-              }
               .rdp-day_range_middle {
+                background-color: rgba(147, 51, 234, 0.1) !important;
+              }
+              :global(.dark) .rdp-day_range_middle {
                 background-color: rgba(168, 85, 247, 0.2) !important;
-              }
-              .rdp-button:focus-visible:not([disabled]) {
-                outline: 2px solid #a855f7;
-              }
-              .rdp-caption_label {
-                font-weight: 600;
-              }
-              .rdp-head_cell {
-                color: #9ca3af;
-                font-weight: 500;
-              }
-              .rdp-nav_button {
-                color: #9ca3af;
-              }
-              .rdp-nav_button:hover {
-                background-color: #374151;
               }
             `}
           </style>
@@ -155,7 +152,12 @@ export function DateRangePicker({
             <span className="text-xs text-gray-500">
               {range?.from
                 ? range?.to
-                  ? `已選擇 ${Math.ceil((range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24)) + 1} 天`
+                  ? `已選擇 ${
+                      Math.ceil(
+                        (range.to.getTime() - range.from.getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      ) + 1
+                    } 天`
                   : "請選擇結束日期"
                 : "請選擇開始日期"}
             </span>

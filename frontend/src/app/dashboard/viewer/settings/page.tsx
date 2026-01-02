@@ -285,8 +285,8 @@ export default function ViewerSettingsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <div className="animate-pulse text-purple-300">載入中...</div>
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse theme-text-secondary">載入中...</div>
       </main>
     );
   }
@@ -298,14 +298,14 @@ export default function ViewerSettingsPage() {
   const viewerUser = isViewer(user) ? user : null;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <main className="theme-main-bg theme-text-primary">
       {/* Header */}
-      <header className="border-b border-white/10 backdrop-blur-sm bg-black/20">
+      <header className="border-b border-purple-300 dark:border-white/10 backdrop-blur-md bg-white/70 dark:bg-black/20 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             type="button"
             onClick={() => router.push("/dashboard/viewer")}
-            className="text-purple-300 hover:text-white transition-colors flex items-center gap-2"
+            className="text-purple-600 dark:text-purple-300 hover:text-purple-800 dark:hover:text-white transition-colors flex items-center gap-2"
           >
             <svg
               className="w-5 h-5"
@@ -322,7 +322,7 @@ export default function ViewerSettingsPage() {
             </svg>
             返回儀表板
           </button>
-          <h1 className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+          <h1 className="text-lg font-semibold theme-text-gradient">
             帳號設定
           </h1>
           <div className="w-24" />
@@ -366,8 +366,8 @@ export default function ViewerSettingsPage() {
         )}
 
         {/* Profile Section */}
-        <section className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+        <section className="theme-card p-6">
+          <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
             個人資料
           </h2>
           <div className="flex items-center gap-6">
@@ -382,14 +382,14 @@ export default function ViewerSettingsPage() {
               />
             )}
             <div>
-              <p className="text-xl font-medium text-white">
+              <p className="text-xl font-medium theme-text-primary">
                 {viewerUser?.displayName}
               </p>
-              <p className="text-purple-300/70">
+              <p className="theme-text-secondary">
                 Twitch ID: {viewerUser?.twitchUserId}
               </p>
               {viewerUser?.consentedAt && (
-                <p className="text-sm text-gray-400 mt-1">
+                <p className="text-sm theme-text-muted mt-1">
                   同意隱私條款於：
                   {new Date(viewerUser.consentedAt).toLocaleDateString("zh-TW")}
                 </p>
@@ -399,21 +399,21 @@ export default function ViewerSettingsPage() {
         </section>
 
         {/* Privacy Settings Section (New 2.5 Features) */}
-        <section className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+        <section className="theme-card p-6">
+          <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
             隱私設定 (GDPR)
           </h2>
           <div className="space-y-6">
             {privacyCategories.map((category) => (
               <div
                 key={category.id}
-                className="bg-gray-700/50 rounded-lg p-6 space-y-4 border border-white/5"
+                className="bg-purple-50/50 dark:bg-white/5 rounded-lg p-6 space-y-4 border border-purple-100 dark:border-white/5"
               >
                 <div>
-                  <h3 className="text-lg font-semibold text-white">
+                  <h3 className="text-lg font-semibold theme-text-primary">
                     {category.title}
                   </h3>
-                  <p className="text-gray-400 text-sm">
+                  <p className="theme-text-muted text-sm">
                     {category.description}
                   </p>
                 </div>
@@ -422,17 +422,17 @@ export default function ViewerSettingsPage() {
                   {category.settings.map((setting) => (
                     <div
                       key={setting.key}
-                      className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-white dark:bg-black/20 rounded-lg border border-purple-100 dark:border-white/5 shadow-sm"
                     >
                       <div className="flex-1">
-                        <div className="font-medium text-white">
+                        <div className="font-medium theme-text-primary">
                           {setting.label}
                         </div>
-                        <div className="text-gray-400 text-sm">
+                        <div className="theme-text-secondary text-sm">
                           {setting.description}
                         </div>
                         {!settings[setting.key] && (
-                          <div className="text-yellow-400/80 text-xs mt-1">
+                          <div className="text-yellow-600 dark:text-yellow-400/80 text-xs mt-1">
                             ⚠️ {setting.impact}
                           </div>
                         )}
@@ -444,7 +444,7 @@ export default function ViewerSettingsPage() {
                         className={`relative w-12 h-6 rounded-full transition-colors ${
                           settings[setting.key]
                             ? "bg-purple-600"
-                            : "bg-gray-600"
+                            : "bg-gray-400 dark:bg-gray-600"
                         } ${isSaving ? "opacity-50" : ""}`}
                       >
                         <span
@@ -462,12 +462,12 @@ export default function ViewerSettingsPage() {
         </section>
 
         {/* Data Summary Section */}
-        <section className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+        <section className="theme-card p-6">
+          <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
             您的資料統計
           </h2>
           {privacyLoading ? (
-            <p className="text-gray-400">載入中...</p>
+            <p className="theme-text-muted">載入中...</p>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl border border-blue-500/20 text-center">
@@ -499,17 +499,17 @@ export default function ViewerSettingsPage() {
         </section>
 
         {/* Data Management Section (Merged with Danger Zone) */}
-        <section className="bg-gray-700/30 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-          <h2 className="text-xl font-semibold mb-4 text-white">
+        <section className="bg-purple-100/30 dark:bg-gray-700/30 backdrop-blur-sm rounded-2xl border border-purple-200 dark:border-white/10 p-6">
+          <h2 className="text-xl font-semibold mb-4 theme-text-primary">
             資料管理與危險區域
           </h2>
 
           <div className="space-y-6">
             {/* Export Data */}
-            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 gap-4">
+            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/50 dark:bg-white/5 rounded-xl border border-purple-100 dark:border-white/5 gap-4">
               <div>
-                <p className="font-medium text-white">匯出我的資料</p>
-                <p className="text-sm text-gray-400">
+                <p className="font-medium theme-text-primary">匯出我的資料</p>
+                <p className="text-sm theme-text-muted">
                   下載包含 JSON 和 CSV 格式的完整資料封存檔
                 </p>
               </div>
@@ -520,7 +520,7 @@ export default function ViewerSettingsPage() {
                 disabled={exportStatus.isExporting}
                 className={`flex-shrink-0 px-6 py-2 rounded-lg font-medium transition-colors ${
                   exportStatus.isExporting
-                    ? "bg-gray-600 cursor-not-allowed"
+                    ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
                     : exportStatus.downloadReady
                     ? "bg-green-600 hover:bg-green-700 text-white"
                     : "bg-blue-600 hover:bg-blue-700 text-white"
@@ -535,27 +535,29 @@ export default function ViewerSettingsPage() {
             </div>
 
             {/* Logout */}
-            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 gap-4">
+            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/50 dark:bg-white/5 rounded-xl border border-purple-100 dark:border-white/5 gap-4">
               <div>
-                <p className="font-medium text-white">登出</p>
-                <p className="text-sm text-gray-400">
+                <p className="font-medium theme-text-primary">登出</p>
+                <p className="text-sm theme-text-muted">
                   登出此帳號，您的資料將會保留
                 </p>
               </div>
               <button
                 type="button"
                 onClick={logout}
-                className="flex-shrink-0 px-6 py-2 border border-gray-500 text-gray-300 rounded-lg hover:bg-white/5 transition-colors"
+                className="flex-shrink-0 px-6 py-2 border border-purple-300 dark:border-gray-500 text-purple-700 dark:text-gray-300 rounded-lg hover:bg-purple-50 dark:hover:bg-white/5 transition-colors"
               >
                 登出
               </button>
             </div>
 
             {/* Delete Account (Red Zone) */}
-            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-red-500/10 rounded-xl border border-red-500/20 gap-4">
+            <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-200 dark:border-red-500/20 gap-4">
               <div>
-                <p className="font-medium text-red-400">刪除我的帳號</p>
-                <p className="text-sm text-red-300/70">
+                <p className="font-medium text-red-600 dark:text-red-400">
+                  刪除我的帳號
+                </p>
+                <p className="text-sm text-red-500/70 dark:text-red-300/70">
                   請求永久刪除您的帳號與所有資料（含 7 天冷靜期）
                 </p>
               </div>
@@ -564,7 +566,7 @@ export default function ViewerSettingsPage() {
                 disabled={deletionStatus?.hasPendingDeletion}
                 className={`flex-shrink-0 px-6 py-2 rounded-lg font-medium transition-colors ${
                   deletionStatus?.hasPendingDeletion
-                    ? "bg-gray-600 cursor-not-allowed"
+                    ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
                     : "bg-red-600 hover:bg-red-700 text-white"
                 }`}
               >

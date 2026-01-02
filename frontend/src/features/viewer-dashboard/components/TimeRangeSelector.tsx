@@ -16,7 +16,11 @@ interface TimeRangeSelectorProps {
   disabled?: boolean;
 }
 
-const RANGE_OPTIONS: { value: TimeRange; label: string; days: number | null }[] = [
+const RANGE_OPTIONS: {
+  value: TimeRange;
+  label: string;
+  days: number | null;
+}[] = [
   { value: "7", label: "7 天", days: 7 },
   { value: "30", label: "30 天", days: 30 },
   { value: "90", label: "90 天", days: 90 },
@@ -29,7 +33,10 @@ export function TimeRangeSelector({
   onCustomRangeChange,
   disabled = false,
 }: TimeRangeSelectorProps) {
-  const handleCustomRangeSelect = (range: { startDate: Date; endDate: Date }) => {
+  const handleCustomRangeSelect = (range: {
+    startDate: Date;
+    endDate: Date;
+  }) => {
     if (onCustomRangeChange) {
       onCustomRangeChange(range);
       onRangeChange("custom");
@@ -37,14 +44,16 @@ export function TimeRangeSelector({
   };
 
   return (
-    <div 
+    <div
       className="flex items-center gap-3 flex-wrap"
       role="group"
       aria-label="時間範圍選擇"
     >
-      <span id="time-range-label" className="text-sm text-gray-400">時間範圍：</span>
-      <div 
-        className="flex bg-gray-800 rounded-lg p-1 border border-gray-700"
+      <span id="time-range-label" className="text-sm theme-text-secondary">
+        時間範圍：
+      </span>
+      <div
+        className="flex bg-white dark:bg-[#1a1b26] rounded-lg p-1 border border-purple-200 dark:border-white/5"
         role="radiogroup"
         aria-labelledby="time-range-label"
       >
@@ -56,13 +65,15 @@ export function TimeRangeSelector({
             aria-checked={currentRange === option.value}
             onClick={() => onRangeChange(option.value)}
             disabled={disabled}
-            aria-label={`顯示${option.label}的資料${currentRange === option.value ? '，目前已選擇' : ''}`}
+            aria-label={`顯示${option.label}的資料${
+              currentRange === option.value ? "，目前已選擇" : ""
+            }`}
             className={`
               px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200
               ${
                 currentRange === option.value
                   ? "bg-purple-600 text-white shadow-sm shadow-purple-900/20"
-                  : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                  : "text-purple-700 dark:text-gray-400 hover:text-purple-900 dark:hover:text-white hover:bg-purple-50 dark:hover:bg-white/5"
               }
               ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
             `}
@@ -71,7 +82,7 @@ export function TimeRangeSelector({
           </button>
         ))}
       </div>
-      
+
       {/* 自訂日期選擇器 */}
       {onCustomRangeChange && (
         <DateRangePicker

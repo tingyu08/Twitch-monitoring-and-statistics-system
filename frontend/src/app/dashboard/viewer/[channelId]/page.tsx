@@ -132,20 +132,22 @@ export default function ViewerChannelStatsPage() {
 
   if (authLoading || loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-400"></div>
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600 dark:border-purple-400"></div>
       </main>
     );
   }
 
   if (error || !stats) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-        <p className="text-red-400 mb-6 text-xl">{error || "無法載入資料"}</p>
+      <main className="min-h-screen flex flex-col items-center justify-center theme-text-primary">
+        <p className="text-red-500 dark:text-red-400 mb-6 text-xl">
+          {error || "無法載入資料"}
+        </p>
         <button
           type="button"
           onClick={() => router.push("/dashboard/viewer")}
-          className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-500 hover:to-pink-500 transition-colors"
+          className="px-6 py-2 theme-btn-primary rounded-xl transition-colors"
         >
           返回儀表板
         </button>
@@ -163,24 +165,24 @@ export default function ViewerChannelStatsPage() {
   }));
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+    <main className="theme-main-bg theme-text-primary">
       {/* Header Bar */}
-      <header className="border-b border-white/10 backdrop-blur-sm bg-black/20">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2 text-sm text-purple-300/70">
+      <header className="border-b border-purple-300 dark:border-white/10 backdrop-blur-md bg-white/70 dark:bg-black/20 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2 text-sm theme-text-secondary">
           <button
             onClick={() => router.push("/dashboard/viewer")}
-            className="hover:text-purple-400 transition-colors"
+            className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
           >
             觀眾儀表板
           </button>
           <span>/</span>
-          <span className="text-white">{channel.displayName}</span>
+          <span className="theme-text-primary">{channel.displayName}</span>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Channel Header */}
-        <section className="mb-10 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
+        <section className="mb-10 theme-header-card p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-6">
               <div className="relative">
@@ -200,15 +202,33 @@ export default function ViewerChannelStatsPage() {
                 )}
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-white mb-1 flex items-center gap-3">
+                <h1 className="text-3xl theme-text-gradient mb-1 flex items-center gap-3">
                   {channel.displayName}
-                  <span className="text-lg font-normal text-purple-300/50 font-mono">
+                  <span className="text-lg font-normal theme-text-muted font-mono">
                     @{channel.name}
                   </span>
                 </h1>
-                <p className="text-purple-300/70 text-sm">
-                  查看你在該頻道的觀看記錄與互動分析
-                </p>
+                <a
+                  href={`https://twitch.tv/${channel.name}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="theme-text-secondary text-sm flex items-center gap-1 hover:underline hover:text-purple-600 dark:hover:text-purple-300 transition-colors w-fit"
+                >
+                  前往觀看
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </a>
               </div>
             </div>
 
@@ -216,7 +236,7 @@ export default function ViewerChannelStatsPage() {
               onClick={() =>
                 router.push(`/dashboard/viewer/footprint/${channelId}`)
               }
-              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-xl shadow-lg shadow-purple-900/40 font-bold transition-all transform hover:-translate-y-1 hover:shadow-purple-900/60 flex items-center gap-2 border border-white/10"
+              className="px-5 py-2.5 theme-btn-primary rounded-xl shadow-lg shadow-purple-900/20 font-bold transition-all transform hover:-translate-y-1 hover:shadow-purple-900/40 flex items-center gap-2 border border-white/10"
             >
               <span className="text-xl">🏆</span>
               查看成就足跡
@@ -232,7 +252,7 @@ export default function ViewerChannelStatsPage() {
             onCustomRangeChange={handleCustomRangeChange}
             disabled={loading}
           />
-          <span className="text-sm text-purple-300/50">
+          <span className="text-sm theme-text-muted">
             {timeRange === "custom" && customRange ? (
               <>自訂範圍：{getDisplayDays()} 天</>
             ) : (
@@ -243,90 +263,100 @@ export default function ViewerChannelStatsPage() {
 
         {/* 觀看統計摘要 */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-4">
+          <h2 className="text-lg font-semibold theme-text-gradient mb-4">
             觀看統計摘要
           </h2>
 
           <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
             {/* 總觀看時數 */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-blue-500/20 to-blue-600/10 backdrop-blur-sm rounded-xl border border-blue-500/20 p-4 text-center group hover:border-blue-500/40 transition-all">
+            <div className="relative overflow-hidden bg-blue-50 dark:bg-blue-500/10 backdrop-blur-sm rounded-xl border border-blue-200 dark:border-blue-500/20 p-4 text-center group hover:border-blue-400 dark:hover:border-blue-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-blue-400">
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
                   {summary.totalWatchHours}
                 </p>
-                <p className="text-xs text-blue-300/70">總觀看時數</p>
+                <p className="text-xs text-blue-600/70 dark:text-blue-300/70">
+                  總觀看時數
+                </p>
               </div>
               <Clock className="absolute -right-4 -bottom-4 w-24 h-24 text-blue-500/5 group-hover:text-blue-500/10 transition-colors rotate-12" />
             </div>
 
             {/* 觀看次數 */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 backdrop-blur-sm rounded-xl border border-cyan-500/20 p-4 text-center group hover:border-cyan-500/40 transition-all">
+            <div className="relative overflow-hidden bg-cyan-50 dark:bg-cyan-500/10 backdrop-blur-sm rounded-xl border border-cyan-200 dark:border-cyan-500/20 p-4 text-center group hover:border-cyan-400 dark:hover:border-cyan-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-cyan-400">
+                <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-400">
                   {summary.sessionCount}
                 </p>
-                <p className="text-xs text-cyan-300/70">觀看次數</p>
+                <p className="text-xs text-cyan-600/70 dark:text-cyan-300/70">
+                  觀看次數
+                </p>
               </div>
               <Eye className="absolute -right-4 -bottom-4 w-24 h-24 text-cyan-500/5 group-hover:text-cyan-500/10 transition-colors rotate-12" />
             </div>
 
             {/* 總留言數 */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-green-500/20 to-green-600/10 backdrop-blur-sm rounded-xl border border-green-500/20 p-4 text-center group hover:border-green-500/40 transition-all">
+            <div className="relative overflow-hidden bg-green-50 dark:bg-green-500/10 backdrop-blur-sm rounded-xl border border-green-200 dark:border-green-500/20 p-4 text-center group hover:border-green-400 dark:hover:border-green-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-green-400">
+                <p className="text-2xl font-bold text-green-700 dark:text-green-400">
                   {summary.totalMessages}
                 </p>
-                <p className="text-xs text-green-300/70">總留言數</p>
+                <p className="text-xs text-green-600/70 dark:text-green-300/70">
+                  總留言數
+                </p>
               </div>
               <MessageSquare className="absolute -right-4 -bottom-4 w-24 h-24 text-green-500/5 group-hover:text-green-500/10 transition-colors rotate-12" />
             </div>
 
             {/* 表情符號 */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 backdrop-blur-sm rounded-xl border border-yellow-500/20 p-4 text-center group hover:border-yellow-500/40 transition-all">
+            <div className="relative overflow-hidden bg-yellow-50 dark:bg-yellow-500/10 backdrop-blur-sm rounded-xl border border-yellow-200 dark:border-yellow-500/20 p-4 text-center group hover:border-yellow-400 dark:hover:border-yellow-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-yellow-400">
+                <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">
                   {summary.totalEmotes}
                 </p>
-                <p className="text-xs text-yellow-300/70">表情符號</p>
+                <p className="text-xs text-yellow-600/70 dark:text-yellow-300/70">
+                  表情符號
+                </p>
               </div>
               <Smile className="absolute -right-4 -bottom-4 w-24 h-24 text-yellow-500/5 group-hover:text-yellow-500/10 transition-colors rotate-12" />
             </div>
 
             {/* 日均分鐘 */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-purple-500/20 to-purple-600/10 backdrop-blur-sm rounded-xl border border-purple-500/20 p-4 text-center group hover:border-purple-500/40 transition-all">
+            <div className="relative overflow-hidden bg-purple-50 dark:bg-purple-500/10 backdrop-blur-sm rounded-xl border border-purple-200 dark:border-purple-500/20 p-4 text-center group hover:border-purple-400 dark:hover:border-purple-500/40 transition-all">
               <div className="relative z-10">
-                <p className="text-2xl font-bold text-purple-400">
+                <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">
                   {summary.averageWatchMinutesPerDay}
                 </p>
-                <p className="text-xs text-purple-300/70">日均分鐘</p>
+                <p className="text-xs text-purple-600/70 dark:text-purple-300/70">
+                  日均分鐘
+                </p>
               </div>
               <Activity className="absolute -right-4 -bottom-4 w-24 h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12" />
             </div>
 
             {/* 首次觀看 */}
-            <div className="relative overflow-hidden bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 p-4 text-center group hover:border-white/20 transition-all">
+            <div className="relative overflow-hidden theme-card p-4 text-center group hover:border-purple-400 transition-all">
               <div className="relative z-10">
-                <p className="text-lg font-semibold text-white">
+                <p className="text-lg font-semibold theme-text-primary">
                   {summary.firstWatchDate
                     ? summary.firstWatchDate.slice(0, 10)
                     : "-"}
                 </p>
-                <p className="text-xs text-purple-300/50">首次觀看</p>
+                <p className="text-xs theme-text-muted">首次觀看</p>
               </div>
-              <Calendar className="absolute -right-4 -bottom-4 w-24 h-24 text-white/5 group-hover:text-white/10 transition-colors rotate-12" />
+              <Calendar className="absolute -right-4 -bottom-4 w-24 h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12" />
             </div>
 
             {/* 最後觀看 */}
-            <div className="relative overflow-hidden bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 p-4 text-center group hover:border-white/20 transition-all">
+            <div className="relative overflow-hidden theme-card p-4 text-center group hover:border-purple-400 transition-all">
               <div className="relative z-10">
-                <p className="text-lg font-semibold text-white">
+                <p className="text-lg font-semibold theme-text-primary">
                   {summary.lastWatchDate
                     ? summary.lastWatchDate.slice(0, 10)
                     : "-"}
                 </p>
-                <p className="text-xs text-purple-300/50">最後觀看</p>
+                <p className="text-xs theme-text-muted">最後觀看</p>
               </div>
-              <History className="absolute -right-4 -bottom-4 w-24 h-24 text-white/5 group-hover:text-white/10 transition-colors rotate-12" />
+              <History className="absolute -right-4 -bottom-4 w-24 h-24 text-purple-500/5 group-hover:text-purple-500/10 transition-colors rotate-12" />
             </div>
           </div>
         </div>
@@ -334,7 +364,7 @@ export default function ViewerChannelStatsPage() {
         {/* 聊天與互動統計 */}
         {messageStats && (
           <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-lg font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-4">
+            <h2 className="text-lg font-semibold theme-text-gradient mb-4">
               聊天互動分析
             </h2>
 
@@ -354,8 +384,8 @@ export default function ViewerChannelStatsPage() {
         )}
 
         {/* 觀看時數趨勢圖 */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+        <div className="theme-card p-6 mb-8">
+          <h2 className="text-lg font-semibold mb-6 theme-text-gradient">
             觀看時數趨勢
             {timeRange === "all"
               ? "（全部資料）"
@@ -366,18 +396,26 @@ export default function ViewerChannelStatsPage() {
               <LineChart data={chartData}>
                 <CartesianGrid
                   strokeDasharray="3 3"
-                  stroke="rgba(255,255,255,0.1)"
+                  stroke="currentColor"
+                  className="text-purple-200 dark:text-white/10"
                   vertical={false}
                 />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 12, fill: "rgba(167, 139, 250, 0.7)" }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.2)" }}
+                  tick={{ fontSize: 12, fill: "currentColor" }}
+                  stroke="currentColor"
+                  className="text-purple-600 dark:text-purple-300/70"
+                  axisLine={{
+                    stroke: "currentColor",
+                    className: "text-purple-200 dark:text-white/20",
+                  }}
                   tickLine={false}
                   dy={10}
                 />
                 <YAxis
-                  tick={{ fontSize: 12, fill: "rgba(167, 139, 250, 0.7)" }}
+                  tick={{ fontSize: 12, fill: "currentColor" }}
+                  stroke="currentColor"
+                  className="text-purple-600 dark:text-purple-300/70"
                   axisLine={false}
                   tickLine={false}
                   dx={-10}
@@ -407,21 +445,21 @@ export default function ViewerChannelStatsPage() {
         </div>
 
         {/* 未來功能預留區 */}
-        <div className="mt-8 p-6 bg-white/5 backdrop-blur-sm rounded-2xl border-2 border-dashed border-white/20 text-center">
-          <h3 className="text-purple-300/70 font-medium mb-3">
+        <div className="mt-8 p-6 theme-card border-2 border-dashed border-purple-200 dark:border-white/20 text-center">
+          <h3 className="theme-text-secondary font-medium mb-3">
             更多深度分析功能，即將登場
           </h3>
-          <div className="flex flex-wrap justify-center gap-4 text-sm text-purple-300/50">
-            <span className="px-3 py-1 bg-white/10 rounded-full border border-white/10">
+          <div className="flex flex-wrap justify-center gap-4 text-sm theme-text-muted">
+            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
               詳細觀看記錄
             </span>
-            <span className="px-3 py-1 bg-white/10 rounded-full border border-white/10">
+            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
               詞彙雲分析
             </span>
-            <span className="px-3 py-1 bg-white/10 rounded-full border border-white/10">
+            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
               訂閱里程碑
             </span>
-            <span className="px-3 py-1 bg-white/10 rounded-full border border-white/10">
+            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
               忠誠度徽章
             </span>
           </div>
