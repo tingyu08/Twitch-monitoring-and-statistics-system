@@ -7,6 +7,7 @@ import { useAuthSession } from "@/features/auth/AuthContext";
 import { viewerApi, type FollowedChannel } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
 import { useSocket } from "@/lib/socket";
+import { DashboardHeader } from "@/components";
 
 // 每頁顯示的頻道數量
 const CHANNELS_PER_PAGE = 24;
@@ -173,58 +174,36 @@ export default function ViewerDashboardPage() {
   const viewerUser = isViewer(user) ? user : null;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header Bar */}
-      <header className="border-b border-white/10 backdrop-blur-sm bg-black/20 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="text-xs text-purple-300/70 font-mono tracking-wider">
-            VIEWER DASHBOARD
-          </div>
+    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 dark:from-dark-bg dark:via-dark-bg dark:to-dark-card">
+      {/* 使用新的響應式 Header */}
+      <DashboardHeader variant="viewer" />
 
-          {/* Radio Button Style Switcher */}
-          <div className="flex bg-white/10 rounded-lg p-1 border border-white/10">
-            <button
-              type="button"
-              className="px-3 py-1 rounded-md text-xs font-medium bg-purple-600 text-white shadow-sm cursor-default"
-            >
-              觀眾
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push("/dashboard/streamer")}
-              className="px-3 py-1 rounded-md text-xs font-medium text-purple-300 hover:text-white transition-all hover:bg-white/10"
-            >
-              實況主
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* User Header */}
-        <section className="mb-10 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
+      <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 md:py-8">
+        {/* User Header - 響應式設計 */}
+        <section className="mb-6 sm:mb-8 md:mb-10 bg-white/10 dark:bg-dark-card backdrop-blur-sm rounded-xl sm:rounded-2xl border border-white/10 dark:border-dark-border p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-5">
               {viewerUser?.avatarUrl && (
                 <Image
                   src={viewerUser.avatarUrl}
                   alt={viewerUser.displayName}
                   width={80}
                   height={80}
-                  className="w-20 h-20 rounded-full border-4 border-purple-500/50 object-cover ring-4 ring-purple-500/20"
+                  className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 sm:border-4 border-purple-500/50 object-cover ring-2 sm:ring-4 ring-purple-500/20"
                   unoptimized
                 />
               )}
               <div>
-                <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
                   歡迎回來，{viewerUser?.displayName || "觀眾"}
                 </h1>
-                <p className="text-purple-300/70 mt-1">
+                <p className="text-sm sm:text-base text-purple-300/70 mt-0.5 sm:mt-1">
                   追蹤你的觀看數據與互動紀錄
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            {/* 桌面版按鈕 - 在移動端隱藏，使用 Header 選單 */}
+            <div className="hidden md:flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => router.push("/dashboard/viewer/settings")}

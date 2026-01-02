@@ -129,3 +129,121 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-400 dark:bg-gray-500;
 }
+
+/* ========== RWD 響應式工具 ========== */
+
+/* 移動端優先的容器 */
+.container-responsive {
+  @apply w-full px-4 sm:px-6 lg:px-8 mx-auto;
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .container-responsive {
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 768px) {
+  .container-responsive {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-responsive {
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container-responsive {
+    max-width: 1280px;
+  }
+}
+
+/* 移動端安全區域 (for iPhone notch) */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* 觸控友善的按鈕 (最小 44px) */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* 移動端選單動畫 */
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-fill-mode: both;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slideInFromTop;
+}
+
+/* 響應式文字大小 */
+.text-responsive-sm {
+  @apply text-xs sm:text-sm;
+}
+
+.text-responsive-base {
+  @apply text-sm sm:text-base;
+}
+
+.text-responsive-lg {
+  @apply text-base sm:text-lg md:text-xl;
+}
+
+.text-responsive-xl {
+  @apply text-lg sm:text-xl md:text-2xl;
+}
+
+.text-responsive-2xl {
+  @apply text-xl sm:text-2xl md:text-3xl;
+}
+
+/* 響應式間距 */
+.p-responsive {
+  @apply p-3 sm:p-4 md:p-6;
+}
+
+.gap-responsive {
+  @apply gap-3 sm:gap-4 md:gap-6;
+}
+
+/* 隱藏滾動條 (for horizontal scroll on mobile) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 觸控裝置優化 */
+@media (hover: none) and (pointer: coarse) {
+  /* 移除 hover 效果在觸控裝置上 */
+  .touch-no-hover:hover {
+    transform: none;
+    box-shadow: inherit;
+  }
+}
+
