@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { viewerApi, type FollowedChannel } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
@@ -28,6 +29,8 @@ function formatStreamDuration(startedAt: string): string {
 }
 
 export default function ViewerDashboardPage() {
+  const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuthSession();
   const [channels, setChannels] = useState<FollowedChannel[]>([]);
@@ -195,10 +198,14 @@ export default function ViewerDashboardPage() {
               )}
               <div>
                 <h1 className="text-xl sm:text-2xl md:text-3xl theme-text-gradient">
-                  歡迎回來，{viewerUser?.displayName || "觀眾"}
+                  {t("viewer.welcome", {
+                    name:
+                      viewerUser?.displayName ||
+                      t("viewer.welcomeGuest").replace("Welcome back, ", ""),
+                  })}
                 </h1>
                 <p className="text-sm sm:text-base theme-text-secondary mt-0.5 sm:mt-1">
-                  追蹤你的觀看數據與互動紀錄
+                  {t("viewer.subtitle")}
                 </p>
               </div>
             </div>
@@ -228,14 +235,14 @@ export default function ViewerDashboardPage() {
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                帳號設定
+                {t("nav.settings")}
               </button>
               <button
                 type="button"
                 onClick={logout}
                 className="px-4 py-2 rounded-lg bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30 text-sm text-red-700 dark:text-red-300 transition-colors border border-red-200 dark:border-red-500/20"
               >
-                登出
+                {t("common.logout")}
               </button>
             </div>
           </div>
@@ -245,7 +252,7 @@ export default function ViewerDashboardPage() {
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-semibold theme-text-gradient">
-              已追蹤的頻道
+              {t("viewer.followedChannels")}
             </h2>
             <span className="text-sm text-purple-600/60 dark:text-purple-500">
               ({filteredChannels.length} 個頻道
@@ -257,7 +264,7 @@ export default function ViewerDashboardPage() {
               id="channel-search-input"
               name="searchQuery"
               type="text"
-              placeholder="搜尋頻道..."
+              placeholder={t("viewer.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full sm:w-64 px-4 py-2 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-xl theme-text-primary placeholder-purple-400 dark:placeholder-purple-300/50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all backdrop-blur-sm"
@@ -288,7 +295,7 @@ export default function ViewerDashboardPage() {
         {filteredChannels.length === 0 ? (
           <div className="text-center py-20 bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 border-dashed">
             <p className="text-purple-800/80 dark:text-purple-300/70 mb-4 text-lg">
-              {searchQuery ? "找不到符合的頻道" : "您尚未追蹤任何頻道"}
+              {searchQuery ? t("viewer.noChannels") : "您尚未追蹤任何頻道"}
             </p>
             {!searchQuery && (
               <button
@@ -345,7 +352,7 @@ export default function ViewerDashboardPage() {
                             onClick={(e) => e.stopPropagation()}
                             className="text-xs text-purple-500 hover:text-purple-700 dark:text-purple-400 dark:hover:text-white hover:underline flex items-center gap-0.5 transition-colors z-10 relative"
                           >
-                            立即觀看
+                            {t("viewer.watchNow")}
                             <svg
                               className="w-3 h-3"
                               fill="none"
@@ -374,7 +381,9 @@ export default function ViewerDashboardPage() {
                           </span>
                           {channel.viewerCount !== null && (
                             <span className="text-[10px] text-purple-800/70 dark:text-purple-300/70">
-                              {channel.viewerCount.toLocaleString()} 觀眾
+                              {t("viewer.viewers", {
+                                count: channel.viewerCount.toLocaleString(),
+                              })}
                             </span>
                           )}
                         </div>
@@ -397,7 +406,7 @@ export default function ViewerDashboardPage() {
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="bg-blue-600/5 dark:bg-blue-500/10 rounded-xl p-3 border border-blue-200 dark:border-blue-500/20">
                       <p className="text-blue-800 dark:text-blue-300/70 text-xs mb-1">
-                        觀看時數
+                        {t("stats.watchHours")}
                       </p>
                       <p className="font-semibold text-blue-900 dark:text-blue-400 text-lg">
                         {(channel.totalWatchMinutes / 60).toFixed(1)}{" "}
@@ -408,7 +417,7 @@ export default function ViewerDashboardPage() {
                     </div>
                     <div className="bg-green-600/5 dark:bg-green-500/10 rounded-xl p-3 border border-green-200 dark:border-green-500/20">
                       <p className="text-green-800 dark:text-green-300/70 text-xs mb-1">
-                        留言數
+                        {t("stats.messageCount")}
                       </p>
                       <p className="font-semibold text-green-900 dark:text-green-400 text-lg">
                         {channel.messageCount}
@@ -418,7 +427,7 @@ export default function ViewerDashboardPage() {
 
                   <div className="mt-4 pt-3 border-t border-purple-200 dark:border-white/10 text-xs text-purple-800/60 dark:text-purple-300/50 space-y-1">
                     <div className="flex justify-between items-center">
-                      <span>最後觀看</span>
+                      <span>{t("viewer.lastWatched")}</span>
                       <span className="text-purple-900 dark:text-purple-300 font-medium">
                         {channel.lastWatched
                           ? channel.lastWatched.split("T")[0]
@@ -427,7 +436,7 @@ export default function ViewerDashboardPage() {
                     </div>
                     {channel.followedAt && (
                       <div className="flex justify-between items-center">
-                        <span>追蹤於</span>
+                        <span>{t("viewer.followedAt")}</span>
                         <span className="text-purple-900 dark:text-purple-300 font-medium">
                           {channel.followedAt.split("T")[0]}
                         </span>
