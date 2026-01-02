@@ -14,9 +14,87 @@ function isRawChatMessage(msg: MessageInput): msg is RawChatMessage {
   return "viewerId" in msg && "bitsAmount" in msg;
 }
 
+// ========== 快取機制（減少 DB 查詢，優化 RAM）==========
+
+// Viewer 快取：twitchUserId -> viewerId（或 null 表示非註冊用戶）
+const viewerCache = new Map<
+  string,
+  { viewerId: string | null; expiry: number }
+>();
+// Channel 快取：channelName -> channelId
+const channelCache = new Map<
+  string,
+  { channelId: string | null; expiry: number }
+>();
+// 快取過期時間：5 分鐘
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 export class ViewerMessageRepository {
   /**
-   * 保存訊息至資料庫
+   * 使用快取獲取 Viewer ID（減少 DB 查詢）
+   */
+  private async getCachedViewerId(
+    twitchUserId: string
+  ): Promise<string | null> {
+    const now = Date.now();
+    const cached = viewerCache.get(twitchUserId);
+
+    // 如果快取有效，直接返回
+    if (cached && cached.expiry > now) {
+      return cached.viewerId;
+    }
+
+    // 查詢資料庫
+    const viewer = await prisma.viewer.findUnique({
+      where: { twitchUserId },
+      select: { id: true },
+    });
+
+    const viewerId = viewer?.id || null;
+
+    // 儲存到快取
+    viewerCache.set(twitchUserId, {
+      viewerId,
+      expiry: now + CACHE_TTL_MS,
+    });
+
+    return viewerId;
+  }
+
+  /**
+   * 使用快取獲取 Channel ID（減少 DB 查詢）
+   */
+  private async getCachedChannelId(
+    channelName: string
+  ): Promise<string | null> {
+    const now = Date.now();
+    const normalizedName = channelName.toLowerCase();
+    const cached = channelCache.get(normalizedName);
+
+    // 如果快取有效，直接返回
+    if (cached && cached.expiry > now) {
+      return cached.channelId;
+    }
+
+    // 查詢資料庫
+    const channel = await prisma.channel.findFirst({
+      where: { channelName: normalizedName },
+      select: { id: true },
+    });
+
+    const channelId = channel?.id || null;
+
+    // 儲存到快取
+    channelCache.set(normalizedName, {
+      channelId,
+      expiry: now + CACHE_TTL_MS,
+    });
+
+    return channelId;
+  }
+
+  /**
+   * 保存訊息至資料庫（帶快取優化）
    * @param channelName Twitch 頻道名稱 (小寫)
    * @param message 解析後的訊息（可以是 ParsedMessage 或 RawChatMessage）
    */
@@ -30,34 +108,26 @@ export class ViewerMessageRepository {
       : messageInput;
 
     try {
-      // 1. 查找對應的 Viewer (只保存已註冊 Viewer 的訊息)
-      const viewer = await prisma.viewer.findUnique({
-        where: { twitchUserId: message.twitchUserId },
-      });
+      // 1. 使用快取查找 Viewer（避免重複 DB 查詢）
+      const viewerId = await this.getCachedViewerId(message.twitchUserId);
 
-      if (!viewer) {
-        // 非註冊 Viewer，忽略
+      if (!viewerId) {
+        // 非註冊 Viewer，快速跳過（不需查 DB）
         return;
       }
 
-      // 2. 查找對應的 Channel
-      let targetChannelId: string | null = null;
+      // 2. 使用快取查找 Channel
+      const channelId = await this.getCachedChannelId(channelName);
 
-      const ch = await prisma.channel.findFirst({
-        where: { channelName: channelName },
-      });
-      targetChannelId = ch?.id || null;
-
-      if (!targetChannelId) {
-        // logger.warn("ViewerMessage", `Channel not found: ${channelName}`);
+      if (!channelId) {
         return;
       }
 
-      // 3. 寫入詳細記錄
+      // 3. 寫入詳細記錄（只有註冊用戶的訊息才會到這裡）
       await prisma.viewerChannelMessage.create({
         data: {
-          viewerId: viewer.id,
-          channelId: targetChannelId,
+          viewerId,
+          channelId,
           messageText: message.messageText,
           messageType: message.messageType,
           timestamp: message.timestamp,
@@ -68,25 +138,21 @@ export class ViewerMessageRepository {
       });
 
       // 4. 即時更新每日聚合 (Upsert)
-      // 為了簡化，我們可以在這裡直接做增量更新，或者讓 Cron Job 做。
-      // AC 4 說 "每小時聚合"，但如果我們想即時顯示，增量更新更好。
-      // 讓我們做一個簡單的增量更新。
-
       const date = new Date(message.timestamp);
       date.setHours(0, 0, 0, 0);
 
       await prisma.viewerChannelMessageDailyAgg.upsert({
         where: {
           viewerId_channelId_date: {
-            viewerId: viewer.id,
-            channelId: targetChannelId,
-            date: date,
+            viewerId,
+            channelId,
+            date,
           },
         },
         create: {
-          viewerId: viewer.id,
-          channelId: targetChannelId,
-          date: date,
+          viewerId,
+          channelId,
+          date,
           totalMessages: 1,
           chatMessages: message.messageType === "CHAT" ? 1 : 0,
           subscriptions: message.messageType === "SUBSCRIPTION" ? 1 : 0,
@@ -113,15 +179,15 @@ export class ViewerMessageRepository {
       await prisma.viewerChannelDailyStat.upsert({
         where: {
           viewerId_channelId_date: {
-            viewerId: viewer.id,
-            channelId: targetChannelId,
-            date: date,
+            viewerId,
+            channelId,
+            date,
           },
         },
         create: {
-          viewerId: viewer.id,
-          channelId: targetChannelId,
-          date: date,
+          viewerId,
+          channelId,
+          date,
           messageCount: 1,
           emoteCount: message.emotes ? message.emotes.length : 0,
           watchSeconds: 0, // Will be calculated by watch-time.service
@@ -137,23 +203,19 @@ export class ViewerMessageRepository {
       // 5. 觸發觀看時間重新計算（非同步，不阻塞訊息儲存）
       import("../../services/watch-time.service").then(
         ({ updateViewerWatchTime }) => {
-          updateViewerWatchTime(
-            viewer.id,
-            targetChannelId,
-            message.timestamp
-          ).catch((err) =>
-            logger.error("ViewerMessage", "Failed to update watch time", err)
+          updateViewerWatchTime(viewerId, channelId, message.timestamp).catch(
+            (err) =>
+              logger.error("ViewerMessage", "Failed to update watch time", err)
           );
         }
       );
 
       // 6. 觸發 WebSocket 廣播 (即時更新)
-      // 我們只廣播必要的增量資訊來減少頻寬
       const { webSocketGateway } = await import(
         "../../services/websocket.gateway"
       );
-      webSocketGateway.broadcastChannelStats(targetChannelId, {
-        channelId: targetChannelId,
+      webSocketGateway.broadcastChannelStats(channelId, {
+        channelId,
         messageCount: 1, // 表示這是一條新消息，前端累加
       });
     } catch (error) {
