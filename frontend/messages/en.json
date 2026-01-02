@@ -1,0 +1,141 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "settings": "Settings",
+    "logout": "Logout",
+    "login": "Login"
+  },
+  "nav": {
+    "viewerDashboard": "Viewer Dashboard",
+    "streamerDashboard": "Streamer Dashboard",
+    "settings": "Account Settings",
+    "appearance": "Appearance"
+  },
+  "home": {
+    "title": "Twitch Monitoring & Analytics Platform",
+    "description": "Whether you're a streamer or viewer, you can access detailed statistics and interaction records through this platform.",
+    "loginHint": "Single sign-in entry point. You can switch between 'Streamer / Viewer' pages after entering the dashboard.",
+    "loginButton": "Go to Login",
+    "loginFailed": "Login Failed",
+    "authErrors": {
+      "authorizationFailed": "You cancelled the Twitch authorization, or an error occurred during authorization.",
+      "callbackException": "An error occurred while processing login. Please try again later.",
+      "unknown": "An unknown error occurred during login."
+    }
+  },
+  "viewer": {
+    "welcome": "Welcome back, {name}",
+    "welcomeGuest": "Welcome back, Viewer",
+    "subtitle": "Track your viewing data and interaction history",
+    "followedChannels": "Followed Channels",
+    "channelCount": "{count} channels",
+    "pageInfo": "Page {current}/{total}",
+    "searchPlaceholder": "Search channels...",
+    "noChannels": "No channels found matching the criteria",
+    "watchNow": "Watch Now",
+    "goToWatch": "Go to Watch",
+    "viewFootprint": "View Achievement Footprint",
+    "lastWatched": "Last Watched",
+    "followedAt": "Followed At",
+    "live": "LIVE",
+    "viewers": "{count} viewers"
+  },
+  "stats": {
+    "totalWatchHours": "Total Watch Hours",
+    "watchCount": "Watch Count",
+    "totalMessages": "Total Messages",
+    "emotes": "Emotes",
+    "dailyAvgMinutes": "Daily Avg Minutes",
+    "firstWatch": "First Watch",
+    "lastWatch": "Last Watch",
+    "watchHours": "Watch Hours",
+    "messageCount": "Messages"
+  },
+  "timeRange": {
+    "label": "Time Range:",
+    "days7": "7 Days",
+    "days30": "30 Days",
+    "days90": "90 Days",
+    "all": "All",
+    "custom": "Custom",
+    "showingDays": "Showing data from the past {days} days",
+    "customRange": "Custom range: {days} days"
+  },
+  "footprint": {
+    "title": "Viewer Footprint Overview",
+    "subtitle": "Explore your interaction history and achievements on {channel}",
+    "yourFootprint": "Your {channel} Footprint",
+    "resetLayout": "Reset Layout",
+    "trackingDays": "Tracking Days",
+    "streak": "Watch Streak",
+    "currentStreak": "Current Streak",
+    "longestStreak": "Longest Streak",
+    "ranking": "Ranking",
+    "badges": "Achievement Badges",
+    "radarChart": "Radar Chart",
+    "mostActiveMonth": "Most Active Month"
+  },
+  "settings": {
+    "title": "Account Settings",
+    "backToDashboard": "Back to Dashboard",
+    "profile": "Profile",
+    "twitchId": "Twitch ID",
+    "consentedAt": "Consented to privacy policy on: {date}",
+    "privacy": {
+      "title": "Privacy Settings (GDPR)",
+      "watchTime": "Watch Time",
+      "watchTimeDesc": "Collect your watch time statistics",
+      "messages": "Messages & Interactions",
+      "messagesDesc": "Collect your chat room interaction records",
+      "badges": "Achievements & Badges",
+      "badgesDesc": "Track your achievement badge progress",
+      "analytics": "Analytics & Rankings",
+      "analyticsDesc": "Calculate your percentile rankings and comprehensive analysis"
+    },
+    "dataSummary": {
+      "title": "Your Data Summary",
+      "totalMessages": "Total Messages",
+      "followedChannels": "Followed Channels",
+      "oldestRecord": "Oldest Record",
+      "newestRecord": "Newest Record"
+    },
+    "dataManagement": {
+      "title": "Data Management & Danger Zone",
+      "export": "Export My Data",
+      "exportDesc": "Download a complete data archive in JSON and CSV format",
+      "exportButton": "Export Data",
+      "exporting": "Preparing export...",
+      "download": "Download Data",
+      "logoutDesc": "Log out of this account, your data will be retained",
+      "delete": "Delete My Account",
+      "deleteDesc": "Request permanent deletion of your account and all data (includes 7-day cooling-off period)",
+      "deleteButton": "Delete Account"
+    },
+    "deleteModal": {
+      "title": "Confirm Account Deletion",
+      "warning": "Are you sure you want to delete your account?",
+      "point1": "All your personal data will be deleted",
+      "point2": "You can cancel this within 7 days",
+      "point3": "After 7 days, data will be permanently anonymized and unrecoverable",
+      "confirmButton": "Confirm Deletion"
+    },
+    "pendingDeletion": {
+      "title": "Account Deletion Request in Progress",
+      "message": "Your account will be deleted in {days} days.",
+      "cancelButton": "Cancel Deletion"
+    },
+    "privacyPolicy": "View Full Privacy Policy"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  }
+}

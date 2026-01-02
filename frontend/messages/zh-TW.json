@@ -1,0 +1,141 @@
+{
+  "common": {
+    "loading": "載入中...",
+    "error": "發生錯誤",
+    "retry": "重試",
+    "save": "儲存",
+    "cancel": "取消",
+    "confirm": "確認",
+    "back": "返回",
+    "next": "下一步",
+    "settings": "設定",
+    "logout": "登出",
+    "login": "登入"
+  },
+  "nav": {
+    "viewerDashboard": "觀眾儀表板",
+    "streamerDashboard": "實況主儀表板",
+    "settings": "帳號設定",
+    "appearance": "外觀設定"
+  },
+  "home": {
+    "title": "Twitch 實況監控與統計平台",
+    "description": "無論您是實況主或觀眾，都能透過本平台查看詳細的統計數據與互動記錄。",
+    "loginHint": "單一登入入口，進入儀表板後可切換「實況主 / 觀眾」頁面",
+    "loginButton": "前往登入",
+    "loginFailed": "登入失敗",
+    "authErrors": {
+      "authorizationFailed": "您取消了 Twitch 授權，或授權過程中發生錯誤。",
+      "callbackException": "處理登入時發生錯誤，請稍後再試。",
+      "unknown": "登入過程中發生未知錯誤。"
+    }
+  },
+  "viewer": {
+    "welcome": "歡迎回來，{name}",
+    "welcomeGuest": "歡迎回來，觀眾",
+    "subtitle": "追蹤你的觀看數據與互動紀錄",
+    "followedChannels": "已追蹤的頻道",
+    "channelCount": "{count} 個頻道",
+    "pageInfo": "第 {current}/{total} 頁",
+    "searchPlaceholder": "搜尋頻道...",
+    "noChannels": "找不到符合條件的頻道",
+    "watchNow": "立即觀看",
+    "goToWatch": "前往觀看",
+    "viewFootprint": "查看成就足跡",
+    "lastWatched": "最後觀看",
+    "followedAt": "追蹤於",
+    "live": "LIVE",
+    "viewers": "{count} 觀眾"
+  },
+  "stats": {
+    "totalWatchHours": "總觀看時數",
+    "watchCount": "觀看次數",
+    "totalMessages": "總留言數",
+    "emotes": "表情符號",
+    "dailyAvgMinutes": "日均分鐘",
+    "firstWatch": "首次觀看",
+    "lastWatch": "最後觀看",
+    "watchHours": "觀看時數",
+    "messageCount": "留言數"
+  },
+  "timeRange": {
+    "label": "時間範圍：",
+    "days7": "7 天",
+    "days30": "30 天",
+    "days90": "90 天",
+    "all": "全部",
+    "custom": "自訂",
+    "showingDays": "顯示過去 {days} 天的資料",
+    "customRange": "自訂範圍：{days} 天"
+  },
+  "footprint": {
+    "title": "觀眾足跡總覽",
+    "subtitle": "探索你在 {channel} 的互動歷程與成就",
+    "yourFootprint": "你的 {channel} 足跡",
+    "resetLayout": "重置佈局",
+    "trackingDays": "追蹤天數",
+    "streak": "連續觀看",
+    "currentStreak": "目前連續",
+    "longestStreak": "最長連續",
+    "ranking": "排名",
+    "badges": "成就徽章",
+    "radarChart": "雷達圖",
+    "mostActiveMonth": "最活躍月份"
+  },
+  "settings": {
+    "title": "帳號設定",
+    "backToDashboard": "返回儀表板",
+    "profile": "個人資料",
+    "twitchId": "Twitch ID",
+    "consentedAt": "同意隱私條款於：{date}",
+    "privacy": {
+      "title": "隱私設定 (GDPR)",
+      "watchTime": "觀看時數",
+      "watchTimeDesc": "收集您的觀看時數統計",
+      "messages": "留言與互動",
+      "messagesDesc": "收集您的聊天室互動記錄",
+      "badges": "成就與徽章",
+      "badgesDesc": "追蹤您的成就徽章進度",
+      "analytics": "分析與排名",
+      "analyticsDesc": "計算您的百分位排名和綜合分析"
+    },
+    "dataSummary": {
+      "title": "您的資料統計",
+      "totalMessages": "總訊息數",
+      "followedChannels": "追蹤頻道",
+      "oldestRecord": "最早記錄",
+      "newestRecord": "最近記錄"
+    },
+    "dataManagement": {
+      "title": "資料管理與危險區域",
+      "export": "匯出我的資料",
+      "exportDesc": "下載包含 JSON 和 CSV 格式的完整資料封存檔",
+      "exportButton": "匯出資料",
+      "exporting": "正在準備匯出...",
+      "download": "下載資料",
+      "logoutDesc": "登出此帳號，您的資料將會保留",
+      "delete": "刪除我的帳號",
+      "deleteDesc": "請求永久刪除您的帳號與所有資料（含 7 天冷靜期）",
+      "deleteButton": "刪除帳號"
+    },
+    "deleteModal": {
+      "title": "確認刪除帳號",
+      "warning": "您確定要刪除您的帳號嗎？",
+      "point1": "您的所有個人資料將被刪除",
+      "point2": "7 天內可以撤銷此操作",
+      "point3": "7 天後資料將永久匿名化且無法恢復",
+      "confirmButton": "確認刪除"
+    },
+    "pendingDeletion": {
+      "title": "帳號刪除請求進行中",
+      "message": "您的帳號將在 {days} 天後被刪除。",
+      "cancelButton": "撤銷刪除"
+    },
+    "privacyPolicy": "查看完整隱私政策"
+  },
+  "theme": {
+    "light": "淺色",
+    "dark": "深色",
+    "system": "系統"
+  }
+}

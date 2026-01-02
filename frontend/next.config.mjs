@@ -1,4 +1,7 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -68,8 +71,9 @@ const sentryWebpackPluginOptions = {
 };
 
 // 只有在配置了 Sentry DSN 時才啟用
-const config = process.env.NEXT_PUBLIC_SENTRY_DSN
+const configWithSentry = process.env.NEXT_PUBLIC_SENTRY_DSN
   ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
   : nextConfig;
 
-export default config;
+// 應用 next-intl 插件
+export default withNextIntl(configWithSentry);
