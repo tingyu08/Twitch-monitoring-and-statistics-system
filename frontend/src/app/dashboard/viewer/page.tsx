@@ -161,7 +161,7 @@ export default function ViewerDashboardPage() {
 
   if (authLoading || loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <main className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-400"></div>
       </main>
     );
@@ -174,7 +174,7 @@ export default function ViewerDashboardPage() {
   const viewerUser = isViewer(user) ? user : null;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 dark:from-dark-bg dark:via-dark-bg dark:to-dark-card">
+    <main className="min-h-screen">
       {/* 使用新的響應式 Header */}
       <DashboardHeader variant="viewer" />
 

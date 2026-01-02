@@ -32,8 +32,8 @@ function LandingPageContent() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-light-bg dark:bg-dark-bg">
-        <p className="text-gray-600 dark:text-gray-400">載入中...</p>
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-purple-700 dark:text-purple-300">載入中...</p>
       </main>
     );
   }
@@ -43,16 +43,16 @@ function LandingPageContent() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-6 px-4 bg-light-bg dark:bg-dark-bg">
+    <main className="min-h-screen flex flex-col items-center justify-center gap-6 px-4">
       {/* 主題切換按鈕 - 右上角 */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
 
-      <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">
+      <h1 className="text-3xl font-bold text-center text-purple-900 dark:text-white drop-shadow-sm">
         Twitch 實況監控與統計平台
       </h1>
-      <p className="text-gray-600 dark:text-gray-400 text-center max-w-lg">
+      <p className="text-purple-700 dark:text-purple-300 text-center max-w-lg">
         無論您是實況主或觀眾，都能透過本平台查看詳細的統計數據與互動記錄。
       </p>
 
@@ -89,8 +89,8 @@ export default function LandingPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen flex items-center justify-center bg-light-bg dark:bg-dark-bg">
-          <p className="text-gray-600 dark:text-gray-400">載入中...</p>
+        <main className="min-h-screen flex items-center justify-center">
+          <p className="text-purple-700 dark:text-purple-300">載入中...</p>
         </main>
       }
     >

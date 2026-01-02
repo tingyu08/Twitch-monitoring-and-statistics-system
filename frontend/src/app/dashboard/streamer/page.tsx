@@ -25,6 +25,7 @@ import {
 } from "@/features/streamer-dashboard/hooks/useChartData";
 import { useUiPreferences } from "@/features/streamer-dashboard/hooks/useUiPreferences";
 import { authLogger } from "@/lib/logger";
+import { DashboardHeader } from "@/components";
 
 export default function StreamerDashboard() {
   const [user, setUser] = useState<StreamerInfo | null>(null);
@@ -113,7 +114,7 @@ export default function StreamerDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-400"></div>
       </div>
     );
@@ -121,9 +122,9 @@ export default function StreamerDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <p className="text-red-400 mb-4 text-xl">無法載入資料</p>
-        <p className="text-purple-300/70 mb-4">{error}</p>
+        <p className="text-purple-300 dark:text-purple-400/70 mb-4">{error}</p>
         <p className="text-purple-300/50 text-sm">正在返回首頁...</p>
       </div>
     );
@@ -131,7 +132,7 @@ export default function StreamerDashboard() {
 
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-400"></div>
       </div>
     );
@@ -139,64 +140,41 @@ export default function StreamerDashboard() {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white"
+      className="min-h-screen"
       data-testid="dashboard-container"
       data-loaded="true"
     >
       {/* Header Bar */}
-      <header className="border-b border-white/10 backdrop-blur-sm bg-black/20 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="text-xs text-purple-300/70 font-mono tracking-wider">
-            STREAMER DASHBOARD
-          </div>
+      <DashboardHeader variant="streamer" />
 
-          {/* Radio Button Style Switcher */}
-          <div className="flex bg-white/10 rounded-lg p-1 border border-white/10">
-            <button
-              type="button"
-              onClick={() => router.push("/dashboard/viewer")}
-              className="px-3 py-1 rounded-md text-xs font-medium text-purple-300 hover:text-white transition-all hover:bg-white/10"
-            >
-              觀眾
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1 rounded-md text-xs font-medium bg-purple-600 text-white shadow-sm cursor-default"
-            >
-              實況主
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto p-4 sm:p-8">
+      <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6 md:py-8">
         {/* User Header Section */}
         <section
-          className="mb-10 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10 p-6"
+          className="mb-6 sm:mb-8 md:mb-10 bg-white/10 dark:bg-dark-card backdrop-blur-sm rounded-xl sm:rounded-2xl border border-white/10 dark:border-dark-border p-4 sm:p-6"
           data-testid="dashboard-header"
         >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-5">
               {user?.avatarUrl && (
                 <Image
                   src={user.avatarUrl}
                   alt="Profile"
                   width={80}
                   height={80}
-                  className="w-20 h-20 rounded-full border-4 border-purple-500/50 object-cover ring-4 ring-purple-500/20"
+                  className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 sm:border-4 border-purple-500/50 object-cover ring-2 sm:ring-4 ring-purple-500/20"
                   data-testid="user-avatar"
                   unoptimized
                 />
               )}
               <div>
                 <h1
-                  className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400"
+                  className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400"
                   data-testid="dashboard-title"
                 >
                   實況主儀表板
                 </h1>
                 <p
-                  className="text-purple-300/70 mt-1"
+                  className="text-sm sm:text-base text-purple-300/70 mt-0.5 sm:mt-1"
                   data-testid="user-greeting"
                 >
                   歡迎回來，{user?.displayName || "實況主"}
@@ -204,7 +182,7 @@ export default function StreamerDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-3">
               <button
                 type="button"
                 onClick={logout}
