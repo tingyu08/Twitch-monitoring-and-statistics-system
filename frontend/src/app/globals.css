@@ -2,7 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Chart Animations */
+/* ========== 主題 CSS 變數 ========== */
+@layer base {
+  :root {
+    /* 淺色主題 */
+    --background: #f7f7f8;
+    --foreground: #18181b;
+    --card: #ffffff;
+    --card-foreground: #18181b;
+    --border: #e5e7eb;
+    --input: #e5e7eb;
+    --ring: #9333ea;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
+    --accent: #9333ea;
+    --accent-foreground: #ffffff;
+    --success: #22c55e;
+    --warning: #eab308;
+    --error: #ef4444;
+  }
+
+  .dark {
+    /* 深色主題 (Twitch 風格) */
+    --background: #0e0e10;
+    --foreground: #efeff1;
+    --card: #18181b;
+    --card-foreground: #efeff1;
+    --border: #2d2d2d;
+    --input: #2d2d2d;
+    --ring: #a855f7;
+    --muted: #26262c;
+    --muted-foreground: #adadb8;
+    --accent: #a855f7;
+    --accent-foreground: #ffffff;
+    --success: #22c55e;
+    --warning: #eab308;
+    --error: #ef4444;
+  }
+
+  /* 應用主題變數 */
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* ========== 通用樣式類別 ========== */
+@layer components {
+  /* 卡片樣式 */
+  .theme-card {
+    @apply bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg;
+  }
+
+  /* 按鈕樣式 */
+  .theme-btn-primary {
+    @apply bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition;
+  }
+
+  .theme-btn-secondary {
+    @apply bg-gray-100 dark:bg-dark-card border border-gray-200 dark:border-dark-border text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-dark-hover transition;
+  }
+
+  /* 輸入框樣式 */
+  .theme-input {
+    @apply bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 py-2 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition;
+  }
+
+  /* 文字樣式 */
+  .theme-text-primary {
+    @apply text-gray-900 dark:text-gray-100;
+  }
+
+  .theme-text-secondary {
+    @apply text-gray-600 dark:text-gray-400;
+  }
+
+  .theme-text-muted {
+    @apply text-gray-500 dark:text-gray-500;
+  }
+}
+
+/* ========== 動畫 ========== */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -12,4 +93,39 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 主題切換動畫 */
+.theme-transition {
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ========== 滾動條樣式 ========== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-dark-bg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-500;
 }
