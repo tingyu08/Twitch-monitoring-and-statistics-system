@@ -9,95 +9,34 @@ import { isViewer } from "@/lib/api/auth";
 import { viewerApi } from "@/lib/api/viewer";
 import { httpClient } from "@/lib/api/httpClient";
 
-// 隱私設定類別定義
+// 隱私設定類別定義 (Simplified for i18n)
 const privacyCategories = [
   {
     id: "watchTime",
-    title: "觀看時數",
-    description: "收集您的觀看時數統計",
     settings: [
-      {
-        key: "collectDailyWatchTime",
-        label: "每日觀看時數統計",
-        description: "收集您每天在各頻道的觀看時間",
-        impact: "停用後將無法查看觀看時數趨勢圖",
-      },
-      {
-        key: "collectWatchTimeDistribution",
-        label: "觀看時段分佈",
-        description: "收集您觀看的時段分佈（早/午/晚）",
-        impact: "停用後將無法查看時段分佈統計",
-      },
-      {
-        key: "collectMonthlyAggregates",
-        label: "月度聚合統計",
-        description: "計算月度和年度的觀看總時數",
-        impact: "停用後將無法查看雷達圖中的觀看維度",
-      },
+      { key: "collectDailyWatchTime" },
+      { key: "collectWatchTimeDistribution" },
+      { key: "collectMonthlyAggregates" },
     ],
   },
   {
     id: "messages",
-    title: "留言與互動",
-    description: "收集您的聊天室互動記錄",
     settings: [
-      {
-        key: "collectChatMessages",
-        label: "聊天室留言記錄",
-        description: "收集您在聊天室發送的訊息",
-        impact: "停用後將無法查看留言統計",
-      },
-      {
-        key: "collectInteractions",
-        label: "互動統計",
-        description: "收集訂閱、Cheer、Raid 等互動記錄",
-        impact: "停用後將無法查看互動類型分佈",
-      },
-      {
-        key: "collectInteractionFrequency",
-        label: "互動頻率分析",
-        description: "分析您的互動頻率和活躍度",
-        impact: "停用後將無法查看互動頻率圖表",
-      },
+      { key: "collectChatMessages" },
+      { key: "collectInteractions" },
+      { key: "collectInteractionFrequency" },
     ],
   },
   {
     id: "badges",
-    title: "成就與徽章",
-    description: "追蹤您的成就徽章進度",
     settings: [
-      {
-        key: "collectBadgeProgress",
-        label: "成就徽章進度",
-        description: "追蹤各項成就徽章的解鎖進度",
-        impact: "停用後將無法查看成就徽章系統",
-      },
-      {
-        key: "collectFootprintData",
-        label: "足跡總覽資料",
-        description: "收集用於生成觀眾足跡的綜合資料",
-        impact: "停用後將無法使用足跡儀表板",
-      },
+      { key: "collectBadgeProgress" },
+      { key: "collectFootprintData" },
     ],
   },
   {
     id: "analytics",
-    title: "分析與排名",
-    description: "計算您的百分位排名和綜合分析",
-    settings: [
-      {
-        key: "collectRankings",
-        label: "百分位排名",
-        description: "計算您在該頻道觀眾中的排名",
-        impact: "停用後將無法查看排名資訊",
-      },
-      {
-        key: "collectRadarAnalysis",
-        label: "雷達圖綜合分析",
-        description: "生成多維度的觀眾行為分析圖",
-        impact: "停用後將無法查看雷達圖",
-      },
-    ],
+    settings: [{ key: "collectRankings" }, { key: "collectRadarAnalysis" }],
   },
 ];
 
@@ -416,10 +355,12 @@ export default function ViewerSettingsPage() {
               >
                 <div>
                   <h3 className="text-lg font-semibold theme-text-primary">
-                    {category.title}
+                    {t(`settings.privacy.${category.id}`)}
                   </h3>
                   <p className="theme-text-muted text-sm">
-                    {category.description}
+                    {category.id === "id"
+                      ? ""
+                      : t(`settings.privacy.${category.id}Desc`)}
                   </p>
                 </div>
 
@@ -431,14 +372,14 @@ export default function ViewerSettingsPage() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="font-medium theme-text-primary">
-                          {setting.label}
+                          {t(`settings.privacy.${setting.key}`)}
                         </div>
                         <div className="theme-text-secondary text-sm">
-                          {setting.description}
+                          {t(`settings.privacy.${setting.key}Desc`)}
                         </div>
                         {!settings[setting.key] && (
                           <div className="text-yellow-600 dark:text-yellow-400/80 text-xs mt-1">
-                            ⚠️ {setting.impact}
+                            ⚠️ {t(`settings.privacy.${setting.key}Impact`)}
                           </div>
                         )}
                       </div>

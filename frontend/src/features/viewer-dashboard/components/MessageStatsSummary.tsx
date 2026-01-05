@@ -1,7 +1,8 @@
 import { MessageStatsSummary as SummaryType } from "@/lib/api/viewer";
 import { MessageSquare, Calendar, ChevronLast, Hash } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { zhTW } from "date-fns/locale";
+import { zhTW, enUS } from "date-fns/locale";
+import { useTranslations, useLocale } from "next-intl";
 
 interface MessageStatsSummaryProps {
   summary: SummaryType;
@@ -12,6 +13,10 @@ export function MessageStatsSummary({
   summary,
   isLoading,
 }: MessageStatsSummaryProps) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const dateLocale = locale === "zh-TW" ? zhTW : enUS;
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -27,36 +32,36 @@ export function MessageStatsSummary({
 
   const items = [
     {
-      title: "總留言數",
+      title: t("stats.totalMessages"),
       value: summary.totalMessages.toLocaleString(),
       icon: MessageSquare,
-      description: "選定期間內的總計",
+      description: t("stats.totalInPeriod"),
     },
     {
-      title: "平均每場",
+      title: t("stats.avgPerStream"),
       value: summary.avgMessagesPerStream.toLocaleString(),
       icon: Hash,
-      description: "平均每次直播的互動",
+      description: t("stats.avgInteractionsDesc"),
     },
     {
-      title: "最活躍日期",
+      title: t("stats.mostActiveDate"),
       value: summary.mostActiveDate || "-",
       icon: Calendar,
       description: summary.mostActiveDate
-        ? `${summary.mostActiveDateCount} 則留言`
-        : "無數據",
+        ? `${summary.mostActiveDateCount} ${t("stats.messagesUnit")}`
+        : t("stats.noData"),
     },
     {
-      title: "最近留言",
+      title: t("stats.recentMessage"),
       value: summary.lastMessageAt
         ? formatDistanceToNow(new Date(summary.lastMessageAt), {
             addSuffix: true,
-            locale: zhTW,
+            locale: dateLocale,
           })
         : "-",
       icon: ChevronLast,
       description: summary.lastMessageAt
-        ? new Date(summary.lastMessageAt).toLocaleString("zh-TW")
+        ? new Date(summary.lastMessageAt).toLocaleString(locale)
         : "",
     },
   ];

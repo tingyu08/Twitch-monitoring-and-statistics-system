@@ -8,6 +8,8 @@ import {
 } from "./InteractionDetailModal";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 
+import { useTranslations } from "next-intl";
+
 interface InteractionBreakdownChartProps {
   data: InteractionBreakdown;
   height?: number;
@@ -17,27 +19,53 @@ export function InteractionBreakdownChart({
   data,
   height = 350,
 }: InteractionBreakdownChartProps) {
+  const t = useTranslations();
   const { isOpen, selectedType, openModal, closeModal } =
     useInteractionDetailModal();
 
   const chartData = [
-    { name: "聊天", value: data.chatMessages, color: "#3b82f6" },
-    { name: "訂閱", value: data.subscriptions, color: "#8b5cf6" },
-    { name: "小奇點", value: data.cheers, color: "#eab308" },
-    { name: "贈禮", value: data.giftSubs, color: "#f43f5e" },
-    { name: "揪團", value: data.raids, color: "#10b981" },
+    {
+      id: "chat",
+      name: t("stats.interactionTypes.chat"),
+      value: data.chatMessages,
+      color: "#3b82f6",
+    },
+    {
+      id: "sub",
+      name: t("stats.interactionTypes.sub"),
+      value: data.subscriptions,
+      color: "#8b5cf6",
+    },
+    {
+      id: "cheer",
+      name: t("stats.interactionTypes.cheer"),
+      value: data.cheers,
+      color: "#eab308",
+    },
+    {
+      id: "gift",
+      name: t("stats.interactionTypes.gift"),
+      value: data.giftSubs,
+      color: "#f43f5e",
+    },
+    {
+      id: "raid",
+      name: t("stats.interactionTypes.raid"),
+      value: data.raids,
+      color: "#10b981",
+    },
   ].filter((d) => d.value > 0);
 
   if (chartData.length === 0) {
     return (
       <div className="flex h-[350px] w-full items-center justify-center rounded-xl border bg-card text-card-foreground shadow p-4">
-        <p className="text-muted-foreground">無足夠數據顯示互動分佈</p>
+        <p className="text-muted-foreground">{t("stats.noInteractionData")}</p>
       </div>
     );
   }
 
-  const handlePieClick = (entry: { name: string }) => {
-    openModal(entry.name);
+  const handlePieClick = (entry: { id: string }) => {
+    openModal(entry.id);
   };
 
   return (
@@ -48,9 +76,11 @@ export function InteractionBreakdownChart({
       >
         <div className="p-6 flex flex-col space-y-1.5">
           <h3 className="font-semibold leading-none tracking-tight">
-            互動類型分佈
+            {t("stats.interactionParams")}
           </h3>
-          <p className="text-sm text-muted-foreground">點擊各類型查看詳情</p>
+          <p className="text-sm text-muted-foreground">
+            {t("stats.clickToView")}
+          </p>
         </div>
         <div className="p-6 pt-0">
           <SafeResponsiveContainer height={height}>
@@ -76,7 +106,10 @@ export function InteractionBreakdownChart({
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => [value.toLocaleString(), "次數"]}
+                formatter={(value: number) => [
+                  value.toLocaleString(),
+                  t("stats.count"),
+                ]}
                 contentStyle={{
                   borderRadius: "8px",
                   border: "1px solid #e2e8f0",

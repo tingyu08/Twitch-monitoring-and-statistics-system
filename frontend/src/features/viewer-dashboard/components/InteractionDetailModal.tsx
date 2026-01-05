@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { InteractionBreakdown } from "@/lib/api/viewer";
 
 interface InteractionDetailModalProps {
@@ -21,17 +22,22 @@ interface InteractionTypeInfo {
   ) => { label: string; value: string }[];
 }
 
-const interactionTypes: Record<string, InteractionTypeInfo> = {
-  聊天: {
-    name: "聊天訊息",
-    description: "一般聊天室訊息",
+const getInteractionTypes = (
+  t: (key: string) => string
+): Record<string, InteractionTypeInfo> => ({
+  chat: {
+    name: t("stats.interactionModal.chatName"),
+    description: t("stats.interactionModal.chatDesc"),
     icon: "💬",
     color: "#3b82f6",
     getValue: (d) => d.chatMessages,
     getDetails: (d) => [
-      { label: "訊息總數", value: d.chatMessages.toLocaleString() },
       {
-        label: "佔總互動比例",
+        label: t("stats.interactionModal.msgCount"),
+        value: d.chatMessages.toLocaleString(),
+      },
+      {
+        label: t("stats.interactionModal.ratio"),
         value: `${(
           (d.chatMessages /
             (d.chatMessages +
@@ -44,16 +50,19 @@ const interactionTypes: Record<string, InteractionTypeInfo> = {
       },
     ],
   },
-  訂閱: {
-    name: "訂閱通知",
-    description: "新訂閱或續訂通知",
+  sub: {
+    name: t("stats.interactionModal.subName"),
+    description: t("stats.interactionModal.subDesc"),
     icon: "⭐",
     color: "#8b5cf6",
     getValue: (d) => d.subscriptions,
     getDetails: (d) => [
-      { label: "訂閱次數", value: d.subscriptions.toLocaleString() },
       {
-        label: "佔總互動比例",
+        label: t("stats.interactionModal.subCount"),
+        value: d.subscriptions.toLocaleString(),
+      },
+      {
+        label: t("stats.interactionModal.ratio"),
         value: `${(
           (d.subscriptions /
             (d.chatMessages +
@@ -66,31 +75,40 @@ const interactionTypes: Record<string, InteractionTypeInfo> = {
       },
     ],
   },
-  小奇點: {
-    name: "Bits 贊助",
-    description: "使用 Bits 小奇點贊助",
+  cheer: {
+    name: t("stats.interactionModal.bitsName"),
+    description: t("stats.interactionModal.bitsDesc"),
     icon: "💎",
     color: "#eab308",
     getValue: (d) => d.cheers,
     getDetails: (d) => [
-      { label: "贊助次數", value: d.cheers.toLocaleString() },
-      { label: "總 Bits 數", value: (d.totalBits || 0).toLocaleString() },
       {
-        label: "預估價值",
+        label: t("stats.interactionModal.cheerCount"),
+        value: d.cheers.toLocaleString(),
+      },
+      {
+        label: t("stats.interactionModal.totalBits"),
+        value: (d.totalBits || 0).toLocaleString(),
+      },
+      {
+        label: t("stats.interactionModal.estValue"),
         value: `$${((d.totalBits || 0) / 100).toFixed(2)} USD`,
       },
     ],
   },
-  贈禮: {
-    name: "贈送訂閱",
-    description: "贈送訂閱給其他觀眾",
+  gift: {
+    name: t("stats.interactionModal.giftName"),
+    description: t("stats.interactionModal.giftDesc"),
     icon: "🎁",
     color: "#f43f5e",
     getValue: (d) => d.giftSubs,
     getDetails: (d) => [
-      { label: "贈禮次數", value: d.giftSubs.toLocaleString() },
       {
-        label: "佔總互動比例",
+        label: t("stats.interactionModal.giftCount"),
+        value: d.giftSubs.toLocaleString(),
+      },
+      {
+        label: t("stats.interactionModal.ratio"),
         value: `${(
           (d.giftSubs /
             (d.chatMessages +
@@ -103,16 +121,19 @@ const interactionTypes: Record<string, InteractionTypeInfo> = {
       },
     ],
   },
-  揪團: {
-    name: "Raid 參與",
-    description: "參與 Raid 揪團活動",
+  raid: {
+    name: t("stats.interactionModal.raidName"),
+    description: t("stats.interactionModal.raidDesc"),
     icon: "🎉",
     color: "#10b981",
     getValue: (d) => d.raids,
     getDetails: (d) => [
-      { label: "揪團次數", value: d.raids.toLocaleString() },
       {
-        label: "佔總互動比例",
+        label: t("stats.interactionModal.raidCount"),
+        value: d.raids.toLocaleString(),
+      },
+      {
+        label: t("stats.interactionModal.ratio"),
         value: `${(
           (d.raids /
             (d.chatMessages +
@@ -125,7 +146,7 @@ const interactionTypes: Record<string, InteractionTypeInfo> = {
       },
     ],
   },
-};
+});
 
 export function InteractionDetailModal({
   isOpen,
@@ -133,6 +154,8 @@ export function InteractionDetailModal({
   type,
   data,
 }: InteractionDetailModalProps) {
+  const t = useTranslations();
+  const interactionTypes = getInteractionTypes(t);
   const typeInfo = interactionTypes[type];
 
   if (!isOpen || !typeInfo) return null;
@@ -168,7 +191,7 @@ export function InteractionDetailModal({
           <button
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
-            aria-label="關閉"
+            aria-label={t("stats.interactionModal.close")}
           >
             <svg
               className="w-5 h-5"
@@ -205,7 +228,7 @@ export function InteractionDetailModal({
             onClick={onClose}
             className="w-full py-3 px-4 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
           >
-            關閉
+            {t("stats.interactionModal.close")}
           </button>
         </div>
       </div>

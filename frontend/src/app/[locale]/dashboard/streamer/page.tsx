@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { getMe, isStreamer, type StreamerInfo } from "@/lib/api/auth";
 import { useAuthSession } from "@/features/auth/AuthContext";
@@ -28,6 +29,7 @@ import { authLogger } from "@/lib/logger";
 import { DashboardHeader } from "@/components";
 
 export default function StreamerDashboard() {
+  const t = useTranslations("streamer");
   const [user, setUser] = useState<StreamerInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -171,13 +173,13 @@ export default function StreamerDashboard() {
                   className="text-xl sm:text-2xl md:text-3xl theme-text-gradient"
                   data-testid="dashboard-title"
                 >
-                  實況主儀表板
+                  {t("title")}
                 </h1>
                 <p
                   className="text-sm sm:text-base theme-text-secondary mt-0.5 sm:mt-1"
                   data-testid="user-greeting"
                 >
-                  歡迎回來，{user?.displayName || "實況主"}
+                  {t("welcome", { name: user?.displayName || "Streamer" })}
                 </p>
               </div>
             </div>
@@ -189,7 +191,7 @@ export default function StreamerDashboard() {
                 className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-sm text-red-300 transition-colors border border-red-500/20"
                 data-testid="logout-button"
               >
-                登出
+                {t("logout")}
               </button>
             </div>
           </div>
@@ -219,7 +221,7 @@ export default function StreamerDashboard() {
                   className="text-lg sm:text-xl font-semibold theme-text-gradient"
                   data-testid="timeseries-title"
                 >
-                  開台時間分析
+                  {t("scheduleAnalysis")}
                 </h2>
                 <div className="flex flex-wrap gap-2">
                   <select
@@ -232,9 +234,9 @@ export default function StreamerDashboard() {
                     className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
                     data-testid="chart-range-select"
                   >
-                    <option value="7d">最近 7 天</option>
-                    <option value="30d">最近 30 天</option>
-                    <option value="90d">最近 90 天</option>
+                    <option value="7d">{t("recentDays", { days: 7 })}</option>
+                    <option value="30d">{t("recentDays", { days: 30 })}</option>
+                    <option value="90d">{t("recentDays", { days: 90 })}</option>
                   </select>
                   <select
                     id="chart-granularity"
@@ -246,14 +248,14 @@ export default function StreamerDashboard() {
                     className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
                     data-testid="chart-granularity-select"
                   >
-                    <option value="day">依日</option>
-                    <option value="week">依週</option>
+                    <option value="day">{t("byDay")}</option>
+                    <option value="week">{t("byWeek")}</option>
                   </select>
                 </div>
               </div>
 
               {timeSeries.isLoading ? (
-                <ChartLoading message="載入圖表資料中..." />
+                <ChartLoading message={t("loadingCharts")} />
               ) : timeSeries.error ? (
                 <ChartError
                   error={timeSeries.error}
@@ -262,15 +264,11 @@ export default function StreamerDashboard() {
               ) : timeSeries.data.length === 0 ? (
                 <ChartEmpty
                   emoji="📊"
-                  title="暫無開台資料"
-                  description={`在選定的 ${
-                    chartRange === "7d"
-                      ? "7天"
-                      : chartRange === "30d"
-                      ? "30天"
-                      : "90天"
-                  } 時間範圍內沒有開台記錄`}
-                  hint="試試切換其他時間範圍"
+                  title={t("noStreamData")}
+                  description={t("noStreamDataDesc", {
+                    range: chartRange,
+                  })}
+                  hint={t("tryOtherRange")}
                 />
               ) : (
                 <div data-testid="timeseries-chart">
@@ -292,24 +290,20 @@ export default function StreamerDashboard() {
                 className="text-lg sm:text-xl font-semibold theme-text-gradient mb-6"
                 data-testid="heatmap-title"
               >
-                開台時段分布
+                {t("timeDistribution")}
               </h2>
               {heatmap.isLoading ? (
-                <ChartLoading message="載入熱力圖資料中..." />
+                <ChartLoading message={t("loadingCharts")} />
               ) : heatmap.error ? (
                 <ChartError error={heatmap.error} onRetry={heatmap.refresh} />
               ) : heatmap.data.length === 0 ? (
                 <ChartEmpty
                   emoji="🔥"
-                  title="暫無時段資料"
-                  description={`在選定的 ${
-                    chartRange === "7d"
-                      ? "7天"
-                      : chartRange === "30d"
-                      ? "30天"
-                      : "90天"
-                  } 時間範圍內沒有開台記錄`}
-                  hint="試試切換其他時間範圍"
+                  title={t("noTimeData")}
+                  description={t("noStreamDataDesc", {
+                    range: chartRange,
+                  })}
+                  hint={t("tryOtherRange")}
                 />
               ) : (
                 <div data-testid="heatmap-chart">
@@ -329,7 +323,7 @@ export default function StreamerDashboard() {
             <div className="theme-card p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <h2 className="text-lg sm:text-xl font-semibold theme-text-gradient">
-                  訂閱數趨勢
+                  {t("subTrends")}
                 </h2>
                 <select
                   id="subs-chart-range"
@@ -340,9 +334,9 @@ export default function StreamerDashboard() {
                   }
                   className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
                 >
-                  <option value="7d">最近 7 天</option>
-                  <option value="30d">最近 30 天</option>
-                  <option value="90d">最近 90 天</option>
+                  <option value="7d">{t("recentDays", { days: 7 })}</option>
+                  <option value="30d">{t("recentDays", { days: 30 })}</option>
+                  <option value="90d">{t("recentDays", { days: 90 })}</option>
                 </select>
               </div>
 
@@ -356,7 +350,7 @@ export default function StreamerDashboard() {
                 )}
 
               {subscriptionTrend.isLoading ? (
-                <ChartLoading message="載入訂閱趨勢資料中..." />
+                <ChartLoading message={t("loadingCharts")} />
               ) : subscriptionTrend.error ? (
                 <ChartError
                   error={subscriptionTrend.error}
@@ -365,9 +359,9 @@ export default function StreamerDashboard() {
               ) : subscriptionTrend.data.length === 0 ? (
                 <ChartEmpty
                   emoji="📈"
-                  title="尚無訂閱資料"
-                  description="系統尚未開始收集訂閱數據，請稍後再試"
-                  hint="訂閱數據需要每日同步，請確保已授權相關權限"
+                  title={t("noSubData")}
+                  description={t("noSubDataDesc")}
+                  hint={t("subDataHint")}
                 />
               ) : (
                 <SubscriptionTrendChart
@@ -383,7 +377,7 @@ export default function StreamerDashboard() {
 
         {visibleSectionCount === 0 && (
           <div className="mb-8 p-6 rounded-2xl border border-dashed border-white/20 bg-white/5 text-center text-purple-300/70">
-            所有圖表都被隱藏，請在「顯示偏好」中開啟想要的區塊。
+            {t("allHidden")}
           </div>
         )}
 
@@ -391,27 +385,27 @@ export default function StreamerDashboard() {
           {/* 基本資料卡片 */}
           <div className="theme-card p-6">
             <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
-              帳戶資訊
+              {t("accountInfo")}
             </h2>
             <div className="space-y-3">
               <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
-                <span className="theme-text-secondary">顯示名稱</span>
+                <span className="theme-text-secondary">{t("displayName")}</span>
                 <span className="theme-text-primary">{user?.displayName}</span>
               </div>
               <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
-                <span className="theme-text-secondary">Twitch ID</span>
+                <span className="theme-text-secondary">{t("twitchId")}</span>
                 <span className="text-xs font-mono theme-text-muted">
                   {user?.twitchUserId}
                 </span>
               </div>
               <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
-                <span className="theme-text-secondary">系統 ID</span>
+                <span className="theme-text-secondary">{t("systemId")}</span>
                 <span className="text-xs font-mono theme-text-muted">
                   {user?.streamerId}
                 </span>
               </div>
               <div className="flex justify-between border-b border-purple-100 dark:border-white/10 pb-2">
-                <span className="theme-text-secondary">頻道連結</span>
+                <span className="theme-text-secondary">{t("channelLink")}</span>
                 <a
                   href={user?.channelUrl}
                   target="_blank"
@@ -427,14 +421,14 @@ export default function StreamerDashboard() {
           {/* 功能區塊 */}
           <div className="theme-card p-6">
             <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
-              快速功能
+              {t("quickActions")}
             </h2>
             <div className="space-y-3">
               <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2 px-4 rounded-xl transition duration-200 font-medium">
-                管理實況設定
+                {t("manageSettings")}
               </button>
               <button className="w-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 theme-text-primary py-2 px-4 rounded-xl transition duration-200 border border-purple-200 dark:border-white/10">
-                查看收益分析
+                {t("viewRevenue")}
               </button>
             </div>
           </div>

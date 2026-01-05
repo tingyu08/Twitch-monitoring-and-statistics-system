@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { BADGE_CONFIG } from "../config/badges.config";
 import { Badge } from "@/lib/api/lifetime-stats";
 import { cn } from "@/lib/utils/cn";
@@ -14,6 +15,7 @@ export const BadgeDisplay = ({
   size = "md",
   showName = true,
 }: BadgeDisplayProps) => {
+  const t = useTranslations("footprint");
   const config = BADGE_CONFIG[badge.id];
   const [isHovered, setIsHovered] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<"top" | "bottom">(
@@ -24,6 +26,10 @@ export const BadgeDisplay = ({
   if (!config) return null;
 
   const isLocked = !badge.unlockedAt || badge.progress < 100;
+
+  // Use translations for name and description
+  const badgeName = t(`badgeItems.${badge.id}.name` as any);
+  const badgeDesc = t(`badgeItems.${badge.id}.desc` as any);
 
   // Determine tooltip position based on available space
   const handleMouseEnter = () => {
@@ -81,7 +87,7 @@ export const BadgeDisplay = ({
             isHovered && "text-white opacity-100"
           )}
         >
-          {config.name}
+          {badgeName}
         </span>
       )}
 
@@ -95,24 +101,26 @@ export const BadgeDisplay = ({
           style={{ zIndex: 9999 }}
         >
           <div className="font-bold text-white mb-1.5 flex items-center justify-between gap-2">
-            <span className="truncate">{config.name}</span>
+            <span className="truncate">{badgeName}</span>
             {isLocked ? (
               <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 whitespace-nowrap border border-slate-700">
-                未解鎖
+                {t("badgeStatus.locked")}
               </span>
             ) : (
               <span className="text-[10px] bg-emerald-950/50 px-1.5 py-0.5 rounded text-emerald-400 whitespace-nowrap border border-emerald-900/50">
-                已獲得
+                {t("badgeStatus.unlocked")}
               </span>
             )}
           </div>
           <div className="text-slate-300 mb-3 leading-relaxed border-b border-slate-800 pb-2">
-            {config.description}
+            {badgeDesc}
           </div>
 
           <div className="space-y-1.5">
             <div className="flex justify-between text-[10px]">
-              <span className="text-slate-400">進度</span>
+              <span className="text-slate-400">
+                {t("badgeStatus.progress")}
+              </span>
               <span
                 className={cn(
                   "font-medium",
