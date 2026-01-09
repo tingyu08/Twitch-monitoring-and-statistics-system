@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { DateRangePicker } from "./DateRangePicker";
 
 export type TimeRange = "7" | "30" | "90" | "all" | "custom";
@@ -9,23 +10,20 @@ export interface CustomDateRange {
   endDate: Date;
 }
 
-interface TimeRangeSelectorProps {
+export interface TimeRangeSelectorProps {
   currentRange: TimeRange;
   onRangeChange: (range: TimeRange) => void;
-  onCustomRangeChange?: (range: CustomDateRange) => void;
+  onCustomRangeChange: (range: CustomDateRange) => void;
   disabled?: boolean;
 }
 
-const RANGE_OPTIONS: {
-  value: TimeRange;
-  label: string;
-  days: number | null;
-}[] = [
+// Keep for compatibility if used elsewhere for logic
+export const RANGE_OPTIONS = [
   { value: "7", label: "7 天", days: 7 },
   { value: "30", label: "30 天", days: 30 },
   { value: "90", label: "90 天", days: 90 },
-  { value: "all", label: "全部", days: null },
-];
+  { value: "all", label: "全部", days: 3650 }, // ~10年
+] as const;
 
 export function TimeRangeSelector({
   currentRange,
@@ -33,48 +31,43 @@ export function TimeRangeSelector({
   onCustomRangeChange,
   disabled = false,
 }: TimeRangeSelectorProps) {
-  const handleCustomRangeSelect = (range: {
-    startDate: Date;
-    endDate: Date;
-  }) => {
-    if (onCustomRangeChange) {
-      onCustomRangeChange(range);
-      onRangeChange("custom");
-    }
-  };
+  const t = useTranslations("timeRange");
+
+  // Dynamic options with translations
+  const displayOptions = [
+    { value: "7", label: t("days7") },
+    { value: "30", label: t("days30") },
+    { value: "90", label: t("days90") },
+    { value: "all", label: t("all") },
+  ];
 
   return (
     <div
       className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3"
       role="group"
-      aria-label="時間範圍選擇"
+      aria-label={t("label")}
     >
-      {/* 標籤 - 手機上獨立一行 */}
       <span
         id="time-range-label"
         className="text-sm theme-text-secondary whitespace-nowrap"
       >
-        時間範圍：
+        {t("label")}
       </span>
 
-      {/* 按鈕群組 - 手機上可換行 */}
       <div className="flex flex-wrap items-center gap-2">
         <div
           className="flex bg-white dark:bg-[#1a1b26] rounded-lg p-0.5 sm:p-1 border border-purple-200 dark:border-white/5"
           role="radiogroup"
           aria-labelledby="time-range-label"
         >
-          {RANGE_OPTIONS.map((option) => (
+          {displayOptions.map((option) => (
             <button
               key={option.value}
               type="button"
               role="radio"
               aria-checked={currentRange === option.value}
-              onClick={() => onRangeChange(option.value)}
+              onClick={() => onRangeChange(option.value as TimeRange)}
               disabled={disabled}
-              aria-label={`顯示${option.label}的資料${
-                currentRange === option.value ? "，目前已選擇" : ""
-              }`}
               className={`
                 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all duration-200
                 ${
@@ -90,40 +83,32 @@ export function TimeRangeSelector({
           ))}
         </div>
 
-        {/* 自訂日期選擇器 */}
-        {onCustomRangeChange && (
+        <div className="flex items-center">
           <DateRangePicker
-            onRangeSelect={handleCustomRangeSelect}
+            onRangeSelect={onCustomRangeChange}
             disabled={disabled}
           />
-        )}
+        </div>
       </div>
+
+      {currentRange === "custom" && (
+        <span className="text-xs text-purple-600 dark:text-purple-400 animate-fade-in">
+          {t("custom")}
+        </span>
+      )}
     </div>
   );
 }
 
-// 輔助函數：將 TimeRange 轉換為 API 需要的 days 參數
 export function getRangeDays(range: TimeRange): number {
-  switch (range) {
-    case "7":
-      return 7;
-    case "30":
-      return 30;
-    case "90":
-      return 90;
-    case "all":
-      return 365; // 預設取一年資料
-    case "custom":
-      return 0; // 自訂範圍不使用 days，直接用日期
-    default:
-      return 30;
-  }
+  const option = RANGE_OPTIONS.find((opt) => opt.value === range);
+  return option?.days || 30;
 }
 
-// 輔助函數：計算自訂範圍的天數
 export function getCustomRangeDays(range: CustomDateRange): number {
-  const diffMs = range.endDate.getTime() - range.startDate.getTime();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  const diffTime = Math.abs(
+    range.endDate.getTime() - range.startDate.getTime()
+  );
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays + 1;
 }
-
-export default TimeRangeSelector;

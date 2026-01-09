@@ -162,9 +162,9 @@ export default function ViewerChannelStatsPage() {
 
   const chartData = dailyStats.map((stat) => ({
     date: stat.date.slice(5),
-    觀看時數: stat.watchHours,
-    留言數: stat.messageCount,
-    表情符號: stat.emoteCount,
+    watchHours: stat.watchHours,
+    messageCount: stat.messageCount,
+    emoteCount: stat.emoteCount,
   }));
 
   return (
@@ -440,7 +440,8 @@ export default function ViewerChannelStatsPage() {
                 <Legend iconType="circle" />
                 <Line
                   type="monotone"
-                  dataKey="觀看時數"
+                  dataKey="watchHours"
+                  name={t("stats.watchHours")}
                   stroke="#60A5FA"
                   strokeWidth={3}
                   dot={{ r: 4, fill: "#60A5FA", strokeWidth: 0 }}

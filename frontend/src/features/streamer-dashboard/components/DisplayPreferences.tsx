@@ -5,10 +5,15 @@
  * Story 1.5: 實況主儀表板 UX 偏好設定
  */
 
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { useUiPreferences, PREFERENCE_ITEMS, type UiPreferences } from '../hooks/useUiPreferences';
+import { useState, useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
+import {
+  useUiPreferences,
+  PREFERENCE_ITEMS,
+  type UiPreferences,
+} from "../hooks/useUiPreferences";
 
 interface DisplayPreferencesProps {
   /** 外部傳入的偏好設定（用於受控模式） */
@@ -50,9 +55,7 @@ function Toggle({
           <div className="text-sm font-medium text-white group-hover:text-purple-300 transition-colors">
             {label}
           </div>
-          <div className="text-xs text-gray-400">
-            {description}
-          </div>
+          <div className="text-xs text-gray-400">{description}</div>
         </div>
       </div>
 
@@ -70,18 +73,18 @@ function Toggle({
         <div
           className={`
             w-11 h-6 rounded-full transition-colors
-            ${checked ? 'bg-purple-600' : 'bg-gray-600'}
+            ${checked ? "bg-purple-600" : "bg-gray-600"}
             peer-focus:ring-2 peer-focus:ring-purple-500 peer-focus:ring-offset-2 peer-focus:ring-offset-gray-900
           `}
         />
         <div
           className={`
             absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform
-            ${checked ? 'translate-x-5' : 'translate-x-0'}
+            ${checked ? "translate-x-5" : "translate-x-0"}
           `}
         />
         <span id={`${id}-desc`} className="sr-only">
-          {checked ? '已顯示' : '已隱藏'} {label}
+          {checked ? "Enabled" : "Disabled"} {label}
         </span>
       </div>
     </label>
@@ -91,23 +94,47 @@ function Toggle({
 /**
  * 顯示設定面板
  */
-export function DisplayPreferences({ preferences: externalPrefs, onToggle, compact = false }: DisplayPreferencesProps) {
+export function DisplayPreferences({
+  preferences: externalPrefs,
+  onToggle,
+  compact = false,
+}: DisplayPreferencesProps) {
+  const t = useTranslations("streamer.layout");
   const [isExpanded, setIsExpanded] = useState(false);
   const internalHook = useUiPreferences();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Map preference items to translations
+  const translatedItems = PREFERENCE_ITEMS.map((item) => {
+    const keyMap: Record<string, string> = {
+      showSummaryCards: "summaryCards",
+      showTimeSeriesChart: "timeSeries",
+      showHeatmapChart: "heatmap",
+      showSubscriptionChart: "subs",
+    };
+    const tKey = keyMap[item.key];
+    return {
+      ...item,
+      label: t(tKey),
+      description: t(`${tKey}Desc`),
+    };
+  });
 
   // 點擊外部關閉下拉面板
   useEffect(() => {
     if (!isExpanded) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsExpanded(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isExpanded]);
 
   // 使用外部傳入的或內部的偏好設定
@@ -146,16 +173,23 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
-          <span>顯示設定</span>
+          <span>{t("displaySettings")}</span>
           <span className="text-xs text-gray-500">({visibleCount}/4)</span>
           <svg
-            className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 transition-transform ${
+              isExpanded ? "rotate-180" : ""
+            }`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
             aria-hidden="true"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </button>
 
@@ -167,8 +201,10 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
             data-testid="display-preferences-panel"
           >
             <div className="p-4 space-y-2">
-              <div className="text-sm font-medium text-gray-300 mb-3">顯示/隱藏儀表板區塊</div>
-              {PREFERENCE_ITEMS.map((item) => (
+              <div className="text-sm font-medium text-gray-300 mb-3">
+                {t("showHide")}
+              </div>
+              {translatedItems.map((item) => (
                 <Toggle
                   key={item.key}
                   id={`pref-${item.key}`}
@@ -184,7 +220,7 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
               <div className="flex gap-2 pt-3 border-t border-gray-700/50 mt-3">
                 <button
                   onClick={() => {
-                    PREFERENCE_ITEMS.forEach(item => {
+                    PREFERENCE_ITEMS.forEach((item) => {
                       if (!preferences[item.key]) {
                         togglePreference(item.key);
                       }
@@ -193,11 +229,11 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
                   className="flex-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded transition-colors"
                   data-testid="show-all-button"
                 >
-                  全部顯示
+                  {t("showAll")}
                 </button>
                 <button
                   onClick={() => {
-                    PREFERENCE_ITEMS.forEach(item => {
+                    PREFERENCE_ITEMS.forEach((item) => {
                       if (preferences[item.key]) {
                         togglePreference(item.key);
                       }
@@ -206,7 +242,7 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
                   className="flex-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded transition-colors"
                   data-testid="hide-all-button"
                 >
-                  全部隱藏
+                  {t("hideAll")}
                 </button>
               </div>
             </div>
@@ -247,22 +283,31 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
             />
           </svg>
           <div>
-            <h3 className="text-sm font-medium text-white">顯示設定</h3>
-            <p className="text-xs text-gray-400">自訂儀表板顯示的區塊</p>
+            <h3 className="text-sm font-medium text-white">
+              {t("displaySettings")}
+            </h3>
+            <p className="text-xs text-gray-400">{t("customize")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-1 rounded">
-            {visibleCount}/4 區塊
+            {t("count", { count: visibleCount })}
           </span>
           <svg
-            className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            className={`w-5 h-5 text-gray-400 transition-transform ${
+              isExpanded ? "rotate-180" : ""
+            }`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
             aria-hidden="true"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </div>
       </button>
@@ -273,7 +318,7 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
           id="display-preferences-panel"
           className="p-4 pt-0 space-y-2 border-t border-gray-700/50"
         >
-          {PREFERENCE_ITEMS.map((item) => (
+          {translatedItems.map((item) => (
             <Toggle
               key={item.key}
               id={`pref-${item.key}`}
@@ -289,7 +334,7 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
           <div className="flex gap-2 pt-2 border-t border-gray-700/30">
             <button
               onClick={() => {
-                PREFERENCE_ITEMS.forEach(item => {
+                PREFERENCE_ITEMS.forEach((item) => {
                   if (!preferences[item.key]) {
                     togglePreference(item.key);
                   }
@@ -297,11 +342,11 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
               }}
               className="flex-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded transition-colors"
             >
-              全部顯示
+              {t("showAll")}
             </button>
             <button
               onClick={() => {
-                PREFERENCE_ITEMS.forEach(item => {
+                PREFERENCE_ITEMS.forEach((item) => {
                   if (preferences[item.key]) {
                     togglePreference(item.key);
                   }
@@ -309,7 +354,7 @@ export function DisplayPreferences({ preferences: externalPrefs, onToggle, compa
               }}
               className="flex-1 px-3 py-1.5 text-xs text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded transition-colors"
             >
-              全部隱藏
+              {t("hideAll")}
             </button>
           </div>
         </div>

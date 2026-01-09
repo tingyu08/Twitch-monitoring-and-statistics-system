@@ -11,6 +11,7 @@ import {
   Legend,
 } from "recharts";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
+import { useTranslations } from "next-intl";
 
 interface MessageTrendChartProps {
   data: MessageDailyStat[];
@@ -21,10 +22,12 @@ export function MessageTrendChart({
   data,
   height = 350,
 }: MessageTrendChartProps) {
+  const t = useTranslations("stats");
+
   if (!data || data.length === 0) {
     return (
       <div className="flex h-[350px] w-full items-center justify-center rounded-xl border bg-card text-card-foreground shadow p-4">
-        <p className="text-muted-foreground">無足夠數據顯示趨勢圖</p>
+        <p className="text-muted-foreground">{t("noTrendData")}</p>
       </div>
     );
   }
@@ -36,11 +39,9 @@ export function MessageTrendChart({
     >
       <div className="p-6 flex flex-col space-y-1.5">
         <h3 className="font-semibold leading-none tracking-tight">
-          每日互動趨勢
+          {t("messageTrendTitle")}
         </h3>
-        <p className="text-sm text-muted-foreground">
-          過去一段時間的留言與互動分佈
-        </p>
+        <p className="text-sm text-muted-foreground">{t("messageTrendDesc")}</p>
       </div>
       <div className="p-6 pt-0 pl-0">
         <SafeResponsiveContainer height={height}>
@@ -74,20 +75,20 @@ export function MessageTrendChart({
             <Legend />
             <Bar
               dataKey="chatMessages"
-              name="聊天"
+              name={t("interactionTypes.chat")}
               stackId="a"
               fill="#3b82f6"
               radius={[0, 0, 4, 4]}
             />
             <Bar
               dataKey="subscriptions"
-              name="訂閱"
+              name={t("interactionTypes.sub")}
               stackId="a"
               fill="#8b5cf6"
             />
             <Bar
               dataKey="cheers"
-              name="小奇點"
+              name={t("interactionTypes.cheer")}
               stackId="a"
               fill="#eab308"
               radius={[4, 4, 0, 0]}

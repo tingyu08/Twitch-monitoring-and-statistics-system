@@ -15,11 +15,7 @@ export const TotalWatchTimeCard = React.forwardRef<
   const t = useTranslations("footprint");
 
   return (
-    <DashboardCardWrapper
-      ref={ref}
-      title={t("title") === "觀眾足跡總覽" ? "總觀看時數" : t("watchHours")}
-      {...props}
-    >
+    <DashboardCardWrapper ref={ref} title={t("totalWatchHours")} {...props}>
       <div className="flex flex-col justify-start">
         <div className="flex items-baseline gap-1">
           <span className="text-3xl lg:text-4xl font-bold text-blue-400 tracking-tight">

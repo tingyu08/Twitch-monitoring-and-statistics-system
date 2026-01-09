@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { DayPicker, type DateRange } from "react-day-picker";
 import { format, subDays, startOfDay } from "date-fns";
-import { zhTW } from "date-fns/locale";
+import { zhTW, enUS } from "date-fns/locale";
+import { useTranslations, useLocale } from "next-intl";
 import "react-day-picker/dist/style.css";
 
 interface DateRangePickerProps {
@@ -15,6 +16,10 @@ export function DateRangePicker({
   onRangeSelect,
   disabled = false,
 }: DateRangePickerProps) {
+  const t = useTranslations("datePicker");
+  const localeStr = useLocale();
+  const dateFnsLocale = localeStr === "zh-TW" ? zhTW : enUS;
+
   const [isOpen, setIsOpen] = useState(false);
   const [range, setRange] = useState<DateRange | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,11 +65,11 @@ export function DateRangePicker({
         aria-haspopup="dialog"
         aria-label={
           range?.from && range?.to
-            ? `已選擇日期範圍：${format(range.from, "MM/dd")} 至 ${format(
-                range.to,
-                "MM/dd"
-              )}，點擊更改`
-            : "選擇自訂日期範圍"
+            ? t("selected", {
+                start: format(range.from, "MM/dd"),
+                end: format(range.to, "MM/dd"),
+              })
+            : t("selectRange")
         }
         className={`
           px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200
@@ -97,13 +102,13 @@ export function DateRangePicker({
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            自訂日期
+            {t("custom")}
           </>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-2 right-0 bg-white dark:bg-[#1a1b26] border border-purple-200 dark:border-white/10 rounded-lg shadow-xl p-4">
+        <div className="absolute z-50 mt-2 right-0 bg-white dark:bg-[#1a1b26] border border-purple-200 dark:border-white/10 rounded-lg shadow-xl p-4 min-w-[320px]">
           <style>
             {`
               .rdp {
@@ -142,7 +147,7 @@ export function DateRangePicker({
             defaultMonth={defaultMonth}
             selected={range}
             onSelect={setRange}
-            locale={zhTW}
+            locale={dateFnsLocale}
             disabled={{ after: today }}
             numberOfMonths={1}
             showOutsideDays
@@ -152,14 +157,15 @@ export function DateRangePicker({
             <span className="text-xs text-gray-500">
               {range?.from
                 ? range?.to
-                  ? `已選擇 ${
-                      Math.ceil(
-                        (range.to.getTime() - range.from.getTime()) /
-                          (1000 * 60 * 60 * 24)
-                      ) + 1
-                    } 天`
-                  : "請選擇結束日期"
-                : "請選擇開始日期"}
+                  ? t("selectedDays", {
+                      days:
+                        Math.ceil(
+                          (range.to.getTime() - range.from.getTime()) /
+                            (1000 * 60 * 60 * 24)
+                        ) + 1,
+                    })
+                  : t("selectEnd")
+                : t("selectStart")}
             </span>
             <button
               type="button"
@@ -169,7 +175,7 @@ export function DateRangePicker({
               }}
               className="text-xs text-gray-400 hover:text-white"
             >
-              清除
+              {t("clear")}
             </button>
           </div>
         </div>

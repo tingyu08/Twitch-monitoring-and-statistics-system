@@ -108,7 +108,10 @@
       "raidName": "Raid 參與",
       "raidDesc": "參與 Raid 揪團活動",
       "raidCount": "揪團次數"
-    }
+    },
+    "messageTrendTitle": "每日互動趨勢",
+    "messageTrendDesc": "過去一段時間的留言與互動分佈",
+    "noTrendData": "無足夠數據顯示趨勢圖"
   },
   "channel": {
     "backToDashboard": "返回儀表板",
@@ -127,9 +130,18 @@
     "days30": "30 天",
     "days90": "90 天",
     "all": "全部",
-    "custom": "自訂",
+    "custom": "自訂日期",
     "showingDays": "顯示過去 {days} 天的資料",
     "customRange": "自訂範圍：{days} 天"
+  },
+  "datePicker": {
+    "selectRange": "選擇自訂日期範圍",
+    "selected": "已選擇範圍：{start} 至 {end}，點擊更改",
+    "custom": "自訂日期",
+    "selectedDays": "已選擇 {days} 天",
+    "selectEnd": "請選擇結束日期",
+    "selectStart": "請選擇開始日期",
+    "clear": "清除"
   },
   "footprint": {
     "title": "觀眾足跡總覽",
@@ -147,7 +159,7 @@
     "streak": "連續觀看",
     "daysUnit": "天",
     "currentStreak": "目前連續",
-    "longestStreak": "最長連續",
+    "longestStreak": "最長觀看天數",
     "ranking": "排名",
     "engagementRanking": "投入排名",
     "watchRank": "觀看時長",
@@ -192,7 +204,8 @@
     "activeDays": "活躍 {count} 天",
     "avgSession": "平均每次觀看",
     "minutes": "分鐘",
-    "watchHours": "觀看時數"
+    "watchHours": "觀看時數",
+    "totalWatchHours": "總觀看時數"
   },
   "settings": {
     "title": "帳號設定",
@@ -306,6 +319,35 @@
     "channelLink": "頻道連結",
     "quickActions": "快速功能",
     "manageSettings": "管理實況設定",
-    "viewRevenue": "查看收益分析"
+    "viewRevenue": "查看收益分析",
+    "overviewTitle": "開台統計總覽",
+    "displaySettings": "顯示設定",
+    "startStreamHint": "開始直播後即可查看統計數據",
+    "summary": {
+      "totalHours": "總開台時數",
+      "totalSessions": "總開台場數",
+      "avgDuration": "平均單場時長",
+      "unitHours": "小時",
+      "unitSessions": "場",
+      "unitMinutes": "分鐘",
+      "pastDays": "在過去 {days} 天內",
+      "avgDesc": "每場平均開台時間",
+      "dataSyncing": "資料可能尚未同步完成"
+    },
+    "layout": {
+      "customize": "自訂儀表板顯示的區塊",
+      "showHide": "顯示/隱藏儀表板區塊",
+      "showAll": "全部顯示",
+      "hideAll": "全部隱藏",
+      "count": "{count}/4 區塊",
+      "summaryCards": "概覽卡片",
+      "summaryCardsDesc": "重要數據總覽",
+      "timeSeries": "開台時間分析",
+      "timeSeriesDesc": "熱力圖與趨勢",
+      "heatmap": "時段分佈",
+      "heatmapDesc": "開台時段熱力圖",
+      "subs": "訂閱趨勢",
+      "subsDesc": "訂閱成長分析"
+    }
   }
 }

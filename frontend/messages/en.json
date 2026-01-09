@@ -108,7 +108,10 @@
       "raidName": "Raid Participation",
       "raidDesc": "Participation in raids",
       "raidCount": "Raid Count"
-    }
+    },
+    "messageTrendTitle": "Daily Interaction Trend",
+    "messageTrendDesc": "Distribution of messages and interactions over the given period",
+    "noTrendData": "Insufficient data to display trend chart"
   },
   "channel": {
     "backToDashboard": "Back to Dashboard",
@@ -127,9 +130,18 @@
     "days30": "30 Days",
     "days90": "90 Days",
     "all": "All",
-    "custom": "Custom",
+    "custom": "Custom Date",
     "showingDays": "Showing data from the past {days} days",
     "customRange": "Custom range: {days} days"
+  },
+  "datePicker": {
+    "selectRange": "Select custom date range",
+    "selected": "Selected: {start} to {end}, click to change",
+    "custom": "Custom Date",
+    "selectedDays": "Selected {days} days",
+    "selectEnd": "Select end date",
+    "selectStart": "Select start date",
+    "clear": "Clear"
   },
   "footprint": {
     "title": "Viewer Footprint Overview",
@@ -147,7 +159,7 @@
     "streak": "Watch Streak",
     "daysUnit": "days",
     "currentStreak": "Current Streak",
-    "longestStreak": "Longest Streak",
+    "longestStreak": "Longest Watch Streak",
     "ranking": "Ranking",
     "engagementRanking": "Engagement Ranking",
     "watchRank": "Watch Time",
@@ -201,7 +213,8 @@
     "activeDays": "Active {count} days",
     "avgSession": "Avg Session Duration",
     "minutes": "mins",
-    "watchHours": "Watch Hours"
+    "watchHours": "Watch Hours",
+    "totalWatchHours": "Total Watch Hours"
   },
   "settings": {
     "title": "Account Settings",
@@ -315,6 +328,35 @@
     "channelLink": "Channel Link",
     "quickActions": "Quick Actions",
     "manageSettings": "Manage Stream Settings",
-    "viewRevenue": "View Revenue Analysis"
+    "viewRevenue": "View Revenue Analysis",
+    "overviewTitle": "Stream Stats Overview",
+    "displaySettings": "Display Settings",
+    "startStreamHint": "Start streaming to see statistics",
+    "summary": {
+      "totalHours": "Total Stream Hours",
+      "totalSessions": "Total Sessions",
+      "avgDuration": "Avg Duration",
+      "unitHours": "hrs",
+      "unitSessions": "sessions",
+      "unitMinutes": "mins",
+      "pastDays": "In the past {days} days",
+      "avgDesc": "Average duration per stream",
+      "dataSyncing": "Data might not be fully synced"
+    },
+    "layout": {
+      "customize": "Customize dashboard layout",
+      "showHide": "Show/Hide sections",
+      "showAll": "Show All",
+      "hideAll": "Hide All",
+      "count": "{count}/4 sections",
+      "summaryCards": "Summary Cards",
+      "summaryCardsDesc": "Key metrics overview",
+      "timeSeries": "Schedule Analysis",
+      "timeSeriesDesc": "Heatmap & Trends",
+      "heatmap": "Time Distribution",
+      "heatmapDesc": "Stream time heatmap",
+      "subs": "Sub Trends",
+      "subsDesc": "Subscription growth analysis"
+    }
   }
 }

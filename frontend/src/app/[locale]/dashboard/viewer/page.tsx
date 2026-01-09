@@ -255,8 +255,14 @@ export default function ViewerDashboardPage() {
               {t("viewer.followedChannels")}
             </h2>
             <span className="text-sm text-purple-600/60 dark:text-purple-500">
-              ({filteredChannels.length} 個頻道
-              {totalPages > 1 ? ` · 第 ${currentPage}/${totalPages} 頁` : ""})
+              ({t("viewer.channelCount", { count: filteredChannels.length })}
+              {totalPages > 1
+                ? ` · ${t("viewer.pageInfo", {
+                    current: currentPage,
+                    total: totalPages,
+                  })}`
+                : ""}
+              )
             </span>
           </div>
           <div className="relative">
