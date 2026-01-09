@@ -335,6 +335,7 @@
       "dataSyncing": "資料可能尚未同步完成"
     },
     "layout": {
+      "displaySettings": "顯示設定",
       "customize": "自訂儀表板顯示的區塊",
       "showHide": "顯示/隱藏儀表板區塊",
       "showAll": "全部顯示",
@@ -348,6 +349,67 @@
       "heatmapDesc": "開台時段熱力圖",
       "subs": "訂閱趨勢",
       "subsDesc": "訂閱成長分析"
+    },
+    "datePicker": {
+      "recent7": "最近 7 天",
+      "recent30": "最近 30 天",
+      "recent90": "最近 90 天",
+      "select": "選擇時間範圍",
+      "current": "目前已選擇"
+    },
+    "charts": {
+      "heatmap": {
+        "title": "開台時段熱力圖 (小時數)",
+        "days": {
+          "mon": "週一",
+          "tue": "週二",
+          "wed": "週三",
+          "thu": "週四",
+          "fri": "週五",
+          "sat": "週六",
+          "sun": "週日"
+        },
+        "noData": "無資料",
+        "total": "總計 {hours} 開台小時",
+        "peak": "，最活躍時段為 {day} {hour}:00 ({hours} 小時)",
+        "cellTooltip": "{day} {hour}:00 - {hours} 小時",
+        "cellAria": "{day} {hour}:00，開台 {hours} 小時",
+        "ariaLabel": "開台時段熱力圖：{summary}",
+        "figcaption": "顯示每週每個時段的開台時間分布熱力圖，顏色越深代表該時段開台時間越長"
+      },
+      "timeSeries": {
+        "ariaLabel": "開台時數與場數趨勢圖表：{summary}",
+        "summary": "顯示 {count} 個{unit}的資料，總開台時數 {hours} 小時，總開台場數 {sessions} 場",
+        "unitDay": "日",
+        "unitWeek": "週",
+        "yAxis": "開台時數 (h)",
+        "tooltipDate": "日期: {date}",
+        "legendHours": "開台時數 (h)",
+        "legendSessions": "開台場數",
+        "tooltipHours": "{value} 小時",
+        "tooltipSessions": "{value} 場",
+        "labelHours": "開台時數",
+        "labelSessions": "開台場數",
+        "figcaption": "顯示開台時數與開台場數隨時間變化的折線圖，藍色線條代表開台時數，綠色線條代表開台場數"
+      },
+      "subs": {
+        "total": "訂閱總數",
+        "netChange": "淨變化",
+        "yAxis": "訂閱數",
+        "estimate": "估算值（資料僅 {days} 天）",
+        "tip": "提示：點擊圖例可顯示/隱藏對應線條。訂閱總數（紫色實線）顯示每日總訂閱數，淨變化（藍色虛線）顯示相較前一日的變化量"
+      },
+      "states": {
+        "loading": "載入圖表資料中...",
+        "errorTitle": "無法載入圖表",
+        "retry": "重試",
+        "emptyTitle": "暫無資料",
+        "syncing": "同步中...",
+        "comingSoon": "資料收集中",
+        "limitedData": "目前僅有 {current} 天的訂閱數據。為獲得可靠的趨勢分析，建議至少收集 {min} 天數據。",
+        "syncNow": "立即同步訂閱數據",
+        "estimate": "估算"
+      }
     }
   }
 }

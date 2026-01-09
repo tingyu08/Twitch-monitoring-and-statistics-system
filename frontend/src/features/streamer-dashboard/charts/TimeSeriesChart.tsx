@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import type { TimeSeriesDataPoint } from "@/lib/api/streamer";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
+import { useTranslations } from "next-intl";
 
 interface TimeSeriesChartProps {
   data: TimeSeriesDataPoint[];
@@ -18,6 +19,8 @@ interface TimeSeriesChartProps {
 }
 
 export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
+  const t = useTranslations("streamer.charts.timeSeries");
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return `${date.getMonth() + 1}/${date.getDate()}`;
@@ -29,21 +32,22 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
 
   // 為螢幕閱讀器生成資料摘要
   const generateDataSummary = () => {
-    if (!data || data.length === 0) return "無資料";
+    if (!data || data.length === 0) return t("summary").split(",")[0]; // Fallback or dedicated noData string
     const totalHours = data.reduce((sum, d) => sum + d.totalHours, 0);
     const totalSessions = data.reduce((sum, d) => sum + d.sessionCount, 0);
-    return `顯示 ${data.length} 個${
-      granularity === "day" ? "日" : "週"
-    }的資料，總開台時數 ${totalHours.toFixed(
-      1
-    )} 小時，總開台場數 ${totalSessions} 場`;
+    return t("summary", {
+      count: data.length,
+      unit: granularity === "day" ? t("unitDay") : t("unitWeek"),
+      hours: totalHours.toFixed(1),
+      sessions: totalSessions,
+    });
   };
 
   return (
     <figure
       className="w-full"
       role="img"
-      aria-label={`開台時數與場數趨勢圖表：${generateDataSummary()}`}
+      aria-label={t("ariaLabel", { summary: generateDataSummary() })}
     >
       <SafeResponsiveContainer height={300}>
         <LineChart
@@ -61,7 +65,7 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
             stroke="#9ca3af"
             style={{ fontSize: "12px" }}
             label={{
-              value: "開台時數 (h)",
+              value: t("yAxis"),
               angle: -90,
               position: "insideLeft",
               style: { fill: "#9ca3af" },
@@ -74,10 +78,14 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
               borderRadius: "8px",
               color: "#f9fafb",
             }}
-            labelFormatter={(value) => `日期: ${formatDate(value as string)}`}
+            labelFormatter={(value) =>
+              t("tooltipDate", { date: formatDate(value as string) })
+            }
             formatter={(value: number, name: string) => {
-              if (name === "totalHours") return [`${value} 小時`, "開台時數"];
-              if (name === "sessionCount") return [`${value} 場`, "開台場數"];
+              if (name === "totalHours")
+                return [t("tooltipHours", { value }), t("labelHours")];
+              if (name === "sessionCount")
+                return [t("tooltipSessions", { value }), t("labelSessions")];
               return [value, name];
             }}
             animationDuration={300}
@@ -86,8 +94,8 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
           <Legend
             wrapperStyle={{ color: "#9ca3af" }}
             formatter={(value) => {
-              if (value === "totalHours") return "開台時數 (h)";
-              if (value === "sessionCount") return "開台場數";
+              if (value === "totalHours") return t("legendHours");
+              if (value === "sessionCount") return t("legendSessions");
               return value;
             }}
           />
@@ -115,9 +123,7 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
           />
         </LineChart>
       </SafeResponsiveContainer>
-      <figcaption className="sr-only">
-        顯示開台時數與開台場數隨時間變化的折線圖，藍色線條代表開台時數，綠色線條代表開台場數
-      </figcaption>
+      <figcaption className="sr-only">{t("figcaption")}</figcaption>
     </figure>
   );
 }

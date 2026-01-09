@@ -13,6 +13,7 @@ import {
 import type { SubscriptionDataPoint } from "@/lib/api/streamer";
 import type { ChartRange } from "../hooks/useChartData";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
+import { useTranslations } from "next-intl";
 
 interface SubscriptionTrendChartProps {
   data: SubscriptionDataPoint[];
@@ -27,9 +28,10 @@ export function SubscriptionTrendChart({
   range,
   currentDataDays = 0,
 }: SubscriptionTrendChartProps) {
+  const t = useTranslations("streamer.charts.subs");
   const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>({
-    訂閱總數: true,
-    淨變化: true,
+    subsTotal: true,
+    subsDelta: true,
   });
 
   // 將資料轉換為 Recharts 格式（只保留有資料的點）
@@ -39,8 +41,8 @@ export function SubscriptionTrendChart({
         .filter((point) => point.subsTotal !== null) // 只顯示有資料的點
         .map((point) => ({
           date: point.date.split("-").slice(1).join("/"), // 轉換為 MM/DD 格式
-          訂閱總數: point.subsTotal,
-          淨變化: point.subsDelta,
+          subsTotal: point.subsTotal,
+          subsDelta: point.subsDelta,
         })),
     [data]
   );
@@ -51,7 +53,7 @@ export function SubscriptionTrendChart({
 
   // Recharts Legend onClick payload 結構: { value, id, type, color, payload, dataKey }
   const handleLegendClick = useCallback((e: any) => {
-    const key = e?.dataKey || e?.value;
+    const key = e?.dataKey;
     if (!key || typeof key !== "string") return;
     setVisibleLines((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -65,7 +67,7 @@ export function SubscriptionTrendChart({
             <span role="img" aria-label="estimate">
               ⚠️
             </span>
-            <span>估算值（資料僅 {currentDataDays} 天）</span>
+            <span>{t("estimate", { days: currentDataDays })}</span>
           </span>
         </div>
       )}
@@ -84,7 +86,7 @@ export function SubscriptionTrendChart({
             stroke="#9CA3AF"
             tick={{ fill: "#9CA3AF", fontSize: 12 }}
             label={{
-              value: "訂閱數",
+              value: t("yAxis"),
               angle: -90,
               position: "insideLeft",
               fill: "#9CA3AF",
@@ -99,7 +101,8 @@ export function SubscriptionTrendChart({
             }}
             labelStyle={{ color: "#D1D5DB" }}
             formatter={(value: number, name: string) => {
-              if (name === "淨變化" && value > 0) {
+              // name maps to Line's name prop, which is translated
+              if (name === t("netChange") && value > 0) {
                 return [`+${value}`, name];
               }
               return [value, name];
@@ -109,8 +112,10 @@ export function SubscriptionTrendChart({
             wrapperStyle={{ color: "#D1D5DB", paddingTop: "12px" }}
             iconType="line"
             onClick={handleLegendClick}
-            formatter={(value: string) => {
-              const isHidden = !visibleLines[value];
+            formatter={(value: string, entry: any) => {
+              // value matches Line name
+              const dataKey = entry?.payload?.dataKey;
+              const isHidden = dataKey ? !visibleLines[dataKey] : false;
               return (
                 <span
                   style={{
@@ -126,32 +131,31 @@ export function SubscriptionTrendChart({
           />
           <Line
             type="monotone"
-            dataKey="訂閱總數"
+            dataKey="subsTotal"
+            name={t("total")}
             stroke="#A78BFA"
             strokeWidth={2}
             dot={{ r: 4, fill: "#A78BFA" }}
             activeDot={{ r: 6 }}
             animationDuration={1500}
-            hide={!visibleLines["訂閱總數"]}
+            hide={!visibleLines["subsTotal"]}
           />
           <Line
             type="monotone"
-            dataKey="淨變化"
+            dataKey="subsDelta"
+            name={t("netChange")}
             stroke="#60A5FA"
             strokeWidth={2}
             dot={{ r: 3, fill: "#60A5FA" }}
             activeDot={{ r: 5 }}
             animationDuration={1500}
             strokeDasharray="5 5"
-            hide={!visibleLines["淨變化"]}
+            hide={!visibleLines["subsDelta"]}
           />
         </LineChart>
       </SafeResponsiveContainer>
       <div className="mt-4 text-xs text-gray-400 text-center">
-        <p>
-          💡
-          提示：點擊圖例可顯示/隱藏對應線條。訂閱總數（紫色實線）顯示每日總訂閱數，淨變化（藍色虛線）顯示相較前一日的變化量
-        </p>
+        <p>💡 {t("tip")}</p>
       </div>
     </div>
   );

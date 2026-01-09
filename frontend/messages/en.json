@@ -344,6 +344,7 @@
       "dataSyncing": "Data might not be fully synced"
     },
     "layout": {
+      "displaySettings": "Display Settings",
       "customize": "Customize dashboard layout",
       "showHide": "Show/Hide sections",
       "showAll": "Show All",
@@ -357,6 +358,67 @@
       "heatmapDesc": "Stream time heatmap",
       "subs": "Sub Trends",
       "subsDesc": "Subscription growth analysis"
+    },
+    "datePicker": {
+      "recent7": "Last 7 days",
+      "recent30": "Last 30 days",
+      "recent90": "Last 90 days",
+      "select": "Select time range",
+      "current": "currently selected"
+    },
+    "charts": {
+      "heatmap": {
+        "title": "Stream Time Distribution (Hours)",
+        "days": {
+          "mon": "Mon",
+          "tue": "Tue",
+          "wed": "Wed",
+          "thu": "Thu",
+          "fri": "Fri",
+          "sat": "Sat",
+          "sun": "Sun"
+        },
+        "noData": "No data",
+        "total": "Total {hours} stream hours",
+        "peak": ", most active: {day} {hour}:00 ({hours} hrs)",
+        "cellTooltip": "{day} {hour}:00 - {hours} hrs",
+        "cellAria": "{day} {hour}:00, steamed {hours} hrs",
+        "ariaLabel": "Heatmap: {summary}",
+        "figcaption": "Heatmap showing stream time distribution by day and hour."
+      },
+      "timeSeries": {
+        "ariaLabel": "Stream Trends: {summary}",
+        "summary": "Showing {count} {unit} data, total hours: {hours}, total sessions: {sessions}",
+        "unitDay": "days",
+        "unitWeek": "weeks",
+        "yAxis": "Hours",
+        "tooltipDate": "Date: {date}",
+        "legendHours": "Stream Hours",
+        "legendSessions": "Sessions",
+        "tooltipHours": "{value} hrs",
+        "tooltipSessions": "{value} sessions",
+        "labelHours": "Stream Hours",
+        "labelSessions": "Sessions",
+        "figcaption": "Line chart showing stream hours and sessions trends over time."
+      },
+      "subs": {
+        "total": "Total Subs",
+        "netChange": "Net Change",
+        "yAxis": "Sub Count",
+        "estimate": "Estimated ({days} days only)",
+        "tip": "Tip: Click legend to toggle lines. Total Subs (Purple) shows daily total, Net Change (Blue dashed) shows daily change."
+      },
+      "states": {
+        "loading": "Loading chart data...",
+        "errorTitle": "Failed to load chart",
+        "retry": "Retry",
+        "emptyTitle": "No Data",
+        "syncing": "Syncing...",
+        "comingSoon": "Data Collection in Progress",
+        "limitedData": "Only {current} days of subscription data available. We recommend at least {min} days for reliable trend analysis.",
+        "syncNow": "Sync Subscription Data",
+        "estimate": "Estimated"
+      }
     }
   }
 }

@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 type DateRange = "7d" | "30d" | "90d";
 
 interface DateRangePickerProps {
@@ -5,25 +7,27 @@ interface DateRangePickerProps {
   onRangeChange: (range: DateRange) => void;
 }
 
-const rangeOptions: { value: DateRange; label: string }[] = [
-  { value: "7d", label: "最近 7 天" },
-  { value: "30d", label: "最近 30 天" },
-  { value: "90d", label: "最近 90 天" },
-];
-
 export function DateRangePicker({
   selectedRange,
   onRangeChange,
 }: DateRangePickerProps) {
+  const t = useTranslations("streamer.datePicker");
+
+  const rangeOptions: { value: DateRange; label: string }[] = [
+    { value: "7d", label: t("recent7") },
+    { value: "30d", label: t("recent30") },
+    { value: "90d", label: t("recent90") },
+  ];
+
   return (
-    <div className="flex gap-2" role="group" aria-label="選擇時間範圍">
+    <div className="flex gap-2" role="group" aria-label={t("select")}>
       {rangeOptions.map((option) => (
         <button
           key={option.value}
           onClick={() => onRangeChange(option.value)}
           aria-pressed={selectedRange === option.value}
           aria-label={`${option.label}${
-            selectedRange === option.value ? "，目前已選擇" : ""
+            selectedRange === option.value ? `, ${t("current")}` : ""
           }`}
           className={`
             px-4 py-2 rounded-lg font-medium transition-all text-sm sm:text-base
