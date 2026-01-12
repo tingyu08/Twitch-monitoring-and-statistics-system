@@ -44,6 +44,8 @@ import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveConta
 import { GameStatsChart } from "@/features/streamer-dashboard/charts/GameStatsChart";
 
 import { ChannelVideosSection } from "@/features/viewer-dashboard/components/ChannelVideosSection";
+import { ViewerTrendsChart } from "@/features/viewer-dashboard/components/ViewerTrendsChart";
+import type { ViewerTrendPoint } from "@/lib/api/viewer";
 
 export default function ViewerChannelStatsPage() {
   const t = useTranslations();
@@ -56,6 +58,9 @@ export default function ViewerChannelStatsPage() {
   const [messageStats, setMessageStats] =
     useState<ViewerMessageStatsResponse | null>(null);
   const [gameStats, setGameStats] = useState<GameStats[] | null>(null);
+  const [viewerTrends, setViewerTrends] = useState<ViewerTrendPoint[] | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("30");
@@ -79,16 +84,18 @@ export default function ViewerChannelStatsPage() {
 
         const rangeKey = days === 7 ? "7d" : days === 90 ? "90d" : "30d";
 
-        const [channelData, messageData, gameData] = await Promise.all([
-          viewerApi.getChannelStats(channelId, days),
-          viewerApi.getMessageStats(
-            viewerId,
-            channelId,
-            startDate.toISOString(),
-            endDate.toISOString()
-          ),
-          viewerApi.getChannelGameStats(channelId, rangeKey),
-        ]);
+        const [channelData, messageData, gameData, trendsData] =
+          await Promise.all([
+            viewerApi.getChannelStats(channelId, days),
+            viewerApi.getMessageStats(
+              viewerId,
+              channelId,
+              startDate.toISOString(),
+              endDate.toISOString()
+            ),
+            viewerApi.getChannelGameStats(channelId, rangeKey),
+            viewerApi.getChannelViewerTrends(channelId, rangeKey),
+          ]);
 
         if (!channelData) {
           setError("查無資料");
@@ -97,6 +104,7 @@ export default function ViewerChannelStatsPage() {
         setStats(channelData);
         setMessageStats(messageData);
         setGameStats(gameData);
+        setViewerTrends(trendsData);
       } catch (err) {
         setError(err instanceof Error ? err.message : "載入統計時發生錯誤");
       } finally {
@@ -468,6 +476,13 @@ export default function ViewerChannelStatsPage() {
               {t("streamer.charts.gameSelection")}
             </h2>
             <GameStatsChart data={gameStats} loading={loading} />
+          </div>
+        )}
+
+        {/* 觀眾人數趨勢 */}
+        {viewerTrends && (
+          <div className="mb-8">
+            <ViewerTrendsChart data={viewerTrends} loading={loading} />
           </div>
         )}
 

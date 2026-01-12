@@ -66,6 +66,13 @@
     "roleViewer": "Viewer",
     "roleStreamer": "Streamer"
   },
+  "charts": {
+    "viewerTrends": "Viewer Trends",
+    "noViewerData": "No stream data in selected range",
+    "avgViewers": "Avg Viewers",
+    "peakViewers": "Peak Viewers",
+    "viewerTrendsDesc": "Showing data from {count} streams"
+  },
   "stats": {
     "totalWatchHours": "Total Watch Hours",
     "watchCount": "Watch Count",

@@ -1,6 +1,15 @@
 import { httpClient } from "./httpClient";
 import type { VideoResponse, ClipResponse, GameStats } from "./streamer";
 
+export interface ViewerTrendPoint {
+  date: string;
+  title: string;
+  avgViewers: number;
+  peakViewers: number;
+  durationHours: number;
+  category: string;
+}
+
 export interface ViewerConsentResponse {
   viewerId: string;
   consentedAt: string;
@@ -412,6 +421,23 @@ export const viewerApi = {
       );
     } catch (err) {
       console.warn("Failed to fetch game stats", err);
+      return null;
+    }
+  },
+
+  /**
+   * 取得頻道的觀眾人數趨勢 (公開)
+   */
+  async getChannelViewerTrends(
+    channelId: string,
+    range = "30d"
+  ): Promise<ViewerTrendPoint[] | null> {
+    try {
+      return await httpClient<ViewerTrendPoint[]>(
+        `/api/streamer/${channelId}/viewer-trends?range=${range}`
+      );
+    } catch (err) {
+      console.warn("Failed to fetch viewer trends", err);
       return null;
     }
   },

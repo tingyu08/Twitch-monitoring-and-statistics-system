@@ -222,3 +222,66 @@ export async function getPublicClipsHandler(
     res.status(500).json({ error: "Internal Server Error" });
   }
 }
+
+/**
+ * 公開: 取得指定頻道的觀眾人數趨勢
+ * GET /api/streamer/:channelId/viewer-trends?range=30d
+ */
+export async function getPublicViewerTrendsHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { streamerId: channelId } = req.params;
+    if (!channelId) {
+      res.status(400).json({ error: "channelId required" });
+      return;
+    }
+
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { id: true },
+    });
+
+    if (!channel) {
+      res.status(404).json({ error: "Channel not found" });
+      return;
+    }
+
+    const range = (req.query.range as string) || "30d";
+    const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const sessions = await prisma.streamSession.findMany({
+      where: {
+        channelId: channelId,
+        startedAt: { gte: startDate },
+        endedAt: { not: null },
+      },
+      orderBy: { startedAt: "asc" },
+      select: {
+        startedAt: true,
+        title: true,
+        category: true,
+        avgViewers: true,
+        peakViewers: true,
+        durationSeconds: true,
+      },
+    });
+
+    const data = sessions.map((s) => ({
+      date: s.startedAt.toISOString().split("T")[0],
+      title: s.title || "Untitled",
+      avgViewers: s.avgViewers || 0,
+      peakViewers: s.peakViewers || 0,
+      durationHours: Math.round(((s.durationSeconds || 0) / 3600) * 10) / 10,
+      category: s.category || "Just Chatting",
+    }));
+
+    res.json(data);
+  } catch (error) {
+    streamerLogger.error("Get Public Viewer Trends Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
