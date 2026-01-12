@@ -27,7 +27,7 @@ import { webSocketGateway } from "./websocket.gateway";
 
 // ========== 熱度追蹤設定 ==========
 const HEAT_WINDOW_MS = 5000; // 5秒視窗
-const HEAT_THRESHOLD_MSG = 5; // 5秒內超過5則訊息視為有熱度
+const HEAT_THRESHOLD_MSG = 50; // 5秒內超過50則訊息視為有熱度
 const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
 
 export class TwurpleChatService {
