@@ -23,8 +23,6 @@ export const metadata = {
   manifest: "/manifest.json",
 };
 
-import { SocketProvider } from "@/features/socket/SocketProvider";
-
 import { Toaster } from "@/components/ui/sonner";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -53,13 +51,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="theme-transition">
         <ThemeProvider>
           <AuthProvider>
-            <SocketProvider>
-              {children}
-              <Suspense fallback={null}>
-                <ConsentBannerWrapper />
-              </Suspense>
-            </SocketProvider>
+            {children}
             <Toaster />
+            <Suspense fallback={null}>
+              <ConsentBannerWrapper />
+            </Suspense>
           </AuthProvider>
         </ThemeProvider>
         {process.env.NEXT_PUBLIC_GA_ID && (
