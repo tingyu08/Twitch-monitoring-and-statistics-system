@@ -48,7 +48,20 @@ httpServer.listen(PORT, async () => {
       // 1. 先啟動定時任務（輕量級）
       startAllJobs();
 
-      // 2. 延遲 3 秒後初始化 Twitch 服務（避免同時載入太多東西）
+      // 2. 初始化 Token 管理系統（必須在 Twitch 服務之前）
+      setTimeout(async () => {
+        try {
+          const { initializeTokenManagement } = await import(
+            "./services/token-management.init"
+          );
+          await initializeTokenManagement();
+          logger.info("Server", "Token 管理系統初始化完成");
+        } catch (error) {
+          logger.error("Server", "Token 管理系統初始化失敗", error);
+        }
+      }, 1000);
+
+      // 3. 延遲 3 秒後初始化 Twitch 服務（避免同時載入太多東西）
       setTimeout(async () => {
         try {
           logger.info("Server", "正在初始化 Twitch 服務...");

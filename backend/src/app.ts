@@ -10,6 +10,7 @@ import { proxyRoutes } from "./modules/proxy/proxy.routes";
 import { performanceMonitor } from "./utils/performance-monitor";
 import { performanceRoutes } from "./modules/admin/performance.routes";
 import { healthRoutes } from "./modules/admin/health.routes";
+import tokenManagementRoutes from "./modules/admin/token-management.routes";
 import twitchRoutes from "./routes/twitch.routes";
 import { eventSubRoutes } from "./routes/eventsub.routes";
 
@@ -76,6 +77,9 @@ class App {
 
     // 管理路由：效能監控
     this.express.use("/api/admin/performance", performanceRoutes);
+
+    // 管理路由：Token 管理
+    this.express.use("/api/admin/tokens", tokenManagementRoutes);
 
     // 健康檢查路由
     this.express.use("/api/health", healthRoutes);

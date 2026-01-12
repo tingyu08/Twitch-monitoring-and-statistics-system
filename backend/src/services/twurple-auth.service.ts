@@ -4,6 +4,7 @@
  * 使用 @twurple/auth 統一管理 Twitch OAuth Token：
  * - App Access Token (用於公開 API)
  * - User Access Token (用於用戶相關 API)
+ * - Token 失效自動標記
  */
 
 import { AppTokenAuthProvider, RefreshingAuthProvider } from "@twurple/auth";
@@ -18,6 +19,12 @@ interface TokenData {
   obtainmentTimestamp: number;
 }
 
+type TokenFailureCallback = (
+  userId: string,
+  error: Error,
+  reason: "refresh_failed" | "invalid_token" | "revoked"
+) => Promise<void>;
+
 // ========== 服務實作 ==========
 
 class TwurpleAuthService {
@@ -25,10 +32,18 @@ class TwurpleAuthService {
   private readonly clientSecret: string;
   private appAuthProvider: AppTokenAuthProvider | null = null;
   private userAuthProviders: Map<string, RefreshingAuthProvider> = new Map();
+  private onTokenFailure: TokenFailureCallback | null = null;
 
   constructor() {
     this.clientId = process.env.TWITCH_CLIENT_ID || "";
     this.clientSecret = process.env.TWITCH_CLIENT_SECRET || "";
+  }
+
+  /**
+   * 設定 Token 失敗回調（用於標記 Token 狀態）
+   */
+  setOnTokenFailure(callback: TokenFailureCallback): void {
+    this.onTokenFailure = callback;
   }
 
   /**
@@ -83,7 +98,7 @@ class TwurpleAuthService {
       ["chat"]
     );
 
-    // 設定 Token 刷新回調
+    // 設定 Token 刷新成功回調
     if (onRefresh) {
       authProvider.onRefresh(async (userId, newTokenData) => {
         logger.info("Twurple Auth", `Token refreshed for user: ${userId}`);
@@ -95,6 +110,48 @@ class TwurpleAuthService {
         });
       });
     }
+
+    // 設定 Token 刷新失敗回調
+    authProvider.onRefreshFailure(async (userId, error) => {
+      logger.error(
+        "Twurple Auth",
+        `Token refresh failed for user: ${userId}`,
+        error
+      );
+
+      // 判斷失敗原因
+      const errorMessage = error.message.toLowerCase();
+      let reason: "refresh_failed" | "invalid_token" | "revoked" =
+        "refresh_failed";
+
+      if (
+        errorMessage.includes("invalid") ||
+        errorMessage.includes("unauthorized")
+      ) {
+        reason = "invalid_token";
+      } else if (
+        errorMessage.includes("revoked") ||
+        errorMessage.includes("access denied")
+      ) {
+        reason = "revoked";
+      }
+
+      // 觸發失敗回調
+      if (this.onTokenFailure) {
+        try {
+          await this.onTokenFailure(userId, error, reason);
+        } catch (callbackError) {
+          logger.error(
+            "Twurple Auth",
+            "Failed to execute token failure callback",
+            callbackError
+          );
+        }
+      }
+
+      // 移除失效的 Provider
+      this.userAuthProviders.delete(userId);
+    });
 
     this.userAuthProviders.set(userId, authProvider);
     return authProvider;
@@ -130,6 +187,20 @@ class TwurpleAuthService {
       appProviderInitialized: !!this.appAuthProvider,
       userProviderCount: this.userAuthProviders.size,
     };
+  }
+
+  /**
+   * 檢查用戶是否有活躍的 Auth Provider
+   */
+  hasActiveProvider(userId: string): boolean {
+    return this.userAuthProviders.has(userId);
+  }
+
+  /**
+   * 獲取所有活躍的用戶 ID
+   */
+  getActiveUserIds(): string[] {
+    return Array.from(this.userAuthProviders.keys());
   }
 }
 

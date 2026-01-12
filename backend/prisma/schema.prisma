@@ -180,12 +180,16 @@ model TwitchToken {
   refreshToken String?
   expiresAt    DateTime?
   scopes       String    @default("[]")
+  status       String    @default("active") // "active" | "expired" | "revoked" | "invalid"
+  lastValidatedAt DateTime?                 // 最後一次驗證成功的時間
+  failureCount Int       @default(0)        // 連續驗證失敗次數
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   viewer       Viewer?   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
   streamer     Streamer? @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([ownerType])
+  @@index([status])
   @@map("twitch_tokens")
 }
 
