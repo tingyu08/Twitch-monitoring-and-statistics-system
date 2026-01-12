@@ -8,6 +8,7 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
+import { logger } from "../utils/logger";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
@@ -34,7 +35,7 @@ export class StreamStatusJob {
    * 啟動 Cron Job
    */
   start(): void {
-    console.log(`📡 Stream Status Job 已排程: ${STREAM_STATUS_CRON}`);
+    logger.info("JOB", `Stream Status Job 已排程: ${STREAM_STATUS_CRON}`);
 
     cron.schedule(STREAM_STATUS_CRON, async () => {
       await this.execute();
@@ -46,7 +47,7 @@ export class StreamStatusJob {
    */
   async execute(): Promise<StreamStatusResult> {
     if (this.isRunning) {
-      console.log("⚠️ Stream Status Job 正在執行中，跳過...");
+      logger.warn("JOB", "Stream Status Job 正在執行中，跳過...");
       return {
         checked: 0,
         online: 0,
@@ -58,7 +59,7 @@ export class StreamStatusJob {
 
     this.isRunning = true;
     const startTime = Date.now();
-    console.log("📡 開始檢查開播狀態...");
+    logger.debug("JOB", "開始檢查開播狀態...");
 
     // 設定超時保護
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -80,13 +81,14 @@ export class StreamStatusJob {
       await Promise.race([this.doExecute(result), timeoutPromise]);
 
       const duration = Date.now() - startTime;
-      console.log(
-        `✅ Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
+      logger.info(
+        "JOB",
+        `Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
       );
 
       return result;
     } catch (error) {
-      console.error("❌ Stream Status Job 執行失敗:", error);
+      logger.error("JOB", "Stream Status Job 執行失敗:", error);
       throw error;
     } finally {
       if (this.timeoutHandle) {
@@ -106,7 +108,7 @@ export class StreamStatusJob {
     result.checked = channels.length;
 
     if (channels.length === 0) {
-      console.log("ℹ️ 沒有需要監控的頻道");
+      logger.info("JOB", "沒有需要監控的頻道");
       return;
     }
 
@@ -116,12 +118,14 @@ export class StreamStatusJob {
     const liveStreamMap = new Map(liveStreams.map((s) => [s.userId, s]));
 
     // 診斷日誌：顯示監控頻道數和直播中頻道
-    console.log(
-      `📊 正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`
+    logger.debug(
+      "JOB",
+      `正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`
     );
     if (liveStreams.length > 0) {
-      console.log(
-        `🔴 直播中: ${liveStreams.map((s) => s.userName).join(", ")}`
+      logger.debug(
+        "JOB",
+        `直播中: ${liveStreams.map((s) => s.userName).join(", ")}`
       );
     }
 
@@ -174,8 +178,9 @@ export class StreamStatusJob {
     const monitoredChannels = await prisma.channel.count({
       where: { isMonitored: true },
     });
-    console.log(
-      `📊 頻道統計: 總共 ${totalChannels} 個頻道, 其中 ${monitoredChannels} 個正在監控`
+    logger.debug(
+      "JOB",
+      `頻道統計: 總共 ${totalChannels} 個頻道, 其中 ${monitoredChannels} 個正在監控`
     );
 
     return prisma.channel.findMany({
@@ -212,7 +217,7 @@ export class StreamStatusJob {
         const streams = await unifiedTwitchService.getStreamsByUserIds(batch);
         allStreams.push(...streams);
       } catch (error) {
-        console.error(`❌ 批次查詢失敗 (${i}-${i + batch.length}):`, error);
+        logger.error("JOB", `批次查詢失敗 (${i}-${i + batch.length}):`, error);
         // 繼續處理下一批
       }
     }
@@ -274,8 +279,9 @@ export class StreamStatusJob {
       });
     }
 
-    console.log(
-      `🔴 新開播: ${channel.channelName} - ${stream.title} (Metric recorded)`
+    logger.info(
+      "JOB",
+      `新開播: ${channel.channelName} - ${stream.title} (Metric recorded)`
     );
   }
 
@@ -346,8 +352,9 @@ export class StreamStatusJob {
       },
     });
 
-    console.log(
-      `⚫ 下播: Session ${sessionId} (${Math.floor(durationSeconds / 60)} 分鐘)`
+    logger.info(
+      "JOB",
+      `下播: Session ${sessionId} (${Math.floor(durationSeconds / 60)} 分鐘)`
     );
   }
 }
