@@ -7,7 +7,10 @@
       "streamOffline": "下播了",
       "clickToWatch": "點擊前往觀看直播",
       "watchBtn": "前往觀看",
-      "chatHeat": "聊天室著火啦！"
+      "chatHeat": "聊天室著火啦！",
+      "raidAlert": "帶著觀眾來揪團囉！",
+      "raidWelcome": "歡迎大家加入！",
+      "viewers": "名觀眾"
     },
     "retry": "重試",
     "save": "儲存",

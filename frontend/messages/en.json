@@ -7,7 +7,10 @@
       "streamOffline": "is offline",
       "clickToWatch": "Click to watch stream",
       "watchBtn": "Watch",
-      "chatHeat": "is heating up!"
+      "chatHeat": "is heating up!",
+      "raidAlert": "is raiding with",
+      "raidWelcome": "Welcome everyone!",
+      "viewers": "viewers"
     },
     "retry": "Retry",
     "save": "Save",

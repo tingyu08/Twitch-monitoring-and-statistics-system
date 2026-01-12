@@ -12,6 +12,7 @@ import {
   ChatMessage,
   ChatSubInfo,
   ChatSubGiftInfo,
+  ChatRaidInfo,
   UserNotice,
 } from "@twurple/chat";
 import { RefreshingAuthProvider } from "@twurple/auth";
@@ -183,6 +184,11 @@ export class TwurpleChatService {
     // 監聽贈送訂閱
     this.chatClient.onSubGift((channel, user, subInfo, msg) => {
       this.handleGiftSub(channel, user, subInfo, msg);
+    });
+
+    // 監聽揪團 (Raid)
+    this.chatClient.onRaid((channel, user, raidInfo, msg) => {
+      this.handleRaid(channel, user, raidInfo, msg);
     });
 
     // 監聽斷線事件
@@ -392,6 +398,46 @@ export class TwurpleChatService {
       this.checkChatHeat(channelName, "Gift Sub!");
     } catch (err) {
       logger.error("Twurple Chat", "Error handling gift sub", err);
+    }
+  }
+
+  /**
+   * 處理揪團 (Raid)
+   */
+  private handleRaid(
+    channel: string,
+    user: string,
+    raidInfo: ChatRaidInfo,
+    msg: UserNotice
+  ): void {
+    const channelName = channel.replace(/^#/, "");
+
+    try {
+      const viewerCount = raidInfo.viewerCount;
+      const parsedMessage = {
+        viewerId: msg?.userInfo?.userId || user,
+        username: user,
+        displayName: raidInfo.displayName || user,
+        messageText: `Raid with ${viewerCount} viewers`,
+        messageType: "RAID",
+        timestamp: new Date(),
+        badges: null,
+        bitsAmount: null,
+        emotesUsed: null,
+      };
+
+      viewerMessageRepository.saveMessage(channelName, parsedMessage);
+
+      // 強制推播 Raid 事件
+      webSocketGateway.emit("stream.raid", {
+        channelName,
+        raider: raidInfo.displayName || user,
+        viewers: viewerCount,
+      });
+
+      this.checkChatHeat(channelName, `Raid from ${user}`);
+    } catch (err) {
+      logger.error("Twurple Chat", "Error handling raid", err);
     }
   }
 
