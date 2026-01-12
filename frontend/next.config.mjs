@@ -1,6 +1,20 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import createNextIntlPlugin from "next-intl/plugin";
 
+import withPWAInit from "@ducanh2912/next-pwa";
+
+const withPWA = withPWAInit({
+  dest: "public",
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+  reloadOnOnline: true,
+  swcMinify: true,
+  disable: process.env.NODE_ENV === "development",
+  workboxOptions: {
+    disableDevLogs: true,
+  },
+});
+
 const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 
 /** @type {import('next').NextConfig} */
@@ -76,4 +90,4 @@ const configWithSentry = process.env.NEXT_PUBLIC_SENTRY_DSN
   : nextConfig;
 
 // 應用 next-intl 插件
-export default withNextIntl(configWithSentry);
+export default withPWA(withNextIntl(configWithSentry));

@@ -3,6 +3,7 @@
 import { useLocale } from "next-intl";
 import { useRouter, usePathname } from "next/navigation";
 import { locales, type Locale } from "@/i18n";
+import { Globe } from "lucide-react";
 
 const localeNames: Record<Locale, string> = {
   "zh-TW": "繁體中文",
@@ -26,10 +27,13 @@ export function LocaleSwitcher() {
 
   return (
     <div className="relative">
+      {/* 地球圖示 */}
+      <Globe className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none theme-text-secondary" />
+
       <select
         value={locale}
         onChange={(e) => handleChange(e.target.value as Locale)}
-        className="appearance-none bg-white/10 dark:bg-white/5 border border-purple-200 dark:border-white/10 rounded-lg px-3 py-1.5 pr-8 text-sm theme-text-primary cursor-pointer hover:bg-white/20 dark:hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+        className="appearance-none bg-white/10 dark:bg-white/5 border border-purple-200 dark:border-white/10 rounded-lg py-1.5 pl-8 pr-8 text-sm theme-text-primary cursor-pointer hover:bg-white/20 dark:hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500/50"
         aria-label="選擇語言"
       >
         {locales.map((loc) => (

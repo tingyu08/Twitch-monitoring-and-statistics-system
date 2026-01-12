@@ -4,6 +4,9 @@ import { AuthProvider } from "@/features/auth/AuthContext";
 import { ThemeProvider } from "@/features/theme";
 import "./globals.css";
 
+// Google Analytics
+import { GoogleAnalytics } from "@next/third-parties/google";
+
 // 動態導入 ConsentBanner 以避免 SSR 問題
 import dynamic from "next/dynamic";
 const ConsentBannerWrapper = dynamic(
@@ -17,6 +20,7 @@ const ConsentBannerWrapper = dynamic(
 export const metadata = {
   title: "Twitch 實況監控與統計平台",
   description: "Streamer Analytics Dashboard",
+  manifest: "/manifest.json",
 };
 
 import { SocketProvider } from "@/features/socket/SocketProvider";
@@ -55,6 +59,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </SocketProvider>
           </AuthProvider>
         </ThemeProvider>
+        {process.env.NEXT_PUBLIC_GA_ID && (
+          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
+        )}
       </body>
     </html>
   );
