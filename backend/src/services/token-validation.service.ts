@@ -8,6 +8,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import axios from "axios";
 import { logger } from "../utils/logger";
 
 const prisma = new PrismaClient();
@@ -46,14 +47,15 @@ class TokenValidationService {
    */
   async validateToken(accessToken: string): Promise<ValidationResult> {
     try {
-      const response = await fetch(this.TWITCH_VALIDATE_URL, {
+      const response = await axios.get(this.TWITCH_VALIDATE_URL, {
         headers: {
           Authorization: `OAuth ${accessToken}`,
         },
+        validateStatus: (status) => status < 500, // 允許 401 等狀態碼，我們自行處理
       });
 
-      if (response.ok) {
-        const data: TwitchValidateResponse = await response.json();
+      if (response.status === 200) {
+        const data: TwitchValidateResponse = response.data;
         logger.debug(
           "Token Validation",
           `Token valid, expires in ${data.expires_in}s`
@@ -68,7 +70,7 @@ class TokenValidationService {
 
       // 處理錯誤狀態碼
       if (response.status === 401) {
-        const errorBody = await response.json().catch(() => ({}));
+        const errorBody = response.data || {};
         const message = errorBody.message || "Invalid access token";
 
         // 判斷是過期還是已撤銷
