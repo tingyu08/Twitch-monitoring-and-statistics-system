@@ -8,3 +8,4 @@ export {
   ChartDataLimitedBanner,
   ChartEstimatedBadge
 } from './ChartStates';
+export { GameStatsChart } from './GameStatsChart';

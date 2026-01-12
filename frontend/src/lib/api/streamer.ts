@@ -132,3 +132,86 @@ export async function syncSubscriptions(): Promise<{ message: string }> {
     { method: "POST" }
   );
 }
+
+/**
+ * 遊戲/分類統計資料
+ */
+export interface GameStats {
+  gameName: string;
+  totalHours: number;
+  avgViewers: number;
+  peakViewers: number;
+  streamCount: number;
+  percentage: number;
+}
+
+/**
+ * 取得實況主遊戲/分類統計
+ */
+export async function getStreamerGameStats(
+  range: "7d" | "30d" | "90d" = "30d"
+): Promise<GameStats[]> {
+  return httpClient<GameStats[]>(
+    \/api/streamer/me/game-stats?range=\\
+  );
+}
+
+/**
+ * VOD/Video 資料結構
+ */
+export interface StreamerVideo {
+  twitchVideoId: string;
+  title: string;
+  url: string;
+  thumbnailUrl: string | null;
+  viewCount: number;
+  duration: string;
+  type: string;
+  createdAt: string;
+  publishedAt: string;
+}
+
+export interface VideoResponse {
+  data: StreamerVideo[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+/**
+ * 取得實況主 VOD 列表
+ */
+export async function getStreamerVideos(page = 1, limit = 20): Promise<VideoResponse> {
+  return httpClient<VideoResponse>(\/api/streamer/me/videos?page=\&limit=\\);
+}
+
+/**
+ * Clip 資料結構
+ */
+export interface StreamerClip {
+  twitchClipId: string;
+  title: string;
+  url: string;
+  embedUrl: string | null;
+  thumbnailUrl: string | null;
+  viewCount: number;
+  duration: number;
+  createdAt: string;
+  gameId: string | null;
+  creatorName: string | null;
+}
+
+export interface ClipResponse {
+  data: StreamerClip[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+/**
+ * 取得實況主 Clip 列表
+ */
+export async function getStreamerClips(page = 1, limit = 20): Promise<ClipResponse> {
+  return httpClient<ClipResponse>(\/api/streamer/me/clips?page=\&limit=\\);
+}
+

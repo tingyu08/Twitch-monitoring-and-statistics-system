@@ -16,6 +16,8 @@ model Streamer {
   updatedAt    DateTime      @updatedAt
   channels     Channel[]
   twitchTokens TwitchToken[]
+  videos       Video[]
+  clips        Clip[]
 
   @@map("streamers")
 }
@@ -399,5 +401,56 @@ model PrivacyAuditLog {
   @@index([viewerId])
   @@index([timestamp])
   @@map("privacy_audit_logs")
+}
+
+
+// ========== Story 6.4: VOD & Clips ==========
+
+model Video {
+  id              String   @id @default(uuid())
+  twitchVideoId   String   @unique
+  streamerId      String
+  title           String
+  description     String?
+  url             String
+  thumbnailUrl    String?
+  viewCount       Int
+  duration        String
+  language        String?
+  type            String   // 'upload', 'archive', 'highlight'
+  createdAt       DateTime // Video creation time on Twitch
+  publishedAt     DateTime // When it was published
+  scrapedAt       DateTime @default(now())
+
+  streamer        Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+
+  @@index([streamerId])
+  @@index([createdAt])
+  @@map("videos")
+}
+
+model Clip {
+  id              String   @id @default(uuid())
+  twitchClipId    String   @unique
+  streamerId      String   // Broadcaster
+  creatorId       String?  // Who created the clip
+  creatorName     String?  // Store name for display
+  videoId         String?  // Source video ID if available
+  gameId          String?
+  title           String
+  url             String
+  embedUrl        String?
+  thumbnailUrl    String?
+  viewCount       Int
+  duration        Float    // Seconds
+  createdAt       DateTime // Clip creation time
+  scrapedAt       DateTime @default(now())
+
+  streamer        Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+
+  @@index([streamerId])
+  @@index([createdAt])
+  @@index([viewCount])
+  @@map("clips")
 }
 

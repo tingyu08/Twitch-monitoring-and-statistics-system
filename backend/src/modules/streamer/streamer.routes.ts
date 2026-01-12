@@ -8,6 +8,11 @@ import {
   getSubscriptionTrendHandler,
   syncSubscriptionsHandler,
 } from "./streamer.controller";
+import {
+  getGameStatsHandler,
+  getVideosHandler,
+  getClipsHandler,
+} from "./streamer-stats.controller";
 
 const router = Router();
 
@@ -37,6 +42,27 @@ router.get(
   "/me/subscription-trend",
   (req, res, next) => requireAuth(req, res, next),
   getSubscriptionTrendHandler
+);
+
+// GET /api/streamer/me/game-stats - 遊戲/分類統計
+router.get(
+  "/me/game-stats",
+  (req, res, next) => requireAuth(req, res, next),
+  getGameStatsHandler
+);
+
+// GET /api/streamer/me/videos - VOD 列表
+router.get(
+  "/me/videos",
+  (req, res, next) => requireAuth(req, res, next),
+  getVideosHandler
+);
+
+// GET /api/streamer/me/clips - Clips 列表
+router.get(
+  "/me/clips",
+  (req, res, next) => requireAuth(req, res, next),
+  getClipsHandler
 );
 
 // POST /api/streamer/me/sync-subscriptions - 手動同步訂閱數據

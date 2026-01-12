@@ -304,6 +304,8 @@
     "system": "系統"
   },
   "streamer": {
+    "videosLibrary": "影片庫",
+    "videosLibraryDesc": "查看 VOD 與精華剪輯",
     "title": "實況主儀表板",
     "welcome": "歡迎回來，{name}",
     "logout": "登出",

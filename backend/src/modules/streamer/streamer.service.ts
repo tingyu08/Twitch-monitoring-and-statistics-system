@@ -371,3 +371,95 @@ export async function getStreamerHeatmap(
     isEstimated: false,
   };
 }
+
+export interface GameStats {
+  gameName: string;
+  totalHours: number;
+  avgViewers: number;
+  peakViewers: number;
+  streamCount: number;
+  percentage: number;
+}
+
+/**
+ * 取得實況主各遊戲/分類的統計數據
+ */
+export async function getStreamerGameStats(
+  streamerId: string,
+  range: "7d" | "30d" | "90d" = "30d"
+): Promise<GameStats[]> {
+  const now = new Date();
+  let days = 30;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
+  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+  const channel = await prisma.channel.findFirst({ where: { streamerId } });
+  if (!channel) return [];
+
+  const sessions = await prisma.streamSession.findMany({
+    where: {
+      channelId: channel.id,
+      startedAt: { gte: cutoffDate },
+    },
+  });
+
+  const statsMap = new Map<string, { totalSeconds: number; weightedViewersSum: number; peakViewers: number; count: number }>();
+  let totalAllSeconds = 0;
+
+  sessions.forEach(session => {
+    const game = session.category || "Uncategorized";
+    const duration = session.durationSeconds || 0;
+    const avgViewers = session.avgViewers || 0;
+    const peakViewers = session.peakViewers || 0;
+
+    totalAllSeconds += duration;
+
+    const current = statsMap.get(game) || { totalSeconds: 0, weightedViewersSum: 0, peakViewers: 0, count: 0 };
+    current.totalSeconds += duration;
+    current.weightedViewersSum += avgViewers * duration; // Weighted by duration
+    current.peakViewers = Math.max(current.peakViewers, peakViewers);
+    current.count += 1;
+    statsMap.set(game, current);
+  });
+
+  return Array.from(statsMap.entries()).map(([gameName, data]) => ({
+    gameName,
+    totalHours: Math.round((data.totalSeconds / 3600) * 10) / 10,
+    avgViewers: data.totalSeconds > 0 ? Math.round(data.weightedViewersSum / data.totalSeconds) : 0,
+    peakViewers: data.peakViewers,
+    streamCount: data.count,
+    percentage: totalAllSeconds > 0 ? Math.round((data.totalSeconds / totalAllSeconds) * 1000) / 10 : 0
+  })).sort((a, b) => b.totalHours - a.totalHours);
+}
+
+// ========== Story 6.4 Helpers ==========
+
+export async function getStreamerVideos(streamerId: string, limit = 20, page = 1) {
+  const skip = (page - 1) * limit;
+  const [data, total] = await Promise.all([
+    prisma.video.findMany({
+      where: { streamerId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip
+    }),
+    prisma.video.count({ where: { streamerId } })
+  ]);
+  return { data, total, page, totalPages: Math.ceil(total / limit) };
+}
+
+export async function getStreamerClips(streamerId: string, limit = 20, page = 1) {
+  const skip = (page - 1) * limit;
+  const [data, total] = await Promise.all([
+    prisma.clip.findMany({
+      where: { streamerId },
+      orderBy: { viewCount: "desc" }, // Clips usually ordered by views or date. Let's default to views/popularity for clips.
+      take: limit,
+      skip
+    }),
+    prisma.clip.count({ where: { streamerId } })
+  ]);
+  return { data, total, page, totalPages: Math.ceil(total / limit) };
+}
+

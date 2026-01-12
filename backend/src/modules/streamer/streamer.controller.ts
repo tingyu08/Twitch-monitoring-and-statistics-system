@@ -225,12 +225,10 @@ export async function syncSubscriptionsHandler(
         error.message.includes("Unauthorized") ||
         error.message.includes("Forbidden")
       ) {
-        res
-          .status(403)
-          .json({
-            error:
-              "Unable to access subscription data. Please check permissions.",
-          });
+        res.status(403).json({
+          error:
+            "Unable to access subscription data. Please check permissions.",
+        });
         return;
       }
     }

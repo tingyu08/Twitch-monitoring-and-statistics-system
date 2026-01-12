@@ -313,6 +313,8 @@
     "system": "System"
   },
   "streamer": {
+    "videosLibrary": "Content Library",
+    "videosLibraryDesc": "Browse VODs and Clips",
     "title": "Streamer Dashboard",
     "welcome": "Welcome back, {name}",
     "logout": "Logout",

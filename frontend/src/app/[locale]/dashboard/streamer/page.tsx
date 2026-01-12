@@ -12,6 +12,7 @@ import {
   TimeSeriesChart,
   HeatmapChart,
   SubscriptionTrendChart,
+  GameStatsChart,
   ChartLoading,
   ChartError,
   ChartEmpty,
@@ -375,6 +376,11 @@ export default function StreamerDashboard() {
           </div>
         )}
 
+        {/* Story 6.5: Category Performance */}
+        <div className="mb-8">
+          <GameStatsChart range={chartRange} />
+        </div>
+
         {visibleSectionCount === 0 && (
           <div className="mb-8 p-6 rounded-2xl border border-dashed border-white/20 bg-white/5 text-center text-purple-300/70">
             {t("allHidden")}
@@ -429,6 +435,12 @@ export default function StreamerDashboard() {
               </button>
               <button className="w-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 theme-text-primary py-2 px-4 rounded-xl transition duration-200 border border-purple-200 dark:border-white/10">
                 {t("viewRevenue")}
+              </button>
+              <button
+                onClick={() => router.push("/dashboard/streamer/videos")}
+                className="w-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 theme-text-primary py-2 px-4 rounded-xl transition duration-200 border border-purple-200 dark:border-white/10"
+              >
+                📹 {t("videosLibrary")}
               </button>
             </div>
           </div>
