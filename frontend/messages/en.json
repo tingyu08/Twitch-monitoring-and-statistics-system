@@ -8,7 +8,7 @@
       "clickToWatch": "Click to watch stream",
       "watchBtn": "Watch",
       "chatHeat": "is heating up!",
-      "raidAlert": "is raiding with",
+      "raidAlert": "{raider} is raiding {target} with viewers!",
       "raidWelcome": "Welcome everyone!",
       "viewers": "viewers"
     },

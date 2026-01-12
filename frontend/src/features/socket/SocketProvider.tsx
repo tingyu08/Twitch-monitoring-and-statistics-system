@@ -114,17 +114,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         "stream.raid",
         (data: { channelName: string; raider: string; viewers: number }) => {
           console.log("Raid:", data);
-          toast.success(
-            `${data.raider} ${t("raidAlert")} (${data.viewers} ${t(
-              "viewers"
-            )})`,
-            {
-              description: t("raidWelcome"),
-              duration: 8000,
-              className: "border-purple-500 bg-purple-50 dark:bg-purple-900/20", // 紫色邊框與背景
-              icon: "🚀",
-            }
-          );
+          toast.success(`🚀 ${data.raider} → ${data.channelName}`, {
+            description: `${t("raidAlert", {
+              raider: data.raider,
+              target: data.channelName,
+            })} (${data.viewers} ${t("viewers")})`,
+            duration: 8000,
+            className: "border-purple-500 bg-purple-50 dark:bg-purple-900/20",
+          });
         }
       );
 

@@ -8,7 +8,7 @@
       "clickToWatch": "點擊前往觀看直播",
       "watchBtn": "前往觀看",
       "chatHeat": "聊天室著火啦！",
-      "raidAlert": "帶著觀眾來揪團囉！",
+      "raidAlert": "{raider} 帶著觀眾揪團到 {target} 囉！",
       "raidWelcome": "歡迎大家加入！",
       "viewers": "名觀眾"
     },
