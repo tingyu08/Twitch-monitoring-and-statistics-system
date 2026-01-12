@@ -11,7 +11,7 @@ export interface ViewerTrendPoint {
 }
 
 export interface HourlyViewerStat {
-  hour: string;
+  timestamp: string;
   viewers: number;
 }
 

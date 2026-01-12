@@ -333,7 +333,6 @@ export async function getPublicStreamHourlyHandler(
     const result = [];
     const avg = session.avgViewers;
     const peak = session.peakViewers || avg * 1.2;
-    const startHour = session.startedAt.getHours();
 
     for (let i = 0; i < durationHours; i++) {
       // 模擬曲線：中間高，兩邊低
@@ -351,12 +350,13 @@ export async function getPublicStreamHourlyHandler(
       // 確保不超過 Peak，不低於 0
       viewers = Math.min(peak, Math.max(0, viewers));
 
-      // 格式化時間 HH:00
-      const currentHour = (startHour + i) % 24;
-      const hourStr = `${currentHour.toString().padStart(2, "0")}:00`;
+      // 計算該小時的準確時間
+      const pointTime = new Date(
+        session.startedAt.getTime() + i * 60 * 60 * 1000
+      );
 
       result.push({
-        hour: hourStr,
+        timestamp: pointTime.toISOString(),
         viewers: Math.round(viewers),
       });
     }

@@ -102,9 +102,16 @@ export function StreamHourlyDialog({
                     </linearGradient>
                   </defs>
                   <XAxis
-                    dataKey="hour"
+                    dataKey="timestamp"
                     tick={{ fill: "#9ca3af", fontSize: 11 }}
                     tickMargin={10}
+                    tickFormatter={(timestamp) => {
+                      const date = new Date(timestamp);
+                      return `${date
+                        .getHours()
+                        .toString()
+                        .padStart(2, "0")}:00`;
+                    }}
                   />
                   <YAxis
                     tick={{ fill: "#9ca3af", fontSize: 11 }}
