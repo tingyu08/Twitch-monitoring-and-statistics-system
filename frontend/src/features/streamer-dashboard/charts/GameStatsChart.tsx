@@ -15,39 +15,51 @@ import { ChartLoading, ChartError, ChartEmpty } from "./ChartStates";
 import { useTranslations } from "next-intl";
 
 interface Props {
-  range: "7d" | "30d" | "90d";
+  range?: "7d" | "30d" | "90d";
+  data?: GameStats[];
+  loading?: boolean;
 }
 
 const COLORS = ["#8b5cf6", "#d946ef", "#f43f5e", "#ec4899", "#a855f7"];
 
-export function GameStatsChart({ range }: Props) {
+export function GameStatsChart({
+  range = "30d",
+  data: externalData,
+  loading: externalLoading,
+}: Props) {
   const t = useTranslations("streamer.charts");
-  const [data, setData] = useState<GameStats[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [internalData, setInternalData] = useState<GameStats[]>([]);
+  const [internalLoading, setInternalLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    // 如果有傳外部數據，就不需要自己抓
+    if (externalData) return;
+
     let mounted = true;
-    setLoading(true);
+    setInternalLoading(true);
     getStreamerGameStats(range)
       .then((res) => {
         if (mounted) {
-          setData(res);
-          setLoading(false);
+          setInternalData(res);
+          setInternalLoading(false);
         }
       })
       .catch(() => {
         if (mounted) {
           setError(true);
-          setLoading(false);
+          setInternalLoading(false);
         }
       });
     return () => {
       mounted = false;
     };
-  }, [range]);
+  }, [range, externalData]);
 
-  if (loading) return <ChartLoading />;
+  const isLoading = externalData ? externalLoading : internalLoading;
+  const displayData = externalData || internalData;
+
+  if (isLoading) return <ChartLoading />;
   // Simple retry by callback
   if (error)
     return (
@@ -56,13 +68,13 @@ export function GameStatsChart({ range }: Props) {
         onRetry={() => window.location.reload()}
       />
     );
-  if (data.length === 0)
+  if (displayData.length === 0)
     return (
       <ChartEmpty description="No game statistics available for the selected range." />
     );
 
   // Take top 5
-  const chartData = data.slice(0, 5);
+  const chartData = displayData.slice(0, 5);
 
   return (
     <div className="w-full h-full bg-white dark:bg-[#1a1b26] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">

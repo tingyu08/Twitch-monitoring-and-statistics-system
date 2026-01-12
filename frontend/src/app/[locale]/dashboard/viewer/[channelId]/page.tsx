@@ -20,6 +20,7 @@ import {
   type ViewerMessageStatsResponse,
 } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
+import type { GameStats } from "@/lib/api/streamer";
 import { MessageStatsSummary } from "@/features/viewer-dashboard/components/MessageStatsSummary";
 import { MessageTrendChart } from "@/features/viewer-dashboard/components/MessageTrendChart";
 import { InteractionBreakdownChart } from "@/features/viewer-dashboard/components/InteractionBreakdownChart";
@@ -40,6 +41,7 @@ import {
   Legend,
 } from "recharts";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
+import { GameStatsChart } from "@/features/streamer-dashboard/charts/GameStatsChart";
 
 import { ChannelVideosSection } from "@/features/viewer-dashboard/components/ChannelVideosSection";
 
@@ -53,6 +55,7 @@ export default function ViewerChannelStatsPage() {
   const [stats, setStats] = useState<ViewerChannelStats | null>(null);
   const [messageStats, setMessageStats] =
     useState<ViewerMessageStatsResponse | null>(null);
+  const [gameStats, setGameStats] = useState<GameStats[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("30");
@@ -74,7 +77,9 @@ export default function ViewerChannelStatsPage() {
         const startDate = new Date();
         startDate.setDate(endDate.getDate() - days);
 
-        const [channelData, messageData] = await Promise.all([
+        const rangeKey = days === 7 ? "7d" : days === 90 ? "90d" : "30d";
+
+        const [channelData, messageData, gameData] = await Promise.all([
           viewerApi.getChannelStats(channelId, days),
           viewerApi.getMessageStats(
             viewerId,
@@ -82,6 +87,7 @@ export default function ViewerChannelStatsPage() {
             startDate.toISOString(),
             endDate.toISOString()
           ),
+          viewerApi.getChannelGameStats(channelId, rangeKey),
         ]);
 
         if (!channelData) {
@@ -90,6 +96,7 @@ export default function ViewerChannelStatsPage() {
         }
         setStats(channelData);
         setMessageStats(messageData);
+        setGameStats(gameData);
       } catch (err) {
         setError(err instanceof Error ? err.message : "載入統計時發生錯誤");
       } finally {
@@ -453,6 +460,16 @@ export default function ViewerChannelStatsPage() {
             </SafeResponsiveContainer>
           </div>
         </div>
+
+        {/* 遊戲與分類統計 */}
+        {gameStats && gameStats.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold theme-text-gradient mb-4">
+              {t("streamer.charts.gameSelection")}
+            </h2>
+            <GameStatsChart data={gameStats} loading={loading} />
+          </div>
+        )}
 
         {/* 影片與剪輯列表 */}
         {channelId && <ChannelVideosSection channelId={channelId} />}

@@ -40,6 +40,48 @@ export async function getGameStatsHandler(
 }
 
 /**
+ * 公開: 取得指定頻道的遊戲/分類統計
+ * GET /api/streamer/:channelId/game-stats?range=30d
+ */
+export async function getPublicGameStatsHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { streamerId: channelId } = req.params;
+    if (!channelId) {
+      res.status(400).json({ error: "channelId required" });
+      return;
+    }
+
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { streamerId: true },
+    });
+
+    if (!channel?.streamerId) {
+      res.status(404).json({ error: "Streamer not found for this channel" });
+      return;
+    }
+
+    const range = (req.query.range as string) || "30d";
+    if (!["7d", "30d", "90d"].includes(range)) {
+      res.status(400).json({ error: "Invalid range parameter." });
+      return;
+    }
+
+    const stats = await getStreamerGameStats(
+      channel.streamerId,
+      range as "7d" | "30d" | "90d"
+    );
+    res.json(stats);
+  } catch (error) {
+    streamerLogger.error("Get Public Game Stats Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
+
+/**
  * 取得 VOD 列表
  * GET /api/streamer/me/videos?page=1&limit=20
  */

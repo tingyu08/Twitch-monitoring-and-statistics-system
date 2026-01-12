@@ -14,6 +14,7 @@ import {
   getClipsHandler,
   getPublicVideosHandler,
   getPublicClipsHandler,
+  getPublicGameStatsHandler,
 } from "./streamer-stats.controller";
 
 const router = Router();
@@ -79,5 +80,6 @@ if (process.env.NODE_ENV !== "production") {
 // Public Routes (Viewer Dashboard Access)
 router.get("/:streamerId/videos", getPublicVideosHandler);
 router.get("/:streamerId/clips", getPublicClipsHandler);
+router.get("/:streamerId/game-stats", getPublicGameStatsHandler);
 
 export const streamerRoutes = router;

@@ -1,5 +1,5 @@
 import { httpClient } from "./httpClient";
-import type { VideoResponse, ClipResponse } from "./streamer";
+import type { VideoResponse, ClipResponse, GameStats } from "./streamer";
 
 export interface ViewerConsentResponse {
   viewerId: string;
@@ -395,6 +395,23 @@ export const viewerApi = {
       );
     } catch (err) {
       console.warn("Failed to fetch clips", err);
+      return null;
+    }
+  },
+
+  /**
+   * 取得頻道的遊戲統計 (公開)
+   */
+  async getChannelGameStats(
+    channelId: string,
+    range = "30d"
+  ): Promise<GameStats[] | null> {
+    try {
+      return await httpClient<GameStats[]>(
+        `/api/streamer/${channelId}/game-stats?range=${range}`
+      );
+    } catch (err) {
+      console.warn("Failed to fetch game stats", err);
       return null;
     }
   },
