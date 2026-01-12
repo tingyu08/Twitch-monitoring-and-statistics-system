@@ -109,6 +109,25 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         }
       );
 
+      // 監聽 Raid 事件
+      newSocket.on(
+        "stream.raid",
+        (data: { channelName: string; raider: string; viewers: number }) => {
+          console.log("Raid:", data);
+          toast.success(
+            `${data.raider} ${t("raidAlert")} (${data.viewers} ${t(
+              "viewers"
+            )})`,
+            {
+              description: t("raidWelcome"),
+              duration: 8000,
+              className: "border-purple-500 bg-purple-50 dark:bg-purple-900/20", // 紫色邊框與背景
+              icon: "🚀",
+            }
+          );
+        }
+      );
+
       setSocket(newSocket);
 
       // 3. Cleanup: 當 user 改變或組件卸載時，斷開這個特定的連線
