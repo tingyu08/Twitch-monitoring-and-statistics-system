@@ -135,11 +135,6 @@ export async function getFollowedChannels(viewerId: string) {
     new Set([...statsChannelIds, ...followChannelIds])
   );
 
-  // 診斷日誌：追蹤頻道數量
-  console.log(
-    `[DEBUG] getFollowedChannels: stats=${stats.length}, follows=${follows.length}, unique=${allChannelIds.length}`
-  );
-
   if (allChannelIds.length === 0) {
     return [];
   }
