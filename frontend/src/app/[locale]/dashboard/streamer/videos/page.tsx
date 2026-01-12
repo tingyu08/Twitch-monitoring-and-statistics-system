@@ -11,6 +11,7 @@ import {
 
 export default function VideosPage() {
   const t = useTranslations("streamer");
+  const tv = useTranslations("streamer.pages.videos");
   const [activeTab, setActiveTab] = useState<"videos" | "clips">("videos");
 
   // Videos State
@@ -61,26 +62,26 @@ export default function VideosPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 mb-6 font-medium">
+      <div className="flex bg-gray-100 dark:bg-white/5 rounded-xl p-1 mb-8 w-fit">
         <button
-          className={`px-6 py-3 transition-colors border-b-2 ${
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
             activeTab === "videos"
-              ? "border-purple-500 text-purple-600 dark:text-purple-400"
-              : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              ? "bg-white dark:bg-purple-600 text-purple-600 dark:text-white shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
           }`}
           onClick={() => handleTabChange("videos")}
         >
-          Latest VODs
+          {tv("latestVods")}
         </button>
         <button
-          className={`px-6 py-3 transition-colors border-b-2 ${
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
             activeTab === "clips"
-              ? "border-purple-500 text-purple-600 dark:text-purple-400"
-              : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              ? "bg-white dark:bg-purple-600 text-purple-600 dark:text-white shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
           }`}
           onClick={() => handleTabChange("clips")}
         >
-          Top Clips
+          {tv("topClips")}
         </button>
       </div>
 
@@ -90,11 +91,11 @@ export default function VideosPage() {
           // Videos List
           loadingVideos ? (
             <div className="col-span-full py-10 text-center text-gray-500">
-              Loading Videos...
+              {tv("loadingVideos")}
             </div>
           ) : videos.length === 0 ? (
             <div className="col-span-full py-10 text-center text-gray-500">
-              No videos found. Ensure sync job is running.
+              {tv("noVideos")} - {tv("noVideosDesc")}
             </div>
           ) : (
             videos.map((v) => (
@@ -140,11 +141,11 @@ export default function VideosPage() {
         ) : // Clips List
         loadingClips ? (
           <div className="col-span-full py-10 text-center text-gray-500">
-            Loading Clips...
+            {tv("loadingClips")}
           </div>
         ) : clips.length === 0 ? (
           <div className="col-span-full py-10 text-center text-gray-500">
-            No clips found.
+            {tv("noClips")}
           </div>
         ) : (
           clips.map((c) => (
@@ -199,10 +200,12 @@ export default function VideosPage() {
           }
           className="px-4 py-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-gray-800 theme-text-primary rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-white/10 transition shadow-sm"
         >
-          Previous
+          {tv("previous")}
         </button>
         <span className="text-sm font-medium theme-text-secondary">
-          Page {activeTab === "videos" ? videosPage : clipsPage}
+          {tv("page", {
+            page: activeTab === "videos" ? videosPage : clipsPage,
+          })}
         </span>
         <button
           disabled={
@@ -217,7 +220,7 @@ export default function VideosPage() {
           }
           className="px-4 py-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-gray-800 theme-text-primary rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-white/10 transition shadow-sm"
         >
-          Next
+          {tv("next")}
         </button>
       </div>
     </div>

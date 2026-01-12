@@ -430,6 +430,25 @@
         "limitedData": "Only {current} days of subscription data available. We recommend at least {min} days for reliable trend analysis.",
         "syncNow": "Sync Subscription Data",
         "estimate": "Estimated"
+      },
+      "gameStats": "Game & Category Stats",
+      "gameSelection": "Popular Games",
+      "totalHours": "Total Hours",
+      "noGameStats": "No Game Statistics",
+      "noGameStatsDesc": "No game statistics available for the selected range"
+    },
+    "pages": {
+      "videos": {
+        "latestVods": "Latest VODs",
+        "topClips": "Top Clips",
+        "loadingVideos": "Loading videos...",
+        "loadingClips": "Loading clips...",
+        "noVideos": "No Videos",
+        "noVideosDesc": "Ensure sync job is running",
+        "noClips": "No Clips",
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page {page}"
       }
     }
   }

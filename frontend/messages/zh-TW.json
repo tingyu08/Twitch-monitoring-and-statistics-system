@@ -421,6 +421,25 @@
         "limitedData": "目前僅有 {current} 天的訂閱數據。為獲得可靠的趨勢分析，建議至少收集 {min} 天數據。",
         "syncNow": "立即同步訂閱數據",
         "estimate": "估算"
+      },
+      "gameStats": "遊戲與分類統計",
+      "gameSelection": "熱門遊戲",
+      "totalHours": "總時數",
+      "noGameStats": "暫無遊戲統計",
+      "noGameStatsDesc": "選定範圍內沒有遊戲統計資料"
+    },
+    "pages": {
+      "videos": {
+        "latestVods": "最新 VOD",
+        "topClips": "熱門剪輯",
+        "loadingVideos": "載入影片中...",
+        "loadingClips": "載入剪輯中...",
+        "noVideos": "暫無影片",
+        "noVideosDesc": "請確認同步任務正在執行中",
+        "noClips": "暫無剪輯",
+        "previous": "上一頁",
+        "next": "下一頁",
+        "page": "第 {page} 頁"
       }
     }
   }

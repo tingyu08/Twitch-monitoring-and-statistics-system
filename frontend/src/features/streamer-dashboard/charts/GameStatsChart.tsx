@@ -64,14 +64,12 @@ export function GameStatsChart({
   if (error)
     return (
       <ChartError
-        error="Unable to load game statistics"
+        error={t("noGameStats")}
         onRetry={() => window.location.reload()}
       />
     );
   if (displayData.length === 0)
-    return (
-      <ChartEmpty description="No game statistics available for the selected range." />
-    );
+    return <ChartEmpty description={t("noGameStatsDesc")} />;
 
   // Take top 5
   const chartData = displayData.slice(0, 5);
@@ -107,7 +105,7 @@ export function GameStatsChart({
                 color: "#fff",
                 borderRadius: "8px",
               }}
-              formatter={(value: number) => [`${value} hrs`, "Total Hours"]}
+              formatter={(value: number) => [`${value} hrs`, t("totalHours")]}
             />
             <Bar dataKey="totalHours" radius={[0, 4, 4, 0]} barSize={20}>
               {chartData.map((entry, index) => (
