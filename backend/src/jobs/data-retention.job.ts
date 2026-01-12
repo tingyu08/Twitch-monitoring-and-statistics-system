@@ -8,6 +8,7 @@
 import cron from "node-cron";
 import { accountDeletionService } from "../services/account-deletion.service";
 import { dataExportService } from "../services/data-export.service";
+import { prisma } from "../db/prisma";
 
 // 每日凌晨 3 點執行
 const DATA_RETENTION_CRON =
@@ -52,6 +53,21 @@ export class DataRetentionJob {
       console.log("📋 清理過期的匯出檔案...");
       const cleanedExports = await dataExportService.cleanupExpiredExports();
       console.log(`   清理了 ${cleanedExports} 個過期匯出檔案`);
+
+      // 3. 清理過期的影片與剪輯 (7天)
+      console.log("📋 清理過期的 VOD 與 Clip...");
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const deletedVideos = await prisma.video.deleteMany({
+        where: { createdAt: { lt: sevenDaysAgo } },
+      });
+      const deletedClips = await prisma.clip.deleteMany({
+        where: { createdAt: { lt: sevenDaysAgo } },
+      });
+      console.log(
+        `   清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯`
+      );
 
       console.log("✅ Data Retention Job 執行完成");
     } catch (error) {

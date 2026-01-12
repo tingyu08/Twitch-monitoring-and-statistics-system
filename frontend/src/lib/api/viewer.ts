@@ -1,4 +1,5 @@
 import { httpClient } from "./httpClient";
+import type { VideoResponse, ClipResponse } from "./streamer";
 
 export interface ViewerConsentResponse {
   viewerId: string;
@@ -339,9 +340,6 @@ export const viewerApi = {
     }
   },
 
-  /**
-   * 設定要監聽的頻道（分頁換頁時調用）
-   */
   async setListenChannels(
     channels: Array<{ channelName: string; isLive: boolean }>
   ): Promise<{
@@ -361,6 +359,42 @@ export const viewerApi = {
       });
     } catch (err) {
       console.warn("Failed to set listen channels", err);
+      return null;
+    }
+  },
+
+  /**
+   * 取得頻道的 VOD 列表 (公開)
+   */
+  async getChannelVideos(
+    channelId: string,
+    page = 1,
+    limit = 6
+  ): Promise<VideoResponse | null> {
+    try {
+      return await httpClient<VideoResponse>(
+        `/api/streamer/${channelId}/videos?page=${page}&limit=${limit}`
+      );
+    } catch (err) {
+      console.warn("Failed to fetch videos", err);
+      return null;
+    }
+  },
+
+  /**
+   * 取得頻道的 Clip 列表 (公開)
+   */
+  async getChannelClips(
+    channelId: string,
+    page = 1,
+    limit = 6
+  ): Promise<ClipResponse | null> {
+    try {
+      return await httpClient<ClipResponse>(
+        `/api/streamer/${channelId}/clips?page=${page}&limit=${limit}`
+      );
+    } catch (err) {
+      console.warn("Failed to fetch clips", err);
       return null;
     }
   },

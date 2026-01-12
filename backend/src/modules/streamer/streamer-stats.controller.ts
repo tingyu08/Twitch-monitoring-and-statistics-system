@@ -1,4 +1,4 @@
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
 import {
   getStreamerGameStats,
@@ -88,6 +88,58 @@ export async function getClipsHandler(
     res.json(result);
   } catch (error) {
     streamerLogger.error("Get Clips Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
+
+/**
+ * 公開: 取得指定實況主的 VOD 列表
+ * GET /api/streamer/:streamerId/videos
+ */
+export async function getPublicVideosHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { streamerId } = req.params;
+    if (!streamerId) {
+      res.status(400).json({ error: "streamerId required" });
+      return;
+    }
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const safeLimit = Math.min(limit, 100);
+
+    const result = await getStreamerVideos(streamerId, safeLimit, page);
+    res.json(result);
+  } catch (error) {
+    streamerLogger.error("Get Public Videos Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
+
+/**
+ * 公開: 取得指定實況主的 Clips 列表
+ * GET /api/streamer/:streamerId/clips
+ */
+export async function getPublicClipsHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { streamerId } = req.params;
+    if (!streamerId) {
+      res.status(400).json({ error: "streamerId required" });
+      return;
+    }
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const safeLimit = Math.min(limit, 100);
+
+    const result = await getStreamerClips(streamerId, safeLimit, page);
+    res.json(result);
+  } catch (error) {
+    streamerLogger.error("Get Public Clips Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 }

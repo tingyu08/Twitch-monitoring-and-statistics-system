@@ -41,6 +41,8 @@ import {
 } from "recharts";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 
+import { ChannelVideosSection } from "@/features/viewer-dashboard/components/ChannelVideosSection";
+
 export default function ViewerChannelStatsPage() {
   const t = useTranslations();
   const locale = useLocale();
@@ -451,6 +453,9 @@ export default function ViewerChannelStatsPage() {
             </SafeResponsiveContainer>
           </div>
         </div>
+
+        {/* 影片與剪輯列表 */}
+        {channelId && <ChannelVideosSection channelId={channelId} />}
 
         {/* 未來功能預留區 */}
         <div className="mt-8 p-6 theme-card border-2 border-dashed border-purple-200 dark:border-white/20 text-center">

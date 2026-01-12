@@ -12,6 +12,8 @@ import {
   getGameStatsHandler,
   getVideosHandler,
   getClipsHandler,
+  getPublicVideosHandler,
+  getPublicClipsHandler,
 } from "./streamer-stats.controller";
 
 const router = Router();
@@ -73,5 +75,9 @@ router.post("/me/sync-subscriptions", requireAuth, syncSubscriptionsHandler);
 if (process.env.NODE_ENV !== "production") {
   router.get("/:streamerId/summary", getStreamerSummaryByIdHandler);
 }
+
+// Public Routes (Viewer Dashboard Access)
+router.get("/:streamerId/videos", getPublicVideosHandler);
+router.get("/:streamerId/clips", getPublicClipsHandler);
 
 export const streamerRoutes = router;
