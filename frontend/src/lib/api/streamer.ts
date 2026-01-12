@@ -134,7 +134,7 @@ export async function syncSubscriptions(): Promise<{ message: string }> {
 }
 
 /**
- * ¹CÀ¸/¤ÀÃş²Î­p¸ê®Æ
+ * éŠæˆ²/åˆ†é¡çµ±è¨ˆè³‡æ–™
  */
 export interface GameStats {
   gameName: string;
@@ -146,18 +146,16 @@ export interface GameStats {
 }
 
 /**
- * ¨ú±o¹êªp¥D¹CÀ¸/¤ÀÃş²Î­p
+ * å–å¾—å¯¦æ³ä¸»éŠæˆ²/åˆ†é¡çµ±è¨ˆ
  */
 export async function getStreamerGameStats(
   range: "7d" | "30d" | "90d" = "30d"
 ): Promise<GameStats[]> {
-  return httpClient<GameStats[]>(
-    \/api/streamer/me/game-stats?range=\\
-  );
+  return httpClient<GameStats[]>(`/api/streamer/me/game-stats?range=${range}`);
 }
 
 /**
- * VOD/Video ¸ê®Æµ²ºc
+ * VOD/Video è³‡æ–™çµæ§‹
  */
 export interface StreamerVideo {
   twitchVideoId: string;
@@ -179,14 +177,19 @@ export interface VideoResponse {
 }
 
 /**
- * ¨ú±o¹êªp¥D VOD ¦Cªí
+ * å–å¾—å¯¦æ³ä¸» VOD åˆ—è¡¨
  */
-export async function getStreamerVideos(page = 1, limit = 20): Promise<VideoResponse> {
-  return httpClient<VideoResponse>(\/api/streamer/me/videos?page=\&limit=\\);
+export async function getStreamerVideos(
+  page = 1,
+  limit = 20
+): Promise<VideoResponse> {
+  return httpClient<VideoResponse>(
+    `/api/streamer/me/videos?page=${page}&limit=${limit}`
+  );
 }
 
 /**
- * Clip ¸ê®Æµ²ºc
+ * Clip è³‡æ–™çµæ§‹
  */
 export interface StreamerClip {
   twitchClipId: string;
@@ -209,9 +212,13 @@ export interface ClipResponse {
 }
 
 /**
- * ¨ú±o¹êªp¥D Clip ¦Cªí
+ * å–å¾—å¯¦æ³ä¸» Clip åˆ—è¡¨
  */
-export async function getStreamerClips(page = 1, limit = 20): Promise<ClipResponse> {
-  return httpClient<ClipResponse>(\/api/streamer/me/clips?page=\&limit=\\);
+export async function getStreamerClips(
+  page = 1,
+  limit = 20
+): Promise<ClipResponse> {
+  return httpClient<ClipResponse>(
+    `/api/streamer/me/clips?page=${page}&limit=${limit}`
+  );
 }
-
