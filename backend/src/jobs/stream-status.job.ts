@@ -258,7 +258,25 @@ export class StreamStatusJob {
       },
     });
 
-    console.log(`🔴 新開播: ${channel.channelName} - ${stream.title}`);
+    // 新開播：同時記錄第一筆 StreamMetric (Realtime Viewer Data)
+    // 我們需要先獲取這個 Session 的 ID (如果是新建的)
+    const session = await prisma.streamSession.findUnique({
+      where: { twitchStreamId: stream.id },
+    });
+
+    if (session) {
+      await prisma.streamMetric.create({
+        data: {
+          streamSessionId: session.id,
+          viewerCount: stream.viewerCount,
+          timestamp: new Date(),
+        },
+      });
+    }
+
+    console.log(
+      `🔴 新開播: ${channel.channelName} - ${stream.title} (Metric recorded)`
+    );
   }
 
   /**
@@ -292,6 +310,15 @@ export class StreamStatusJob {
         category: stream.gameName,
         avgViewers: newAvg,
         peakViewers: newPeak,
+      },
+    });
+
+    // 記錄真實每小時數據點 (StreamMetric)
+    await prisma.streamMetric.create({
+      data: {
+        streamSessionId: sessionId,
+        viewerCount: stream.viewerCount,
+        timestamp: new Date(),
       },
     });
   }

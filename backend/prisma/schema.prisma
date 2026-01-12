@@ -89,9 +89,23 @@ model StreamSession {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   channel         Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  metrics         StreamMetric[]
 
   @@index([channelId, startedAt])
   @@map("stream_sessions")
+}
+
+model StreamMetric {
+  id              String        @id @default(uuid())
+  streamSessionId String
+  timestamp       DateTime      @default(now())
+  viewerCount     Int           @default(0)
+  chatCount       Int?          @default(0)
+  
+  streamSession   StreamSession @relation(fields: [streamSessionId], references: [id], onDelete: Cascade)
+
+  @@index([streamSessionId, timestamp])
+  @@map("stream_metrics")
 }
 
 model ChannelDailyStat {

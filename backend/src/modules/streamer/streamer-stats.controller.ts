@@ -316,19 +316,43 @@ export async function getPublicStreamHourlyHandler(
         },
       },
       select: {
+        id: true,
         startedAt: true,
         durationSeconds: true,
         avgViewers: true,
         peakViewers: true,
+        metrics: {
+          orderBy: { timestamp: "asc" },
+          select: {
+            timestamp: true,
+            viewerCount: true,
+          },
+        },
       },
     });
 
-    if (!session || !session.durationSeconds || !session.avgViewers) {
+    if (!session) {
       res.json([]);
       return;
     }
 
-    // 模擬每小時數據
+    // 1. 如果有真實數據 (Metrics)，優先使用
+    if (session.metrics && session.metrics.length > 0) {
+      const realData = session.metrics.map((m) => ({
+        timestamp: m.timestamp.toISOString(),
+        viewers: m.viewerCount,
+      }));
+      res.json(realData);
+      return;
+    }
+
+    // 2. 如果沒有真實數據，且無法模擬 (無 duration/avg)，回傳空
+    if (!session.durationSeconds || !session.avgViewers) {
+      res.json([]);
+      return;
+    }
+
+    // 3. Fallback: 使用模擬演算法 (舊資料/未能採集到時使用)
     const durationHours = Math.ceil(session.durationSeconds / 3600);
     const result = [];
     const avg = session.avgViewers;
