@@ -90,7 +90,7 @@ export function ChannelVideosSection({ channelId }: Props) {
                 href={v.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative block overflow-hidden rounded-xl bg-gray-100 dark:bg-black/20 border border-gray-200 dark:border-white/5 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/10 transition-all"
+                className="group relative block overflow-hidden theme-card hover:shadow-lg hover:shadow-purple-500/10 transition-all"
               >
                 <div className="aspect-video relative">
                   {v.thumbnailUrl ? (
@@ -140,7 +140,7 @@ export function ChannelVideosSection({ channelId }: Props) {
               href={c.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group relative block overflow-hidden rounded-xl bg-gray-100 dark:bg-black/20 border border-gray-200 dark:border-white/5 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/10 transition-all"
+              className="group relative block overflow-hidden theme-card hover:shadow-lg hover:shadow-purple-500/10 transition-all"
             >
               <div className="aspect-video relative">
                 {c.thumbnailUrl ? (

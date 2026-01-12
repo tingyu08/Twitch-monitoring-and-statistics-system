@@ -101,7 +101,7 @@ export default function VideosPage() {
             videos.map((v) => (
               <div
                 key={v.twitchVideoId}
-                className="group relative bg-white dark:bg-[#1a1b26] rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition duration-300 border border-gray-100 dark:border-gray-800"
+                className="group relative theme-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition duration-300"
               >
                 <a
                   href={v.url}
@@ -151,7 +151,7 @@ export default function VideosPage() {
           clips.map((c) => (
             <div
               key={c.twitchClipId}
-              className="group relative bg-white dark:bg-[#1a1b26] rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition duration-300 border border-gray-100 dark:border-gray-800"
+              className="group relative theme-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition duration-300"
             >
               <a
                 href={c.url}

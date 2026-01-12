@@ -75,7 +75,7 @@ export function GameStatsChart({
   const chartData = displayData.slice(0, 5);
 
   return (
-    <div className="w-full h-full bg-white dark:bg-[#1a1b26] rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+    <div className="theme-card p-6">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold theme-text-primary">
           {t("gameStats", { defaultMessage: "Category Performance" })}
