@@ -10,6 +10,11 @@ export interface ViewerTrendPoint {
   category: string;
 }
 
+export interface HourlyViewerStat {
+  hour: string;
+  viewers: number;
+}
+
 export interface ViewerConsentResponse {
   viewerId: string;
   consentedAt: string;
@@ -438,6 +443,23 @@ export const viewerApi = {
       );
     } catch (err) {
       console.warn("Failed to fetch viewer trends", err);
+      return null;
+    }
+  },
+
+  /**
+   * 取得特定直播的小時觀眾分佈 (公開)
+   */
+  async getChannelStreamHourlyStats(
+    channelId: string,
+    date: string
+  ): Promise<HourlyViewerStat[] | null> {
+    try {
+      return await httpClient<HourlyViewerStat[]>(
+        `/api/streamer/${channelId}/stream-hourly?date=${date}`
+      );
+    } catch (err) {
+      console.warn("Failed to fetch stream hourly stats", err);
       return null;
     }
   },

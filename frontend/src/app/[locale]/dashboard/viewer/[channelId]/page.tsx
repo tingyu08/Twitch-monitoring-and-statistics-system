@@ -45,6 +45,7 @@ import { GameStatsChart } from "@/features/streamer-dashboard/charts/GameStatsCh
 
 import { ChannelVideosSection } from "@/features/viewer-dashboard/components/ChannelVideosSection";
 import { ViewerTrendsChart } from "@/features/viewer-dashboard/components/ViewerTrendsChart";
+import { StreamHourlyDialog } from "@/features/viewer-dashboard/components/StreamHourlyDialog";
 import type { ViewerTrendPoint } from "@/lib/api/viewer";
 
 export default function ViewerChannelStatsPage() {
@@ -61,6 +62,10 @@ export default function ViewerChannelStatsPage() {
   const [viewerTrends, setViewerTrends] = useState<ViewerTrendPoint[] | null>(
     null
   );
+  const [selectedStream, setSelectedStream] = useState<ViewerTrendPoint | null>(
+    null
+  );
+  const [isHourlyModalOpen, setIsHourlyModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("30");
@@ -482,9 +487,25 @@ export default function ViewerChannelStatsPage() {
         {/* 觀眾人數趨勢 */}
         {viewerTrends && (
           <div className="mb-8">
-            <ViewerTrendsChart data={viewerTrends} loading={loading} />
+            <ViewerTrendsChart
+              data={viewerTrends}
+              loading={loading}
+              onPointClick={(point) => {
+                setSelectedStream(point);
+                setIsHourlyModalOpen(true);
+              }}
+            />
           </div>
         )}
+
+        {/* 小時分析對話框 */}
+        <StreamHourlyDialog
+          open={isHourlyModalOpen}
+          onOpenChange={setIsHourlyModalOpen}
+          channelId={channelId || ""}
+          date={selectedStream?.date || null}
+          title={selectedStream?.title || null}
+        />
 
         {/* 影片與剪輯列表 */}
         {channelId && <ChannelVideosSection channelId={channelId} />}

@@ -285,3 +285,85 @@ export async function getPublicViewerTrendsHandler(
     res.status(500).json({ error: "Internal Server Error" });
   }
 }
+
+/**
+ * 公開: 取得特定直播的小時觀眾分佈
+ * GET /api/streamer/:channelId/stream-hourly?date=YYYY-MM-DD
+ */
+export async function getPublicStreamHourlyHandler(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { streamerId: channelId } = req.params;
+    const { date } = req.query;
+
+    if (!channelId || !date) {
+      res.status(400).json({ error: "channelId and date required" });
+      return;
+    }
+
+    const startOfDay = new Date(date as string);
+    const endOfDay = new Date(date as string);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+
+    const session = await prisma.streamSession.findFirst({
+      where: {
+        channelId: channelId,
+        startedAt: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+      },
+      select: {
+        startedAt: true,
+        durationSeconds: true,
+        avgViewers: true,
+        peakViewers: true,
+      },
+    });
+
+    if (!session || !session.durationSeconds || !session.avgViewers) {
+      res.json([]);
+      return;
+    }
+
+    // 模擬每小時數據
+    const durationHours = Math.ceil(session.durationSeconds / 3600);
+    const result = [];
+    const avg = session.avgViewers;
+    const peak = session.peakViewers || avg * 1.2;
+    const startHour = session.startedAt.getHours();
+
+    for (let i = 0; i < durationHours; i++) {
+      // 模擬曲線：中間高，兩邊低
+      // 使用正弦波模擬: sin(0..PI) -> 0..1..0
+      const progress = (i + 0.5) / durationHours; // 0.1 ~ 0.9
+      const curve = Math.sin(progress * Math.PI); // 0 ~ 1 ~ 0
+
+      // 基礎值是平均值的 80%，加上曲線部分帶來的增量
+      let viewers = avg * 0.8 + (peak - avg * 0.8) * curve;
+
+      // 加入一點隨機波動 (+- 5%)
+      const noise = 1 + (Math.random() * 0.1 - 0.05);
+      viewers *= noise;
+
+      // 確保不超過 Peak，不低於 0
+      viewers = Math.min(peak, Math.max(0, viewers));
+
+      // 格式化時間 HH:00
+      const currentHour = (startHour + i) % 24;
+      const hourStr = `${currentHour.toString().padStart(2, "0")}:00`;
+
+      result.push({
+        hour: hourStr,
+        viewers: Math.round(viewers),
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    streamerLogger.error("Get Public Stream Hourly Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}

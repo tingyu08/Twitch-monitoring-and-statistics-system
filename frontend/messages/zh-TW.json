@@ -71,7 +71,11 @@
     "noViewerData": "選定範圍內沒有直播資料",
     "avgViewers": "平均觀眾",
     "peakViewers": "最高觀眾",
-    "viewerTrendsDesc": "顯示 {count} 場直播的觀眾數據"
+    "viewerTrendsDesc": "顯示 {count} 場直播的觀眾數據",
+    "clickForDetails": "點擊查看詳細",
+    "hourlyAnalysis": "每小時觀眾分析",
+    "noHourlyData": "無詳細分析資料",
+    "viewers": "觀眾"
   },
   "stats": {
     "totalWatchHours": "總觀看時數",

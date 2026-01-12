@@ -16,6 +16,7 @@ import {
   getPublicClipsHandler,
   getPublicGameStatsHandler,
   getPublicViewerTrendsHandler,
+  getPublicStreamHourlyHandler,
 } from "./streamer-stats.controller";
 
 const router = Router();
@@ -83,5 +84,6 @@ router.get("/:streamerId/videos", getPublicVideosHandler);
 router.get("/:streamerId/clips", getPublicClipsHandler);
 router.get("/:streamerId/game-stats", getPublicGameStatsHandler);
 router.get("/:streamerId/viewer-trends", getPublicViewerTrendsHandler);
+router.get("/:streamerId/stream-hourly", getPublicStreamHourlyHandler);
 
 export const streamerRoutes = router;

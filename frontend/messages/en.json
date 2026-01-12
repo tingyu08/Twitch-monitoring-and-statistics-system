@@ -71,7 +71,8 @@
     "noViewerData": "No stream data in selected range",
     "avgViewers": "Avg Viewers",
     "peakViewers": "Peak Viewers",
-    "viewerTrendsDesc": "Showing data from {count} streams"
+    "viewerTrendsDesc": "Showing data from {count} streams",
+    "clickForDetails": "Click for Details"
   },
   "stats": {
     "totalWatchHours": "Total Watch Hours",

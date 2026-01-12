@@ -15,9 +15,10 @@ import type { ViewerTrendPoint } from "@/lib/api/viewer";
 interface Props {
   data: ViewerTrendPoint[];
   loading?: boolean;
+  onPointClick?: (point: ViewerTrendPoint) => void;
 }
 
-export function ViewerTrendsChart({ data, loading }: Props) {
+export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
   const t = useTranslations();
 
   if (loading) {
@@ -45,14 +46,23 @@ export function ViewerTrendsChart({ data, loading }: Props) {
 
   return (
     <div className="theme-card p-6">
-      <h3 className="text-lg font-semibold theme-text-primary mb-4">
+      <h3 className="text-lg font-semibold theme-text-primary mb-4 flex items-center gap-2">
         {t("charts.viewerTrends")}
+        <span className="text-xs font-normal theme-text-secondary bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-full">
+          {t("charts.clickForDetails")}
+        </span>
       </h3>
       <div className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
             margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+            onClick={(e: any) => {
+              if (e && e.activePayload && e.activePayload[0] && onPointClick) {
+                onPointClick(e.activePayload[0].payload);
+              }
+            }}
+            className={onPointClick ? "cursor-pointer" : ""}
           >
             <XAxis
               dataKey="date"
@@ -93,7 +103,7 @@ export function ViewerTrendsChart({ data, loading }: Props) {
               stroke="#8b5cf6"
               strokeWidth={2}
               dot={{ fill: "#8b5cf6", r: 4 }}
-              activeDot={{ r: 6 }}
+              activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }}
             />
             <Line
               type="monotone"
@@ -101,7 +111,7 @@ export function ViewerTrendsChart({ data, loading }: Props) {
               stroke="#f43f5e"
               strokeWidth={2}
               dot={{ fill: "#f43f5e", r: 4 }}
-              activeDot={{ r: 6 }}
+              activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>
