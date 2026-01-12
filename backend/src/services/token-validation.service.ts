@@ -7,11 +7,9 @@
  * - 嘗試刷新過期的 Token
  */
 
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../db/prisma";
 import axios from "axios";
 import { logger } from "../utils/logger";
-
-const prisma = new PrismaClient();
 
 // Token 狀態常量
 export const TokenStatus = {

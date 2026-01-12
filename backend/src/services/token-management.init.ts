@@ -6,7 +6,7 @@
  * - 註冊 Token 驗證排程任務
  */
 
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "./twurple-auth.service";
 import {
   tokenValidationService,
@@ -14,8 +14,6 @@ import {
   type TokenStatusType,
 } from "./token-validation.service";
 import { logger } from "../utils/logger";
-
-const prisma = new PrismaClient();
 
 /**
  * 初始化 Token 管理系統
