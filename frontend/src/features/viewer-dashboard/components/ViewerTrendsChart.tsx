@@ -77,6 +77,7 @@ export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
                 color: "#fff",
                 borderRadius: "8px",
               }}
+              wrapperStyle={{ pointerEvents: "none" }} // 關鍵：讓點擊穿透 Tooltip
               formatter={(value: number, name: string) => [
                 value.toLocaleString(),
                 name === "avgViewers"
@@ -103,7 +104,17 @@ export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
               stroke="#8b5cf6"
               strokeWidth={2}
               dot={{ fill: "#8b5cf6", r: 4 }}
-              activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }}
+              activeDot={{
+                r: 8,
+                stroke: "#fff",
+                strokeWidth: 2,
+                cursor: "pointer",
+                onClick: (e: any, payload: any) => {
+                  if (onPointClick && payload?.payload) {
+                    onPointClick(payload.payload);
+                  }
+                },
+              }}
             />
             <Line
               type="monotone"
@@ -111,7 +122,17 @@ export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
               stroke="#f43f5e"
               strokeWidth={2}
               dot={{ fill: "#f43f5e", r: 4 }}
-              activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }}
+              activeDot={{
+                r: 8,
+                stroke: "#fff",
+                strokeWidth: 2,
+                cursor: "pointer",
+                onClick: (e: any, payload: any) => {
+                  if (onPointClick && payload?.payload) {
+                    onPointClick(payload.payload);
+                  }
+                },
+              }}
             />
           </LineChart>
         </ResponsiveContainer>
