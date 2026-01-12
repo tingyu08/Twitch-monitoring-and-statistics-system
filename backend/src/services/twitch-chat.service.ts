@@ -297,10 +297,10 @@ export class TwurpleChatService {
     const now = Date.now();
 
     // 獲取該頻道的訊息時間戳
+    const timestamps = this.messageTimestamps.get(channelName) || [];
     if (!this.messageTimestamps.has(channelName)) {
-      this.messageTimestamps.set(channelName, []);
+      this.messageTimestamps.set(channelName, timestamps);
     }
-    const timestamps = this.messageTimestamps.get(channelName)!;
 
     // 加入當前訊息時間
     timestamps.push(now);

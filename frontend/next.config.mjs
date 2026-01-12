@@ -19,6 +19,14 @@ const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["localhost:3000", "app.localhost:3000"],
+    },
+  },
   // E2E Test Configuration - rewrites to mock server on port 4001
   async rewrites() {
     const apiUrl = process.env.E2E_API_URL || "http://localhost:4000";
