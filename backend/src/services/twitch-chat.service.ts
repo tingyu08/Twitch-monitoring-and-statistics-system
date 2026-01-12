@@ -22,12 +22,28 @@ import { decryptToken, encryptToken } from "../utils/crypto.utils";
 
 // ========== 服務實作 ==========
 
+import { webSocketGateway } from "./websocket.gateway";
+
+// ========== 熱度追蹤設定 ==========
+const HEAT_WINDOW_MS = 5000; // 5秒視窗
+const HEAT_THRESHOLD_MSG = 5; // 5秒內超過5則訊息視為有熱度
+const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
+
 export class TwurpleChatService {
   private chatClient: ChatClient | null = null;
   private channels: Set<string> = new Set();
   private isConnected = false;
 
+  // 熱度追蹤：channelName -> timestamps[]
+  private messageTimestamps: Map<string, number[]> = new Map();
+  // 熱度冷卻：channelName -> lastAlertTime
+  private lastHeatAlert: Map<string, number> = new Map();
+
   constructor() {}
+
+  // ... (省略 initialize 等方法，保持不變)
+
+  // ... (保留 initialize method)
 
   /**
    * 初始化並連接到 Twitch 聊天
@@ -139,6 +155,8 @@ export class TwurpleChatService {
     }
   }
 
+  // ... (保留 setupEventHandlers, joinChannel, leaveChannel methods)
+
   /**
    * 設定事件處理器
    */
@@ -243,7 +261,7 @@ export class TwurpleChatService {
     const channelName = channel.replace(/^#/, "");
 
     try {
-      // 從 Twurple ChatMessage 轉換為我們的格式
+      // 1. 轉換訊息格式
       const parsedMessage = {
         viewerId: msg.userInfo.userId,
         username: user,
@@ -256,9 +274,57 @@ export class TwurpleChatService {
         emotesUsed: this.extractEmotes(msg),
       };
 
+      // 2. 儲存訊息
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
+
+      // 3. 檢測熱度 (Heat Check)
+      this.checkChatHeat(channelName, text);
     } catch (err) {
       logger.error("Twurple Chat", "Error handling message", err);
+    }
+  }
+
+  /**
+   * 檢測聊天室熱度
+   */
+  private checkChatHeat(channelName: string, text: string) {
+    const now = Date.now();
+
+    // 獲取該頻道的訊息時間戳
+    if (!this.messageTimestamps.has(channelName)) {
+      this.messageTimestamps.set(channelName, []);
+    }
+    const timestamps = this.messageTimestamps.get(channelName)!;
+
+    // 加入當前訊息時間
+    timestamps.push(now);
+
+    // 移除視窗外的時間戳（例如只保留最近 5 秒）
+    const validStart = now - HEAT_WINDOW_MS;
+    while (timestamps.length > 0 && timestamps[0] < validStart) {
+      timestamps.shift();
+    }
+
+    // 檢查是否超過閾值
+    if (timestamps.length >= HEAT_THRESHOLD_MSG) {
+      const lastAlert = this.lastHeatAlert.get(channelName) || 0;
+
+      // 檢查是否在冷卻時間內
+      if (now - lastAlert > HEAT_COOLDOWN_MS) {
+        // 觸發熱度警報！
+        logger.info(
+          "Chat Heat",
+          `🔥 Channel ${channelName} is heating up! (${timestamps.length} msgs/5s)`
+        );
+
+        webSocketGateway.emit("chat.heat", {
+          channelName,
+          heatLevel: timestamps.length,
+          message: text.substring(0, 20), // 附帶最後一則訊息作為範例
+        });
+
+        this.lastHeatAlert.set(channelName, now);
+      }
     }
   }
 
@@ -287,10 +353,15 @@ export class TwurpleChatService {
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
+
+      // 訂閱也算熱度
+      this.checkChatHeat(channelName, "New Subscription!");
     } catch (err) {
       logger.error("Twurple Chat", "Error handling subscription", err);
     }
   }
+
+  // ... (保留 handleGiftSub, extractBadges, extractEmotes, getStatus, disconnect)
 
   /**
    * 處理贈送訂閱
@@ -317,6 +388,8 @@ export class TwurpleChatService {
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
+
+      this.checkChatHeat(channelName, "Gift Sub!");
     } catch (err) {
       logger.error("Twurple Chat", "Error handling gift sub", err);
     }

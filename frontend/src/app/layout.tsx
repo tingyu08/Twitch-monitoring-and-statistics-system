@@ -25,6 +25,8 @@ export const metadata = {
 
 import { SocketProvider } from "@/features/socket/SocketProvider";
 
+import { Toaster } from "@/components/ui/sonner";
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-Hant" suppressHydrationWarning>
@@ -57,6 +59,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <ConsentBannerWrapper />
               </Suspense>
             </SocketProvider>
+            <Toaster />
           </AuthProvider>
         </ThemeProvider>
         {process.env.NEXT_PUBLIC_GA_ID && (

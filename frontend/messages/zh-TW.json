@@ -2,6 +2,13 @@
   "common": {
     "loading": "載入中...",
     "error": "發生錯誤",
+    "notifications": {
+      "streamOnline": "開台啦！",
+      "streamOffline": "下播了",
+      "clickToWatch": "點擊前往觀看直播",
+      "watchBtn": "前往觀看",
+      "chatHeat": "聊天室著火啦！"
+    },
     "retry": "重試",
     "save": "儲存",
     "cancel": "取消",

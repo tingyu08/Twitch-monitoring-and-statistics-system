@@ -2,6 +2,13 @@
   "common": {
     "loading": "Loading...",
     "error": "An error occurred",
+    "notifications": {
+      "streamOnline": "is live now!",
+      "streamOffline": "is offline",
+      "clickToWatch": "Click to watch stream",
+      "watchBtn": "Watch",
+      "chatHeat": "is heating up!"
+    },
     "retry": "Retry",
     "save": "Save",
     "cancel": "Cancel",
