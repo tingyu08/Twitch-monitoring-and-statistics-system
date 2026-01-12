@@ -448,6 +448,22 @@ export async function triggerFollowSyncForUser(
 
     logger.info("Jobs", `取得 ${followedChannels.length} 個追蹤的頻道`);
 
+    // 診斷：檢查是否包含自己的頻道
+    const selfFollow = followedChannels.find(
+      (f) => f.broadcasterId === viewer.twitchUserId
+    );
+    if (selfFollow) {
+      logger.info(
+        "Jobs",
+        `✅ 追蹤清單包含自己的頻道: ${selfFollow.broadcasterLogin}`
+      );
+    } else {
+      logger.info(
+        "Jobs",
+        `ℹ️ 追蹤清單不包含自己的頻道 (Twitch User ID: ${viewer.twitchUserId})`
+      );
+    }
+
     // 獲取現有的追蹤記錄
     const existingFollows = await prisma.userFollow.findMany({
       where: {
