@@ -48,6 +48,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
               <button
                 type="button"
                 onClick={() => !isViewer && router.push("/dashboard/viewer")}
+                onMouseEnter={() => router.prefetch("/dashboard/viewer")}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                   isViewer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
@@ -61,6 +62,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 onClick={() =>
                   !isStreamer && router.push("/dashboard/streamer")
                 }
+                onMouseEnter={() => router.prefetch("/dashboard/streamer")}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                   isStreamer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
@@ -104,6 +106,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                     router.push("/dashboard/viewer");
                     setMobileMenuOpen(false);
                   }}
+                  onMouseEnter={() => router.prefetch("/dashboard/viewer")}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all ${
                     isViewer
                       ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
@@ -124,6 +127,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                     router.push("/dashboard/streamer");
                     setMobileMenuOpen(false);
                   }}
+                  onMouseEnter={() => router.prefetch("/dashboard/streamer")}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all ${
                     isStreamer
                       ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
