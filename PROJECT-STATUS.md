@@ -177,16 +177,16 @@
 | WebSocket 即時推送 | Socket.IO                    | 2026-01-12 |
 | Sentry 錯誤追蹤    | 前後端整合                   | 2026-01-12 |
 
-### ⏳ 待規劃前端效能優化
+### ✅ 前端效能優化 (Phase 2)
 
-| 項目             | 技術                   | 適用場景                     | 預估效益                |
-| ---------------- | ---------------------- | ---------------------------- | ----------------------- |
-| Skeleton Loading | 骨架屏 UI              | 圖表與資料載入等待期         | 提升感知效能，減少 CLS  |
-| 虛擬滾動         | `react-window`         | 聊天室記錄、追蹤清單、排行榜 | 解決大量 DOM 造成的卡頓 |
-| 狀態管理優化     | `React.memo` / Zustand | Socket.IO 高頻數據更新       | 減少無效渲染            |
-| 計算分流         | Web Workers            | 觀眾留存率、複雜統計計算     | 避免主線程阻塞          |
-| 字型優化         | `next/font`            | 全站字體載入                 | 消除 FOUT 與佈局位移    |
-| 資源預取         | Prefetching            | 關鍵路徑 (Dashboard 路由)    | 點擊即時響應            |
+| 項目           | 技術                      | 說明                                    | 完成日期   |
+| -------------- | ------------------------- | --------------------------------------- | ---------- |
+| **字型優化**   | `next/font`               | 內建 Inter + Noto Sans TC，消除 FOUT    | 2026-01-13 |
+| **感知效能**   | Skeleton UI               | 圖表與資料載入時的骨架屏                | 2026-01-13 |
+| **狀態管理**   | Zustand                   | Socket.IO 高頻數據管理 (useShallow)     | 2026-01-13 |
+| **長列表優化** | `react-window`            | Virtual Scrolling 解決 DOM 過多卡頓     | 2026-01-13 |
+| **計算分流**   | Web Workers               | 背景執行複雜統計運算 (`useStatsWorker`) | 2026-01-13 |
+| **工具庫**     | `clsx` + `tailwind-merge` | 樣式類名合併工具                        | 2026-01-13 |
 
 ---
 
@@ -233,7 +233,12 @@
 2. **UI 改善**
    - ✅ 實況主影片庫新增返回鍵
    - ✅ 修正開台時段分佈時區顯示問題 (UTC → 本地時間)
-   - ✅ 改善遊戲分類統計 Tooltip 顏色
+3. **前端效能優化 (Performance)**
+   - ✅ 實作 Virtual Scrolling (`react-window`) 優化長列表
+   - ✅ 引入 Web Workers 處理複雜統計計算
+   - ✅ 使用 Zustand (`useShallow`) 優化 Socket.IO 狀態管理
+   - ✅ 全站字體優化 (`next/font`) 與 Skeleton Loading
+   - ✅ 前端與 Extension Token 同步機制
 
 ---
 
