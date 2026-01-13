@@ -7,14 +7,15 @@ import { Request, Response } from "express";
 import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
 
-interface AuthenticatedRequest extends Request {
-  userId?: string;
-}
-
 interface HeartbeatBody {
   channelName: string;
   timestamp: string;
   duration: number; // seconds
+}
+
+interface AuthenticatedRequest
+  extends Request<unknown, unknown, HeartbeatBody> {
+  userId?: string;
 }
 
 /**
@@ -32,7 +33,7 @@ export async function postHeartbeatHandler(
       return;
     }
 
-    const { channelName, duration } = req.body as HeartbeatBody;
+    const { channelName, duration } = req.body;
 
     if (!channelName || !duration) {
       res.status(400).json({ error: "Missing channelName or duration" });
