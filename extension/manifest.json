@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Twitch Watch Tracker",
+  "version": "1.0.0",
+  "description": "精準追蹤 Twitch 觀看時數並同步至 Bmad 儀表板",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["*://*.twitch.tv/*"],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.twitch.tv/*",
+        "http://localhost:3000/*",
+        "https://twitch-monitoring-and-statistics-sy.vercel.app/*",
+        "https://twitch-monitoring-and-statistics-system.vercel.app/*"
+      ],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_end"
+    }
+  ]
+}

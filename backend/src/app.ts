@@ -13,6 +13,7 @@ import { healthRoutes } from "./modules/admin/health.routes";
 import tokenManagementRoutes from "./modules/admin/token-management.routes";
 import twitchRoutes from "./routes/twitch.routes";
 import { eventSubRoutes } from "./routes/eventsub.routes";
+import extensionRoutes from "./modules/extension/extension.routes";
 
 class App {
   public express: express.Application;
@@ -83,6 +84,9 @@ class App {
 
     // 健康檢查路由
     this.express.use("/api/health", healthRoutes);
+
+    // 瀏覽器擴充功能 API
+    this.express.use("/api/extension", extensionRoutes);
 
     // EventSub Webhook 路由 (Twitch 事件訂閱)
     this.express.use("/eventsub", eventSubRoutes);
