@@ -24,10 +24,44 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
     t("days.sun"),
   ];
 
+  // 處理時區轉換 (UTC -> 本地時間)
+  const localData = React.useMemo(() => {
+    // 取得本地時區偏移 (小時)，例如 TW 為 +8
+    const offsetHours = -(new Date().getTimezoneOffset() / 60);
+
+    return data.map((cell) => {
+      // 加上偏移量
+      let newHour = cell.hour + offsetHours;
+      let newDay = cell.dayOfWeek;
+
+      // 處理跨日 (往未來)
+      if (newHour >= 24) {
+        newHour -= 24;
+        // 假設 dayOfWeek 是 0(Sun) - 6(Sat)
+        newDay = (newDay + 1) % 7;
+      }
+      // 處理跨日 (往過去)
+      else if (newHour < 0) {
+        newHour += 24;
+        newDay = (newDay - 1 + 7) % 7;
+      }
+
+      // 如果時區有半小時間隔 (如印度 +5.5)，四捨五入到最近的小時
+      return {
+        ...cell,
+        hour: Math.round(newHour),
+        dayOfWeek: newDay,
+      };
+    });
+  }, [data]);
+
   const dataMap = new Map<string, number>();
-  data.forEach((cell) => {
+  localData.forEach((cell) => {
     const key = `${cell.dayOfWeek}-${cell.hour}`;
-    dataMap.set(key, cell.value);
+    // 如果轉換後多個時段重疊到同一小時 (罕見)，累加數值？
+    // Heatmap 主要是顯示「有開台的時間」，如果原本是 hour duration，累加是對的。
+    const current = dataMap.get(key) || 0;
+    dataMap.set(key, current + cell.value);
   });
 
   // 使用 API 提供的 maxValue 進行動態顏色計算
@@ -44,11 +78,11 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
 
   // 為螢幕閱讀器生成資料摘要
   const generateDataSummary = () => {
-    if (!data || data.length === 0) return t("noData");
-    const totalHours = data.reduce((sum, d) => sum + d.value, 0);
+    if (!localData || localData.length === 0) return t("noData");
+    const totalHours = localData.reduce((sum, d) => sum + d.value, 0);
     // 找出最活躍的時段
     let maxHourData = { day: 0, hour: 0, value: 0 };
-    data.forEach((cell) => {
+    localData.forEach((cell) => {
       if (cell.value > maxHourData.value) {
         maxHourData = {
           day: cell.dayOfWeek,
