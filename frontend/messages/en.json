@@ -324,6 +324,7 @@
     "videosLibrary": "Content Library",
     "videosLibraryDesc": "Browse VODs and Clips",
     "title": "Streamer Dashboard",
+    "backToDashboard": "Back to Dashboard",
     "welcome": "Welcome back, {name}",
     "logout": "Logout",
     "scheduleAnalysis": "Stream Schedule Analysis",

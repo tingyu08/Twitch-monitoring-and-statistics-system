@@ -8,6 +8,8 @@ import {
   type StreamerVideo,
   type StreamerClip,
 } from "@/lib/api/streamer";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 export default function VideosPage() {
   const t = useTranslations("streamer");
@@ -54,6 +56,16 @@ export default function VideosPage() {
 
   return (
     <div className="container px-4 py-8 mx-auto max-w-7xl animate-in fade-in zoom-in-95 duration-500">
+      <div className="mb-6">
+        <Link
+          href="/dashboard/streamer"
+          className="inline-flex items-center gap-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">{t("backToDashboard")}</span>
+        </Link>
+      </div>
+
       <div className="mb-8 space-y-2">
         <h1 className="text-3xl font-bold theme-text-gradient">
           {t("videosLibrary")}
