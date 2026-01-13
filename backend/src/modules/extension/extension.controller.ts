@@ -13,27 +13,24 @@ interface HeartbeatBody {
   duration: number; // seconds
 }
 
-interface AuthenticatedRequest
-  extends Request<unknown, unknown, HeartbeatBody> {
-  userId?: string;
-}
-
 /**
  * POST /api/extension/heartbeat
  * 接收並處理觀看心跳
  */
 export async function postHeartbeatHandler(
-  req: AuthenticatedRequest,
+  req: Request,
   res: Response
 ): Promise<void> {
   try {
-    const viewerId = req.userId;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const viewerId = (req as any).userId as string | undefined;
     if (!viewerId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
 
-    const { channelName, duration } = req.body;
+    const body = req.body as HeartbeatBody;
+    const { channelName, duration } = body;
 
     if (!channelName || !duration) {
       res.status(400).json({ error: "Missing channelName or duration" });
