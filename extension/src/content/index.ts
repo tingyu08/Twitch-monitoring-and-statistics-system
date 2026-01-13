@@ -26,10 +26,16 @@ window.addEventListener("message", (event) => {
     console.log("[Bmad] Received token from web app");
 
     // 轉發給 Background
-    chrome.runtime.sendMessage({
-      type: "SYNC_TOKEN",
-      token: data.token,
-    });
+    chrome.runtime.sendMessage(
+      {
+        type: "SYNC_TOKEN",
+        token: data.token,
+      },
+      () => {
+        // 通知網頁同步成功
+        window.postMessage({ type: "BMAD_SYNC_SUCCESS" }, "*");
+      }
+    );
   }
 });
 

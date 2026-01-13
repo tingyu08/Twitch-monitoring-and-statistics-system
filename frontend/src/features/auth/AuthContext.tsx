@@ -16,6 +16,7 @@ import {
   isViewer as checkIsViewer,
 } from "@/lib/api/auth";
 import { authLogger } from "@/lib/logger";
+import { useExtensionSync } from "@/hooks/useExtensionSync";
 
 interface AuthContextType {
   user: UserInfo | null;
@@ -86,6 +87,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user]
   );
   const isViewer = useMemo(() => user !== null && checkIsViewer(user), [user]);
+
+  // 同步用戶資訊到擴充功能
+  const viewerId = useMemo(() => {
+    if (!user) return null;
+    if ("viewerId" in user && user.viewerId) return user.viewerId;
+    if ("streamerId" in user) return user.streamerId; // 實況主也可以追蹤
+    return null;
+  }, [user]);
+
+  useExtensionSync(viewerId);
 
   return (
     <AuthContext.Provider

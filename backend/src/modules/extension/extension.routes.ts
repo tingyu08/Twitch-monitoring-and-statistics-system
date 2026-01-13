@@ -5,11 +5,11 @@
 
 import { Router } from "express";
 import { postHeartbeatHandler } from "./extension.controller";
-import { authMiddleware } from "../auth/auth.middleware";
 
 const router = Router();
 
-// POST /api/extension/heartbeat - 需要認證
-router.post("/heartbeat", authMiddleware, postHeartbeatHandler);
+// POST /api/extension/heartbeat
+// 認證在 controller 中透過 Authorization header 處理
+router.post("/heartbeat", postHeartbeatHandler);
 
 export default router;

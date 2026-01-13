@@ -22,10 +22,27 @@ export async function postHeartbeatHandler(
   res: Response
 ): Promise<void> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const viewerId = (req as any).userId as string | undefined;
+    // 從 Authorization header 取得 viewerId
+    // 格式: "Bearer {viewerId}"
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Missing authorization header" });
+      return;
+    }
+
+    const viewerId = authHeader.substring(7); // 移除 "Bearer " 前綴
     if (!viewerId) {
-      res.status(401).json({ error: "Unauthorized" });
+      res.status(401).json({ error: "Invalid token" });
+      return;
+    }
+
+    // 驗證 viewerId 是否存在於資料庫
+    const viewer = await prisma.viewer.findUnique({
+      where: { id: viewerId },
+    });
+
+    if (!viewer) {
+      res.status(401).json({ error: "Invalid viewer" });
       return;
     }
 
