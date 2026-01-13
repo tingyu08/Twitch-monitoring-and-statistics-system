@@ -9,6 +9,11 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "var(--font-noto-sans-tc)", "system-ui", "sans-serif"],
+        inter: ["var(--font-inter)", "sans-serif"],
+        "noto-tc": ["var(--font-noto-sans-tc)", "sans-serif"],
+      },
       colors: {
         // 主要品牌色 (Twitch 紫色系)
         primary: {

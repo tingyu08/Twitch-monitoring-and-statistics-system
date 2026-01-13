@@ -7,6 +7,22 @@ import "./globals.css";
 // Google Analytics
 import { GoogleAnalytics } from "@next/third-parties/google";
 
+// Font Optimization with next/font
+import { Inter, Noto_Sans_TC } from "next/font/google";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const notoSansTC = Noto_Sans_TC({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-noto-sans-tc",
+  display: "swap",
+});
+
 // 動態導入 ConsentBanner 以避免 SSR 問題
 import dynamic from "next/dynamic";
 const ConsentBannerWrapper = dynamic(
@@ -27,7 +43,11 @@ import { Toaster } from "@/components/ui/sonner";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-Hant" suppressHydrationWarning>
+    <html
+      lang="zh-Hant"
+      suppressHydrationWarning
+      className={`${inter.variable} ${notoSansTC.variable}`}
+    >
       <head>
         {/* 防止 FOUC (Flash of Unstyled Content) */}
         <script
@@ -48,7 +68,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
         <meta name="theme-color" content="#0e0e10" />
       </head>
-      <body className="theme-transition">
+      <body className={`theme-transition font-sans`}>
         <ThemeProvider>
           <AuthProvider>
             {children}
