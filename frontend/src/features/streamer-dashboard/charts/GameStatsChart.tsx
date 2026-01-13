@@ -102,9 +102,10 @@ export function GameStatsChart({
               contentStyle={{
                 backgroundColor: "#1f2937",
                 borderColor: "#374151",
-                color: "#fff",
+                color: "#e5e7eb", // gray-200 for title
                 borderRadius: "8px",
               }}
+              itemStyle={{ color: "#c084fc" }} // purple-400 for value text
               formatter={(value: number) => [`${value} hrs`, t("totalHours")]}
             />
             <Bar dataKey="totalHours" radius={[0, 4, 4, 0]} barSize={20}>
