@@ -7,15 +7,6 @@
  * - 處理訂閱、Cheer 等互動事件
  */
 
-import {
-  ChatClient,
-  ChatMessage,
-  ChatSubInfo,
-  ChatSubGiftInfo,
-  ChatRaidInfo,
-  UserNotice,
-} from "@twurple/chat";
-import { RefreshingAuthProvider } from "@twurple/auth";
 import { logger } from "../utils/logger";
 import { viewerMessageRepository } from "../modules/viewer/viewer-message.repository";
 import { prisma } from "../db/prisma";
@@ -31,7 +22,8 @@ const HEAT_THRESHOLD_MSG = 50; // 5秒內超過50則訊息視為有熱度
 const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
 
 export class TwurpleChatService {
-  private chatClient: ChatClient | null = null;
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  private chatClient: any | null = null;
   private channels: Set<string> = new Set();
   private isConnected = false;
 
@@ -51,6 +43,9 @@ export class TwurpleChatService {
    */
   public async initialize(): Promise<void> {
     try {
+      // 動態導入 @twurple/chat (ESM)
+      const { ChatClient } = await import("@twurple/chat");
+
       // 從資料庫獲取第一個有 Token 的使用者（通常是您自己）
       const tokenRecord = await prisma.twitchToken.findFirst({
         where: {
@@ -89,13 +84,15 @@ export class TwurpleChatService {
       const refreshToken = decryptToken(tokenRecord.refreshToken);
 
       // 建立 RefreshingAuthProvider（自動刷新 Token）
+      const { RefreshingAuthProvider } = await import("@twurple/auth");
+
       const authProvider = new RefreshingAuthProvider({
         clientId,
         clientSecret,
       });
 
       // 設定 Token 刷新回調（刷新後更新資料庫）
-      authProvider.onRefresh(async (userId, newTokenData) => {
+      authProvider.onRefresh(async (userId: any, newTokenData: any) => {
         logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
 
         // 更新資料庫中的 Token
@@ -166,38 +163,46 @@ export class TwurpleChatService {
 
     // 監聽一般訊息
     this.chatClient.onMessage(
-      (channel: string, user: string, text: string, msg: ChatMessage) => {
+      (channel: string, user: string, text: string, msg: any) => {
         this.handleMessage(channel, user, text, msg);
       }
     );
 
     // 監聯訂閱事件
-    this.chatClient.onSub((channel, user, subInfo, msg) => {
+    this.chatClient.onSub((channel: any, user: any, subInfo: any, msg: any) => {
       this.handleSubscription(channel, user, subInfo, msg);
     });
 
     // 監聽續訂事件
-    this.chatClient.onResub((channel, user, subInfo, msg) => {
-      this.handleSubscription(channel, user, subInfo, msg);
-    });
+    this.chatClient.onResub(
+      (channel: any, user: any, subInfo: any, msg: any) => {
+        this.handleSubscription(channel, user, subInfo, msg);
+      }
+    );
 
     // 監聽贈送訂閱
-    this.chatClient.onSubGift((channel, user, subInfo, msg) => {
-      this.handleGiftSub(channel, user, subInfo, msg);
-    });
+    this.chatClient.onSubGift(
+      (channel: any, user: any, subInfo: any, msg: any) => {
+        this.handleGiftSub(channel, user, subInfo, msg);
+      }
+    );
 
     // 監聽揪團 (Raid)
-    this.chatClient.onRaid((channel, user, raidInfo, msg) => {
-      this.handleRaid(channel, user, raidInfo, msg);
-    });
+    this.chatClient.onRaid(
+      (channel: any, user: any, raidInfo: any, msg: any) => {
+        this.handleRaid(channel, user, raidInfo, msg);
+      }
+    );
 
     // 監聽斷線事件
-    this.chatClient.onDisconnect((manually, reason) => {
-      this.isConnected = false;
-      if (!manually) {
-        logger.warn("Twurple Chat", `已斷線: ${reason}`);
+    this.chatClient.onDisconnect(
+      (manually: boolean, reason: Error | undefined) => {
+        this.isConnected = false;
+        if (!manually) {
+          logger.warn("Twurple Chat", `已斷線: ${reason}`);
+        }
       }
-    });
+    );
 
     // 監聽重連事件
     this.chatClient.onConnect(() => {
@@ -262,7 +267,7 @@ export class TwurpleChatService {
     channel: string,
     user: string,
     text: string,
-    msg: ChatMessage
+    msg: any
   ): void {
     const channelName = channel.replace(/^#/, "");
 
@@ -340,8 +345,8 @@ export class TwurpleChatService {
   private handleSubscription(
     channel: string,
     user: string,
-    subInfo: ChatSubInfo,
-    msg: UserNotice
+    subInfo: any,
+    msg: any
   ): void {
     const channelName = channel.replace(/^#/, "");
 
@@ -375,8 +380,8 @@ export class TwurpleChatService {
   private handleGiftSub(
     channel: string,
     user: string,
-    subInfo: ChatSubGiftInfo,
-    msg: UserNotice
+    subInfo: any,
+    msg: any
   ): void {
     const channelName = channel.replace(/^#/, "");
 
@@ -407,8 +412,8 @@ export class TwurpleChatService {
   private handleRaid(
     channel: string,
     user: string,
-    raidInfo: ChatRaidInfo,
-    msg: UserNotice
+    raidInfo: any,
+    msg: any
   ): void {
     const channelName = channel.replace(/^#/, "");
 
@@ -444,13 +449,13 @@ export class TwurpleChatService {
   /**
    * 提取徽章資訊
    */
-  private extractBadges(msg: ChatMessage): Record<string, string> | null {
+  private extractBadges(msg: any): Record<string, string> | null {
     try {
       const badges: Record<string, string> = {};
       const badgeInfo = msg.userInfo.badges;
 
       if (badgeInfo) {
-        badgeInfo.forEach((version, badge) => {
+        badgeInfo.forEach((version: any, badge: any) => {
           badges[badge] = version;
         });
       }
@@ -464,13 +469,13 @@ export class TwurpleChatService {
   /**
    * 提取表情符號資訊
    */
-  private extractEmotes(msg: ChatMessage): string[] | null {
+  private extractEmotes(msg: any): string[] | null {
     try {
       const emotes = msg.emoteOffsets;
       if (!emotes || emotes.size === 0) return null;
 
       const emoteIds: string[] = [];
-      emotes.forEach((_, emoteId) => {
+      emotes.forEach((_: any, emoteId: any) => {
         emoteIds.push(emoteId);
       });
 

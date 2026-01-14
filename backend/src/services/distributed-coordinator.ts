@@ -12,12 +12,12 @@
 
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 
 // ========== 配置常數 ==========
 
 const INSTANCE_ID =
-  process.env.INSTANCE_ID || `instance-${uuidv4().slice(0, 8)}`;
+  process.env.INSTANCE_ID || `instance-${randomUUID().slice(0, 8)}`;
 const HEARTBEAT_INTERVAL_MS = 30 * 1000; // 30 秒
 const LOCK_TIMEOUT_MS = 60 * 1000; // 60 秒無心跳視為死亡
 const MAX_CHANNELS_PER_INSTANCE = 80;
