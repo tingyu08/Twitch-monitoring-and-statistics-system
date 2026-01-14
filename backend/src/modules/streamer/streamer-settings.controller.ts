@@ -1,8 +1,8 @@
-import { Request, Response } from "express";
+import { Request as ExpressRequest, Response } from "express";
 import { streamerSettingsService } from "./streamer-settings.service";
 import { templateService } from "./template.service";
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends ExpressRequest {
   user?: {
     streamerId?: string;
     viewerId?: string;
