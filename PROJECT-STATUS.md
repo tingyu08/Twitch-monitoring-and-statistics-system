@@ -1,6 +1,6 @@
 # Twitch Analytics - 專案狀態報告
 
-**最後更新**: 2026-01-13
+**最後更新**: 2026-01-14
 **版本**: v1.5.0 (Production)
 
 ---
@@ -239,7 +239,8 @@
    - ✅ 引入 Web Workers 處理複雜統計計算
    - ✅ 使用 Zustand (`useShallow`) 優化 Socket.IO 狀態管理
    - ✅ 全站字體優化 (`next/font`) 與 Skeleton Loading
-   - ✅ 前端與 Extension Token 同步機制
+   - ✅ 前端與 Extension Token 同步機制 (`useExtensionSync`)
+   - ✅ 後端 Extension API 整合測試完成
 
 ---
 
@@ -262,9 +263,8 @@
 
 ### 🎯 下一步重點
 
-1. **前端整合 Extension Token 同步**：登入時自動將 Token 同步到擴充功能。
+1. **Epic 4 實況主快速操作中心**：讓實況主從儀表板直接編輯標題、查看收益統計。
 2. **Epic 7 社群互動管理**：實況主可查看/管理聊天室成員。
-3. **Epic 4 實況主快速操作中心**：讓實況主從儀表板直接編輯標題、查看收益統計。
 
 ### 💡 專案願景
 
