@@ -18,8 +18,12 @@ import {
   getPublicViewerTrendsHandler,
   getPublicStreamHourlyHandler,
 } from "./streamer-stats.controller";
+import streamerSettingsRoutes from "./streamer-settings.routes";
 
 const router = Router();
+
+// Epic 4: 實況設定與模板管理路由
+router.use("/", streamerSettingsRoutes);
 
 // GET /api/streamer/me/summary?range=30d - 查詢自己的統計
 router.get(

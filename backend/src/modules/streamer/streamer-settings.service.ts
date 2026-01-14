@@ -1,0 +1,204 @@
+import { prisma } from "../../db/prisma";
+import { TwitchOAuthClient } from "../auth/twitch-oauth.client";
+import { env } from "../../config/env";
+
+export interface ChannelInfo {
+  title: string;
+  gameId: string;
+  gameName: string;
+  tags: string[];
+  language: string;
+}
+
+export interface UpdateChannelInfoDto {
+  title?: string;
+  gameId?: string;
+  tags?: string[];
+  language?: string;
+}
+
+export class StreamerSettingsService {
+  private twitchClient: TwitchOAuthClient;
+
+  constructor() {
+    this.twitchClient = new TwitchOAuthClient();
+  }
+
+  /**
+   * 從 Twitch API 獲取實況主當前頻道設定
+   */
+  async getChannelInfo(streamerId: string): Promise<ChannelInfo | null> {
+    const streamer = await prisma.streamer.findUnique({
+      where: { id: streamerId },
+      include: {
+        twitchTokens: {
+          where: { ownerType: "streamer", status: "active" },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!streamer || streamer.twitchTokens.length === 0) {
+      return null;
+    }
+
+    const accessToken = streamer.twitchTokens[0].accessToken;
+    const broadcasterId = streamer.twitchUserId;
+
+    try {
+      const response = await fetch(
+        `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+        {
+          headers: {
+            "Client-Id": env.twitchClientId,
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Twitch API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const channel = data.data?.[0];
+
+      if (!channel) {
+        return null;
+      }
+
+      return {
+        title: channel.title || "",
+        gameId: channel.game_id || "",
+        gameName: channel.game_name || "",
+        tags: channel.tags || [],
+        language: channel.broadcaster_language || "zh",
+      };
+    } catch (error) {
+      console.error("[StreamerSettingsService] getChannelInfo error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 更新實況主頻道設定到 Twitch
+   */
+  async updateChannelInfo(
+    streamerId: string,
+    data: UpdateChannelInfoDto
+  ): Promise<boolean> {
+    const streamer = await prisma.streamer.findUnique({
+      where: { id: streamerId },
+      include: {
+        twitchTokens: {
+          where: { ownerType: "streamer", status: "active" },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!streamer || streamer.twitchTokens.length === 0) {
+      throw new Error("Streamer not found or no valid token");
+    }
+
+    const accessToken = streamer.twitchTokens[0].accessToken;
+    const broadcasterId = streamer.twitchUserId;
+
+    // Twitch API 要求的 body 格式
+    const body: Record<string, unknown> = {};
+    if (data.title !== undefined) body.title = data.title;
+    if (data.gameId !== undefined) body.game_id = data.gameId;
+    if (data.tags !== undefined) body.tags = data.tags;
+    if (data.language !== undefined) body.broadcaster_language = data.language;
+
+    try {
+      const response = await fetch(
+        `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Client-Id": env.twitchClientId,
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(
+          "[StreamerSettingsService] updateChannelInfo error:",
+          errorText
+        );
+        throw new Error(`Twitch API error: ${response.status}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error(
+        "[StreamerSettingsService] updateChannelInfo error:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * 搜尋遊戲分類
+   */
+  async searchGames(
+    query: string
+  ): Promise<Array<{ id: string; name: string; boxArtUrl: string }>> {
+    if (!query || query.length < 2) {
+      return [];
+    }
+
+    // 需要使用 app access token 或 user access token
+    // 這裡簡化處理，使用第一個可用的 streamer token
+    const token = await prisma.twitchToken.findFirst({
+      where: { status: "active" },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    if (!token) {
+      return [];
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(
+          query
+        )}&first=10`,
+        {
+          headers: {
+            "Client-Id": env.twitchClientId,
+            Authorization: `Bearer ${token.accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      return (data.data || []).map(
+        (game: { id: string; name: string; box_art_url: string }) => ({
+          id: game.id,
+          name: game.name,
+          boxArtUrl:
+            game.box_art_url
+              ?.replace("{width}", "52")
+              .replace("{height}", "72") || "",
+        })
+      );
+    } catch {
+      return [];
+    }
+  }
+}
+
+export const streamerSettingsService = new StreamerSettingsService();

@@ -91,6 +91,9 @@ export class AuthController {
           "channel:read:subscriptions",
           "analytics:read:games",
           "analytics:read:extensions",
+          // Epic 4: 快速操作中心
+          "channel:manage:broadcast", // 編輯標題/分類/標籤
+          "bits:read", // 讀取 Bits 贊助
           // 觀眾權限
           "chat:read",
           "chat:edit",

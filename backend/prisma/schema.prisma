@@ -19,6 +19,11 @@ model Streamer {
   videos       Video[]
   clips        Clip[]
 
+  // Epic 4: 快速操作中心
+  settingTemplates      StreamerSettingTemplate[]
+  subscriptionSnapshots SubscriptionSnapshot[]
+  cheerEvents           CheerEvent[]
+
   @@map("streamers")
 }
 
@@ -468,3 +473,57 @@ model Clip {
   @@map("clips")
 }
 
+
+// ========== Epic 4: Streamer Quick Actions ==========
+
+model StreamerSettingTemplate {
+  id           String   @id @default(uuid())
+  streamerId   String
+  templateName String
+  title        String?
+  gameId       String?
+  gameName     String?
+  tags         String?  // JSON array
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  streamer     Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+
+  @@index([streamerId])
+  @@map("streamer_setting_templates")
+}
+
+model SubscriptionSnapshot {
+  id               String   @id @default(uuid())
+  streamerId       String
+  snapshotDate     DateTime
+  tier1Count       Int      @default(0)
+  tier2Count       Int      @default(0)
+  tier3Count       Int      @default(0)
+  totalSubscribers Int      @default(0)
+  estimatedRevenue Float?
+  createdAt        DateTime @default(now())
+
+  streamer         Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+
+  @@unique([streamerId, snapshotDate])
+  @@index([streamerId])
+  @@map("subscription_snapshots")
+}
+
+model CheerEvent {
+  id           String   @id @default(uuid())
+  streamerId   String
+  twitchUserId String?
+  userName     String?
+  bits         Int
+  message      String?
+  isAnonymous  Boolean  @default(false)
+  cheeredAt    DateTime
+  createdAt    DateTime @default(now())
+
+  streamer     Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+
+  @@index([streamerId, cheeredAt])
+  @@map("cheer_events")
+}
