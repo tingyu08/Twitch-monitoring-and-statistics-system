@@ -5,6 +5,10 @@ import { prisma } from "../../db/prisma";
 // 擴展 Express Request 類型以包含 user 資訊
 export interface AuthRequest extends Request {
   user?: JWTPayload;
+  // 顯式聲明這些屬性以確保相容性，無論 Request 解析為何
+  query: Record<string, any>;
+  params: Record<string, any>;
+  body: any;
 }
 
 export const requireAuth = async (
