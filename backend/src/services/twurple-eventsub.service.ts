@@ -12,8 +12,13 @@
  * - EVENTSUB_CALLBACK_URL: 公開的 HTTPS URL (可用 ngrok)
  */
 
-import { EventSubMiddleware } from "@twurple/eventsub-http";
-import { ApiClient } from "@twurple/api";
+// import type {
+//   EventSubMiddleware,
+//   EventSubStreamOnlineEvent,
+//   EventSubStreamOfflineEvent,
+//   EventSubChannelUpdateEvent,
+// } from "@twurple/eventsub-http";
+// import type { ApiClient } from "@twurple/api";
 import type { Application } from "express";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { prisma } from "../db/prisma";
@@ -39,8 +44,10 @@ interface EventSubConfig {
 }
 
 class TwurpleEventSubService {
-  private middleware: EventSubMiddleware | null = null;
-  private apiClient: ApiClient | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private middleware: any | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private apiClient: any | null = null;
   private isInitialized = false;
   private subscribedChannels: Set<string> = new Set();
 
@@ -68,7 +75,8 @@ class TwurpleEventSubService {
       }
 
       // 2. 獲取 App Auth Provider
-      const authProvider = twurpleAuthService.getAppAuthProvider();
+      const authProvider = await twurpleAuthService.getAppAuthProvider();
+      const { ApiClient } = await import("@twurple/api");
       this.apiClient = new ApiClient({
         authProvider,
         logger: { minLevel: "error" }, // 隱藏 rate-limit 警告
@@ -81,6 +89,7 @@ class TwurpleEventSubService {
       logger.info("TwurpleEventSub", `使用 Hostname 初始化中: ${hostName}`);
 
       // 4. 創建 EventSub Middleware
+      const { EventSubMiddleware } = await import("@twurple/eventsub-http");
       this.middleware = new EventSubMiddleware({
         apiClient: this.apiClient,
         hostName,
@@ -172,37 +181,49 @@ class TwurpleEventSubService {
 
     try {
       // 訂閱 stream.online 事件
-      await this.middleware.onStreamOnline(twitchChannelId, async (event) => {
-        logger.info(
-          "TwurpleEventSub",
-          `🟢 STREAM ONLINE: ${event.broadcasterDisplayName}`
-        );
-        await this.handleStreamOnline(event.broadcasterId, {
-          displayName: event.broadcasterDisplayName,
-          startedAt: event.startDate,
-        });
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this.middleware.onStreamOnline(
+        twitchChannelId,
+        async (event: any) => {
+          logger.info(
+            "TwurpleEventSub",
+            `🟢 STREAM ONLINE: ${event.broadcasterDisplayName}`
+          );
+          await this.handleStreamOnline(event.broadcasterId, {
+            displayName: event.broadcasterDisplayName,
+            startedAt: event.startDate,
+          });
+        }
+      );
 
       // 訂閱 stream.offline 事件
-      await this.middleware.onStreamOffline(twitchChannelId, async (event) => {
-        logger.info(
-          "TwurpleEventSub",
-          `🔴 STREAM OFFLINE: ${event.broadcasterDisplayName}`
-        );
-        await this.handleStreamOffline(event.broadcasterId);
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this.middleware.onStreamOffline(
+        twitchChannelId,
+        async (event: any) => {
+          logger.info(
+            "TwurpleEventSub",
+            `🔴 STREAM OFFLINE: ${event.broadcasterDisplayName}`
+          );
+          await this.handleStreamOffline(event.broadcasterId);
+        }
+      );
 
       // 訂閱 channel.update 事件
-      await this.middleware.onChannelUpdate(twitchChannelId, async (event) => {
-        logger.info(
-          "TwurpleEventSub",
-          `📝 CHANNEL UPDATE: ${event.broadcasterDisplayName} - "${event.streamTitle}" [${event.categoryName}]`
-        );
-        await this.handleChannelUpdate(event.broadcasterId, {
-          title: event.streamTitle,
-          category: event.categoryName,
-        });
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this.middleware.onChannelUpdate(
+        twitchChannelId,
+        async (event: any) => {
+          logger.info(
+            "TwurpleEventSub",
+            `📝 CHANNEL UPDATE: ${event.broadcasterDisplayName} - "${event.streamTitle}" [${event.categoryName}]`
+          );
+          await this.handleChannelUpdate(event.broadcasterId, {
+            title: event.streamTitle,
+            category: event.categoryName,
+          });
+        }
+      );
 
       this.subscribedChannels.add(twitchChannelId);
       // logger.info("TwurpleEventSub", `✅ Subscribed to: ${displayName}`);

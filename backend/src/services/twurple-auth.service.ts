@@ -7,7 +7,11 @@
  * - Token 失效自動標記
  */
 
-import { AppTokenAuthProvider, RefreshingAuthProvider } from "@twurple/auth";
+import type {
+  AppTokenAuthProvider,
+  RefreshingAuthProvider,
+  AccessToken,
+} from "@twurple/auth";
 import { logger } from "../utils/logger";
 
 // ========== 類型定義 ==========
@@ -56,11 +60,12 @@ class TwurpleAuthService {
   /**
    * 獲取 App Auth Provider (用於公開 API)
    */
-  getAppAuthProvider(): AppTokenAuthProvider {
+  async getAppAuthProvider(): Promise<AppTokenAuthProvider> {
     if (!this.appAuthProvider) {
       if (!this.hasCredentials()) {
         throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET");
       }
+      const { AppTokenAuthProvider } = await import("@twurple/auth");
       this.appAuthProvider = new AppTokenAuthProvider(
         this.clientId,
         this.clientSecret
@@ -76,11 +81,13 @@ class TwurpleAuthService {
    * @param tokenData 用戶的 Token 資料
    * @param onRefresh 當 Token 刷新時的回調（用於保存新 Token）
    */
-  createUserAuthProvider(
+  async createUserAuthProvider(
     userId: string,
     tokenData: TokenData,
     onRefresh?: (userId: string, newTokenData: TokenData) => Promise<void>
-  ): RefreshingAuthProvider {
+  ): Promise<RefreshingAuthProvider> {
+    const { RefreshingAuthProvider } = await import("@twurple/auth");
+
     const authProvider = new RefreshingAuthProvider({
       clientId: this.clientId,
       clientSecret: this.clientSecret,
@@ -100,7 +107,7 @@ class TwurpleAuthService {
 
     // 設定 Token 刷新成功回調
     if (onRefresh) {
-      authProvider.onRefresh(async (userId, newTokenData) => {
+      authProvider.onRefresh(async (userId, newTokenData: AccessToken) => {
         logger.info("Twurple Auth", `Token refreshed for user: ${userId}`);
         await onRefresh(userId, {
           accessToken: newTokenData.accessToken,

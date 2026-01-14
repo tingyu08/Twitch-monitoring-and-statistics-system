@@ -8,7 +8,13 @@
  * - 獲取追蹤者數據
  */
 
-import { ApiClient } from "@twurple/api";
+import type {
+  ApiClient,
+  HelixUser,
+  HelixStream,
+  HelixChannel,
+  HelixUserRelation,
+} from "@twurple/api";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
 
@@ -68,9 +74,10 @@ class TwurpleHelixService {
   /**
    * 獲取或初始化 API Client
    */
-  private getApiClient(): ApiClient {
+  private async getApiClient(): Promise<ApiClient> {
     if (!this.apiClient) {
-      const authProvider = twurpleAuthService.getAppAuthProvider();
+      const { ApiClient } = await import("@twurple/api");
+      const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({
         authProvider,
         logger: { minLevel: "error" }, // 隱藏 rate-limit 警告
@@ -87,7 +94,7 @@ class TwurpleHelixService {
    */
   async getUserByLogin(login: string): Promise<TwitchUser | null> {
     try {
-      const api = this.getApiClient();
+      const api = await this.getApiClient();
       const user = await api.users.getUserByName(login);
       if (!user) return null;
 
@@ -113,7 +120,7 @@ class TwurpleHelixService {
    */
   async getUserById(id: string): Promise<TwitchUser | null> {
     try {
-      const api = this.getApiClient();
+      const api = await this.getApiClient();
       const user = await api.users.getUserById(id);
       if (!user) return null;
 
@@ -148,7 +155,7 @@ class TwurpleHelixService {
     }
 
     try {
-      const api = this.getApiClient();
+      const api = await this.getApiClient();
       const users = await api.users.getUsersByIds(ids);
 
       return users.map((user) => ({
@@ -175,7 +182,7 @@ class TwurpleHelixService {
    */
   async getChannelInfo(broadcasterId: string): Promise<TwitchChannel | null> {
     try {
-      const api = this.getApiClient();
+      const api = await this.getApiClient();
       const channel = await api.channels.getChannelInfoById(broadcasterId);
       if (!channel) return null;
 
@@ -205,7 +212,7 @@ class TwurpleHelixService {
    */
   async getStream(userId: string): Promise<TwitchStream | null> {
     try {
-      const api = this.getApiClient();
+      const api = await this.getApiClient();
       const stream = await api.streams.getStreamByUserId(userId);
       if (!stream) return null;
 
@@ -240,7 +247,7 @@ class TwurpleHelixService {
     }
 
     try {
-      const api = this.getApiClient();
+      const api = await this.getApiClient();
       const streams = await api.streams.getStreamsByUserIds(userIds);
 
       return streams.map((stream) => ({
@@ -280,7 +287,7 @@ class TwurpleHelixService {
    */
   async getFollowerCount(broadcasterId: string): Promise<number> {
     try {
-      const api = this.getApiClient();
+      const api = await this.getApiClient();
       const result = await api.channels.getChannelFollowerCount(broadcasterId);
       return result;
     } catch (error) {
@@ -307,6 +314,7 @@ class TwurpleHelixService {
   ): Promise<FollowedChannel[]> {
     try {
       let api: ApiClient;
+      const { ApiClient } = await import("@twurple/api");
 
       // 如果有用戶 Token，使用用戶的 Auth Provider
       if (userAccessToken) {
@@ -322,7 +330,7 @@ class TwurpleHelixService {
         });
       } else {
         // 回退到 App Token（但通常不會成功，因為需要 user:read:follows）
-        api = this.getApiClient();
+        api = await this.getApiClient();
       }
 
       const results: FollowedChannel[] = [];
