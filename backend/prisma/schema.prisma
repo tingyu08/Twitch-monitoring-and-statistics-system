@@ -485,6 +485,7 @@ model StreamerSettingTemplate {
   gameId       String?
   gameName     String?
   tags         String?  // JSON array
+  language     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

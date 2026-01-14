@@ -199,6 +199,67 @@ export class StreamerSettingsService {
       return [];
     }
   }
+
+  /**
+   * 建立設定模板
+   */
+  async createTemplate(
+    streamerId: string,
+    data: {
+      templateName: string;
+      title: string;
+      gameId?: string;
+      gameName?: string;
+      tags?: string[];
+      language?: string;
+    }
+  ) {
+    return prisma.streamerSettingTemplate.create({
+      data: {
+        streamerId,
+        templateName: data.templateName,
+        title: data.title,
+        gameId: data.gameId,
+        gameName: data.gameName,
+        tags: data.tags ? JSON.stringify(data.tags) : undefined,
+      },
+    });
+  }
+
+  /**
+   * 取得實況主的所有模板
+   */
+  async getTemplates(streamerId: string) {
+    const templates = await prisma.streamerSettingTemplate.findMany({
+      where: { streamerId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return templates.map((tpl) => ({
+      ...tpl,
+      tags: tpl.tags ? JSON.parse(tpl.tags) : [],
+    }));
+  }
+
+  /**
+   * 刪除模板
+   */
+  async deleteTemplate(streamerId: string, templateId: string) {
+    // 確認模板屬於該實況主
+    const template = await prisma.streamerSettingTemplate.findFirst({
+      where: { id: templateId, streamerId },
+    });
+
+    if (!template) {
+      throw new Error("Template not found or permission denied");
+    }
+
+    await prisma.streamerSettingTemplate.delete({
+      where: { id: templateId },
+    });
+
+    return true;
+  }
 }
 
 export const streamerSettingsService = new StreamerSettingsService();

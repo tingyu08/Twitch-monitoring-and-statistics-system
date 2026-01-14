@@ -361,7 +361,18 @@
       "saving": "儲存中...",
       "saveSuccess": "設定已成功更新！",
       "saveError": "更新失敗，請重試",
-      "loadError": "無法載入頻道設定"
+      "loadError": "無法載入頻道設定",
+      "manageTemplates": "模板管理",
+      "loadTemplate": "載入模板",
+      "deleteTemplate": "刪除模板",
+      "templateNamePlaceholder": "模板名稱",
+      "templateCreateSuccess": "模板建立成功！",
+      "templateCreateError": "建立模板失敗",
+      "templateDeleteSuccess": "模板已刪除",
+      "templateDeleteError": "刪除模板失敗",
+      "templateLoaded": "模板已載入",
+      "deleteTemplateConfirm": "確定要刪除此模板嗎？",
+      "noTemplates": "尚無儲存的模板"
     },
     "templates": {
       "title": "設定模板",
