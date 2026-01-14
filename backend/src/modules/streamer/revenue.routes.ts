@@ -5,7 +5,7 @@ import { requireAuth } from "../auth/auth.middleware";
 const router = Router();
 
 // 所有路由都需要認證
-router.use(requireAuth);
+router.use((req, res, next) => requireAuth(req, res, next));
 
 // GET /api/streamer/revenue/overview - 收益總覽
 router.get("/overview", (req, res) => revenueController.getOverview(req, res));

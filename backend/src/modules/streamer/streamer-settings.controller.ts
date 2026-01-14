@@ -1,21 +1,14 @@
-import { Request as ExpressRequest, Response } from "express";
+import type { Response } from "express";
 import { streamerSettingsService } from "./streamer-settings.service";
 import { templateService } from "./template.service";
-
-interface AuthenticatedRequest extends ExpressRequest {
-  user?: {
-    streamerId?: string;
-    viewerId?: string;
-    displayName?: string;
-  };
-}
+import type { AuthRequest } from "../auth/auth.middleware";
 
 export class StreamerSettingsController {
   /**
    * GET /api/streamer/settings
-   * 獲取當前頻道設定
+   * ?��??��??��?設�?
    */
-  async getSettings(req: AuthenticatedRequest, res: Response) {
+  async getSettings(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -36,9 +29,9 @@ export class StreamerSettingsController {
 
   /**
    * POST /api/streamer/settings
-   * 更新頻道設定
+   * ?�新?��?設�?
    */
-  async updateSettings(req: AuthenticatedRequest, res: Response) {
+  async updateSettings(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -47,7 +40,7 @@ export class StreamerSettingsController {
 
       const { title, gameId, tags, language } = req.body;
 
-      // 驗證
+      // 驗�?
       if (title && title.length > 140) {
         return res
           .status(400)
@@ -81,9 +74,9 @@ export class StreamerSettingsController {
 
   /**
    * GET /api/streamer/games/search?q=xxx
-   * 搜尋遊戲分類
+   * ?��??�戲?��?
    */
-  async searchGames(req: AuthenticatedRequest, res: Response) {
+  async searchGames(req: AuthRequest, res: Response) {
     try {
       const query = req.query.q as string;
       if (!query || query.length < 2) {
@@ -102,9 +95,9 @@ export class StreamerSettingsController {
 
   /**
    * GET /api/streamer/templates
-   * 列出所有模板
+   * ?�出?�?�模??
    */
-  async listTemplates(req: AuthenticatedRequest, res: Response) {
+  async listTemplates(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -121,9 +114,9 @@ export class StreamerSettingsController {
 
   /**
    * POST /api/streamer/templates
-   * 建立模板
+   * 建�?模板
    */
-  async createTemplate(req: AuthenticatedRequest, res: Response) {
+  async createTemplate(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -156,9 +149,9 @@ export class StreamerSettingsController {
 
   /**
    * PUT /api/streamer/templates/:id
-   * 更新模板
+   * ?�新模板
    */
-  async updateTemplate(req: AuthenticatedRequest, res: Response) {
+  async updateTemplate(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -192,9 +185,9 @@ export class StreamerSettingsController {
 
   /**
    * DELETE /api/streamer/templates/:id
-   * 刪除模板
+   * ?�除模板
    */
-  async deleteTemplate(req: AuthenticatedRequest, res: Response) {
+  async deleteTemplate(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {

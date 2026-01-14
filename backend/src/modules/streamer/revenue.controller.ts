@@ -1,20 +1,13 @@
-import { Request as ExpressRequest, Response } from "express";
+import type { Response } from "express";
 import { revenueService } from "./revenue.service";
-
-interface AuthenticatedRequest extends ExpressRequest {
-  user?: {
-    streamerId?: string;
-    viewerId?: string;
-    displayName?: string;
-  };
-}
+import type { AuthRequest } from "../auth/auth.middleware";
 
 export class RevenueController {
   /**
    * GET /api/streamer/revenue/overview
-   * 獲取收益總覽
+   * ?��??��?總覽
    */
-  async getOverview(req: AuthenticatedRequest, res: Response) {
+  async getOverview(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -31,9 +24,9 @@ export class RevenueController {
 
   /**
    * GET /api/streamer/revenue/subscriptions?days=30
-   * 獲取訂閱統計趨勢
+   * ?��?訂閱統�?趨勢
    */
-  async getSubscriptionStats(req: AuthenticatedRequest, res: Response) {
+  async getSubscriptionStats(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -53,9 +46,9 @@ export class RevenueController {
 
   /**
    * GET /api/streamer/revenue/bits?days=30
-   * 獲取 Bits 統計趨勢
+   * ?��? Bits 統�?趨勢
    */
-  async getBitsStats(req: AuthenticatedRequest, res: Response) {
+  async getBitsStats(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -73,9 +66,9 @@ export class RevenueController {
 
   /**
    * GET /api/streamer/revenue/top-supporters?limit=10
-   * 獲取 Top 贊助者排行榜
+   * ?��? Top 贊助?��?行�?
    */
-  async getTopSupporters(req: AuthenticatedRequest, res: Response) {
+  async getTopSupporters(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -96,9 +89,9 @@ export class RevenueController {
 
   /**
    * POST /api/streamer/revenue/sync
-   * 手動同步訂閱數據
+   * ?��??�步訂閱?��?
    */
-  async syncSubscriptions(req: AuthenticatedRequest, res: Response) {
+  async syncSubscriptions(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -115,9 +108,9 @@ export class RevenueController {
 
   /**
    * GET /api/streamer/revenue/export?format=csv
-   * 匯出收益報表
+   * ?�出?��??�表
    */
-  async exportReport(req: AuthenticatedRequest, res: Response) {
+  async exportReport(req: AuthRequest, res: Response) {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
@@ -127,7 +120,7 @@ export class RevenueController {
       const format = (req.query.format as string) || "csv";
       const days = parseInt(req.query.days as string) || 30;
 
-      // 獲取數據
+      // ?��??��?
       const [subStats, bitsStats, overview] = await Promise.all([
         revenueService.getSubscriptionStats(streamerId, days),
         revenueService.getBitsStats(streamerId, days),
@@ -135,12 +128,12 @@ export class RevenueController {
       ]);
 
       if (format === "csv") {
-        // 生成 CSV
+        // ?��? CSV
         const lines = [
           "Date,Tier1,Tier2,Tier3,TotalSubs,SubRevenue,Bits,BitsRevenue",
         ];
 
-        // 合併訂閱和 Bits 資料
+        // ?�併訂閱??Bits 資�?
         const allDates = new Set([
           ...subStats.map((s) => s.date),
           ...bitsStats.map((b) => b.date),
@@ -171,7 +164,7 @@ export class RevenueController {
         return res.send(lines.join("\n"));
       }
 
-      // JSON 格式
+      // JSON ?��?
       return res.json({
         overview,
         subscriptions: subStats,
