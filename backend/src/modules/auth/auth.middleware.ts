@@ -1,13 +1,8 @@
-import type {
-  Request,
-  Response,
-  NextFunction,
-} from "express-serve-static-core";
+import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, type JWTPayload, type UserRole } from "./jwt.utils";
 import { prisma } from "../../db/prisma";
 
 // 擴展 Express Request 類型以包含 user 資訊
-// 使用 express-serve-static-core 的 Request 避免與 Node 22 的全域 Fetch API 衝突
 export interface AuthRequest extends Request {
   user?: JWTPayload;
 }
