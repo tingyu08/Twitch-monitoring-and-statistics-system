@@ -1,15 +1,19 @@
-import type { Request, Response, NextFunction } from "express";
+import type {
+  Request as ExpressRequest,
+  Response,
+  NextFunction,
+} from "express";
 import { verifyAccessToken, type JWTPayload, type UserRole } from "./jwt.utils";
 import { prisma } from "../../db/prisma";
 
 // 擴展 Express Request 類型以包含 user 資訊
-// 不重新定義 params/query/body，讓它們繼承自 Express Request
-export interface AuthRequest extends Request {
+// 重命名為 ExpressRequest 避免與 Node 22 的全域 Fetch API Request 衝突
+export interface AuthRequest extends ExpressRequest {
   user?: JWTPayload;
 }
 
 export const requireAuth = async (
-  req: Request,
+  req: ExpressRequest,
   res: Response,
   next: NextFunction,
   allowedRoles: UserRole[] = []
