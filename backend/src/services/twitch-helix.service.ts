@@ -8,13 +8,7 @@
  * - 獲取追蹤者數據
  */
 
-import type {
-  ApiClient,
-  HelixUser,
-  HelixStream,
-  HelixChannel,
-  HelixUserRelation,
-} from "@twurple/api";
+import type { ApiClient } from "@twurple/api";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
 
