@@ -6,9 +6,11 @@ import { prisma } from "../../db/prisma";
 export interface AuthRequest extends Request {
   user?: JWTPayload;
   // 顯式聲明這些屬性以確保相容性，無論 Request 解析為何
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   query: Record<string, any>;
   params: Record<string, any>;
   body: any;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 export const requireAuth = async (

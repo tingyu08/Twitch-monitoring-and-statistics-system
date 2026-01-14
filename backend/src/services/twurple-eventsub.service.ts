@@ -180,8 +180,8 @@ class TwurpleEventSubService {
     const displayName = channelName || twitchChannelId;
 
     try {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
       // 訂閱 stream.online 事件
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this.middleware.onStreamOnline(
         twitchChannelId,
         async (event: any) => {
@@ -197,7 +197,6 @@ class TwurpleEventSubService {
       );
 
       // 訂閱 stream.offline 事件
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this.middleware.onStreamOffline(
         twitchChannelId,
         async (event: any) => {
@@ -210,7 +209,6 @@ class TwurpleEventSubService {
       );
 
       // 訂閱 channel.update 事件
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this.middleware.onChannelUpdate(
         twitchChannelId,
         async (event: any) => {
@@ -224,6 +222,7 @@ class TwurpleEventSubService {
           });
         }
       );
+      /* eslint-enable @typescript-eslint/no-explicit-any */
 
       this.subscribedChannels.add(twitchChannelId);
       // logger.info("TwurpleEventSub", `✅ Subscribed to: ${displayName}`);
