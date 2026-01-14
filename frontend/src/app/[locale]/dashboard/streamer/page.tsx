@@ -28,6 +28,8 @@ import {
 import { useUiPreferences } from "@/features/streamer-dashboard/hooks/useUiPreferences";
 import { authLogger } from "@/lib/logger";
 import { DashboardHeader } from "@/components";
+import { QuickActionsPanel } from "@/features/streamer-dashboard/components/QuickActionsPanel";
+import { StreamSettingsEditor } from "@/features/streamer-dashboard/components/StreamSettingsEditor";
 
 export default function StreamerDashboard() {
   const t = useTranslations("streamer");
@@ -40,6 +42,9 @@ export default function StreamerDashboard() {
   const [chartRange, setChartRange] = useState<ChartRange>("30d");
   const [granularity, setGranularity] = useState<ChartGranularity>("day");
   const [subsChartRange, setSubsChartRange] = useState<ChartRange>("30d");
+
+  // Epic 4 state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const canFetch = !!user;
 
@@ -389,7 +394,7 @@ export default function StreamerDashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* 基本資料卡片 */}
-          <div className="theme-card p-6">
+          <div className="theme-card p-6 h-full">
             <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
               {t("accountInfo")}
             </h2>
@@ -424,28 +429,20 @@ export default function StreamerDashboard() {
             </div>
           </div>
 
-          {/* 功能區塊 */}
-          <div className="theme-card p-6">
-            <h2 className="text-xl font-semibold mb-4 theme-text-gradient">
-              {t("quickActions")}
-            </h2>
-            <div className="space-y-3">
-              <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white py-2 px-4 rounded-xl transition duration-200 font-medium">
-                {t("manageSettings")}
-              </button>
-              <button className="w-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 theme-text-primary py-2 px-4 rounded-xl transition duration-200 border border-purple-200 dark:border-white/10">
-                {t("viewRevenue")}
-              </button>
-              <button
-                onClick={() => router.push("/dashboard/streamer/videos")}
-                className="w-full bg-white/50 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 theme-text-primary py-2 px-4 rounded-xl transition duration-200 border border-purple-200 dark:border-white/10"
-              >
-                📹 {t("videosLibrary")}
-              </button>
-            </div>
+          {/* Quick Actions Panel */}
+          <div className="h-full">
+            <QuickActionsPanel
+              onManageSettings={() => setIsSettingsOpen(true)}
+            />
           </div>
         </div>
       </div>
+
+      {/* Stream Settings Editor */}
+      <StreamSettingsEditor
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 }
