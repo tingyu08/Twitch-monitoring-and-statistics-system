@@ -8,7 +8,9 @@ export class TwurpleVideoService {
 
   private async getClient() {
     if (!this.apiClient) {
-      const { ApiClient } = await import("@twurple/api");
+      const { ApiClient } = await new Function(
+        'return import("@twurple/api")'
+      )();
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({ authProvider });
     }

@@ -76,7 +76,9 @@ class TwurpleEventSubService {
 
       // 2. 獲取 App Auth Provider
       const authProvider = await twurpleAuthService.getAppAuthProvider();
-      const { ApiClient } = await import("@twurple/api");
+      const { ApiClient } = await new Function(
+        'return import("@twurple/api")'
+      )();
       this.apiClient = new ApiClient({
         authProvider,
         logger: { minLevel: "error" }, // 隱藏 rate-limit 警告
@@ -89,7 +91,9 @@ class TwurpleEventSubService {
       logger.info("TwurpleEventSub", `使用 Hostname 初始化中: ${hostName}`);
 
       // 4. 創建 EventSub Middleware
-      const { EventSubMiddleware } = await import("@twurple/eventsub-http");
+      const { EventSubMiddleware } = await new Function(
+        'return import("@twurple/eventsub-http")'
+      )();
       this.middleware = new EventSubMiddleware({
         apiClient: this.apiClient,
         hostName,

@@ -43,8 +43,9 @@ export class TwurpleChatService {
    */
   public async initialize(): Promise<void> {
     try {
-      // 動態導入 @twurple/chat (ESM)
-      const { ChatClient } = await import("@twurple/chat");
+      const { ChatClient } = await new Function(
+        'return import("@twurple/chat")'
+      )();
 
       // 從資料庫獲取第一個有 Token 的使用者（通常是您自己）
       const tokenRecord = await prisma.twitchToken.findFirst({
@@ -83,8 +84,9 @@ export class TwurpleChatService {
       const accessToken = decryptToken(tokenRecord.accessToken);
       const refreshToken = decryptToken(tokenRecord.refreshToken);
 
-      // 建立 RefreshingAuthProvider（自動刷新 Token）
-      const { RefreshingAuthProvider } = await import("@twurple/auth");
+      const { RefreshingAuthProvider } = await new Function(
+        'return import("@twurple/auth")'
+      )();
 
       const authProvider = new RefreshingAuthProvider({
         clientId,

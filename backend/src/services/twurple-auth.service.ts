@@ -65,7 +65,9 @@ class TwurpleAuthService {
       if (!this.hasCredentials()) {
         throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET");
       }
-      const { AppTokenAuthProvider } = await import("@twurple/auth");
+      const { AppTokenAuthProvider } = await new Function(
+        'return import("@twurple/auth")'
+      )();
       this.appAuthProvider = new AppTokenAuthProvider(
         this.clientId,
         this.clientSecret
@@ -86,7 +88,9 @@ class TwurpleAuthService {
     tokenData: TokenData,
     onRefresh?: (userId: string, newTokenData: TokenData) => Promise<void>
   ): Promise<RefreshingAuthProvider> {
-    const { RefreshingAuthProvider } = await import("@twurple/auth");
+    const { RefreshingAuthProvider } = await new Function(
+      'return import("@twurple/auth")'
+    )();
 
     const authProvider = new RefreshingAuthProvider({
       clientId: this.clientId,
