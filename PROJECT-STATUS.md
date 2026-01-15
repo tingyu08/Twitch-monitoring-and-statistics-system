@@ -1,6 +1,6 @@
 # Twitch Analytics - 專案狀態報告
 
-**最後更新**: 2026-01-14
+**最後更新**: 2026-01-15
 **版本**: v1.5.0 (Production)
 
 ---
@@ -242,13 +242,28 @@
    - ✅ 前端與 Extension Token 同步機制 (`useExtensionSync`)
    - ✅ 後端 Extension API 整合測試完成
 
+### 📅 2026-01-15 更新
+
+1. **實況主快速操作中心 (Epic 4) � Phase 4 完成**
+   - ✅ 實作「實況設定模板」CRUD 功能 (Epic 4.2)
+   - ✅ 實作「訂閱與 Bits 收益統計」(Epic 4.3/4.4)
+   - ✅ 新增 `SubscriptionSnapshot` 與 `CheerEvent` 資料表
+   - ✅ 建立每日訂閱快照排程任務 (`sync-subscriptions.job.ts`)
+   - ✅ 實作 Bits 贊助即時監聽 (EventSub)
+   - ✅ 前端收益圖表與模板管理 UI 整合
+2. **後端架構優化 (Infrastructure)**
+   - ✅ 全面解決 ESM (`ERR_REQUIRE_ESM`) 部署錯誤
+   - ✅ 重構 `@twurple` 服務為動態導入 (Dynamic Import)
+   - ✅ 替換 `uuid` 庫為原生 `node:crypto`
+   - ✅ 優化 Prisma 設定與依賴管理
+
 ---
 
 ## 九、結論與現況總結
 
 ### 📈 目前狀態
 
-截至 **2026-01-13**，專案已完成 **70%**，成功建立了一個功能完整的 Twitch 數據分析平台。
+截至 **2026-01-15**，專案已完成 **70%**，成功建立了一個功能完整的 Twitch 數據分析平台。
 
 **系統現在可以：**
 

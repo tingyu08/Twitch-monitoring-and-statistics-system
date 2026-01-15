@@ -226,6 +226,29 @@ class TwurpleEventSubService {
           });
         }
       );
+
+      // 訂閱 channel.cheer 事件 (Bits 贊助)
+      // 注意：需要 bits:read 權限，僅對有授權的實況主頻道有效
+      try {
+        await this.middleware.onChannelCheer(
+          twitchChannelId,
+          async (event: any) => {
+            logger.info(
+              "TwurpleEventSub",
+              `💎 CHEER: ${event.userDisplayName || "Anonymous"} cheered ${
+                event.bits
+              } bits to ${event.broadcasterDisplayName}`
+            );
+            await this.handleChannelCheer(event);
+          }
+        );
+      } catch {
+        // bits:read 權限可能不足，忽略此錯誤
+        logger.debug(
+          "TwurpleEventSub",
+          `Skipped cheer subscription for ${displayName} (likely no bits:read permission)`
+        );
+      }
       /* eslint-enable @typescript-eslint/no-explicit-any */
 
       this.subscribedChannels.add(twitchChannelId);
@@ -382,6 +405,57 @@ class TwurpleEventSubService {
       }
     } catch (error) {
       logger.error("TwurpleEventSub", "Error handling channel.update", error);
+    }
+  }
+
+  /**
+   * 處理 Bits 贊助事件
+   * eslint-disable-next-line @typescript-eslint/no-explicit-any
+   */
+  private async handleChannelCheer(event: {
+    broadcasterId: string;
+    broadcasterDisplayName: string;
+    userId?: string;
+    userDisplayName?: string;
+    bits: number;
+    message?: string;
+    isAnonymous: boolean;
+  }): Promise<void> {
+    try {
+      // 找到對應的實況主
+      const streamer = await prisma.streamer.findFirst({
+        where: { twitchUserId: event.broadcasterId },
+      });
+
+      if (!streamer) {
+        logger.debug(
+          "TwurpleEventSub",
+          `Ignoring cheer event: Streamer ${event.broadcasterDisplayName} not found in database`
+        );
+        return;
+      }
+
+      // 儲存 CheerEvent
+      await prisma.cheerEvent.create({
+        data: {
+          streamerId: streamer.id,
+          twitchUserId: event.isAnonymous ? null : event.userId,
+          userName: event.isAnonymous ? null : event.userDisplayName,
+          bits: event.bits,
+          message: event.message,
+          isAnonymous: event.isAnonymous,
+          cheeredAt: new Date(),
+        },
+      });
+
+      logger.info(
+        "TwurpleEventSub",
+        `Saved cheer event: ${event.bits} bits from ${
+          event.isAnonymous ? "Anonymous" : event.userDisplayName
+        } to ${event.broadcasterDisplayName}`
+      );
+    } catch (error) {
+      logger.error("TwurpleEventSub", "Error handling channel.cheer", error);
     }
   }
 

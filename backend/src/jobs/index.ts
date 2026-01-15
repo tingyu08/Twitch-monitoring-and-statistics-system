@@ -11,6 +11,7 @@ import { channelStatsSyncJob } from "./channel-stats-sync.job";
 import { syncUserFollowsJob } from "./sync-user-follows.job";
 import { validateTokensJob } from "./validate-tokens.job";
 import { syncVideosJob } from "./sync-videos.job";
+import { syncSubscriptionsJob } from "./sync-subscriptions.job";
 
 /**
  * 啟動所有定時任務
@@ -38,6 +39,9 @@ export function startAllJobs(): void {
 
   // Story 6.4: VOD 與剪輯同步任務
   syncVideosJob.start();
+
+  // Epic 4: 訂閱快照同步任務
+  syncSubscriptionsJob.start();
 
   // Token 驗證任務 - 每天凌晨 4 點執行（低流量時段）
   cron.schedule("0 4 * * *", async () => {
