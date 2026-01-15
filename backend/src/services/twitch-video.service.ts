@@ -1,13 +1,14 @@
-import { ApiClient } from "@twurple/api";
 import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export class TwurpleVideoService {
-  private apiClient: ApiClient | null = null;
+  private apiClient: any | null = null;
 
   private async getClient() {
     if (!this.apiClient) {
+      const { ApiClient } = await import("@twurple/api");
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({ authProvider });
     }
