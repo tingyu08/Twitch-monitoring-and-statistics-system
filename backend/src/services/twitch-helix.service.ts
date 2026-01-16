@@ -310,11 +310,15 @@ class TwurpleHelixService {
   ): Promise<FollowedChannel[]> {
     try {
       let api: ApiClient;
-      const { ApiClient } = await import("@twurple/api");
+      const { ApiClient } = await new Function(
+        'return import("@twurple/api")'
+      )();
 
       // 如果有用戶 Token，使用用戶的 Auth Provider
       if (userAccessToken) {
-        const { StaticAuthProvider } = await import("@twurple/auth");
+        const { StaticAuthProvider } = await new Function(
+          'return import("@twurple/auth")'
+        )();
         const clientId = twurpleAuthService.getClientId();
         const userAuthProvider = new StaticAuthProvider(
           clientId,
