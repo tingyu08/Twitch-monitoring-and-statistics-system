@@ -26,7 +26,7 @@ export class StreamerSettingsController {
       const streamerId = req.user!.streamerId!;
       const success = await streamerSettingsService.updateChannelInfo(
         streamerId,
-        req.body
+        req.body,
       );
       if (success) {
         return res.json({ success: true });
@@ -70,7 +70,7 @@ export class StreamerSettingsController {
       const streamerId = req.user!.streamerId!;
       const template = await streamerSettingsService.createTemplate(
         streamerId,
-        req.body
+        req.body,
       );
       return res.status(201).json(template);
     } catch (error) {
