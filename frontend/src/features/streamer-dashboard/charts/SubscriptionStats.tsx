@@ -34,7 +34,10 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
   const [error, setError] = useState<string | null>(null);
 
   const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
+      : "http://localhost:4000");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,7 +45,7 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
       try {
         const res = await fetch(
           `${apiBaseUrl}/api/streamer/revenue/subscriptions?days=${days}`,
-          { credentials: "include" }
+          { credentials: "include" },
         );
         if (!res.ok) throw new Error("Failed to fetch");
         const json = await res.json();

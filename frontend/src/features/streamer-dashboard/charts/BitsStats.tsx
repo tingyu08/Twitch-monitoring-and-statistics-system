@@ -38,7 +38,10 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
   const [error, setError] = useState<string | null>(null);
 
   const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
+      : "http://localhost:4000");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -207,10 +210,10 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
                         index === 0
                           ? "bg-yellow-500 text-black"
                           : index === 1
-                          ? "bg-gray-400 text-black"
-                          : index === 2
-                          ? "bg-orange-600 text-white"
-                          : "bg-gray-600 text-white"
+                            ? "bg-gray-400 text-black"
+                            : index === 2
+                              ? "bg-orange-600 text-white"
+                              : "bg-gray-600 text-white"
                       }`}
                     >
                       {index + 1}

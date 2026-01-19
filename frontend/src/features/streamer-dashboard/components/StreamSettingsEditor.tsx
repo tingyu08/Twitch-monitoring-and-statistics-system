@@ -78,7 +78,10 @@ export function StreamSettingsEditor({
   const [templateActionLoading, setTemplateActionLoading] = useState(false);
 
   const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
+      : "http://localhost:4000");
 
   // Fetch current settings
   useEffect(() => {

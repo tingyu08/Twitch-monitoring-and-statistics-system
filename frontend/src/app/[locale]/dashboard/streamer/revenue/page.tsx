@@ -16,14 +16,17 @@ export default function RevenuePage() {
   const locale = (params?.locale as string) || "zh-TW";
 
   const [activeTab, setActiveTab] = useState<"subscriptions" | "bits">(
-    "subscriptions"
+    "subscriptions",
   );
   const [days, setDays] = useState(30);
   const [syncing, setSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
+      : "http://localhost:4000");
 
   const handleSync = async () => {
     setSyncing(true);
@@ -48,7 +51,7 @@ export default function RevenuePage() {
     try {
       const res = await fetch(
         `${apiBaseUrl}/api/streamer/revenue/export?format=csv&days=${days}`,
-        { credentials: "include" }
+        { credentials: "include" },
       );
       if (!res.ok) throw new Error("Export failed");
 
