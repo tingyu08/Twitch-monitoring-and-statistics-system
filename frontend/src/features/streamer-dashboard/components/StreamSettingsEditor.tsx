@@ -50,6 +50,7 @@ export function StreamSettingsEditor({
   onClose,
 }: StreamSettingsEditorProps) {
   const t = useTranslations("streamer.settingsEditor");
+  const tCommon = useTranslations("common");
 
   const [settings, setSettings] = useState<ChannelSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,18 +91,28 @@ export function StreamSettingsEditor({
         const res = await fetch(`${apiBaseUrl}/api/streamer/settings`, {
           credentials: "include",
         });
-        if (!res.ok) throw new Error("Failed to fetch");
+        if (!res.ok) {
+          try {
+            const errJson = await res.json();
+            throw new Error(
+              errJson.error || `Error ${res.status}: ${res.statusText}`,
+            );
+          } catch {
+            throw new Error(`Error ${res.status}: ${res.statusText}`);
+          }
+        }
         const data = await res.json();
         setSettings(data);
         setTitle(data.title || "");
         setSelectedGame(
           data.gameId
             ? { id: data.gameId, name: data.gameName, boxArtUrl: "" }
-            : null
+            : null,
         );
         setTags(data.tags || []);
-      } catch {
-        setError(t("loadError"));
+      } catch (err: any) {
+        console.error("Failed to load settings:", err);
+        setError(`${t("loadError")} (${err.message || "Unknown error"})`);
       } finally {
         setLoading(false);
       }
@@ -122,11 +133,11 @@ export function StreamSettingsEditor({
       try {
         const res = await fetch(
           `${apiBaseUrl}/api/streamer/games/search?q=${encodeURIComponent(
-            query
+            query,
           )}`,
           {
             credentials: "include",
-          }
+          },
         );
         if (res.ok) {
           const data = await res.json();
@@ -138,7 +149,7 @@ export function StreamSettingsEditor({
         setSearchingGames(false);
       }
     },
-    [apiBaseUrl]
+    [apiBaseUrl],
   );
 
   // Debounce game search
@@ -336,7 +347,7 @@ export function StreamSettingsEditor({
                     className="bg-transparent text-sm text-purple-200 focus:outline-none w-full cursor-pointer"
                     onChange={(e) => {
                       const template = templates.find(
-                        (t) => t.id === e.target.value
+                        (t) => t.id === e.target.value,
                       );
                       if (template) loadTemplate(template);
                       e.target.value = ""; // Reset selection
@@ -488,7 +499,7 @@ export function StreamSettingsEditor({
               onClick={onClose}
               className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
             >
-              {t("cancel", { ns: "common" })}
+              {tCommon("cancel")}
             </button>
             <button
               onClick={handleSave}
@@ -505,7 +516,7 @@ export function StreamSettingsEditor({
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  {t("save", { ns: "common" })}
+                  {tCommon("save")}
                 </>
               )}
             </button>
@@ -534,14 +545,14 @@ export function StreamSettingsEditor({
                 onClick={() => setShowSaveTemplateDialog(false)}
                 className="px-3 py-1.5 text-gray-400 hover:text-white"
               >
-                {t("cancel", { ns: "common" })}
+                {tCommon("cancel")}
               </button>
               <button
                 onClick={handleCreateTemplate}
                 disabled={!newTemplateName.trim() || templateActionLoading}
                 className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-50"
               >
-                {t("save", { ns: "common" })}
+                {tCommon("save")}
               </button>
             </div>
           </div>
