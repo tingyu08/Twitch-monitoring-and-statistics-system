@@ -6,8 +6,12 @@ export class StreamerSettingsController {
   // 獲取設定
   async getSettings(req: AuthRequest, res: Response) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const streamerId = req.user!.streamerId!;
+      const streamerId = req.user?.streamerId;
+      if (!streamerId) {
+        return res
+          .status(403)
+          .json({ error: "Not a streamer or not authenticated" });
+      }
       const settings = await streamerSettingsService.getChannelInfo(streamerId);
       if (!settings) {
         return res.status(404).json({ error: "Settings not found" });
@@ -22,8 +26,12 @@ export class StreamerSettingsController {
   // 更新設定
   async updateSettings(req: AuthRequest, res: Response) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const streamerId = req.user!.streamerId!;
+      const streamerId = req.user?.streamerId;
+      if (!streamerId) {
+        return res
+          .status(403)
+          .json({ error: "Not a streamer or not authenticated" });
+      }
       const success = await streamerSettingsService.updateChannelInfo(
         streamerId,
         req.body,
@@ -53,8 +61,12 @@ export class StreamerSettingsController {
   // 列出模板
   async listTemplates(req: AuthRequest, res: Response) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const streamerId = req.user!.streamerId!;
+      const streamerId = req.user?.streamerId;
+      if (!streamerId) {
+        return res
+          .status(403)
+          .json({ error: "Not a streamer or not authenticated" });
+      }
       const templates = await streamerSettingsService.getTemplates(streamerId);
       return res.json(templates);
     } catch (error) {
@@ -66,8 +78,12 @@ export class StreamerSettingsController {
   // 建立模板
   async createTemplate(req: AuthRequest, res: Response) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const streamerId = req.user!.streamerId!;
+      const streamerId = req.user?.streamerId;
+      if (!streamerId) {
+        return res
+          .status(403)
+          .json({ error: "Not a streamer or not authenticated" });
+      }
       const template = await streamerSettingsService.createTemplate(
         streamerId,
         req.body,
@@ -87,8 +103,12 @@ export class StreamerSettingsController {
   // 刪除模板
   async deleteTemplate(req: AuthRequest, res: Response) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const streamerId = req.user!.streamerId!;
+      const streamerId = req.user?.streamerId;
+      if (!streamerId) {
+        return res
+          .status(403)
+          .json({ error: "Not a streamer or not authenticated" });
+      }
       const templateId = req.params.id;
       await streamerSettingsService.deleteTemplate(streamerId, templateId);
       return res.json({ success: true });
