@@ -9,7 +9,7 @@ export class TwurpleVideoService {
   private async getClient() {
     if (!this.apiClient) {
       const { ApiClient } = await new Function(
-        'return import("@twurple/api")'
+        'return import("@twurple/api")',
       )();
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({ authProvider });
@@ -69,15 +69,15 @@ export class TwurpleVideoService {
         syncedCount++;
       }
 
-      logger.info(
+      logger.debug(
         "TwitchVideo",
-        `Synced ${syncedCount} videos for user ${userId}`
+        `Synced ${syncedCount} videos for user ${userId}`,
       );
     } catch (error) {
       logger.error(
         "TwitchVideo",
         `Failed to sync videos for user ${userId}`,
-        error
+        error,
       );
     }
   }
@@ -130,15 +130,15 @@ export class TwurpleVideoService {
         });
         syncedCount++;
       }
-      logger.info(
+      logger.debug(
         "TwitchVideo",
-        `Synced ${syncedCount} clips for user ${userId}`
+        `Synced ${syncedCount} clips for user ${userId}`,
       );
     } catch (error) {
       logger.error(
         "TwitchVideo",
         `Failed to sync clips for user ${userId}`,
-        error
+        error,
       );
     }
   }

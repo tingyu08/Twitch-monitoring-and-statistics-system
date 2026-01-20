@@ -15,9 +15,9 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
     for (const streamer of streamers) {
       if (!streamer.twitchUserId) continue;
 
-      logger.info(
+      logger.debug(
         "Jobs",
-        `Syncing videos for streamer: ${streamer.displayName}`
+        `Syncing videos for streamer: ${streamer.displayName}`,
       );
 
       // 依序執行以免觸發 Rate Limit
@@ -30,7 +30,7 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
 
     logger.info(
       "Jobs",
-      `Sync Videos Job completed. Processed ${streamers.length} streamers.`
+      `Sync Videos Job completed. Processed ${streamers.length} streamers.`,
     );
   } catch (error) {
     logger.error("Jobs", "Sync Videos Job failed", error);
