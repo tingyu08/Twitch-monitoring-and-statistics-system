@@ -1,6 +1,7 @@
 import { prisma } from "../../db/prisma";
 import { TwitchOAuthClient } from "../auth/twitch-oauth.client";
 import { env } from "../../config/env";
+import { decryptToken } from "../../utils/crypto.utils";
 
 export interface ChannelInfo {
   title: string;
@@ -43,7 +44,8 @@ export class StreamerSettingsService {
       return null;
     }
 
-    const accessToken = streamer.twitchTokens[0].accessToken;
+    const encryptedToken = streamer.twitchTokens[0].accessToken;
+    const accessToken = decryptToken(encryptedToken);
     const broadcasterId = streamer.twitchUserId;
 
     try {
@@ -54,7 +56,7 @@ export class StreamerSettingsService {
             "Client-Id": env.twitchClientId,
             Authorization: `Bearer ${accessToken}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -86,7 +88,7 @@ export class StreamerSettingsService {
    */
   async updateChannelInfo(
     streamerId: string,
-    data: UpdateChannelInfoDto
+    data: UpdateChannelInfoDto,
   ): Promise<boolean> {
     const streamer = await prisma.streamer.findUnique({
       where: { id: streamerId },
@@ -103,7 +105,8 @@ export class StreamerSettingsService {
       throw new Error("Streamer not found or no valid token");
     }
 
-    const accessToken = streamer.twitchTokens[0].accessToken;
+    const encryptedToken = streamer.twitchTokens[0].accessToken;
+    const accessToken = decryptToken(encryptedToken);
     const broadcasterId = streamer.twitchUserId;
 
     // Twitch API 要求的 body 格式
@@ -124,14 +127,14 @@ export class StreamerSettingsService {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(body),
-        }
+        },
       );
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error(
           "[StreamerSettingsService] updateChannelInfo error:",
-          errorText
+          errorText,
         );
         throw new Error(`Twitch API error: ${response.status}`);
       }
@@ -140,7 +143,7 @@ export class StreamerSettingsService {
     } catch (error) {
       console.error(
         "[StreamerSettingsService] updateChannelInfo error:",
-        error
+        error,
       );
       throw error;
     }
@@ -150,7 +153,7 @@ export class StreamerSettingsService {
    * 搜尋遊戲分類
    */
   async searchGames(
-    query: string
+    query: string,
   ): Promise<Array<{ id: string; name: string; boxArtUrl: string }>> {
     if (!query || query.length < 2) {
       return [];
@@ -168,16 +171,17 @@ export class StreamerSettingsService {
     }
 
     try {
+      const accessToken = decryptToken(token.accessToken);
       const response = await fetch(
         `https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(
-          query
+          query,
         )}&first=10`,
         {
           headers: {
             "Client-Id": env.twitchClientId,
-            Authorization: `Bearer ${token.accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -193,7 +197,7 @@ export class StreamerSettingsService {
             game.box_art_url
               ?.replace("{width}", "52")
               .replace("{height}", "72") || "",
-        })
+        }),
       );
     } catch {
       return [];
@@ -212,7 +216,7 @@ export class StreamerSettingsService {
       gameName?: string;
       tags?: string[];
       language?: string;
-    }
+    },
   ) {
     return prisma.streamerSettingTemplate.create({
       data: {

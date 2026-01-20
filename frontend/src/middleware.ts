@@ -11,10 +11,10 @@ export default createMiddleware({
 });
 
 export const config = {
-  // 匹配所有路由，排除 API 路由、靜態檔案等
+  // 匹配所有路由，排除 API 路由、靜態檔案、認證路徑等
   matcher: [
-    // 匹配所有頁面路由
-    "/((?!api|_next|_vercel|.*\\..*).*)",
+    // 匹配所有頁面路由，排除 api, auth, _next, _vercel 和靜態資源
+    "/((?!api|auth|_next|_vercel|.*\\..*).*)",
     // 也匹配根路由
     "/",
   ],
