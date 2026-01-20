@@ -9,7 +9,7 @@ export class TwurpleVideoService {
   private async getClient() {
     if (!this.apiClient) {
       const { ApiClient } = await new Function(
-        'return import("@twurple/api")'
+        'return import("@twurple/api")',
       )();
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({ authProvider });
@@ -19,18 +19,19 @@ export class TwurpleVideoService {
 
   /**
    * 同步實況主的 VOD (Videos)
-   * 預設同步最新的 20 筆封存影片 (Archive)
+   * 只保留最新的 6 筆封存影片 (Archive)
    */
   async syncVideos(userId: string, streamerId: string) {
     try {
       const client = await this.getClient();
-      // 獲取前 20 筆 Archive (過往實況)
+      // 獲取前 6 筆 Archive (過往實況) - 依時間排序最新的
       const videos = await client.videos.getVideosByUser(userId, {
-        limit: 20,
+        limit: 6,
         type: "archive",
       });
 
       let syncedCount = 0;
+      const syncedVideoIds: string[] = [];
 
       for (const video of videos.data) {
         // Twurple video.duration is a string like "3h30m20s"
@@ -66,35 +67,48 @@ export class TwurpleVideoService {
             viewCount: video.views,
           },
         });
+        syncedVideoIds.push(video.id);
         syncedCount++;
       }
 
+      // 刪除不在最新 6 部中的舊影片
+      const deleteResult = await prisma.video.deleteMany({
+        where: {
+          streamerId: streamerId,
+          twitchVideoId: {
+            notIn: syncedVideoIds,
+          },
+        },
+      });
+
       logger.info(
         "TwitchVideo",
-        `Synced ${syncedCount} videos for user ${userId}`
+        `Synced ${syncedCount} videos for user ${userId}, deleted ${deleteResult.count} old videos`,
       );
     } catch (error) {
       logger.error(
         "TwitchVideo",
         `Failed to sync videos for user ${userId}`,
-        error
+        error,
       );
     }
   }
 
   /**
    * 同步實況主的 Clips (精華)
-   * 預設同步最新的 50 筆
+   * 只保留觀看次數最高的 6 筆
    */
   async syncClips(userId: string, streamerId: string) {
     try {
       const client = await this.getClient();
 
+      // 從 Twitch API 獲取剪輯（API 預設依觀看次數排序）
       const clips = await client.clips.getClipsForBroadcaster(userId, {
-        limit: 50,
+        limit: 6,
       });
 
       let syncedCount = 0;
+      const syncedClipIds: string[] = [];
 
       for (const clip of clips.data) {
         await prisma.clip.upsert({
@@ -128,17 +142,29 @@ export class TwurpleVideoService {
               .replace("{height}", "180"),
           },
         });
+        syncedClipIds.push(clip.id);
         syncedCount++;
       }
+
+      // 刪除不在 Top 6 觀看次數中的舊剪輯
+      const deleteResult = await prisma.clip.deleteMany({
+        where: {
+          streamerId: streamerId,
+          twitchClipId: {
+            notIn: syncedClipIds,
+          },
+        },
+      });
+
       logger.info(
         "TwitchVideo",
-        `Synced ${syncedCount} clips for user ${userId}`
+        `Synced ${syncedCount} clips for user ${userId}, deleted ${deleteResult.count} old clips`,
       );
     } catch (error) {
       logger.error(
         "TwitchVideo",
         `Failed to sync clips for user ${userId}`,
-        error
+        error,
       );
     }
   }
