@@ -90,13 +90,35 @@ export class TwurpleVideoService {
     try {
       const client = await this.getClient();
 
-      const clips = await client.clips.getClipsForBroadcaster(userId, {
+      // 策略更新：分開抓取以滿足兩種需求
+      // 1. 觀眾追蹤名單：需要歷史觀看數最高的 6 部 (Top 6 All-time)
+      const topClipsPromise = client.clips.getClipsForBroadcaster(userId, {
+        limit: 6,
+      });
+
+      // 2. 實況主後台：需要顯示最近生成的剪輯 (Recent 50)
+      // Twitch API Clips 預設按熱門排序，要抓「最新」只能透過 startDate 限制範圍
+      const recentStart = new Date();
+      recentStart.setDate(recentStart.getDate() - 60); // 抓過去 60 天
+      const recentClipsPromise = client.clips.getClipsForBroadcaster(userId, {
+        startDate: recentStart,
         limit: 50,
+      });
+
+      const [topClips, recentClips] = await Promise.all([
+        topClipsPromise,
+        recentClipsPromise,
+      ]);
+
+      // 合併結果並去重
+      const uniqueClips = new Map();
+      [...topClips.data, ...recentClips.data].forEach((clip) => {
+        uniqueClips.set(clip.id, clip);
       });
 
       let syncedCount = 0;
 
-      for (const clip of clips.data) {
+      for (const clip of uniqueClips.values()) {
         await prisma.clip.upsert({
           where: { twitchClipId: clip.id },
           create: {
@@ -132,7 +154,7 @@ export class TwurpleVideoService {
       }
       logger.debug(
         "TwitchVideo",
-        `Synced ${syncedCount} clips for user ${userId}`,
+        `Synced ${syncedCount} clips (Top 6 + Recent) for user ${userId}`,
       );
     } catch (error) {
       logger.error(
