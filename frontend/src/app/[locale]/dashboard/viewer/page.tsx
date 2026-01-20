@@ -36,7 +36,7 @@ export default function ViewerDashboardPage() {
   const [channels, setChannels] = useState<FollowedChannel[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredChannels, setFilteredChannels] = useState<FollowedChannel[]>(
-    []
+    [],
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +73,7 @@ export default function ViewerDashboardPage() {
               };
             }
             return ch;
-          })
+          }),
         );
       };
 
@@ -84,7 +84,7 @@ export default function ViewerDashboardPage() {
     }
   }, [authLoading, user, router, socket, socketConnected]);
 
-  const loadChannels = async (silent = false) => {
+  const loadChannels = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       const data = await viewerApi.getFollowedChannels();
@@ -95,7 +95,35 @@ export default function ViewerDashboardPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, []);
+
+  // 自動輪詢: 每 60 秒更新一次頻道列表 (包含開台狀態)
+  useEffect(() => {
+    if (!user) return;
+
+    const poll = () => {
+      // 只有在頁面可見時才執行更新，節省資源
+      if (document.visibilityState === "visible") {
+        loadChannels(true);
+      }
+    };
+
+    const intervalId = setInterval(poll, 60000); // 60秒
+
+    // 額外: 當使用者切換回此分頁時，立即更新一次
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadChannels(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user, loadChannels]);
 
   // 過濾頻道
   useEffect(() => {
@@ -105,8 +133,8 @@ export default function ViewerDashboardPage() {
         channels.filter(
           (ch) =>
             ch.channelName.toLowerCase().includes(lowerQuery) ||
-            ch.displayName.toLowerCase().includes(lowerQuery)
-        )
+            ch.displayName.toLowerCase().includes(lowerQuery),
+        ),
       );
       // 搜尋時重置到第一頁
       setCurrentPage(1);
@@ -142,7 +170,7 @@ export default function ViewerDashboardPage() {
         await viewerApi.setListenChannels(liveChannels);
       }
     },
-    []
+    [],
   );
 
   // 當頁面變更時通知後端
