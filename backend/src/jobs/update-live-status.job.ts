@@ -2,8 +2,6 @@ import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "../services/twurple-auth.service";
 import { logger } from "../utils/logger";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import cron from "node-cron";
 
 /**
