@@ -177,12 +177,10 @@ export async function getPublicVideosHandler(
 
     res.json({
       data: videos,
-      pagination: {
-        total: videos.length, // 這裡僅回傳當前數量作為總數，不進行全表 count
-        page: 1,
-        limit,
-        totalPages: 1,
-      },
+      total: videos.length,
+      page: 1,
+      limit,
+      totalPages: 1,
     });
   } catch (error) {
     streamerLogger.error("Get Public Videos Error:", error);
@@ -232,12 +230,10 @@ export async function getPublicClipsHandler(
 
     res.json({
       data: clips,
-      pagination: {
-        total: clips.length,
-        page: 1,
-        limit,
-        totalPages: 1,
-      },
+      total: clips.length,
+      page: 1,
+      limit,
+      totalPages: 1,
     });
   } catch (error) {
     streamerLogger.error("Get Public Clips Error:", error);
