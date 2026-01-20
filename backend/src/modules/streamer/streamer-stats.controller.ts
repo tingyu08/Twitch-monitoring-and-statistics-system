@@ -14,7 +14,7 @@ import { streamerLogger } from "../../utils/logger";
  */
 export async function getGameStatsHandler(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
@@ -30,7 +30,7 @@ export async function getGameStatsHandler(
     // Cast strict type
     const stats = await getStreamerGameStats(
       streamerId,
-      range as "7d" | "30d" | "90d"
+      range as "7d" | "30d" | "90d",
     );
     res.json(stats);
   } catch (error) {
@@ -45,7 +45,7 @@ export async function getGameStatsHandler(
  */
 export async function getPublicGameStatsHandler(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const { streamerId: channelId } = req.params;
@@ -72,7 +72,7 @@ export async function getPublicGameStatsHandler(
 
     const stats = await getStreamerGameStats(
       channel.streamerId,
-      range as "7d" | "30d" | "90d"
+      range as "7d" | "30d" | "90d",
     );
     res.json(stats);
   } catch (error) {
@@ -87,7 +87,7 @@ export async function getPublicGameStatsHandler(
  */
 export async function getVideosHandler(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
@@ -115,7 +115,7 @@ export async function getVideosHandler(
  */
 export async function getClipsHandler(
   req: AuthRequest,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
@@ -142,7 +142,7 @@ export async function getClipsHandler(
  */
 export async function getPublicVideosHandler(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const { streamerId: channelId } = req.params; // 參數名稱是 streamerId 但其實是 channelId
@@ -167,12 +167,23 @@ export async function getPublicVideosHandler(
       return;
     }
 
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const safeLimit = Math.min(limit, 100);
+    // 自定義查詢：只取最新 6 部
+    const limit = 6;
+    const videos = await prisma.video.findMany({
+      where: { streamerId: channel.streamerId },
+      orderBy: { publishedAt: "desc" },
+      take: limit,
+    });
 
-    const result = await getStreamerVideos(channel.streamerId, safeLimit, page);
-    res.json(result);
+    res.json({
+      data: videos,
+      pagination: {
+        total: videos.length, // 這裡僅回傳當前數量作為總數，不進行全表 count
+        page: 1,
+        limit,
+        totalPages: 1,
+      },
+    });
   } catch (error) {
     streamerLogger.error("Get Public Videos Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -186,7 +197,7 @@ export async function getPublicVideosHandler(
  */
 export async function getPublicClipsHandler(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const { streamerId: channelId } = req.params; // 參數名稱是 streamerId 但其實是 channelId
@@ -211,12 +222,23 @@ export async function getPublicClipsHandler(
       return;
     }
 
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const safeLimit = Math.min(limit, 100);
+    // 自定義查詢：只取觀看次數最高的 6 部
+    const limit = 6;
+    const clips = await prisma.clip.findMany({
+      where: { streamerId: channel.streamerId },
+      orderBy: { viewCount: "desc" },
+      take: limit,
+    });
 
-    const result = await getStreamerClips(channel.streamerId, safeLimit, page);
-    res.json(result);
+    res.json({
+      data: clips,
+      pagination: {
+        total: clips.length,
+        page: 1,
+        limit,
+        totalPages: 1,
+      },
+    });
   } catch (error) {
     streamerLogger.error("Get Public Clips Error:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -229,7 +251,7 @@ export async function getPublicClipsHandler(
  */
 export async function getPublicViewerTrendsHandler(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const { streamerId: channelId } = req.params;
@@ -292,7 +314,7 @@ export async function getPublicViewerTrendsHandler(
  */
 export async function getPublicStreamHourlyHandler(
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> {
   try {
     const { streamerId: channelId } = req.params;
@@ -376,7 +398,7 @@ export async function getPublicStreamHourlyHandler(
 
       // 計算該小時的準確時間
       const pointTime = new Date(
-        session.startedAt.getTime() + i * 60 * 60 * 1000
+        session.startedAt.getTime() + i * 60 * 60 * 1000,
       );
 
       result.push({
