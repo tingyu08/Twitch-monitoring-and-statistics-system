@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Settings, DollarSign } from "lucide-react";
+import { Settings, DollarSign, Video } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -23,7 +23,7 @@ export function QuickActionsPanel({
         {t("quickActions")}
       </h2>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* 管理實況設定 */}
         <button
           onClick={onManageSettings}
@@ -41,6 +41,26 @@ export function QuickActionsPanel({
             <span className="text-xs text-gray-400">編輯標題、分類、標籤</span>
           </div>
         </button>
+
+        {/* 影片庫 */}
+        <Link
+          href={`/${locale}/dashboard/streamer/videos`}
+          className="group flex items-center gap-3 p-4 bg-gradient-to-r from-blue-600/20 to-blue-500/10 
+                     rounded-lg border border-blue-500/30 hover:border-blue-400/50 
+                     transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/10"
+        >
+          <div className="p-2 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30 transition-colors">
+            <Video className="w-5 h-5 text-blue-400" />
+          </div>
+          <div className="text-left">
+            <span className="block text-white font-medium">
+              {t("videosLibrary")}
+            </span>
+            <span className="text-xs text-gray-400">
+              {t("videosLibraryDesc")}
+            </span>
+          </div>
+        </Link>
 
         {/* 查看收益分析 */}
         <Link
