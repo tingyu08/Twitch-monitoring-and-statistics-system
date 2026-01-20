@@ -91,7 +91,7 @@ export class TwurpleVideoService {
       const client = await this.getClient();
 
       const clips = await client.clips.getClipsForBroadcaster(userId, {
-        limit: 50,
+        limit: 100,
       });
 
       let syncedCount = 0;
