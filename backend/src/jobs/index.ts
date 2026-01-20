@@ -12,6 +12,7 @@ import { syncUserFollowsJob } from "./sync-user-follows.job";
 import { validateTokensJob } from "./validate-tokens.job";
 import { syncVideosJob } from "./sync-videos.job";
 import { syncSubscriptionsJob } from "./sync-subscriptions.job";
+import { updateLiveStatusJob } from "./update-live-status.job";
 
 /**
  * 啟動所有定時任務
@@ -43,13 +44,16 @@ export function startAllJobs(): void {
   // Epic 4: 訂閱快照同步任務
   syncSubscriptionsJob.start();
 
+  // 優化: 即時直播狀態更新任務
+  updateLiveStatusJob.start();
+
   // Token 驗證任務 - 每天凌晨 4 點執行（低流量時段）
   cron.schedule("0 4 * * *", async () => {
     console.log("🔐 [Jobs] 開始執行 Token 驗證任務...");
     try {
       const result = await validateTokensJob();
       console.log(
-        `✅ [Jobs] Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`
+        `✅ [Jobs] Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`,
       );
     } catch (error) {
       console.error("❌ [Jobs] Token 驗證失敗:", error);

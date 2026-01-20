@@ -1,5 +1,4 @@
 import { prisma } from "../../db/prisma";
-import { twurpleHelixService } from "../../services/twitch-helix.service";
 
 export async function recordConsent(viewerId: string, consentVersion = 1) {
   return prisma.viewer.update({
@@ -40,7 +39,7 @@ export async function getChannelStats(
   channelId: string,
   days?: number,
   startDate?: Date,
-  endDate?: Date
+  endDate?: Date,
 ): Promise<ViewerChannelStatsResponse> {
   // 計算日期範圍
   let queryStartDate: Date;
@@ -52,7 +51,7 @@ export async function getChannelStats(
     queryEndDate = endDate;
     actualDays =
       Math.ceil(
-        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
       ) + 1;
   } else {
     const daysToQuery = days ?? 30;
@@ -132,7 +131,7 @@ export async function getFollowedChannels(viewerId: string) {
   const statsChannelIds = new Set(stats.map((s) => s.channelId));
   const followChannelIds = new Set(follows.map((f) => f.channelId));
   const allChannelIds = Array.from(
-    new Set([...statsChannelIds, ...followChannelIds])
+    new Set([...statsChannelIds, ...followChannelIds]),
   );
 
   if (allChannelIds.length === 0) {
@@ -159,40 +158,8 @@ export async function getFollowedChannels(viewerId: string) {
   // 建立 Stats Map 以便快速查找
   const statsMap = new Map(stats.map((s) => [s.channelId, s]));
 
-  // 5. 從 Twitch API 獲取所有開台頻道的即時資訊（觀眾數、開台時間）
-  // 注意: Twitch API 一次最多查詢 100 個，需要分批處理
-  const twitchChannelIds = channels.map((ch) => ch.twitchChannelId);
-  let liveStreamsMap = new Map<
-    string,
-    { viewerCount: number; startedAt: Date; gameName: string }
-  >();
-
-  try {
-    // 分批處理（每批最多 100 個）
-    const BATCH_SIZE = 100;
-    const allLiveStreams: Awaited<
-      ReturnType<typeof twurpleHelixService.getStreamsByUserIds>
-    > = [];
-
-    for (let i = 0; i < twitchChannelIds.length; i += BATCH_SIZE) {
-      const batch = twitchChannelIds.slice(i, i + BATCH_SIZE);
-      const batchStreams = await twurpleHelixService.getStreamsByUserIds(batch);
-      allLiveStreams.push(...batchStreams);
-    }
-
-    liveStreamsMap = new Map(
-      allLiveStreams.map((s) => [
-        s.userId,
-        {
-          viewerCount: s.viewerCount,
-          startedAt: s.startedAt,
-          gameName: s.gameName,
-        },
-      ])
-    );
-  } catch {
-    // 如果 API 失敗，繼續使用 DB 資料
-  }
+  // 5. [優化] 改為直接使用 DB 中的快取狀態，不再即時呼叫 Twitch API
+  // 這大幅提升了回應速度並避免了 Rate Limit
 
   // 建立 Follows Map 以便查找追蹤時間
   const followsMap = new Map(follows.map((f) => [f.channelId, f.followedAt]));
@@ -200,21 +167,20 @@ export async function getFollowedChannels(viewerId: string) {
   // 6. 轉換為前端格式
   const results = channels.map((channel) => {
     const stat = statsMap.get(channel.id);
-    const liveInfo = liveStreamsMap.get(channel.twitchChannelId);
     const followedAt = followsMap.get(channel.id);
 
-    // 使用 Twitch API 的即時狀態
-    const isLive = !!liveInfo;
+    // 使用 DB 中的快取狀態
+    const isLive = channel.isLive;
 
     return {
       id: channel.id,
       channelName: channel.channelName,
       displayName: channel.streamer?.displayName || channel.channelName,
       avatarUrl: channel.streamer?.avatarUrl || "",
-      category: liveInfo?.gameName || "Just Chatting",
+      category: channel.currentGameName || "Just Chatting",
       isLive,
-      viewerCount: liveInfo?.viewerCount ?? null,
-      streamStartedAt: liveInfo?.startedAt?.toISOString() ?? null,
+      viewerCount: channel.currentViewerCount ?? null,
+      streamStartedAt: channel.currentStreamStartedAt?.toISOString() ?? null,
       followedAt: followedAt?.toISOString() ?? null,
       tags: ["中文", "遊戲"],
       // 如果有統計數據則顯示最後觀看時間，否則顯示 null

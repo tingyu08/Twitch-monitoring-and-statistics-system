@@ -64,8 +64,13 @@ model Channel {
   channelName     String
   channelUrl      String?
   isMonitored     Boolean                  @default(true)   // Story 3.6: 是否監控中
-  isLive          Boolean                  @default(false)  // New: 直播狀態
-  source          String                   @default("platform") // Story 3.6: "platform" | "external"
+  isLive          Boolean                  @default(false)
+  currentViewerCount Int?                  @default(0)      // 優化: 快取觀眾數
+  currentStreamStartedAt DateTime?                          // 優化: 快取開台時間
+  currentGameName String?                                   // 優化: 快取遊戲名稱
+  currentTitle    String?                                   // 優化: 快取標題
+  lastLiveCheckAt DateTime?                                 // 優化: 最後檢查時間
+  source          String                   @default("platform")
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
   dailyStats      ChannelDailyStat[]
