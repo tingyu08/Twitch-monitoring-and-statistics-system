@@ -1,7 +1,19 @@
 import express from "express";
 import axios from "axios";
+import { env } from "../../config/env";
 
 const router = express.Router();
+
+/**
+ * 驗證 hostname 是否為允許的網域
+ * 使用精確匹配避免繞過攻擊 (e.g., evil-static-cdn.jtvnw.net.attacker.com)
+ */
+function isAllowedDomain(hostname: string, allowedDomains: string[]): boolean {
+  return allowedDomains.some((domain) => {
+    // 精確匹配或子網域匹配
+    return hostname === domain || hostname.endsWith(`.${domain}`);
+  });
+}
 
 /**
  * Avatar Proxy API
@@ -30,8 +42,15 @@ router.get("/avatar", async (req, res) => {
     ];
 
     const urlObj = new URL(decodedUrl);
-    if (!allowedDomains.some((domain) => urlObj.hostname.includes(domain))) {
+
+    // 使用精確匹配驗證網域
+    if (!isAllowedDomain(urlObj.hostname, allowedDomains)) {
       return res.status(403).json({ error: "Domain not allowed" });
+    }
+
+    // 確保使用 HTTPS
+    if (urlObj.protocol !== "https:") {
+      return res.status(403).json({ error: "Only HTTPS URLs are allowed" });
     }
 
     // 發送請求獲取圖片
@@ -47,7 +66,8 @@ router.get("/avatar", async (req, res) => {
     const contentType = response.headers["content-type"] || "image/png";
     res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "public, max-age=86400"); // 快取 1 天
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // 使用 frontendUrl 限制 CORS，而非開放給所有來源
+    res.setHeader("Access-Control-Allow-Origin", env.frontendUrl);
 
     return res.send(Buffer.from(response.data));
   } catch (error) {

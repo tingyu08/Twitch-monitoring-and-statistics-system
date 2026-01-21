@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import * as Sentry from "@sentry/node";
 import { oauthRoutes, apiRoutes } from "./modules/auth/auth.routes";
 import { streamerRoutes } from "./modules/streamer/streamer.routes";
@@ -14,6 +15,28 @@ import tokenManagementRoutes from "./modules/admin/token-management.routes";
 import twitchRoutes from "./routes/twitch.routes";
 import { eventSubRoutes } from "./routes/eventsub.routes";
 import extensionRoutes from "./modules/extension/extension.routes";
+
+// Rate Limiting 設定
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 分鐘
+  max: 100, // 每個 IP 每 15 分鐘最多 100 次請求
+  message: { error: "Too many requests, please try again later." },
+  standardHeaders: true, // 返回 RateLimit-* headers
+  legacyHeaders: false, // 停用 X-RateLimit-* headers
+  skip: (req) => {
+    // 跳過健康檢查端點
+    return req.path === "/" || req.path.startsWith("/api/health");
+  },
+});
+
+// 針對認證端點的更嚴格限制
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 分鐘
+  max: 20, // 每個 IP 每 15 分鐘最多 20 次認證請求
+  message: { error: "Too many authentication attempts, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 class App {
   public express: express.Application;
@@ -33,7 +56,12 @@ class App {
       })
     );
 
-    // 1. 設定 CORS
+    // 1. Rate Limiting（防止 DoS 攻擊）
+    // 必須在 CORS 之前，確保即使被限流也能正確返回 CORS headers
+    this.express.use("/api", apiLimiter);
+    this.express.use("/auth", authLimiter);
+
+    // 2. 設定 CORS
     // 允許前端帶 Cookie (credentials)，origin 必須指定確切的前端網址
     this.express.use(
       cors({
@@ -44,7 +72,7 @@ class App {
       })
     );
 
-    // 2. 解析 JSON Body (排除 EventSub 路徑，因為 Twurple 需要 raw body)
+    // 3. 解析 JSON Body (排除 EventSub 路徑，因為 Twurple 需要 raw body)
     this.express.use(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (req: any, res: any, next: any) => {
@@ -56,10 +84,10 @@ class App {
       }
     );
 
-    // 3. 解析 Cookies (處理 httpOnly cookie 必備)
+    // 4. 解析 Cookies (處理 httpOnly cookie 必備)
     this.express.use(cookieParser());
 
-    // 4. API 效能監控
+    // 5. API 效能監控
     this.express.use(performanceMonitor.middleware());
   }
 

@@ -67,12 +67,12 @@ class TwurpleHelixService {
 
   /**
    * 獲取或初始化 API Client
+   * 使用標準動態 import 取代 new Function 以避免安全隱患
    */
   private async getApiClient(): Promise<ApiClient> {
     if (!this.apiClient) {
-      const { ApiClient } = await new Function(
-        'return import("@twurple/api")'
-      )();
+      // 使用標準動態 import 語法
+      const { ApiClient } = await import("@twurple/api");
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({
         authProvider,
@@ -310,15 +310,12 @@ class TwurpleHelixService {
   ): Promise<FollowedChannel[]> {
     try {
       let api: ApiClient;
-      const { ApiClient } = await new Function(
-        'return import("@twurple/api")'
-      )();
 
       // 如果有用戶 Token，使用用戶的 Auth Provider
       if (userAccessToken) {
-        const { StaticAuthProvider } = await new Function(
-          'return import("@twurple/auth")'
-        )();
+        // 使用標準動態 import 語法
+        const { ApiClient } = await import("@twurple/api");
+        const { StaticAuthProvider } = await import("@twurple/auth");
         const clientId = twurpleAuthService.getClientId();
         const userAuthProvider = new StaticAuthProvider(
           clientId,

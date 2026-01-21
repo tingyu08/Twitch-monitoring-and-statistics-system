@@ -28,10 +28,12 @@ if (!fs.existsSync(backendEnvPath) && fs.existsSync(rootEnvPath)) {
   dotenv.config({ path: rootEnvPath });
 }
 
-const defaultViewerEncryptionKey =
-  process.env.NODE_ENV === "production"
-    ? ""
-    : "dmlld2VyLXRva2VuLWVuY3J5cHRpb24ta2V5LTMyISE="; // 32 bytes base64 (dev/test fallback)
+const isProduction = process.env.NODE_ENV === "production";
+const isTest = process.env.NODE_ENV === "test";
+
+// 開發/測試環境的預設加密金鑰（僅用於本地開發）
+const DEV_ENCRYPTION_KEY = "dmlld2VyLXRva2VuLWVuY3J5cHRpb24ta2V5LTMyISE=";
+const DEV_JWT_SECRET = "dev-secret-change-in-production";
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
@@ -42,9 +44,9 @@ export const env = {
     process.env.TWITCH_REDIRECT_URI ?? "http://localhost:3000/auth/callback",
   twitchViewerRedirectUri:
     process.env.TWITCH_VIEWER_REDIRECT_URI ?? "http://localhost:4000/auth/viewer/callback",
-  jwtSecret: process.env.APP_JWT_SECRET ?? "dev-secret-change-in-production",
+  jwtSecret: process.env.APP_JWT_SECRET ?? (isProduction ? "" : DEV_JWT_SECRET),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
-  viewerTokenEncryptionKey: process.env.VIEWER_TOKEN_ENCRYPTION_KEY ?? defaultViewerEncryptionKey,
+  viewerTokenEncryptionKey: process.env.VIEWER_TOKEN_ENCRYPTION_KEY ?? (isProduction ? "" : DEV_ENCRYPTION_KEY),
 };
 
 // #region agent log
@@ -67,17 +69,49 @@ const logEntry2 = JSON.stringify({
 fs.appendFileSync(logPath, logEntry2);
 // #endregion
 
-if (!env.twitchClientId || !env.twitchClientSecret) {
-  // 在開發階段給出明確警告，但不強制中止，方便先跑起流程
-  // 真正部署前應確保環境變數正確設定
-    console.warn(
-    "[backend/env] TWITCH_CLIENT_ID 或 TWITCH_CLIENT_SECRET 尚未設定，Twitch OAuth 相關功能將無法正常運作。"
-  );
+// 生產環境嚴格驗證必要的環境變數
+if (isProduction) {
+  const missingVars: string[] = [];
+
+  if (!process.env.APP_JWT_SECRET) {
+    missingVars.push("APP_JWT_SECRET");
+  }
+  if (!process.env.VIEWER_TOKEN_ENCRYPTION_KEY) {
+    missingVars.push("VIEWER_TOKEN_ENCRYPTION_KEY");
+  }
+  if (!process.env.TWITCH_CLIENT_ID) {
+    missingVars.push("TWITCH_CLIENT_ID");
+  }
+  if (!process.env.TWITCH_CLIENT_SECRET) {
+    missingVars.push("TWITCH_CLIENT_SECRET");
+  }
+
+  if (missingVars.length > 0) {
+    throw new Error(
+      `[backend/env] 生產環境缺少必要的環境變數: ${missingVars.join(", ")}。請確保這些變數已正確設定。`
+    );
+  }
 }
 
+// 開發/測試環境的警告
+if (!isProduction && !isTest) {
+  if (!env.twitchClientId || !env.twitchClientSecret) {
+    console.warn(
+      "[backend/env] TWITCH_CLIENT_ID 或 TWITCH_CLIENT_SECRET 尚未設定，Twitch OAuth 相關功能將無法正常運作。"
+    );
+  }
+}
+
+// 驗證加密金鑰格式
 if (!env.viewerTokenEncryptionKey) {
   throw new Error(
     "[backend/env] VIEWER_TOKEN_ENCRYPTION_KEY 未設定，請提供 32-byte base64 key（ex: dmlld2VyLXRva2VuLWVuY3J5cHRpb24ta2V5LTMyISE=）。"
+  );
+}
+
+if (!env.jwtSecret) {
+  throw new Error(
+    "[backend/env] APP_JWT_SECRET 未設定，請提供安全的 JWT 密鑰。"
   );
 }
 
