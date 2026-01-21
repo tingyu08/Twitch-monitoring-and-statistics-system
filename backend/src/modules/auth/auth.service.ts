@@ -74,7 +74,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
 
   logger.info(
     "Auth",
-    `Processing unified login for: ${user.display_name} (${user.id})`
+    `Processing unified login for: ${user.display_name} (${user.id})`,
   );
 
   // 同時 Check/Create Viewer record (實況主也是觀眾)
@@ -137,10 +137,20 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   if (existingToken) {
     await prisma.twitchToken.update({
       where: { id: existingToken.id },
-      data: tokenDataToSave,
+      data: {
+        ...tokenDataToSave,
+        status: "active", // 重要：重設 Token 狀態
+        failureCount: 0, // 重要：重設失敗計數
+      },
     });
   } else {
-    await prisma.twitchToken.create({ data: tokenDataToSave });
+    await prisma.twitchToken.create({
+      data: {
+        ...tokenDataToSave,
+        status: "active",
+        failureCount: 0,
+      },
+    });
   }
 
   const result = { streamerRecord, viewerRecord };
@@ -172,9 +182,9 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   // 非同步觸發追蹤名單同步（不阻塞登入流程）
   triggerFollowSyncForUser(
     result.viewerRecord.id,
-    tokenData.access_token
+    tokenData.access_token,
   ).catch((err: unknown) =>
-    logger.error("Auth", "Follow sync failed after login", err)
+    logger.error("Auth", "Follow sync failed after login", err),
   );
 
   // 非同步觸發聊天室服務重新初始化（不阻塞登入流程）
@@ -183,9 +193,9 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
       twurpleChatService
         .initialize()
         .catch((err: unknown) =>
-          logger.error("Auth", "Chat service reinit failed after login", err)
+          logger.error("Auth", "Chat service reinit failed after login", err),
         );
-    }
+    },
   );
 
   return { streamer, accessToken, refreshToken };
@@ -197,7 +207,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
  * 根據 Streamer ID 取得 Streamer 資訊
  */
 export async function getStreamerById(
-  streamerId: string
+  streamerId: string,
 ): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { id: streamerId },
@@ -227,7 +237,7 @@ export async function getStreamerById(
  * 根據 Twitch User ID 取得 Streamer 資訊
  */
 export async function getStreamerByTwitchId(
-  twitchUserId: string
+  twitchUserId: string,
 ): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { twitchUserId },
