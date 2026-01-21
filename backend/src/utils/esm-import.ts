@@ -16,7 +16,7 @@
  * @param moduleName 模組名稱（如 "@twurple/api"）
  * @returns 模組的導出內容
  */
-export async function importEsm<T = any>(moduleName: string): Promise<T> {
+export async function importEsm<T = unknown>(moduleName: string): Promise<T> {
   // 使用 new Function 繞過 TypeScript 將 import() 編譯為 require() 的行為
   const dynamicImport = new Function("moduleName", "return import(moduleName)");
   return dynamicImport(moduleName);
@@ -47,5 +47,7 @@ export async function importTwurpleChat() {
  * 導入 @twurple/eventsub-http
  */
 export async function importTwurpleEventSub() {
-  return importEsm<typeof import("@twurple/eventsub-http")>("@twurple/eventsub-http");
+  return importEsm<typeof import("@twurple/eventsub-http")>(
+    "@twurple/eventsub-http",
+  );
 }
