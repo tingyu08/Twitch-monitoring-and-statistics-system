@@ -101,6 +101,7 @@
     "interactionParams": "互動類型分佈",
     "clickToView": "點擊各類型查看詳情",
     "noInteractionData": "無足夠數據顯示互動分佈",
+    "noData": "無資料",
     "count": "次數",
     "interactionTypes": {
       "chat": "聊天",

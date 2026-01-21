@@ -188,11 +188,15 @@ export async function getFollowedChannels(viewerId: string) {
       // 使用 DB 中的快取狀態
       const isLive = channel.isLive;
 
+      const displayName = channel.streamer?.displayName || channel.channelName;
+      const avatarUrl = channel.streamer?.avatarUrl ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff&size=150`;
+
       return {
         id: channel.id,
         channelName: channel.channelName,
-        displayName: channel.streamer?.displayName || channel.channelName,
-        avatarUrl: channel.streamer?.avatarUrl || "",
+        displayName,
+        avatarUrl,
         category: channel.currentGameName || "Just Chatting",
         isLive,
         viewerCount: channel.currentViewerCount ?? null,

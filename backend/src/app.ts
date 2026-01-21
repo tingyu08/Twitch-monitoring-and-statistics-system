@@ -17,9 +17,10 @@ import { eventSubRoutes } from "./routes/eventsub.routes";
 import extensionRoutes from "./modules/extension/extension.routes";
 
 // Rate Limiting 設定
+const isDev = process.env.NODE_ENV === "development";
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 分鐘
-  max: 100, // 每個 IP 每 15 分鐘最多 100 次請求
+  max: isDev ? 1000 : 100, // 開發環境放寬限制
   message: { error: "Too many requests, please try again later." },
   standardHeaders: true, // 返回 RateLimit-* headers
   legacyHeaders: false, // 停用 X-RateLimit-* headers
@@ -32,7 +33,7 @@ const apiLimiter = rateLimit({
 // 針對認證端點的更嚴格限制
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 分鐘
-  max: 20, // 每個 IP 每 15 分鐘最多 20 次認證請求
+  max: isDev ? 100 : 20, // 開發環境放寬限制
   message: { error: "Too many authentication attempts, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -63,13 +64,8 @@ class App {
       })
     );
 
-    // 1. Rate Limiting（防止 DoS 攻擊）
-    // 必須在 CORS 之前，確保即使被限流也能正確返回 CORS headers
-    this.express.use("/api", apiLimiter);
-    this.express.use("/auth", authLimiter);
-
-    // 2. 設定 CORS
-    // 允許前端帶 Cookie (credentials)，origin 必須指定確切的前端網址
+    // 1. 設定 CORS（必須在 Rate Limiting 之前）
+    // 確保即使被限流也能正確返回 CORS headers
     this.express.use(
       cors({
         origin: process.env.FRONTEND_URL || "http://localhost:3000",
@@ -78,6 +74,10 @@ class App {
         allowedHeaders: ["Content-Type", "Authorization"],
       })
     );
+
+    // 2. Rate Limiting（防止 DoS 攻擊）
+    this.express.use("/api", apiLimiter);
+    this.express.use("/auth", authLimiter);
 
     // 3. 解析 JSON Body (排除 EventSub 路徑，因為 Twurple 需要 raw body)
     this.express.use(

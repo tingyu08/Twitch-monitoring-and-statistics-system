@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
@@ -361,7 +361,7 @@ export default function ViewerDashboardPage() {
                   <div className="flex items-center gap-4 mb-4">
                     <div className="relative">
                       <Image
-                        src={channel.avatarUrl}
+                        src={channel.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.displayName)}&background=6366f1&color=fff`}
                         alt={channel.displayName}
                         width={60}
                         height={60}
@@ -507,17 +507,13 @@ export default function ViewerDashboardPage() {
                       return false;
                     })
                     .map((page, index, arr) => (
-                      <>
+                      <React.Fragment key={page}>
                         {index > 0 && arr[index - 1] !== page - 1 && (
-                          <span
-                            key={`ellipsis-${page}`}
-                            className="px-2 text-purple-300/50"
-                          >
+                          <span className="px-2 text-purple-300/50">
                             ...
                           </span>
                         )}
                         <button
-                          key={page}
                           type="button"
                           onClick={() => handlePageChange(page)}
                           className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
@@ -528,7 +524,7 @@ export default function ViewerDashboardPage() {
                         >
                           {page}
                         </button>
-                      </>
+                      </React.Fragment>
                     ))}
                 </div>
 
