@@ -67,6 +67,12 @@
 <details>
 <summary><b>點擊展開過往更新詳情</b></summary>
 
+### 2026-01-21 (Hotfix - Token Management)
+
+- **修復**: 實作 Twitch Token 自動刷新機制，解決 Access Token 過期導致的 401/404 錯誤。
+- **修復**: 修正使用者重新登入時，未重置 Token 狀態 (Expired -> Active) 的問題。
+- **優化**: `StreamerSettingsService` 加入重試邏輯，提升 API 穩定性。
+
 ### 2026-01-15 (Infrastructure Update)
 
 - **功能**: 完成 Epic 4.2~4.4 (設定模板、訂閱/Bits 收益統計)。
