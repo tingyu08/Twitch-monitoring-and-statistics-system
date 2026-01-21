@@ -43,6 +43,13 @@ class App {
 
   constructor() {
     this.express = express();
+
+    // 在 Render/Heroku 等雲端平台上，應用程式在反向代理後面運行
+    // 需要信任代理以正確獲取客戶端 IP（用於 Rate Limiting）
+    if (process.env.NODE_ENV === "production") {
+      this.express.set("trust proxy", 1);
+    }
+
     this.middleware();
     this.routes();
   }
