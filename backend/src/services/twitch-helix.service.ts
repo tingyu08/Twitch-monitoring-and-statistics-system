@@ -11,6 +11,7 @@
 import type { ApiClient } from "@twurple/api";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
+import { importTwurpleApi, importTwurpleAuth } from "../utils/esm-import";
 
 // ========== 類型定義 ==========
 
@@ -67,12 +68,12 @@ class TwurpleHelixService {
 
   /**
    * 獲取或初始化 API Client
-   * 使用標準動態 import 取代 new Function 以避免安全隱患
+   * 使用 ESM 動態導入包裝器以支援 CommonJS 環境
    */
   private async getApiClient(): Promise<ApiClient> {
     if (!this.apiClient) {
-      // 使用標準動態 import 語法
-      const { ApiClient } = await import("@twurple/api");
+      // 使用 ESM 包裝器導入（繞過 TypeScript 將 import() 編譯為 require() 的行為）
+      const { ApiClient } = await importTwurpleApi();
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({
         authProvider,
@@ -313,9 +314,9 @@ class TwurpleHelixService {
 
       // 如果有用戶 Token，使用用戶的 Auth Provider
       if (userAccessToken) {
-        // 使用標準動態 import 語法
-        const { ApiClient } = await import("@twurple/api");
-        const { StaticAuthProvider } = await import("@twurple/auth");
+        // 使用 ESM 包裝器導入
+        const { ApiClient } = await importTwurpleApi();
+        const { StaticAuthProvider } = await importTwurpleAuth();
         const clientId = twurpleAuthService.getClientId();
         const userAuthProvider = new StaticAuthProvider(
           clientId,
