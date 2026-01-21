@@ -1,7 +1,7 @@
 import { prisma } from "../../db/prisma";
 import { TwitchOAuthClient } from "../auth/twitch-oauth.client";
 import { env } from "../../config/env";
-import { decryptToken } from "../../utils/crypto.utils";
+import { decryptToken, encryptToken } from "../../utils/crypto.utils";
 
 export interface ChannelInfo {
   title: string;
@@ -26,6 +26,46 @@ export class StreamerSettingsService {
   }
 
   /**
+   * 內部方法：取得有效的 Access Token，若過期則嘗試刷新
+   */
+  private async getValidAccessToken(tokenRecord: {
+    id: string;
+    accessToken: string;
+    refreshToken: string | null;
+  }): Promise<string> {
+    return decryptToken(tokenRecord.accessToken);
+  }
+
+  /**
+   * 內部方法：刷新 Token 並更新資料庫
+   */
+  private async refreshAndSaveToken(
+    tokenId: string,
+    encryptedRefreshToken: string,
+  ): Promise<string> {
+    const refreshToken = decryptToken(encryptedRefreshToken);
+    const newTokenData =
+      await this.twitchClient.refreshAccessToken(refreshToken);
+
+    // 更新資料庫
+    await prisma.twitchToken.update({
+      where: { id: tokenId },
+      data: {
+        accessToken: encryptToken(newTokenData.access_token),
+        refreshToken: encryptToken(newTokenData.refresh_token),
+        status: "active",
+        failureCount: 0,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log(
+      `[StreamerSettingsService] Token ${tokenId} refreshed successfully`,
+    );
+    return newTokenData.access_token;
+  }
+
+  /**
    * 從 Twitch API 獲取實況主當前頻道設定
    */
   async getChannelInfo(streamerId: string): Promise<ChannelInfo | null> {
@@ -41,46 +81,82 @@ export class StreamerSettingsService {
     });
 
     if (!streamer || streamer.twitchTokens.length === 0) {
+      console.warn(
+        `[StreamerSettingsService] No active token found for streamer ${streamerId}`,
+      );
       return null;
     }
 
-    const encryptedToken = streamer.twitchTokens[0].accessToken;
-    const accessToken = decryptToken(encryptedToken);
+    const tokenRecord = streamer.twitchTokens[0];
+    let accessToken = decryptToken(tokenRecord.accessToken);
     const broadcasterId = streamer.twitchUserId;
 
-    try {
-      const response = await fetch(
-        `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
-        {
-          headers: {
-            "Client-Id": env.twitchClientId,
-            Authorization: `Bearer ${accessToken}`,
-          },
+    // 嘗試呼叫 Twitch API
+    let response = await fetch(
+      `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+      {
+        headers: {
+          "Client-Id": env.twitchClientId,
+          Authorization: `Bearer ${accessToken}`,
         },
+      },
+    );
+
+    // 如果 Token 過期 (401)，嘗試刷新
+    if (response.status === 401 && tokenRecord.refreshToken) {
+      console.log(
+        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`,
       );
+      try {
+        accessToken = await this.refreshAndSaveToken(
+          tokenRecord.id,
+          tokenRecord.refreshToken,
+        );
 
-      if (!response.ok) {
-        throw new Error(`Twitch API error: ${response.status}`);
+        // 重試請求
+        response = await fetch(
+          `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+          {
+            headers: {
+              "Client-Id": env.twitchClientId,
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        );
+      } catch (refreshError) {
+        console.error(
+          "[StreamerSettingsService] Token refresh failed:",
+          refreshError,
+        );
+        // 標記 Token 為失效
+        await prisma.twitchToken.update({
+          where: { id: tokenRecord.id },
+          data: { status: "expired", failureCount: { increment: 1 } },
+        });
+        throw new Error(
+          "Token expired and refresh failed. Please re-authenticate.",
+        );
       }
-
-      const data = await response.json();
-      const channel = data.data?.[0];
-
-      if (!channel) {
-        return null;
-      }
-
-      return {
-        title: channel.title || "",
-        gameId: channel.game_id || "",
-        gameName: channel.game_name || "",
-        tags: channel.tags || [],
-        language: channel.broadcaster_language || "zh",
-      };
-    } catch (error) {
-      console.error("[StreamerSettingsService] getChannelInfo error:", error);
-      throw error;
     }
+
+    if (!response.ok) {
+      throw new Error(`Twitch API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const channel = data.data?.[0];
+
+    if (!channel) {
+      return null;
+    }
+
+    return {
+      title: channel.title || "",
+      gameId: channel.game_id || "",
+      gameName: channel.game_name || "",
+      tags: channel.tags || [],
+      language: channel.broadcaster_language || "zh",
+    };
   }
 
   /**
@@ -105,8 +181,8 @@ export class StreamerSettingsService {
       throw new Error("Streamer not found or no valid token");
     }
 
-    const encryptedToken = streamer.twitchTokens[0].accessToken;
-    const accessToken = decryptToken(encryptedToken);
+    const tokenRecord = streamer.twitchTokens[0];
+    let accessToken = decryptToken(tokenRecord.accessToken);
     const broadcasterId = streamer.twitchUserId;
 
     // Twitch API 要求的 body 格式
@@ -116,37 +192,69 @@ export class StreamerSettingsService {
     if (data.tags !== undefined) body.tags = data.tags;
     if (data.language !== undefined) body.broadcaster_language = data.language;
 
-    try {
-      const response = await fetch(
-        `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Client-Id": env.twitchClientId,
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
+    // 發送 PATCH 請求
+    let response = await fetch(
+      `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Client-Id": env.twitchClientId,
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify(body),
+      },
+    );
+
+    // 如果 Token 過期 (401)，嘗試刷新
+    if (response.status === 401 && tokenRecord.refreshToken) {
+      console.log(
+        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`,
       );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(
-          "[StreamerSettingsService] updateChannelInfo error:",
-          errorText,
+      try {
+        accessToken = await this.refreshAndSaveToken(
+          tokenRecord.id,
+          tokenRecord.refreshToken,
         );
-        throw new Error(`Twitch API error: ${response.status}`);
-      }
 
-      return true;
-    } catch (error) {
+        // 重試請求
+        response = await fetch(
+          `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Client-Id": env.twitchClientId,
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          },
+        );
+      } catch (refreshError) {
+        console.error(
+          "[StreamerSettingsService] Token refresh failed:",
+          refreshError,
+        );
+        await prisma.twitchToken.update({
+          where: { id: tokenRecord.id },
+          data: { status: "expired", failureCount: { increment: 1 } },
+        });
+        throw new Error(
+          "Token expired and refresh failed. Please re-authenticate.",
+        );
+      }
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
       console.error(
         "[StreamerSettingsService] updateChannelInfo error:",
-        error,
+        errorText,
       );
-      throw error;
+      throw new Error(`Twitch API error: ${response.status}`);
     }
+
+    return true;
   }
 
   /**
