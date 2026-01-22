@@ -34,7 +34,7 @@ export class WatchTimeIncrementJob {
 
   async execute(): Promise<void> {
     if (this.isRunning) {
-      logger.warn("Jobs", "⚠️ Watch Time Increment Job 正在執行中，跳過...");
+      logger.debug("Jobs", "Watch Time Increment Job 正在執行中，跳過...");
       return;
     }
 
@@ -114,12 +114,17 @@ export class WatchTimeIncrementJob {
         }
       }
 
-      logger.info(
-        "Jobs",
-        `✅ Watch Time Increment 完成: 更新了 ${updatedCount} 個觀眾的觀看時間 (+${
-          INCREMENT_SECONDS / 60
-        } 分鐘)`
-      );
+      // 只在有實際更新時輸出 info，否則輸出 debug
+      if (updatedCount > 0) {
+        logger.info(
+          "Jobs",
+          `Watch Time Increment 完成: 更新了 ${updatedCount} 個觀眾的觀看時間 (+${
+            INCREMENT_SECONDS / 60
+          } 分鐘)`
+        );
+      } else {
+        logger.debug("Jobs", "Watch Time Increment 完成: 沒有需要更新的觀眾");
+      }
     } catch (error) {
       logger.error("Jobs", "❌ Watch Time Increment Job 執行失敗", error);
     } finally {

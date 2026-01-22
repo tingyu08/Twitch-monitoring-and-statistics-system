@@ -13,7 +13,7 @@ export const updateLiveStatusJob = cron.schedule("* * * * *", async () => {
 });
 
 async function updateLiveStatusFn() {
-  logger.info("Jobs", "Starting Update Live Status Job...");
+  logger.debug("Jobs", "Starting Update Live Status Job...");
 
   try {
     // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)
@@ -26,7 +26,7 @@ async function updateLiveStatusFn() {
     });
 
     if (channels.length === 0) {
-      logger.info("Jobs", "No channels to monitor.");
+      logger.debug("Jobs", "No channels to monitor.");
       return;
     }
 
@@ -117,7 +117,7 @@ async function updateLiveStatusFn() {
       await prisma.$transaction(txBatch);
     }
 
-    logger.info("Jobs", `Updated live status for ${updates.length} channels.`);
+    logger.debug("Jobs", `Updated live status for ${updates.length} channels.`);
   } catch (error) {
     logger.error("Jobs", "Update Live Status Job failed", error);
   }

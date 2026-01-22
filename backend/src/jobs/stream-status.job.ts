@@ -47,7 +47,7 @@ export class StreamStatusJob {
    */
   async execute(): Promise<StreamStatusResult> {
     if (this.isRunning) {
-      logger.warn("JOB", "Stream Status Job 正在執行中，跳過...");
+      logger.debug("JOB", "Stream Status Job 正在執行中，跳過...");
       return {
         checked: 0,
         online: 0,
@@ -81,10 +81,18 @@ export class StreamStatusJob {
       await Promise.race([this.doExecute(result), timeoutPromise]);
 
       const duration = Date.now() - startTime;
-      logger.info(
-        "JOB",
-        `Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
-      );
+      // 只在有新場次或結束場次時輸出 info，否則輸出 debug
+      if (result.newSessions > 0 || result.endedSessions > 0) {
+        logger.info(
+          "JOB",
+          `Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
+        );
+      } else {
+        logger.debug(
+          "JOB",
+          `Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線`
+        );
+      }
 
       return result;
     } catch (error) {
@@ -108,7 +116,7 @@ export class StreamStatusJob {
     result.checked = channels.length;
 
     if (channels.length === 0) {
-      logger.info("JOB", "沒有需要監控的頻道");
+      logger.debug("JOB", "沒有需要監控的頻道");
       return;
     }
 

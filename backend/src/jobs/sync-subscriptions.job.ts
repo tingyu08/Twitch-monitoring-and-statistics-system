@@ -35,7 +35,7 @@ export const syncSubscriptionsJob = cron.schedule("0 0 * * *", async () => {
       try {
         await revenueService.syncSubscriptionSnapshot(streamer.id);
         successCount++;
-        logger.info(
+        logger.debug(
           "Jobs",
           `Synced subscription snapshot for ${streamer.displayName}`
         );

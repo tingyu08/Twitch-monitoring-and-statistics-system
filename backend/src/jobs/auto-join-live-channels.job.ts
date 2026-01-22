@@ -8,7 +8,7 @@ import { logger } from "../utils/logger";
 const CHECK_LIVE_CRON = process.env.CHECK_LIVE_CRON || "0 2-59/5 * * * *";
 
 // 超時時間（毫秒）- 2 分鐘
-const JOB_TIMEOUT_MS = 2 * 60 * 1000;
+//  const JOB_TIMEOUT_MS = 2 * 60 * 1000;
 
 export class AutoJoinLiveChannelsJob {
   private isRunning = false;
@@ -17,12 +17,12 @@ export class AutoJoinLiveChannelsJob {
   start(): void {
     logger.info(
       "Jobs",
-      `📋 Auto Join Live Channels Job 已排程: ${CHECK_LIVE_CRON}`
+      `📋 Auto Join Live Channels Job 已排程: ${CHECK_LIVE_CRON}`,
     );
 
     // 啟動時立即執行一次
     this.execute().catch((err) =>
-      logger.error("Jobs", "Initial auto-join execution failed", err)
+      logger.error("Jobs", "Initial auto-join execution failed", err),
     );
 
     cron.schedule(CHECK_LIVE_CRON, async () => {
@@ -32,12 +32,12 @@ export class AutoJoinLiveChannelsJob {
 
   async execute(): Promise<void> {
     if (this.isRunning) {
-      logger.warn("Jobs", "⚠️ Auto Join Job 正在執行中，跳過...");
+      logger.debug("Jobs", "Auto Join Job 正在執行中，跳過...");
       return;
     }
 
     this.isRunning = true;
-    logger.info("Jobs", "📋 開始檢查直播頻道並加入聊天室...");
+    logger.debug("Jobs", "開始檢查直播頻道並加入聊天室...");
 
     try {
       // 1. 獲取所有受監控的頻道
@@ -52,7 +52,7 @@ export class AutoJoinLiveChannelsJob {
       });
 
       if (monitoredChannels.length === 0) {
-        logger.info("Jobs", "沒有受監控的頻道");
+        logger.debug("Jobs", "沒有受監控的頻道");
         return;
       }
 
@@ -66,9 +66,8 @@ export class AutoJoinLiveChannelsJob {
         const twitchIds = batch.map((c) => c.twitchChannelId);
 
         try {
-          const streams = await twurpleHelixService.getStreamsByUserIds(
-            twitchIds
-          );
+          const streams =
+            await twurpleHelixService.getStreamsByUserIds(twitchIds);
           const liveStreamMap = new Map(streams.map((s) => [s.userId, s]));
 
           // 3. 更新狀態並加入聊天室

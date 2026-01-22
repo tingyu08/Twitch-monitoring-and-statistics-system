@@ -402,9 +402,10 @@ class TwurpleHelixService {
           authProvider: userAuthProvider,
           logger: { minLevel: "error" },
         });
-        logger.warn(
+        // 登入時使用的 token 是新的，不需要刷新，所以用 debug 級別
+        logger.debug(
           "Twurple Helix",
-          `使用 StaticAuthProvider（不支援自動刷新），建議改用 tokenInfo 參數`
+          `使用 StaticAuthProvider（不支援自動刷新）`
         );
       } else {
         // 回退到 App Token（但通常不會成功，因為需要 user:read:follows）

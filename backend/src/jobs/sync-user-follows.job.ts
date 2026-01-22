@@ -55,7 +55,7 @@ export class SyncUserFollowsJob {
    */
   async execute(): Promise<SyncUserFollowsResult> {
     if (this.isRunning) {
-      logger.warn("Jobs", "⚠️ Sync User Follows Job 正在執行中，跳過...");
+      logger.debug("Jobs", "Sync User Follows Job 正在執行中，跳過...");
       return {
         usersProcessed: 0,
         channelsCreated: 0,
@@ -70,7 +70,7 @@ export class SyncUserFollowsJob {
 
     this.isRunning = true;
     const startTime = Date.now();
-    logger.info("Jobs", "📋 開始同步使用者追蹤名單...");
+    logger.debug("Jobs", "開始同步使用者追蹤名單...");
 
     const result: SyncUserFollowsResult = {
       usersProcessed: 0,
@@ -86,7 +86,7 @@ export class SyncUserFollowsJob {
     try {
       // 1. 獲取所有有 user:read:follows 權限的使用者
       const usersWithFollowScope = await this.getUsersWithFollowScope();
-      logger.info(
+      logger.debug(
         "Jobs",
         `找到 ${usersWithFollowScope.length} 個有追蹤權限的使用者`
       );
