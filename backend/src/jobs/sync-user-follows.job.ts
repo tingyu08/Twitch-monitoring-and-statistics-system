@@ -42,7 +42,7 @@ export class SyncUserFollowsJob {
   start(): void {
     logger.info(
       "Jobs",
-      `📋 Sync User Follows Job 已排程: ${SYNC_FOLLOWS_CRON}`
+      `📋 Sync User Follows Job 已排程: ${SYNC_FOLLOWS_CRON}`,
     );
 
     cron.schedule(SYNC_FOLLOWS_CRON, async () => {
@@ -88,7 +88,7 @@ export class SyncUserFollowsJob {
       const usersWithFollowScope = await this.getUsersWithFollowScope();
       logger.debug(
         "Jobs",
-        `找到 ${usersWithFollowScope.length} 個有追蹤權限的使用者`
+        `找到 ${usersWithFollowScope.length} 個有追蹤權限的使用者`,
       );
 
       // 2. 對每個使用者同步追蹤名單 (使用並發控制)
@@ -108,7 +108,7 @@ export class SyncUserFollowsJob {
             logger.error(
               "Jobs",
               `同步使用者 ${user.twitchUserId} 追蹤名單失敗`,
-              error
+              error,
             );
             return {
               success: false,
@@ -117,7 +117,7 @@ export class SyncUserFollowsJob {
               followsRemoved: 0,
             };
           }
-        })
+        }),
       );
 
       const taskResults = await Promise.all(syncTasks);
@@ -150,7 +150,7 @@ export class SyncUserFollowsJob {
           `${result.channelsCreated} 新頻道, ${result.followsCreated} 新追蹤, ` +
           `${result.followsRemoved} 移除追蹤, ${result.channelsDeactivated} 停用頻道, ` +
           `${result.usersFailed} 失敗, ${result.totalMonitoredChannels} 監控中, ` +
-          `耗時 ${result.executionTimeMs}ms`
+          `耗時 ${result.executionTimeMs}ms`,
       );
 
       return result;
@@ -282,7 +282,7 @@ export class SyncUserFollowsJob {
         refreshToken: decryptedRefreshToken,
         expiresAt: user.expiresAt,
         tokenId: user.tokenId,
-      }
+      },
     );
 
     // 2. 獲取目前資料庫中的追蹤記錄
@@ -292,7 +292,7 @@ export class SyncUserFollowsJob {
     });
 
     const existingFollowMap = new Map(
-      existingFollows.map((f) => [f.channel.twitchChannelId, f])
+      existingFollows.map((f) => [f.channel.twitchChannelId, f]),
     );
 
     // 3. 處理每個追蹤的頻道
@@ -314,7 +314,7 @@ export class SyncUserFollowsJob {
           let displayName = follow.broadcasterLogin;
           try {
             const userInfo = await twurpleHelixService.getUserById(
-              follow.broadcasterId
+              follow.broadcasterId,
             );
             if (userInfo) {
               avatarUrl = userInfo.profileImageUrl || "";
@@ -417,7 +417,7 @@ export class SyncUserFollowsJob {
     if (orphanedChannels.length > 0) {
       logger.info(
         "Jobs",
-        `🧹 停用 ${orphanedChannels.length} 個無人追蹤的外部頻道`
+        `🧹 停用 ${orphanedChannels.length} 個無人追蹤的外部頻道`,
       );
     }
 
@@ -446,7 +446,7 @@ export const syncUserFollowsJob = new SyncUserFollowsJob();
  */
 export async function triggerFollowSyncForUser(
   viewerId: string,
-  accessToken: string
+  accessToken: string,
 ): Promise<void> {
   // 批次處理大小（每處理 N 個頻道休息一下讓 GC 工作）
   const BATCH_SIZE = 20;
@@ -468,12 +468,12 @@ export async function triggerFollowSyncForUser(
     // 呼叫 Twurple API 獲取所有追蹤清單（不限制數量）
     const followedChannels = await twurpleHelixService.getFollowedChannels(
       viewer.twitchUserId,
-      accessToken
+      accessToken,
     );
 
     logger.info(
       "Jobs",
-      `📋 從 Twitch 取得 ${followedChannels.length} 個追蹤頻道`
+      `📋 從 Twitch 取得 ${followedChannels.length} 個追蹤頻道`,
     );
 
     // 獲取現有的追蹤記錄
@@ -489,7 +489,7 @@ export async function triggerFollowSyncForUser(
     });
 
     const existingFollowMap = new Map(
-      existingFollows.map((f) => [f.channel.twitchChannelId, f])
+      existingFollows.map((f) => [f.channel.twitchChannelId, f]),
     );
 
     let created = 0;
@@ -530,6 +530,7 @@ export async function triggerFollowSyncForUser(
           },
           update: {
             channelName: follow.broadcasterLogin,
+            isMonitored: true, // 重要：確保已追蹤的頻道都會被監控
           },
         });
 
@@ -571,6 +572,19 @@ export async function triggerFollowSyncForUser(
     }
 
     logger.info("Jobs", `✅ 追蹤同步完成: 新增 ${created}, 移除 ${removed}`);
+
+    // 立即觸發開台狀態更新，確保使用者登入後能看到最新的開台狀態
+    try {
+      const { updateLiveStatusFn } = await import("./update-live-status.job");
+      await updateLiveStatusFn();
+      logger.info("Jobs", "✅ 開台狀態已即時更新");
+    } catch (updateError) {
+      logger.warn(
+        "Jobs",
+        "登入後開台狀態更新失敗（不影響主流程）",
+        updateError,
+      );
+    }
   } catch (error) {
     logger.error("Jobs", "追蹤同步失敗", error);
     throw error;
