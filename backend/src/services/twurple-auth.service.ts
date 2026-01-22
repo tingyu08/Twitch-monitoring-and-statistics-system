@@ -190,6 +190,13 @@ class TwurpleAuthService {
   }
 
   /**
+   * 獲取 Client Secret
+   */
+  getClientSecret(): string {
+    return this.clientSecret;
+  }
+
+  /**
    * 獲取服務狀態
    */
   getStatus() {

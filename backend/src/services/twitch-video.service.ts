@@ -98,17 +98,45 @@ export class TwurpleVideoService {
 
       // 2. 實況主後台：需要顯示最近生成的剪輯 (Recent 50)
       // Twitch API Clips 預設按熱門排序，要抓「最新」只能透過 startDate 限制範圍
+      // 注意：Twurple 有 bug，startDate 的 Date 物件會被錯誤序列化為 toString() 格式
+      // 而非 ISO 8601 格式，因此這裡使用底層 API 調用來繞過此問題
       const recentStart = new Date();
       recentStart.setDate(recentStart.getDate() - 60); // 抓過去 60 天
-      const recentClipsPromise = client.clips.getClipsForBroadcaster(userId, {
-        startDate: recentStart,
-        limit: 50,
+      const recentClipsPromise = client.callApi({
+        type: "helix",
+        url: "clips",
+        query: {
+          broadcaster_id: userId,
+          started_at: recentStart.toISOString(), // 手動轉換為 ISO 8601 格式
+          first: "50",
+        },
       });
 
-      const [topClips, recentClips] = await Promise.all([
+      const [topClips, recentClipsResponse] = await Promise.all([
         topClipsPromise,
         recentClipsPromise,
       ]);
+
+      // 將原始 API 回應轉換為與 Twurple 相同的格式
+      const recentClips = {
+        data: (recentClipsResponse.data || []).map((clip: any) => ({
+          id: clip.id,
+          url: clip.url,
+          embedUrl: clip.embed_url,
+          broadcasterId: clip.broadcaster_id,
+          broadcasterDisplayName: clip.broadcaster_name,
+          creatorId: clip.creator_id,
+          creatorDisplayName: clip.creator_name,
+          videoId: clip.video_id,
+          gameId: clip.game_id,
+          language: clip.language,
+          title: clip.title,
+          views: clip.view_count,
+          creationDate: new Date(clip.created_at),
+          thumbnailUrl: clip.thumbnail_url,
+          duration: clip.duration,
+        })),
+      };
 
       // 合併結果並去重
       const uniqueClips = new Map();

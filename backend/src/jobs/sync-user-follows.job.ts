@@ -172,6 +172,9 @@ export class SyncUserFollowsJob {
       twitchUserId: string;
       userType: "streamer" | "viewer";
       accessToken: string;
+      refreshToken: string | null;
+      expiresAt: Date | null;
+      tokenId: string;
     }>
   > {
     const users: Array<{
@@ -179,6 +182,9 @@ export class SyncUserFollowsJob {
       twitchUserId: string;
       userType: "streamer" | "viewer";
       accessToken: string;
+      refreshToken: string | null;
+      expiresAt: Date | null;
+      tokenId: string;
     }> = [];
 
     // 獲取有 user:read:follows scope 的 Streamer tokens
@@ -204,6 +210,9 @@ export class SyncUserFollowsJob {
           twitchUserId: token.streamer.twitchUserId,
           userType: userType as "streamer" | "viewer",
           accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          expiresAt: token.expiresAt,
+          tokenId: token.id,
         });
       }
     }
@@ -225,6 +234,9 @@ export class SyncUserFollowsJob {
           twitchUserId: token.viewer.twitchUserId,
           userType: "viewer",
           accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          expiresAt: token.expiresAt,
+          tokenId: token.id,
         });
       }
     }
@@ -240,6 +252,9 @@ export class SyncUserFollowsJob {
     twitchUserId: string;
     userType: "streamer" | "viewer";
     accessToken: string;
+    refreshToken: string | null;
+    expiresAt: Date | null;
+    tokenId: string;
   }): Promise<{
     channelsCreated: number;
     followsCreated: number;
@@ -251,13 +266,23 @@ export class SyncUserFollowsJob {
       followsRemoved: 0,
     };
 
-    // 1. 從 Twitch 獲取追蹤名單 (需要傳入解密後的 User Token)
+    // 1. 從 Twitch 獲取追蹤名單 (使用完整 Token 資訊以支援自動刷新)
     const { decryptToken } = await import("../utils/crypto.utils");
-    const decryptedToken = decryptToken(user.accessToken);
+    const decryptedAccessToken = decryptToken(user.accessToken);
+    const decryptedRefreshToken = user.refreshToken
+      ? decryptToken(user.refreshToken)
+      : "";
 
+    // 使用 tokenInfo 參數以支援 Token 自動刷新
     const followedChannels = await twurpleHelixService.getFollowedChannels(
       user.twitchUserId,
-      decryptedToken
+      undefined, // 不使用舊的 userAccessToken 參數
+      {
+        accessToken: decryptedAccessToken,
+        refreshToken: decryptedRefreshToken,
+        expiresAt: user.expiresAt,
+        tokenId: user.tokenId,
+      }
     );
 
     // 2. 獲取目前資料庫中的追蹤記錄
