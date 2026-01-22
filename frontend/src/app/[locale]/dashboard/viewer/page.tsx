@@ -90,14 +90,18 @@ export default function ViewerDashboardPage() {
         console.log("[WebSocket] Stream online:", data);
         setChannels((prev) =>
           prev.map((ch) => {
-            if (ch.id === data.channelId || ch.channelName === data.channelName) {
+            if (
+              ch.id === data.channelId ||
+              ch.channelName === data.channelName
+            ) {
               return {
                 ...ch,
                 isLive: true,
                 currentTitle: data.title || ch.currentTitle,
                 currentGameName: data.gameName || ch.currentGameName,
                 currentViewerCount: data.viewerCount || 0,
-                currentStreamStartedAt: data.startedAt || new Date().toISOString(),
+                currentStreamStartedAt:
+                  data.startedAt || new Date().toISOString(),
               };
             }
             return ch;
@@ -113,12 +117,15 @@ export default function ViewerDashboardPage() {
         console.log("[WebSocket] Stream offline:", data);
         setChannels((prev) =>
           prev.map((ch) => {
-            if (ch.id === data.channelId || ch.channelName === data.channelName) {
+            if (
+              ch.id === data.channelId ||
+              ch.channelName === data.channelName
+            ) {
               return {
                 ...ch,
                 isLive: false,
                 currentViewerCount: 0,
-                currentStreamStartedAt: null,
+                currentStreamStartedAt: undefined,
               };
             }
             return ch;
@@ -137,7 +144,10 @@ export default function ViewerDashboardPage() {
       }) => {
         setChannels((prev) =>
           prev.map((ch) => {
-            if (ch.id === data.channelId || ch.channelName === data.channelName) {
+            if (
+              ch.id === data.channelId ||
+              ch.channelName === data.channelName
+            ) {
               return {
                 ...ch,
                 isLive: data.isLive ?? ch.isLive,
@@ -442,7 +452,10 @@ export default function ViewerDashboardPage() {
                   <div className="flex items-center gap-4 mb-4">
                     <div className="relative">
                       <Image
-                        src={channel.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.displayName)}&background=6366f1&color=fff`}
+                        src={
+                          channel.avatarUrl ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.displayName)}&background=6366f1&color=fff`
+                        }
                         alt={channel.displayName}
                         width={60}
                         height={60}
@@ -590,9 +603,7 @@ export default function ViewerDashboardPage() {
                     .map((page, index, arr) => (
                       <React.Fragment key={page}>
                         {index > 0 && arr[index - 1] !== page - 1 && (
-                          <span className="px-2 text-purple-300/50">
-                            ...
-                          </span>
+                          <span className="px-2 text-purple-300/50">...</span>
                         )}
                         <button
                           type="button"
