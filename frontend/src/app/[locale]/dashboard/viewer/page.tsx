@@ -60,7 +60,8 @@ export default function ViewerDashboardPage() {
 
     // WebSocket 即時更新邏輯
     if (socket && socketConnected) {
-      const handleUpdate = (data: {
+      // 處理訊息統計更新
+      const handleStatsUpdate = (data: {
         channelId: string;
         messageCount: number;
       }) => {
@@ -77,9 +78,89 @@ export default function ViewerDashboardPage() {
         );
       };
 
-      socket.on("stats-update", handleUpdate);
+      // 處理開台事件
+      const handleStreamOnline = (data: {
+        channelId: string;
+        channelName: string;
+        title?: string;
+        gameName?: string;
+        viewerCount?: number;
+        startedAt?: string;
+      }) => {
+        console.log("[WebSocket] Stream online:", data);
+        setChannels((prev) =>
+          prev.map((ch) => {
+            if (ch.id === data.channelId || ch.channelName === data.channelName) {
+              return {
+                ...ch,
+                isLive: true,
+                currentTitle: data.title || ch.currentTitle,
+                currentGameName: data.gameName || ch.currentGameName,
+                currentViewerCount: data.viewerCount || 0,
+                currentStreamStartedAt: data.startedAt || new Date().toISOString(),
+              };
+            }
+            return ch;
+          }),
+        );
+      };
+
+      // 處理關台事件
+      const handleStreamOffline = (data: {
+        channelId: string;
+        channelName: string;
+      }) => {
+        console.log("[WebSocket] Stream offline:", data);
+        setChannels((prev) =>
+          prev.map((ch) => {
+            if (ch.id === data.channelId || ch.channelName === data.channelName) {
+              return {
+                ...ch,
+                isLive: false,
+                currentViewerCount: 0,
+                currentStreamStartedAt: null,
+              };
+            }
+            return ch;
+          }),
+        );
+      };
+
+      // 處理頻道更新事件（觀眾數、標題等）
+      const handleChannelUpdate = (data: {
+        channelId: string;
+        channelName: string;
+        isLive?: boolean;
+        viewerCount?: number;
+        title?: string;
+        gameName?: string;
+      }) => {
+        setChannels((prev) =>
+          prev.map((ch) => {
+            if (ch.id === data.channelId || ch.channelName === data.channelName) {
+              return {
+                ...ch,
+                isLive: data.isLive ?? ch.isLive,
+                currentViewerCount: data.viewerCount ?? ch.currentViewerCount,
+                currentTitle: data.title || ch.currentTitle,
+                currentGameName: data.gameName || ch.currentGameName,
+              };
+            }
+            return ch;
+          }),
+        );
+      };
+
+      socket.on("stats-update", handleStatsUpdate);
+      socket.on("stream.online", handleStreamOnline);
+      socket.on("stream.offline", handleStreamOffline);
+      socket.on("channel.update", handleChannelUpdate);
+
       return () => {
-        socket.off("stats-update", handleUpdate);
+        socket.off("stats-update", handleStatsUpdate);
+        socket.off("stream.online", handleStreamOnline);
+        socket.off("stream.offline", handleStreamOffline);
+        socket.off("channel.update", handleChannelUpdate);
       };
     }
   }, [authLoading, user, router, socket, socketConnected]);

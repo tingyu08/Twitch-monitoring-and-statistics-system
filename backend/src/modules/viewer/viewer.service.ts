@@ -11,7 +11,11 @@ export async function recordConsent(viewerId: string, consentVersion = 1) {
       },
     });
   } catch (error) {
-    logger.error("ViewerService", `recordConsent 失敗 (viewerId: ${viewerId})`, error);
+    logger.error(
+      "ViewerService",
+      `recordConsent 失敗 (viewerId: ${viewerId})`,
+      error,
+    );
     throw error;
   }
 }
@@ -102,7 +106,7 @@ export async function getChannelStats(
     logger.error(
       "ViewerService",
       `getChannelStats 失敗 (viewerId: ${viewerId}, channelId: ${channelId})`,
-      error
+      error,
     );
     throw error;
   }
@@ -185,11 +189,15 @@ export async function getFollowedChannels(viewerId: string) {
       const stat = statsMap.get(channel.id);
       const followedAt = followsMap.get(channel.id);
 
-      // 使用 DB 中的快取狀態
-      const isLive = channel.isLive;
+      // 使用 DB 中的快取狀態，並以 StreamSession 作為備用判斷
+      // 優先使用 isLive（每分鐘更新），若為 false 則檢查是否有進行中的 StreamSession
+      const hasActiveSession =
+        channel.streamSessions && channel.streamSessions.length > 0;
+      const isLive = channel.isLive || hasActiveSession;
 
       const displayName = channel.streamer?.displayName || channel.channelName;
-      const avatarUrl = channel.streamer?.avatarUrl ||
+      const avatarUrl =
+        channel.streamer?.avatarUrl ||
         `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff&size=150`;
 
       return {
@@ -232,7 +240,7 @@ export async function getFollowedChannels(viewerId: string) {
     logger.error(
       "ViewerService",
       `getFollowedChannels 失敗 (viewerId: ${viewerId})`,
-      error
+      error,
     );
     throw error;
   }

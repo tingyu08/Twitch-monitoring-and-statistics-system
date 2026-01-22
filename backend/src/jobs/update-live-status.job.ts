@@ -1,5 +1,6 @@
 import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "../services/twurple-auth.service";
+import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
 
 import cron from "node-cron";
@@ -16,14 +17,24 @@ async function updateLiveStatusFn() {
   logger.debug("Jobs", "Starting Update Live Status Job...");
 
   try {
-    // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)
+    // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)，包含當前狀態
     const channels = await prisma.channel.findMany({
       where: {
         twitchChannelId: { not: "" },
         isMonitored: true,
       },
-      select: { id: true, twitchChannelId: true },
+      select: {
+        id: true,
+        twitchChannelId: true,
+        channelName: true,
+        isLive: true, // 獲取當前狀態以便比較變更
+      },
     });
+
+    // 建立當前狀態 Map 用於比較
+    const previousStatusMap = new Map(
+      channels.map((c) => [c.twitchChannelId, c.isLive])
+    );
 
     if (channels.length === 0) {
       logger.debug("Jobs", "No channels to monitor.");
@@ -41,6 +52,8 @@ async function updateLiveStatusFn() {
 
     // 用來儲存需要更新的數據
     const updates: {
+      channelId: string;
+      channelName: string;
       twitchId: string;
       isLive: boolean;
       viewerCount: number;
@@ -68,6 +81,8 @@ async function updateLiveStatusFn() {
 
           if (stream) {
             updates.push({
+              channelId: channel.id,
+              channelName: channel.channelName,
               twitchId: channel.twitchChannelId,
               isLive: true,
               viewerCount: stream.viewers,
@@ -78,6 +93,8 @@ async function updateLiveStatusFn() {
           } else {
             // 未開台
             updates.push({
+              channelId: channel.id,
+              channelName: channel.channelName,
               twitchId: channel.twitchChannelId,
               isLive: false,
               viewerCount: 0,
@@ -117,7 +134,65 @@ async function updateLiveStatusFn() {
       await prisma.$transaction(txBatch);
     }
 
-    logger.debug("Jobs", `Updated live status for ${updates.length} channels.`);
+    // 5. 推送 WebSocket 事件（只推送狀態有變更的頻道）
+    let onlineChanges = 0;
+    let offlineChanges = 0;
+
+    for (const update of updates) {
+      const previousStatus = previousStatusMap.get(update.twitchId);
+
+      // 狀態從 offline -> online
+      if (!previousStatus && update.isLive) {
+        webSocketGateway.emit("stream.online", {
+          channelId: update.channelId,
+          channelName: update.channelName,
+          twitchChannelId: update.twitchId,
+          title: update.title,
+          gameName: update.gameName,
+          viewerCount: update.viewerCount,
+          startedAt: update.startedAt,
+        });
+        onlineChanges++;
+      }
+      // 狀態從 online -> offline
+      else if (previousStatus && !update.isLive) {
+        webSocketGateway.emit("stream.offline", {
+          channelId: update.channelId,
+          channelName: update.channelName,
+          twitchChannelId: update.twitchId,
+        });
+        offlineChanges++;
+      }
+      // 持續開台中，推送觀眾數更新
+      else if (previousStatus && update.isLive) {
+        webSocketGateway.emit("channel.update", {
+          channelId: update.channelId,
+          channelName: update.channelName,
+          twitchChannelId: update.twitchId,
+          isLive: true,
+          viewerCount: update.viewerCount,
+          title: update.title,
+          gameName: update.gameName,
+        });
+      }
+    }
+
+    // 統計開台與未開台頻道數量
+    const liveCount = updates.filter((u) => u.isLive).length;
+    const offlineCount = updates.filter((u) => !u.isLive).length;
+
+    // 只在有狀態變更時輸出 info
+    if (onlineChanges > 0 || offlineChanges > 0) {
+      logger.info(
+        "Jobs",
+        `Update Live Status: ${onlineChanges} went online, ${offlineChanges} went offline (${liveCount} live, ${offlineCount} offline)`
+      );
+    } else {
+      logger.debug(
+        "Jobs",
+        `Update Live Status: ${updates.length} channels checked, ${liveCount} live, ${offlineCount} offline`
+      );
+    }
   } catch (error) {
     logger.error("Jobs", "Update Live Status Job failed", error);
   }

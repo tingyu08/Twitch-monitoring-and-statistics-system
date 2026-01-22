@@ -21,6 +21,7 @@
 // import type { ApiClient } from "@twurple/api";
 import type { Application } from "express";
 import { twurpleAuthService } from "./twurple-auth.service";
+import { webSocketGateway } from "./websocket.gateway";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 
@@ -306,9 +307,24 @@ class TwurpleEventSubService {
         },
       });
 
+      // 更新頻道的開台狀態
+      await prisma.channel.update({
+        where: { id: channel.id },
+        data: { isLive: true, currentStreamStartedAt: data.startedAt },
+      });
+
+      // 推送 WebSocket 事件
+      webSocketGateway.emit("stream.online", {
+        channelId: channel.id,
+        channelName: channel.channelName,
+        twitchChannelId,
+        displayName: data.displayName,
+        startedAt: data.startedAt,
+      });
+
       logger.info(
         "TwurpleEventSub",
-        `Created stream session for ${data.displayName}`
+        `Stream online: ${data.displayName} (WebSocket event sent)`
       );
     } catch (error) {
       logger.error("TwurpleEventSub", "Error handling stream.online", error);
@@ -357,10 +373,28 @@ class TwurpleEventSubService {
         data: { endedAt, durationSeconds },
       });
 
+      // 更新頻道的開台狀態
+      await prisma.channel.update({
+        where: { id: channel.id },
+        data: {
+          isLive: false,
+          currentViewerCount: 0,
+          currentStreamStartedAt: null,
+        },
+      });
+
+      // 推送 WebSocket 事件
+      webSocketGateway.emit("stream.offline", {
+        channelId: channel.id,
+        channelName: channel.channelName,
+        twitchChannelId,
+        durationSeconds,
+      });
+
       const durationMinutes = Math.floor(durationSeconds / 60);
       logger.info(
         "TwurpleEventSub",
-        `Closed session for ${channel.channelName}, duration: ${durationMinutes} minutes`
+        `Stream offline: ${channel.channelName}, duration: ${durationMinutes} min (WebSocket event sent)`
       );
     } catch (error) {
       logger.error("TwurpleEventSub", "Error handling stream.offline", error);
