@@ -500,41 +500,42 @@ export async function triggerFollowSyncForUser(
     for (const follow of followedChannels) {
       const existingFollow = existingFollowMap.get(follow.broadcasterId);
 
+      // 無論是否已追蹤，都要確保頻道存在且 isMonitored=true
+      const displayName = follow.broadcasterLogin;
+
+      // 建立或獲取 Streamer 記錄（使用 upsert）
+      const streamer = await prisma.streamer.upsert({
+        where: { twitchUserId: follow.broadcasterId },
+        create: {
+          twitchUserId: follow.broadcasterId,
+          displayName,
+          avatarUrl: "", // 跳過頭像獲取，後續可在開台時更新
+        },
+        update: {},
+      });
+
+      // 建立或獲取頻道，確保 isMonitored=true
+      const channel = await prisma.channel.upsert({
+        where: { twitchChannelId: follow.broadcasterId },
+        create: {
+          twitchChannelId: follow.broadcasterId,
+          channelName: follow.broadcasterLogin,
+          channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
+          source: "external",
+          isMonitored: true,
+          streamerId: streamer.id,
+        },
+        update: {
+          channelName: follow.broadcasterLogin,
+          isMonitored: true, // 關鍵：確保所有已追蹤的頻道都被監控
+        },
+      });
+
       if (existingFollow) {
+        // 已存在的追蹤，從 map 中移除（避免被刪除）
         existingFollowMap.delete(follow.broadcasterId);
       } else {
-        // 新追蹤：使用 broadcasterLogin 作為名稱（跳過額外API調用以節省配額）
-        const displayName = follow.broadcasterLogin;
-
-        // 建立或獲取 Streamer 記錄（使用 upsert）
-        const streamer = await prisma.streamer.upsert({
-          where: { twitchUserId: follow.broadcasterId },
-          create: {
-            twitchUserId: follow.broadcasterId,
-            displayName,
-            avatarUrl: "", // 跳過頭像獲取，後續可在開台時更新
-          },
-          update: {},
-        });
-
-        // 建立或獲取頻道（使用 upsert 防止 UNIQUE 約束錯誤）
-        const channel = await prisma.channel.upsert({
-          where: { twitchChannelId: follow.broadcasterId },
-          create: {
-            twitchChannelId: follow.broadcasterId,
-            channelName: follow.broadcasterLogin,
-            channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
-            source: "external",
-            isMonitored: true,
-            streamerId: streamer.id,
-          },
-          update: {
-            channelName: follow.broadcasterLogin,
-            isMonitored: true, // 重要：確保已追蹤的頻道都會被監控
-          },
-        });
-
-        // 建立追蹤記錄（使用 upsert 防止重複）
+        // 新追蹤：建立追蹤記錄
         await prisma.userFollow.upsert({
           where: {
             userId_channelId: {
