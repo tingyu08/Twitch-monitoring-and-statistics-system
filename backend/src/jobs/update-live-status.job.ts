@@ -14,7 +14,7 @@ export const updateLiveStatusJob = cron.schedule("* * * * *", async () => {
 });
 
 export async function updateLiveStatusFn() {
-  logger.info("Jobs", "🔄 Starting Update Live Status Job...");
+  logger.debug("Jobs", "🔄 Starting Update Live Status Job...");
 
   try {
     // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)，包含當前狀態
@@ -44,7 +44,7 @@ export async function updateLiveStatusFn() {
       return;
     }
 
-    logger.info(
+    logger.debug(
       "Jobs",
       `📊 Found ${channels.length} monitored channels to check`,
     );
@@ -196,7 +196,7 @@ export async function updateLiveStatusFn() {
         `Update Live Status: ${onlineChanges} went online, ${offlineChanges} went offline (${liveCount} live, ${offlineCount} offline)`,
       );
     } else {
-      logger.info(
+      logger.debug(
         "Jobs",
         `✅ Update Live Status: ${updates.length} channels checked, ${liveCount} LIVE, ${offlineCount} offline`,
       );
