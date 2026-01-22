@@ -14,7 +14,7 @@ export const updateLiveStatusJob = cron.schedule("* * * * *", async () => {
 });
 
 export async function updateLiveStatusFn() {
-  logger.debug("Jobs", "Starting Update Live Status Job...");
+  logger.info("Jobs", "🔄 Starting Update Live Status Job...");
 
   try {
     // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)，包含當前狀態
@@ -33,13 +33,21 @@ export async function updateLiveStatusFn() {
 
     // 建立當前狀態 Map 用於比較
     const previousStatusMap = new Map(
-      channels.map((c) => [c.twitchChannelId, c.isLive])
+      channels.map((c) => [c.twitchChannelId, c.isLive]),
     );
 
     if (channels.length === 0) {
-      logger.debug("Jobs", "No channels to monitor.");
+      logger.warn(
+        "Jobs",
+        "⚠️ No monitored channels found (isMonitored=true). Check if channels are correctly synced.",
+      );
       return;
     }
+
+    logger.info(
+      "Jobs",
+      `📊 Found ${channels.length} monitored channels to check`,
+    );
 
     // 2. 初始化 API Client
     const { ApiClient } = await new Function('return import("@twurple/api")')();
@@ -185,12 +193,12 @@ export async function updateLiveStatusFn() {
     if (onlineChanges > 0 || offlineChanges > 0) {
       logger.info(
         "Jobs",
-        `Update Live Status: ${onlineChanges} went online, ${offlineChanges} went offline (${liveCount} live, ${offlineCount} offline)`
+        `Update Live Status: ${onlineChanges} went online, ${offlineChanges} went offline (${liveCount} live, ${offlineCount} offline)`,
       );
     } else {
-      logger.debug(
+      logger.info(
         "Jobs",
-        `Update Live Status: ${updates.length} channels checked, ${liveCount} live, ${offlineCount} offline`
+        `✅ Update Live Status: ${updates.length} channels checked, ${liveCount} LIVE, ${offlineCount} offline`,
       );
     }
   } catch (error) {

@@ -17,140 +17,140 @@ const viewerApiRoutes = Router();
 viewerApiRoutes.post(
   "/consent",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  controller.consent
+  controller.consent,
 );
 
 viewerApiRoutes.get(
   "/stats/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  controller.getChannelStats
+  controller.getChannelStats,
 );
 
 // New Interaction Stats Route
 viewerApiRoutes.get(
   "/:viewerId/channels/:channelId/message-stats",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  messageStatsController.getMessageStats
+  messageStatsController.getMessageStats,
 );
 
 viewerApiRoutes.get(
   "/channels",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  controller.getChannels
+  controller.getChannels,
 );
 
 // Privacy Control Routes (Legacy)
 viewerApiRoutes.get(
   "/privacy/settings",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.getPrivacySettings.bind(privacyController)
+  privacyController.getPrivacySettings.bind(privacyController),
 );
 
 viewerApiRoutes.put(
   "/privacy/settings",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.updatePrivacySettings.bind(privacyController)
+  privacyController.updatePrivacySettings.bind(privacyController),
 );
 
 viewerApiRoutes.get(
   "/privacy/data-summary",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.getDataSummary.bind(privacyController)
+  privacyController.getDataSummary.bind(privacyController),
 );
 
 viewerApiRoutes.delete(
   "/privacy/messages",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.clearAllMessages.bind(privacyController)
+  privacyController.clearAllMessages.bind(privacyController),
 );
 
 viewerApiRoutes.delete(
   "/privacy/messages/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.clearChannelMessages.bind(privacyController)
+  privacyController.clearChannelMessages.bind(privacyController),
 );
 
 // Story 2.5: Privacy Consent Routes (Fine-grained)
 viewerApiRoutes.get(
   "/privacy/consent",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.getConsentSettings.bind(privacyController)
+  privacyController.getConsentSettings.bind(privacyController),
 );
 
 viewerApiRoutes.patch(
   "/privacy/consent",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.updateConsentSettings.bind(privacyController)
+  privacyController.updateConsentSettings.bind(privacyController),
 );
 
 viewerApiRoutes.post(
   "/privacy/consent/accept-all",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.acceptAllConsent.bind(privacyController)
+  privacyController.acceptAllConsent.bind(privacyController),
 );
 
 // Story 2.5: Data Export Routes
 viewerApiRoutes.post(
   "/privacy/export",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.requestExport.bind(privacyController)
+  privacyController.requestExport.bind(privacyController),
 );
 
 viewerApiRoutes.get(
   "/privacy/export/:jobId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.getExportStatus.bind(privacyController)
+  privacyController.getExportStatus.bind(privacyController),
 );
 
 viewerApiRoutes.get(
   "/privacy/export/:jobId/download",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.downloadExport.bind(privacyController)
+  privacyController.downloadExport.bind(privacyController),
 );
 
 // Story 2.5: Account Deletion Routes
 viewerApiRoutes.post(
   "/privacy/delete-account",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.requestDeleteAccount.bind(privacyController)
+  privacyController.requestDeleteAccount.bind(privacyController),
 );
 
 viewerApiRoutes.post(
   "/privacy/cancel-deletion",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.cancelDeletion.bind(privacyController)
+  privacyController.cancelDeletion.bind(privacyController),
 );
 
 viewerApiRoutes.get(
   "/privacy/deletion-status",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  privacyController.getDeletionStatus.bind(privacyController)
+  privacyController.getDeletionStatus.bind(privacyController),
 );
 
 // Lifetime Stats Routes
 viewerApiRoutes.get(
   "/:viewerId/channels/:channelId/lifetime-stats",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  viewerLifetimeStatsController.getLifetimeStats
+  viewerLifetimeStatsController.getLifetimeStats,
 );
 
 // Dashboard Layout Routes
 viewerApiRoutes.post(
   "/dashboard-layout",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  dashboardLayoutController.saveLayout
+  dashboardLayoutController.saveLayout,
 );
 
 viewerApiRoutes.get(
   "/dashboard-layout/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  dashboardLayoutController.getLayout
+  dashboardLayoutController.getLayout,
 );
 
 viewerApiRoutes.delete(
   "/dashboard-layout/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
-  dashboardLayoutController.resetLayout
+  dashboardLayoutController.resetLayout,
 );
 
 // 設定監聽頻道（前端分頁換頁時調用）
@@ -176,8 +176,8 @@ viewerApiRoutes.post(
           chatListenerManager.requestListen(ch.channelName, {
             isLive: true,
             priority: 10, // 用戶正在查看的頁面優先級最高
-          })
-        )
+          }),
+        ),
       );
 
       const successCount = results.filter((r) => r).length;
@@ -193,7 +193,54 @@ viewerApiRoutes.post(
       console.error("Error setting listen channels:", error);
       return res.status(500).json({ error: "Internal Server Error" });
     }
-  }
+  },
+);
+
+// 診斷端點：檢查頻道開台狀態（僅用於調試）
+viewerApiRoutes.get(
+  "/debug/live-status",
+  (req, res, next) => requireAuth(req, res, next, ["viewer", "streamer"]),
+  async (req: AuthRequest, res) => {
+    try {
+      const { prisma } = await import("../../db/prisma");
+
+      // 統計監控狀態
+      const totalChannels = await prisma.channel.count();
+      const monitoredChannels = await prisma.channel.count({
+        where: { isMonitored: true },
+      });
+      const liveChannels = await prisma.channel.count({
+        where: { isLive: true },
+      });
+
+      // 取得前 10 個監控中的頻道狀態
+      const sampleChannels = await prisma.channel.findMany({
+        where: { isMonitored: true },
+        take: 10,
+        orderBy: { updatedAt: "desc" },
+        select: {
+          channelName: true,
+          isLive: true,
+          isMonitored: true,
+          currentViewerCount: true,
+          lastLiveCheckAt: true,
+        },
+      });
+
+      return res.json({
+        summary: {
+          totalChannels,
+          monitoredChannels,
+          liveChannels,
+        },
+        sampleChannels,
+        serverTime: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Debug endpoint error:", error);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
 );
 
 export { viewerApiRoutes };
