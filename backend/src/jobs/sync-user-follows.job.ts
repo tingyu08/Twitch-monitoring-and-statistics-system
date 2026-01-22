@@ -497,63 +497,99 @@ export async function triggerFollowSyncForUser(
     let processed = 0;
 
     // 處理每個追蹤的頻道（批次處理）
+    // 處理每個追蹤的頻道（批次處理）
     for (const follow of followedChannels) {
-      const existingFollow = existingFollowMap.get(follow.broadcasterId);
+      try {
+        const existingFollow = existingFollowMap.get(follow.broadcasterId);
 
-      // 無論是否已追蹤，都要確保頻道存在且 isMonitored=true
-      const displayName = follow.broadcasterLogin;
-
-      // 建立或獲取 Streamer 記錄（使用 upsert）
-      const streamer = await prisma.streamer.upsert({
-        where: { twitchUserId: follow.broadcasterId },
-        create: {
-          twitchUserId: follow.broadcasterId,
-          displayName,
-          avatarUrl: "", // 跳過頭像獲取，後續可在開台時更新
-        },
-        update: {},
-      });
-
-      // 建立或獲取頻道，確保 isMonitored=true
-      const channel = await prisma.channel.upsert({
-        where: { twitchChannelId: follow.broadcasterId },
-        create: {
-          twitchChannelId: follow.broadcasterId,
-          channelName: follow.broadcasterLogin,
-          channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
-          source: "external",
-          isMonitored: true,
-          streamerId: streamer.id,
-        },
-        update: {
-          channelName: follow.broadcasterLogin,
-          isMonitored: true, // 關鍵：確保所有已追蹤的頻道都被監控
-        },
-      });
-
-      if (existingFollow) {
-        // 已存在的追蹤，從 map 中移除（避免被刪除）
-        existingFollowMap.delete(follow.broadcasterId);
-      } else {
-        // 新追蹤：建立追蹤記錄
-        await prisma.userFollow.upsert({
-          where: {
-            userId_channelId: {
-              userId: viewerId,
-              channelId: channel.id,
-            },
-          },
-          create: {
-            userId: viewerId,
-            userType: "viewer",
-            channelId: channel.id,
-            followedAt: follow.followedAt,
-          },
-          update: {
-            followedAt: follow.followedAt,
-          },
+        // 優化：先檢查頻道是否存在以及監控狀態，減少不必要的寫入
+        const existingChannel = await prisma.channel.findUnique({
+          where: { twitchChannelId: follow.broadcasterId },
+          select: { id: true, isMonitored: true, streamerId: true },
         });
-        created++;
+
+        let channelId = existingChannel?.id;
+        let streamerId = existingChannel?.streamerId;
+
+        // 如果頻道不存在，或者需要更新監控狀態
+        if (!existingChannel || !existingChannel.isMonitored) {
+          // 確保 Streamer 存在
+          if (!existingChannel) {
+            const displayName = follow.broadcasterLogin;
+            const streamer = await prisma.streamer.upsert({
+              where: { twitchUserId: follow.broadcasterId },
+              create: {
+                twitchUserId: follow.broadcasterId,
+                displayName,
+                avatarUrl: "",
+              },
+              update: {},
+            });
+            streamerId = streamer.id;
+          }
+
+          // 建立或更新頻道
+          const channel = await prisma.channel.upsert({
+            where: { twitchChannelId: follow.broadcasterId },
+            create: {
+              twitchChannelId: follow.broadcasterId,
+              channelName: follow.broadcasterLogin,
+              channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
+              source: "external",
+              isMonitored: true,
+              streamerId:
+                streamerId ||
+                (
+                  await prisma.streamer.findUniqueOrThrow({
+                    where: { twitchUserId: follow.broadcasterId },
+                  })
+                ).id,
+            },
+            update: {
+              channelName: follow.broadcasterLogin,
+              isMonitored: true,
+            },
+          });
+          channelId = channel.id;
+        }
+
+        if (!channelId) {
+          throw new Error(
+            `Failed to resolve channelId for ${follow.broadcasterLogin}`,
+          );
+        }
+
+        if (existingFollow) {
+          // 已存在的追蹤，從 map 中移除（避免被刪除）
+          existingFollowMap.delete(follow.broadcasterId);
+        } else {
+          // 新追蹤：建立追蹤記錄
+          await prisma.userFollow.upsert({
+            where: {
+              userId_channelId: {
+                userId: viewerId,
+                channelId: channelId,
+              },
+            },
+            create: {
+              userId: viewerId,
+              userType: "viewer",
+              channelId: channelId,
+              followedAt: follow.followedAt,
+            },
+            update: {
+              followedAt: follow.followedAt,
+            },
+          });
+          created++;
+        }
+      } catch (err) {
+        logger.warn(
+          "Jobs",
+          `Failed to sync channel ${follow.broadcasterLogin}`,
+          err,
+        );
+        // Continue to verify next channel even if one fails
       }
 
       processed++;
