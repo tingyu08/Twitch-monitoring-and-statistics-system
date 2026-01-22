@@ -13,7 +13,7 @@ export const updateLiveStatusJob = cron.schedule("* * * * *", async () => {
   await updateLiveStatusFn();
 });
 
-async function updateLiveStatusFn() {
+export async function updateLiveStatusFn() {
   logger.debug("Jobs", "Starting Update Live Status Job...");
 
   try {
