@@ -308,6 +308,11 @@ class TwurpleHelixService {
     userAccessToken?: string,
     tokenInfo?: UserTokenInfo
   ): Promise<FollowedChannel[]> {
+    // 記憶體優化：使用臨時變數追蹤需要釋放的資源
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let tempAuthProvider: any = null;
+    let tempApiClient: ApiClient | null = null;
+
     try {
       let api: ApiClient;
 
@@ -318,13 +323,14 @@ class TwurpleHelixService {
         const clientId = twurpleAuthService.getClientId();
         const clientSecret = twurpleAuthService.getClientSecret();
 
-        const authProvider = new RefreshingAuthProvider({
+        tempAuthProvider = new RefreshingAuthProvider({
           clientId,
           clientSecret,
         });
 
         // 設定 Token 刷新回調（刷新後更新資料庫）
-        authProvider.onRefresh(async (_userId: string, newTokenData: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tempAuthProvider.onRefresh(async (_userId: string, newTokenData: any) => {
           logger.info(
             "Twurple Helix",
             `Token 已自動刷新 (User: ${userId}, TokenID: ${tokenInfo.tokenId})`
@@ -356,7 +362,7 @@ class TwurpleHelixService {
         });
 
         // 添加使用者的 Token
-        await authProvider.addUserForToken(
+        await tempAuthProvider.addUserForToken(
           {
             accessToken: tokenInfo.accessToken,
             refreshToken: tokenInfo.refreshToken,
@@ -368,20 +374,22 @@ class TwurpleHelixService {
           ["user:read:follows"]
         );
 
-        api = new ApiClient({
-          authProvider,
+        tempApiClient = new ApiClient({
+          authProvider: tempAuthProvider,
           logger: { minLevel: "error" },
         });
+        api = tempApiClient;
       } else if (userAccessToken) {
         // 向後兼容：使用 StaticAuthProvider（不支援自動刷新）
         const { ApiClient } = await importTwurpleApi();
         const { StaticAuthProvider } = await importTwurpleAuth();
         const clientId = twurpleAuthService.getClientId();
-        const userAuthProvider = new StaticAuthProvider(clientId, userAccessToken);
-        api = new ApiClient({
-          authProvider: userAuthProvider,
+        tempAuthProvider = new StaticAuthProvider(clientId, userAccessToken);
+        tempApiClient = new ApiClient({
+          authProvider: tempAuthProvider,
           logger: { minLevel: "error" },
         });
+        api = tempApiClient;
         // 登入時使用的 token 是新的，不需要刷新，所以用 debug 級別
         logger.debug("Twurple Helix", `使用 StaticAuthProvider（不支援自動刷新）`);
       } else {
@@ -392,6 +400,8 @@ class TwurpleHelixService {
       const results: FollowedChannel[] = [];
 
       // 使用 Twurple 的分頁器獲取所有追蹤的頻道
+      // 記憶體優化：限制最大獲取數量，避免記憶體爆炸
+      const MAX_FOLLOWS = 2000; // 大部分用戶不會追蹤超過 2000 個頻道
       const paginator = api.channels.getFollowedChannelsPaginated(userId);
 
       for await (const follow of paginator) {
@@ -401,6 +411,15 @@ class TwurpleHelixService {
           broadcasterName: follow.broadcasterDisplayName,
           followedAt: follow.followDate,
         });
+
+        // 記憶體保護：超過上限則停止
+        if (results.length >= MAX_FOLLOWS) {
+          logger.warn(
+            "Twurple Helix",
+            `用戶 ${userId} 追蹤數量超過 ${MAX_FOLLOWS}，已截斷`
+          );
+          break;
+        }
       }
 
       logger.info("Twurple Helix", `已獲取 ${results.length} 個追蹤頻道 (User ID: ${userId})`);
@@ -408,6 +427,11 @@ class TwurpleHelixService {
     } catch (error) {
       logger.error("Twurple Helix", `獲取用戶追蹤列表失敗: ${userId}`, error);
       return [];
+    } finally {
+      // 記憶體優化：確保臨時資源被釋放
+      // 將引用設為 null，讓 GC 可以回收
+      tempAuthProvider = null;
+      tempApiClient = null;
     }
   }
 

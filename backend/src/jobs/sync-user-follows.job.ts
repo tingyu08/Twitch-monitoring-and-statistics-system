@@ -401,24 +401,41 @@ export class SyncUserFollowsJob {
       }
     }
 
-    // 使用 upsert 逐筆處理，避免 SQLite 的 UNIQUE 約束錯誤
+    // 使用 upsert 批次處理，避免 SQLite 的 UNIQUE 約束錯誤
     // (SQLite 不支援 Prisma 的 skipDuplicates 選項)
-    for (const followData of followsToCreate) {
-      try {
-        await prisma.userFollow.upsert({
-          where: {
-            userId_channelId: {
-              userId: followData.userId,
-              channelId: followData.channelId,
+    // 記憶體優化：每 50 筆為一批，讓 GC 有機會回收
+    const UPSERT_BATCH_SIZE = 50;
+    for (let i = 0; i < followsToCreate.length; i += UPSERT_BATCH_SIZE) {
+      const batch = followsToCreate.slice(i, i + UPSERT_BATCH_SIZE);
+
+      // 使用 Promise.allSettled 避免單筆失敗影響整批
+      const results = await Promise.allSettled(
+        batch.map((followData) =>
+          prisma.userFollow.upsert({
+            where: {
+              userId_channelId: {
+                userId: followData.userId,
+                channelId: followData.channelId,
+              },
             },
-          },
-          create: followData,
-          update: { followedAt: followData.followedAt },
-        });
-        result.followsCreated++;
-      } catch (err) {
-        // 如果還是發生錯誤（極少情況），記錄但不中斷流程
-        logger.warn("Jobs", `Failed to upsert follow for channel ${followData.channelId}`, err);
+            create: followData,
+            update: { followedAt: followData.followedAt },
+          })
+        )
+      );
+
+      // 統計成功數量
+      result.followsCreated += results.filter((r) => r.status === "fulfilled").length;
+
+      // 記錄失敗的項目（但不中斷流程）
+      const failures = results.filter((r) => r.status === "rejected");
+      if (failures.length > 0) {
+        logger.warn("Jobs", `批次 upsert 有 ${failures.length} 筆失敗`);
+      }
+
+      // 讓系統喘息一下
+      if (i + UPSERT_BATCH_SIZE < followsToCreate.length) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
 
