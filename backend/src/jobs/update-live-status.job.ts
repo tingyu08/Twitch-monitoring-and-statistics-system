@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma";
-import { twurpleAuthService } from "../services/twurple-auth.service";
+
 import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
 
@@ -44,12 +44,14 @@ export async function updateLiveStatusFn() {
 
     logger.debug("Jobs", `📊 Found ${channels.length} monitored channels to check`);
 
-    // 2. 初始化 API Client
-    const { ApiClient } = await new Function('return import("@twurple/api")')();
-    const authProvider = await twurpleAuthService.getAppAuthProvider();
-    const apiClient = new ApiClient({ authProvider });
+    // 2. 初始化 API Client (使用單例模式或確保釋放)
+    // 這裡我們直接使用 twurpleHelixService 封裝好的方法，它已經處理了 ApiClient 的生命週期
+    // 但是這裡需要批量查詢，twurpleHelixService.getStreamsByUserIds 已經有實現
+    // 所以我們不需要在這裡手動初始化 ApiClient
 
-    // 3. 分批處理 (Twitch API 上限通常為 100)
+    const { twurpleHelixService } = await import("../services/twitch-helix.service");
+
+    // 3. 分批處理 (減少 Batch Size 讓系統有機會喘息)
     const BATCH_SIZE = 100;
     const now = new Date();
 
@@ -70,7 +72,8 @@ export async function updateLiveStatusFn() {
       const twitchIds = batch.map((c) => c.twitchChannelId);
 
       try {
-        const streams = await apiClient.streams.getStreamsByUserIds(twitchIds);
+        // 使用 twurpleHelixService (內部已管理 ApiClient)
+        const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);
 
         // 建立一個 Map 方便查詢
         const streamMap = new Map();
@@ -88,10 +91,10 @@ export async function updateLiveStatusFn() {
               channelName: channel.channelName,
               twitchId: channel.twitchChannelId,
               isLive: true,
-              viewerCount: stream.viewers,
+              viewerCount: stream.viewerCount, // 注意：TwurpleHelixService 返回的結構屬性名可能不同
               title: stream.title,
               gameName: stream.gameName,
-              startedAt: stream.startDate,
+              startedAt: stream.startedAt,
             });
           } else {
             // 未開台
@@ -101,7 +104,7 @@ export async function updateLiveStatusFn() {
               twitchId: channel.twitchChannelId,
               isLive: false,
               viewerCount: 0,
-              title: "", // 或保留最後標題? 這裡先清空或設為 null
+              title: "",
               gameName: "",
               startedAt: null,
             });
@@ -109,6 +112,11 @@ export async function updateLiveStatusFn() {
         }
       } catch (err) {
         logger.error("Jobs", `Failed to fetch streams for batch ${i}`, err);
+      }
+
+      // 記憶體/CPU 優化：批次之間休息一下
+      if (i + BATCH_SIZE < channels.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
