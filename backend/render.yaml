@@ -4,7 +4,7 @@ services:
     runtime: node
     region: singapore # 離台灣最近的區域
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
