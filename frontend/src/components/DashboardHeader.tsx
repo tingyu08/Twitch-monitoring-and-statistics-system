@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { ThemeToggle, ThemeToggleSimple } from "@/features/theme";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
@@ -14,14 +14,13 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
   const t = useTranslations();
+  const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuthSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // 獲取當前語言
-  // (簡單從 pathname 解析，因為 next-navigation 的 useRouter 不支援自動補全 locale)
-  const currentLocale = pathname?.split("/")[1] || "zh-TW";
+  const currentLocale = locale;
 
   const isViewer = variant === "viewer" || pathname?.includes("/viewer");
   const isStreamer = variant === "streamer" || pathname?.includes("/streamer");
@@ -54,8 +53,8 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 onClick={() => !isViewer && router.push(`/${currentLocale}/dashboard/viewer`)}
                 onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/viewer`)}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isViewer
-                    ? "bg-purple-600 text-white shadow-sm cursor-default"
-                    : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
+                  ? "bg-purple-600 text-white shadow-sm cursor-default"
+                  : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
                   }`}
               >
                 {t("viewer.roleViewer")}
@@ -65,8 +64,8 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 onClick={() => !isStreamer && router.push(`/${currentLocale}/dashboard/streamer`)}
                 onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/streamer`)}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isStreamer
-                    ? "bg-purple-600 text-white shadow-sm cursor-default"
-                    : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
+                  ? "bg-purple-600 text-white shadow-sm cursor-default"
+                  : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
                   }`}
               >
                 {t("viewer.roleStreamer")}
@@ -108,8 +107,8 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   }}
                   onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/viewer`)}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isViewer
-                      ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
-                      : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
+                    ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
+                    : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
                     }`}
                 >
                   <User size={18} />
@@ -128,8 +127,8 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   }}
                   onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/streamer`)}
                   className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isStreamer
-                      ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
-                      : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
+                    ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
+                    : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
                     }`}
                 >
                   <LayoutDashboard size={18} />
