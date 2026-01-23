@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const backendUrl =
-      process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
     // 呼叫後端交換 Token
     const res = await fetch(`${backendUrl}/auth/twitch/callback?code=${code}`, {
