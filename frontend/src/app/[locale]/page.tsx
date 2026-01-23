@@ -7,7 +7,9 @@ import { useAuthSession } from "@/features/auth/AuthContext";
 import { ThemeToggle } from "@/features/theme";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
 
 function LandingPageContent() {
   const t = useTranslations();

@@ -27,8 +27,11 @@ export async function GET(request: NextRequest) {
   console.log("[Auth Callback] Received code, forwarding to backend...");
 
   try {
+    // Server-side fetch needs absolute URL
     const backendUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      process.env.BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:4000";
 
     // 呼叫後端交換 Token
     const res = await fetch(`${backendUrl}/auth/twitch/callback?code=${code}`, {

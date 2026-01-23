@@ -20,8 +20,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Server-side fetch needs absolute URL
+    // 生產環境：優先使用 BACKEND_URL (Render URL)，否則使用 NEXT_PUBLIC_API_URL
     const backendUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      process.env.BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:4000";
 
     // 呼叫後端交換 Token (這裡示範轉發，具體視您後端路由設計而定)
     // 但根據上面的 Controller 代碼，後端其實已經接管了 Callback。
