@@ -5,8 +5,6 @@
  * Story 3.6: 使用者追蹤頻道與全域監控
  */
 
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import cron from "node-cron";
 import pLimit from "p-limit";
