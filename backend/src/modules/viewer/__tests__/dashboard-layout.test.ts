@@ -17,6 +17,7 @@ app.use("/api/viewer", viewerApiRoutes);
 
 describe("DashboardLayoutController", () => {
   const mockLayout = [{ i: "card1", x: 0, y: 0, w: 1, h: 1 }];
+  const mockChannelId = "123e4567-e89b-12d3-a456-426614174000"; // Valid UUID
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -26,17 +27,17 @@ describe("DashboardLayoutController", () => {
     it("should return layout", async () => {
       (dashboardLayoutService.getLayout as jest.Mock).mockResolvedValue(mockLayout);
 
-      const res = await request(app).get("/api/viewer/dashboard-layout/c1");
+      const res = await request(app).get(`/api/viewer/dashboard-layout/${mockChannelId}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ layout: mockLayout });
-      expect(dashboardLayoutService.getLayout).toHaveBeenCalledWith("v1", "c1");
+      expect(dashboardLayoutService.getLayout).toHaveBeenCalledWith("v1", mockChannelId);
     });
 
     it("should return null layout if not found", async () => {
       (dashboardLayoutService.getLayout as jest.Mock).mockResolvedValue(null);
 
-      const res = await request(app).get("/api/viewer/dashboard-layout/c1");
+      const res = await request(app).get(`/api/viewer/dashboard-layout/${mockChannelId}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ layout: null });
@@ -49,15 +50,15 @@ describe("DashboardLayoutController", () => {
 
       const res = await request(app)
         .post("/api/viewer/dashboard-layout")
-        .send({ channelId: "c1", layout: mockLayout });
+        .send({ channelId: mockChannelId, layout: mockLayout });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(dashboardLayoutService.saveLayout).toHaveBeenCalledWith("v1", "c1", mockLayout);
+      expect(dashboardLayoutService.saveLayout).toHaveBeenCalledWith("v1", mockChannelId, mockLayout);
     });
 
     it("should fail validation if missing fields", async () => {
-      const res = await request(app).post("/api/viewer/dashboard-layout").send({ channelId: "c1" }); // missing layout
+      const res = await request(app).post("/api/viewer/dashboard-layout").send({ channelId: mockChannelId }); // missing layout
 
       expect(res.status).toBe(400);
     });
@@ -67,11 +68,11 @@ describe("DashboardLayoutController", () => {
     it("should reset layout", async () => {
       (dashboardLayoutService.resetLayout as jest.Mock).mockResolvedValue({});
 
-      const res = await request(app).delete("/api/viewer/dashboard-layout/c1");
+      const res = await request(app).delete(`/api/viewer/dashboard-layout/${mockChannelId}`);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(dashboardLayoutService.resetLayout).toHaveBeenCalledWith("v1", "c1");
+      expect(dashboardLayoutService.resetLayout).toHaveBeenCalledWith("v1", mockChannelId);
     });
   });
 });

@@ -360,7 +360,12 @@ export class SyncUserFollowsJob {
               channelUrl: channelData.channelUrl,
               source: "external",
               isMonitored: true,
-              streamerId: streamer.id,
+              streamer: {
+                connect: { id: streamer.id },
+              },
+            },
+            include: {
+              streamer: true,
             },
           });
           existingChannelMap.set(channel.twitchChannelId, channel);
@@ -401,7 +406,6 @@ export class SyncUserFollowsJob {
     if (followsToCreate.length > 0) {
       await prisma.userFollow.createMany({
         data: followsToCreate,
-        skipDuplicates: true,
       });
       result.followsCreated = followsToCreate.length;
     }
