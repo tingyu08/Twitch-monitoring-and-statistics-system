@@ -41,11 +41,7 @@ function getSecret(): string {
 /**
  * 計算 HMAC 簽名
  */
-function getHmacMessage(
-  messageId: string,
-  timestamp: string,
-  body: string
-): string {
+function getHmacMessage(messageId: string, timestamp: string, body: string): string {
   return messageId + timestamp + body;
 }
 
@@ -53,27 +49,18 @@ function getHmacMessage(
  * 計算 HMAC-SHA256 簽名
  */
 function computeHmac(secret: string, message: string): string {
-  return (
-    HMAC_PREFIX +
-    crypto.createHmac("sha256", secret).update(message).digest("hex")
-  );
+  return HMAC_PREFIX + crypto.createHmac("sha256", secret).update(message).digest("hex");
 }
 
 /**
  * 驗證簽名
  */
-function verifySignature(
-  expectedSignature: string,
-  actualSignature: string
-): boolean {
+function verifySignature(expectedSignature: string, actualSignature: string): boolean {
   // 使用 timing-safe 比較防止時序攻擊
   try {
     const expected = Buffer.from(expectedSignature);
     const actual = Buffer.from(actualSignature);
-    return (
-      expected.length === actual.length &&
-      crypto.timingSafeEqual(expected, actual)
-    );
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
   } catch {
     return false;
   }
@@ -92,11 +79,7 @@ function verifyTimestamp(timestamp: string): boolean {
  * EventSub 驗證中間件
  * 驗證 Twitch Webhook 請求的 HMAC 簽名
  */
-export function verifyEventSubSignature(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function verifyEventSubSignature(req: Request, res: Response, next: NextFunction): void {
   try {
     // 獲取必要的 headers
     const messageId = req.headers[TWITCH_MESSAGE_ID] as string;
@@ -119,8 +102,7 @@ export function verifyEventSubSignature(
     }
 
     // 獲取 raw body (需要在 express.json() 之前使用 express.raw())
-    const rawBody =
-      typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
 
     // 計算預期的簽名
     const secret = getSecret();

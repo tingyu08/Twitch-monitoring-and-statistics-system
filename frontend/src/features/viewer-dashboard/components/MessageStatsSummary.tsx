@@ -1,5 +1,5 @@
 import { MessageStatsSummary as SummaryType } from "@/lib/api/viewer";
-import { MessageSquare, Calendar, ChevronLast, Hash } from "lucide-react";
+import { MessageSquare, Calendar, ChevronRight, Hash } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhTW, enUS } from "date-fns/locale";
 import { useTranslations, useLocale } from "next-intl";
@@ -9,10 +9,7 @@ interface MessageStatsSummaryProps {
   isLoading?: boolean;
 }
 
-export function MessageStatsSummary({
-  summary,
-  isLoading,
-}: MessageStatsSummaryProps) {
+export function MessageStatsSummary({ summary, isLoading }: MessageStatsSummaryProps) {
   const t = useTranslations();
   const locale = useLocale();
   const dateLocale = locale === "zh-TW" ? zhTW : enUS;
@@ -59,7 +56,7 @@ export function MessageStatsSummary({
             locale: dateLocale,
           })
         : "-",
-      icon: ChevronLast,
+      icon: ChevronRight,
       description: summary.lastMessageAt
         ? new Date(summary.lastMessageAt).toLocaleString(locale)
         : "",
@@ -72,10 +69,7 @@ export function MessageStatsSummary({
       aria-label="Message Statistics Summary"
     >
       {items.map((item, index) => (
-        <div
-          key={index}
-          className="rounded-xl border bg-card text-card-foreground shadow"
-        >
+        <div key={index} className="rounded-xl border bg-card text-card-foreground shadow">
           <div className="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
             <h3 className="tracking-tight text-sm font-medium">{item.title}</h3>
             <item.icon className="h-4 w-4 text-muted-foreground" />

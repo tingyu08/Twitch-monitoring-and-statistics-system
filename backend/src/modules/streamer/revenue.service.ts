@@ -67,10 +67,7 @@ export class RevenueService {
     const broadcasterId = streamer.twitchUserId;
 
     // 呼叫 Twitch API 獲取訂閱資料
-    const subscriptions = await this.fetchSubscriptionsFromTwitch(
-      broadcasterId,
-      accessToken
-    );
+    const subscriptions = await this.fetchSubscriptionsFromTwitch(broadcasterId, accessToken);
 
     // 計算預估收益
     const estimatedRevenue =
@@ -159,10 +156,7 @@ export class RevenueService {
         cursor = data.pagination?.cursor;
       } while (cursor);
     } catch (error) {
-      console.error(
-        "[RevenueService] fetchSubscriptionsFromTwitch error:",
-        error
-      );
+      console.error("[RevenueService] fetchSubscriptionsFromTwitch error:", error);
       throw error;
     }
 
@@ -172,10 +166,7 @@ export class RevenueService {
   /**
    * 獲取訂閱統計趨勢
    */
-  async getSubscriptionStats(
-    streamerId: string,
-    days: number = 30
-  ): Promise<SubscriptionStats[]> {
+  async getSubscriptionStats(streamerId: string, days: number = 30): Promise<SubscriptionStats[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
     startDate.setHours(0, 0, 0, 0);
@@ -201,10 +192,7 @@ export class RevenueService {
   /**
    * 獲取 Bits 統計趨勢
    */
-  async getBitsStats(
-    streamerId: string,
-    days: number = 30
-  ): Promise<BitsStats[]> {
+  async getBitsStats(streamerId: string, days: number = 30): Promise<BitsStats[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
     startDate.setHours(0, 0, 0, 0);
@@ -219,10 +207,7 @@ export class RevenueService {
     });
 
     // 按日期分組
-    const dailyMap = new Map<
-      string,
-      { totalBits: number; eventCount: number }
-    >();
+    const dailyMap = new Map<string, { totalBits: number; eventCount: number }>();
 
     for (const event of events) {
       const dateKey = event.cheeredAt.toISOString().split("T")[0];
@@ -293,9 +278,7 @@ export class RevenueService {
   async getTopSupporters(
     streamerId: string,
     limit: number = 10
-  ): Promise<
-    Array<{ userName: string; totalBits: number; eventCount: number }>
-  > {
+  ): Promise<Array<{ userName: string; totalBits: number; eventCount: number }>> {
     const supporters = await prisma.cheerEvent.groupBy({
       by: ["userName"],
       where: {

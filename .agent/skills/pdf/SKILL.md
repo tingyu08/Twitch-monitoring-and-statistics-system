@@ -1,6 +1,9 @@
 ---
 name: pdf
-description: Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs, merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or programmatically process, generate, or analyze PDF documents at scale.
+description:
+  Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs,
+  merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or
+  programmatically process, generate, or analyze PDF documents at scale.
 source: anthropics/skills
 license: Apache-2.0
 ---
@@ -27,6 +30,7 @@ for page in reader.pages:
 ### pypdf - Basic Operations
 
 #### Merge PDFs
+
 ```python
 from pypdf import PdfWriter, PdfReader
 
@@ -41,6 +45,7 @@ with open("merged.pdf", "wb") as output:
 ```
 
 #### Split PDF
+
 ```python
 reader = PdfReader("input.pdf")
 for i, page in enumerate(reader.pages):
@@ -53,6 +58,7 @@ for i, page in enumerate(reader.pages):
 ### pdfplumber - Text and Table Extraction
 
 #### Extract Tables
+
 ```python
 import pdfplumber
 import pandas as pd
@@ -94,11 +100,11 @@ qpdf input.pdf --pages . 1-5 -- pages1-5.pdf
 
 ## Quick Reference
 
-| Task | Best Tool | Command/Code |
-|------|-----------|--------------|
-| Merge PDFs | pypdf | `writer.add_page(page)` |
-| Split PDFs | pypdf | One page per file |
-| Extract text | pdfplumber | `page.extract_text()` |
-| Extract tables | pdfplumber | `page.extract_tables()` |
-| Create PDFs | reportlab | Canvas or Platypus |
-| OCR scanned PDFs | pytesseract | Convert to image first |
+| Task             | Best Tool   | Command/Code            |
+| ---------------- | ----------- | ----------------------- |
+| Merge PDFs       | pypdf       | `writer.add_page(page)` |
+| Split PDFs       | pypdf       | One page per file       |
+| Extract text     | pdfplumber  | `page.extract_text()`   |
+| Extract tables   | pdfplumber  | `page.extract_tables()` |
+| Create PDFs      | reportlab   | Canvas or Platypus      |
+| OCR scanned PDFs | pytesseract | Convert to image first  |

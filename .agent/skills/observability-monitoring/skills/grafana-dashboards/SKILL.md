@@ -1,6 +1,9 @@
 ---
 name: grafana-dashboards
-description: Create and manage production Grafana dashboards for real-time visualization of system and application metrics. Use when building monitoring dashboards, visualizing metrics, or creating operational observability interfaces.
+description:
+  Create and manage production Grafana dashboards for real-time visualization of system and
+  application metrics. Use when building monitoring dashboards, visualizing metrics, or creating
+  operational observability interfaces.
 ---
 
 # Grafana Dashboards
@@ -9,7 +12,8 @@ Create and manage production-ready Grafana dashboards for comprehensive system o
 
 ## Purpose
 
-Design effective Grafana dashboards for monitoring applications, infrastructure, and business metrics.
+Design effective Grafana dashboards for monitoring applications, infrastructure, and business
+metrics.
 
 ## When to Use
 
@@ -22,6 +26,7 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 ## Dashboard Design Principles
 
 ### 1. Hierarchy of Information
+
 ```
 ┌─────────────────────────────────────┐
 │  Critical Metrics (Big Numbers)     │
@@ -33,11 +38,13 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 ```
 
 ### 2. RED Method (Services)
+
 - **Rate** - Requests per second
 - **Errors** - Error rate
 - **Duration** - Latency/response time
 
 ### 3. USE Method (Resources)
+
 - **Utilization** - % time resource is busy
 - **Saturation** - Queue length/wait time
 - **Errors** - Error count
@@ -63,7 +70,7 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
             "legendFormat": "{{service}}"
           }
         ],
-        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
       },
       {
         "title": "Error Rate %",
@@ -77,14 +84,14 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
         "alert": {
           "conditions": [
             {
-              "evaluator": {"params": [5], "type": "gt"},
-              "operator": {"type": "and"},
-              "query": {"params": ["A", "5m", "now"]},
+              "evaluator": { "params": [5], "type": "gt" },
+              "operator": { "type": "and" },
+              "query": { "params": ["A", "5m", "now"] },
               "type": "query"
             }
           ]
         },
-        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
       },
       {
         "title": "P95 Latency",
@@ -95,7 +102,7 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
             "legendFormat": "{{service}}"
           }
         ],
-        "gridPos": {"x": 0, "y": 8, "w": 24, "h": 8}
+        "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 }
       }
     ]
   }
@@ -107,13 +114,16 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 ## Panel Types
 
 ### 1. Stat Panel (Single Value)
+
 ```json
 {
   "type": "stat",
   "title": "Total Requests",
-  "targets": [{
-    "expr": "sum(http_requests_total)"
-  }],
+  "targets": [
+    {
+      "expr": "sum(http_requests_total)"
+    }
+  ],
   "options": {
     "reduceOptions": {
       "values": false,
@@ -128,9 +138,9 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
       "thresholds": {
         "mode": "absolute",
         "steps": [
-          {"value": 0, "color": "green"},
-          {"value": 80, "color": "yellow"},
-          {"value": 90, "color": "red"}
+          { "value": 0, "color": "green" },
+          { "value": 80, "color": "yellow" },
+          { "value": 90, "color": "red" }
         ]
       }
     }
@@ -139,35 +149,38 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 ```
 
 ### 2. Time Series Graph
+
 ```json
 {
   "type": "graph",
   "title": "CPU Usage",
-  "targets": [{
-    "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"
-  }],
-  "yaxes": [
-    {"format": "percent", "max": 100, "min": 0},
-    {"format": "short"}
-  ]
+  "targets": [
+    {
+      "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"
+    }
+  ],
+  "yaxes": [{ "format": "percent", "max": 100, "min": 0 }, { "format": "short" }]
 }
 ```
 
 ### 3. Table Panel
+
 ```json
 {
   "type": "table",
   "title": "Service Status",
-  "targets": [{
-    "expr": "up",
-    "format": "table",
-    "instant": true
-  }],
+  "targets": [
+    {
+      "expr": "up",
+      "format": "table",
+      "instant": true
+    }
+  ],
   "transformations": [
     {
       "id": "organize",
       "options": {
-        "excludeByName": {"Time": true},
+        "excludeByName": { "Time": true },
         "indexByName": {},
         "renameByName": {
           "instance": "Instance",
@@ -181,14 +194,17 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 ```
 
 ### 4. Heatmap
+
 ```json
 {
   "type": "heatmap",
   "title": "Latency Heatmap",
-  "targets": [{
-    "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le)",
-    "format": "heatmap"
-  }],
+  "targets": [
+    {
+      "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le)",
+      "format": "heatmap"
+    }
+  ],
   "dataFormat": "tsbuckets",
   "yAxis": {
     "format": "s"
@@ -199,6 +215,7 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 ## Variables
 
 ### Query Variables
+
 ```json
 {
   "templating": {
@@ -225,6 +242,7 @@ Design effective Grafana dashboards for monitoring applications, infrastructure,
 ```
 
 ### Use Variables in Queries
+
 ```
 sum(rate(http_requests_total{namespace="$namespace", service=~"$service"}[5m]))
 ```
@@ -241,11 +259,11 @@ sum(rate(http_requests_total{namespace="$namespace", service=~"$service"}[5m]))
           "params": [5],
           "type": "gt"
         },
-        "operator": {"type": "and"},
+        "operator": { "type": "and" },
         "query": {
           "params": ["A", "5m", "now"]
         },
-        "reducer": {"type": "avg"},
+        "reducer": { "type": "avg" },
         "type": "query"
       }
     ],
@@ -254,9 +272,7 @@ sum(rate(http_requests_total{namespace="$namespace", service=~"$service"}[5m]))
     "frequency": "1m",
     "message": "Error rate is above 5%",
     "noDataState": "no_data",
-    "notifications": [
-      {"uid": "slack-channel"}
-    ]
+    "notifications": [{ "uid": "slack-channel" }]
   }
 }
 ```
@@ -264,13 +280,14 @@ sum(rate(http_requests_total{namespace="$namespace", service=~"$service"}[5m]))
 ## Dashboard Provisioning
 
 **dashboards.yml:**
+
 ```yaml
 apiVersion: 1
 
 providers:
-  - name: 'default'
+  - name: "default"
     orgId: 1
-    folder: 'General'
+    folder: "General"
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10
@@ -284,6 +301,7 @@ providers:
 ### Infrastructure Dashboard
 
 **Key Panels:**
+
 - CPU utilization per node
 - Memory usage per node
 - Disk I/O
@@ -296,6 +314,7 @@ providers:
 ### Database Dashboard
 
 **Key Panels:**
+
 - Queries per second
 - Connection pool usage
 - Query latency (P50, P95, P99)
@@ -309,6 +328,7 @@ providers:
 ### Application Dashboard
 
 **Key Panels:**
+
 - Request rate
 - Error rate
 - Response time (percentiles)

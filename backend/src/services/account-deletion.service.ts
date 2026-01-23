@@ -68,9 +68,7 @@ export class AccountDeletionService {
 
     // 計算執行時間 (7 天後)
     const executionScheduledAt = new Date();
-    executionScheduledAt.setDate(
-      executionScheduledAt.getDate() + COOLING_PERIOD_DAYS
-    );
+    executionScheduledAt.setDate(executionScheduledAt.getDate() + COOLING_PERIOD_DAYS);
 
     // 建立刪除請求
     const deletionRequest = await prisma.deletionRequest.create({
@@ -145,8 +143,7 @@ export class AccountDeletionService {
         action: "deletion_cancelled",
         details: JSON.stringify({
           cancelledAt: new Date().toISOString(),
-          originalScheduledAt:
-            deletionRequest.executionScheduledAt.toISOString(),
+          originalScheduledAt: deletionRequest.executionScheduledAt.toISOString(),
         }),
       },
     });
@@ -222,7 +219,7 @@ export class AccountDeletionService {
         .delete({
           where: { viewerId },
         })
-        .catch(() => null); // 可能不存在
+        .catch((): null => null); // 可能不存在
 
       // 5. 更新刪除請求狀態
       await tx.deletionRequest
@@ -230,7 +227,7 @@ export class AccountDeletionService {
           where: { viewerId },
           data: { status: "executed" },
         })
-        .catch(() => null); // 可能不存在
+        .catch((): null => null); // 可能不存在
 
       // 6. 記錄審計日誌
       await tx.privacyAuditLog.create({
@@ -307,9 +304,7 @@ export class AccountDeletionService {
         success++;
       } else {
         failed++;
-        console.error(
-          `匿名化失敗 (viewerId: ${deletion.viewerId}): ${result.message}`
-        );
+        console.error(`匿名化失敗 (viewerId: ${deletion.viewerId}): ${result.message}`);
       }
     }
 

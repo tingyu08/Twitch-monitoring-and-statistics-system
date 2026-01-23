@@ -21,6 +21,8 @@ import {
 } from "../../jobs/validate-tokens.job";
 import { getTokenManagementStatus } from "../../services/token-management.init";
 import { logger } from "../../utils/logger";
+import { validateRequest } from "../../middlewares/validate.middleware";
+import * as schemas from "./token-management.schema";
 
 const router = Router();
 
@@ -94,11 +96,7 @@ router.post("/:tokenId/validate", async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
-    logger.error(
-      "Token Admin",
-      `Failed to validate token ${req.params.tokenId}`,
-      error
-    );
+    logger.error("Token Admin", `Failed to validate token ${req.params.tokenId}`, error);
     res.status(500).json({
       success: false,
       error: "Failed to validate token",
@@ -110,7 +108,7 @@ router.post("/:tokenId/validate", async (req: Request, res: Response) => {
  * PATCH /api/admin/tokens/:tokenId/status
  * 手動更新 Token 狀態
  */
-router.patch("/:tokenId/status", async (req: Request, res: Response) => {
+router.patch("/:tokenId/status", validateRequest(schemas.updateTokenStatusSchema), async (req: Request, res: Response) => {
   try {
     const { tokenId } = req.params;
     const { status, reason } = req.body;

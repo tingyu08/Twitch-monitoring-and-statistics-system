@@ -24,9 +24,7 @@ describe("DashboardLayoutController", () => {
 
   describe("GET /dashboard-layout/:channelId", () => {
     it("should return layout", async () => {
-      (dashboardLayoutService.getLayout as jest.Mock).mockResolvedValue(
-        mockLayout
-      );
+      (dashboardLayoutService.getLayout as jest.Mock).mockResolvedValue(mockLayout);
 
       const res = await request(app).get("/api/viewer/dashboard-layout/c1");
 
@@ -55,17 +53,11 @@ describe("DashboardLayoutController", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(dashboardLayoutService.saveLayout).toHaveBeenCalledWith(
-        "v1",
-        "c1",
-        mockLayout
-      );
+      expect(dashboardLayoutService.saveLayout).toHaveBeenCalledWith("v1", "c1", mockLayout);
     });
 
     it("should fail validation if missing fields", async () => {
-      const res = await request(app)
-        .post("/api/viewer/dashboard-layout")
-        .send({ channelId: "c1" }); // missing layout
+      const res = await request(app).post("/api/viewer/dashboard-layout").send({ channelId: "c1" }); // missing layout
 
       expect(res.status).toBe(400);
     });
@@ -79,10 +71,7 @@ describe("DashboardLayoutController", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(dashboardLayoutService.resetLayout).toHaveBeenCalledWith(
-        "v1",
-        "c1"
-      );
+      expect(dashboardLayoutService.resetLayout).toHaveBeenCalledWith("v1", "c1");
     });
   });
 });

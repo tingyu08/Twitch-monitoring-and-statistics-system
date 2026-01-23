@@ -108,8 +108,8 @@ Skills 會**自動啟用**，只需在對話中提出需求：
 
 ## 📋 Workflows (工作流程)
 
-Workflows 是自訂的步驟式指令，定義如何完成特定任務。
-在對話中使用 `/workflow-name` 來觸發對應的工作流程。
+Workflows 是自訂的步驟式指令，定義如何完成特定任務。在對話中使用 `/workflow-name`
+來觸發對應的工作流程。
 
 ### 建立新 Workflow
 
@@ -123,8 +123,7 @@ description: Brief description of what this workflow does
 # Workflow Name
 
 1. First step
-2. Second step
-   // turbo ← 自動執行下一步
+2. Second step // turbo ← 自動執行下一步
 3. Third step (will auto-run)
 ```
 
@@ -142,5 +141,4 @@ description: Brief description of what this workflow does
 
 ---
 
-**最後更新**: 2026-01-14
-**Skills 總數**: 265 個
+**最後更新**: 2026-01-14 **Skills 總數**: 265 個

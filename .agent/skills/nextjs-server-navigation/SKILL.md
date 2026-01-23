@@ -1,6 +1,10 @@
 ---
 name: nextjs-server-navigation
-description: Guide for implementing navigation in Next.js Server Components using Link component and redirect() function. Covers the difference between server and client navigation methods. Use when adding links, redirects, or navigation logic in server components without converting them to client components unnecessarily.
+description:
+  Guide for implementing navigation in Next.js Server Components using Link component and redirect()
+  function. Covers the difference between server and client navigation methods. Use when adding
+  links, redirects, or navigation logic in server components without converting them to client
+  components unnecessarily.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
@@ -10,13 +14,16 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 
 **Server Components use DIFFERENT navigation methods than Client Components!**
 
-When requirements call for server-rendered navigation—for example, linking to other pages, redirecting after a check, or demonstrating routing patterns—prefer `<Link>` and `redirect()` within Server Components. You still avoid `'use client'` unless a client-only API is involved.
+When requirements call for server-rendered navigation—for example, linking to other pages,
+redirecting after a check, or demonstrating routing patterns—prefer `<Link>` and `redirect()` within
+Server Components. You still avoid `'use client'` unless a client-only API is involved.
 
 ## The Pattern
 
 **Scenario:** build a server component that demonstrates proper navigation patterns
 
 **✅ CORRECT Solution:**
+
 ```typescript
 // app/page.tsx (Server Component - NO 'use client'!)
 import Link from 'next/link';
@@ -33,14 +40,15 @@ export default async function Page() {
 ```
 
 **❌ WRONG Solution:**
+
 ```typescript
 // app/page.tsx
-'use client';  // ❌ NO! Server components don't need this for navigation!
+"use client"; // ❌ NO! Server components don't need this for navigation!
 
-import { useRouter } from 'next/navigation';  // ❌ Wrong for server components
+import { useRouter } from "next/navigation"; // ❌ Wrong for server components
 
 export default function Page() {
-  const router = useRouter();  // ❌ This is client-side navigation
+  const router = useRouter(); // ❌ This is client-side navigation
   // ...
 }
 ```
@@ -77,6 +85,7 @@ export default async function Page() {
 ```
 
 **Key Points:**
+
 - ✅ Works in Server Components (no 'use client' needed)
 - ✅ Can be async function
 - ✅ Can fetch data
@@ -107,6 +116,7 @@ export default async function ProfilePage() {
 ```
 
 **When to use `redirect()`:**
+
 - Conditional redirects based on server-side data
 - Authentication checks
 - Permission validation
@@ -202,14 +212,14 @@ function handleClick(e: React.MouseEvent<HTMLButtonElement>) { ... }
 
 ## Server vs Client Navigation Comparison
 
-| Feature | Server Component | Client Component |
-|---------|-----------------|------------------|
-| `<Link>` | ✅ Yes | ✅ Yes |
-| `redirect()` | ✅ Yes | ❌ No |
-| `useRouter()` | ❌ No | ✅ Yes |
-| `usePathname()` | ❌ No | ✅ Yes |
-| async function | ✅ Yes | ❌ No |
-| 'use client' | ❌ No | ✅ Yes |
+| Feature         | Server Component | Client Component |
+| --------------- | ---------------- | ---------------- |
+| `<Link>`        | ✅ Yes           | ✅ Yes           |
+| `redirect()`    | ✅ Yes           | ❌ No            |
+| `useRouter()`   | ❌ No            | ✅ Yes           |
+| `usePathname()` | ❌ No            | ✅ Yes           |
+| async function  | ✅ Yes           | ❌ No            |
+| 'use client'    | ❌ No            | ✅ Yes           |
 
 ## Common Mistakes to Avoid
 
@@ -240,10 +250,10 @@ export default async function Page() {
 
 ```typescript
 // ❌ WRONG
-import { useRouter } from 'next/navigation';  // This is for CLIENT components!
+import { useRouter } from "next/navigation"; // This is for CLIENT components!
 
 export default async function Page() {
-  const router = useRouter();  // ERROR! Can't use hooks in server components
+  const router = useRouter(); // ERROR! Can't use hooks in server components
   // ...
 }
 ```
@@ -372,6 +382,7 @@ Need navigation in a component?
 ## When to Use Client-Side Navigation Instead
 
 Use Client Components (`'use client'` + `useRouter()`) ONLY when you need:
+
 - Programmatic navigation based on client state
 - Navigation after client-side animations
 - Browser-only APIs (window, localStorage)
@@ -394,6 +405,7 @@ When you see "demonstrates navigation patterns":
 ## Summary
 
 **Server Component Navigation:**
+
 - ✅ Use `<Link>` for navigation links
 - ✅ Use `redirect()` for conditional redirects
 - ✅ Keep component async if needed

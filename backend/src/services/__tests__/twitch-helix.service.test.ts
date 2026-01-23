@@ -1,6 +1,36 @@
 import { twurpleHelixService } from "../twitch-helix.service";
-import { ApiClient } from "@twurple/api";
+import * as esmImportUtils from "../../utils/esm-import";
 
+// Define mock functions at module level (accessible in tests)
+const mockUsersApi = {
+  getUserByName: jest.fn(),
+  getUserById: jest.fn(),
+  getUsersByIds: jest.fn(),
+};
+
+const mockChannelsApi = {
+  getChannelInfoById: jest.fn(),
+  getChannelFollowerCount: jest.fn(),
+};
+
+const mockStreamsApi = {
+  getStreamByUserId: jest.fn(),
+  getStreamsByUserIds: jest.fn(),
+};
+
+const mockHelixApiClientInstance = {
+  users: mockUsersApi,
+  channels: mockChannelsApi,
+  streams: mockStreamsApi,
+};
+
+// Mock the ESM loader utility (Basic mock structure)
+jest.mock("../../utils/esm-import", () => ({
+  importTwurpleApi: jest.fn(),
+  importTwurpleAuth: jest.fn(),
+}));
+
+// Mock Auth Service
 jest.mock("../twurple-auth.service", () => ({
   twurpleAuthService: {
     getAppAuthProvider: jest.fn().mockReturnValue({}),
@@ -8,48 +38,25 @@ jest.mock("../twurple-auth.service", () => ({
   },
 }));
 
-jest.mock("@twurple/api", () => {
-  const mockApi = {
-    users: {
-      getUserByName: jest.fn(),
-      getUserById: jest.fn(),
-      getUsersByIds: jest.fn(),
-    },
-    channels: {
-      getChannelInfoById: jest.fn(),
-      getChannelFollowerCount: jest.fn(),
-    },
-    streams: {
-      getStreamByUserId: jest.fn(),
-      getStreamsByUserIds: jest.fn(),
-    },
-  };
-  return {
-    ApiClient: jest.fn().mockImplementation(() => mockApi),
-  };
-});
-
 describe("TwurpleHelixService", () => {
-  let mockApi: any;
-
   beforeEach(() => {
     jest.clearAllMocks();
-    mockApi =
-      (ApiClient as jest.Mock).mock.results[0]?.value ||
-      new (ApiClient as jest.Mock)();
-    // Reset individual mocks
-    mockApi.users.getUserByName.mockReset();
-    mockApi.users.getUserById.mockReset();
-    mockApi.users.getUsersByIds.mockReset();
-    mockApi.channels.getChannelInfoById.mockReset();
-    mockApi.channels.getChannelFollowerCount.mockReset();
-    mockApi.streams.getStreamByUserId.mockReset();
-    mockApi.streams.getStreamsByUserIds.mockReset();
+
+    // Setup the mock implementation for importTwurpleApi
+    // This runs after hoisting, so we can access outer variables
+    (esmImportUtils.importTwurpleApi as jest.Mock).mockResolvedValue({
+      ApiClient: jest.fn().mockImplementation(() => mockHelixApiClientInstance),
+    });
+
+    (esmImportUtils.importTwurpleAuth as jest.Mock).mockResolvedValue({
+      StaticAuthProvider: jest.fn(),
+      RefreshingAuthProvider: jest.fn(),
+    });
   });
 
   describe("getUsersByIds", () => {
     it("should return users array", async () => {
-      mockApi.users.getUsersByIds.mockResolvedValue([
+      mockUsersApi.getUsersByIds.mockResolvedValue([
         {
           id: "1",
           name: "a",
@@ -67,7 +74,7 @@ describe("TwurpleHelixService", () => {
     });
 
     it("should return empty array on exception", async () => {
-      mockApi.users.getUsersByIds.mockRejectedValue(new Error("Fail"));
+      mockUsersApi.getUsersByIds.mockRejectedValue(new Error("Fail"));
       const result = await twurpleHelixService.getUsersByIds(["1"]);
       expect(result).toEqual([]);
     });
@@ -75,7 +82,7 @@ describe("TwurpleHelixService", () => {
 
   describe("Channel APIs", () => {
     it("getChannelInfo should return info", async () => {
-      mockApi.channels.getChannelInfoById.mockResolvedValue({
+      mockChannelsApi.getChannelInfoById.mockResolvedValue({
         id: "1",
         name: "a",
         displayName: "A",
@@ -91,7 +98,7 @@ describe("TwurpleHelixService", () => {
 
   describe("Stream APIs", () => {
     it("getStream should return info", async () => {
-      mockApi.streams.getStreamByUserId.mockResolvedValue({
+      mockStreamsApi.getStreamByUserId.mockResolvedValue({
         id: "s1",
         userId: "1",
         userName: "a",

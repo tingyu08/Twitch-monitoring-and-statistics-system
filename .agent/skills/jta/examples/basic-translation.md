@@ -1,10 +1,12 @@
 # Example: Basic Translation
 
-This example demonstrates the most common use case: translating a JSON i18n file to multiple languages.
+This example demonstrates the most common use case: translating a JSON i18n file to multiple
+languages.
 
 ## Scenario
 
-User has `locales/en.json` containing English translations and wants to add Chinese, Japanese, and Korean support.
+User has `locales/en.json` containing English translations and wants to add Chinese, Japanese, and
+Korean support.
 
 ## User Request
 
@@ -15,6 +17,7 @@ User has `locales/en.json` containing English translations and wants to add Chin
 ### Step 1: Understand the Request
 
 Claude recognizes:
+
 - **Task**: Translation
 - **Source file**: en.json (implied to be in locales/)
 - **Target languages**: Chinese (zh), Japanese (ja), Korean (ko)
@@ -28,6 +31,7 @@ find . -type f -name "en.json" \( -path "*/locales/*" -o -path "*/locale/*" -o -
 ```
 
 Output:
+
 ```
 ./locales/en.json
 ```
@@ -40,12 +44,14 @@ jta --version
 ```
 
 If not installed:
+
 ```bash
 # Install via Homebrew (macOS)
 brew tap hikanner/jta && brew install jta
 ```
 
 Check API key:
+
 ```bash
 # Check if API key exists
 if [[ -n "$OPENAI_API_KEY" ]]; then
@@ -61,6 +67,7 @@ jq '.' locales/en.json | head -20
 ```
 
 Output:
+
 ```json
 {
   "app": {
@@ -82,6 +89,7 @@ jta locales/en.json --to zh,ja,ko -y
 ```
 
 **What happens:**
+
 1. **Terminology Detection**: Jta analyzes content and detects important terms
 2. **Batch Processing**: Splits into batches (default 20 keys per batch)
 3. **Translation**: Sends each batch to AI provider
@@ -91,6 +99,7 @@ jta locales/en.json --to zh,ja,ko -y
 ### Step 6: Monitor Progress
 
 Console output:
+
 ```
 📄 Loading source file...
 ✓ Source file loaded (100 keys)
@@ -125,6 +134,7 @@ ls -lh locales/*.json
 ```
 
 Output:
+
 ```
 -rw-r--r--  1 user  staff   2.3K  en.json
 -rw-r--r--  1 user  staff   2.8K  zh.json
@@ -133,6 +143,7 @@ Output:
 ```
 
 Validate JSON structure:
+
 ```bash
 for file in locales/{zh,ja,ko}.json; do
   if jq empty "$file" 2>/dev/null; then
@@ -206,6 +217,7 @@ Would you like me to show you a sample of the translations or make any adjustmen
 ## Sample Translations
 
 ### English (source)
+
 ```json
 {
   "app": {
@@ -219,6 +231,7 @@ Would you like me to show you a sample of the translations or make any adjustmen
 ```
 
 ### Chinese (zh.json)
+
 ```json
 {
   "app": {
@@ -232,6 +245,7 @@ Would you like me to show you a sample of the translations or make any adjustmen
 ```
 
 ### Japanese (ja.json)
+
 ```json
 {
   "app": {
@@ -245,6 +259,7 @@ Would you like me to show you a sample of the translations or make any adjustmen
 ```
 
 ### Korean (ko.json)
+
 ```json
 {
   "app": {

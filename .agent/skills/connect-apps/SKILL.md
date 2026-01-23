@@ -1,11 +1,14 @@
 ---
 name: connect-apps
-description: Connect Claude to external apps like Gmail, Slack, GitHub. Use this skill when the user wants to send emails, create issues, post messages, or take actions in external services.
+description:
+  Connect Claude to external apps like Gmail, Slack, GitHub. Use this skill when the user wants to
+  send emails, create issues, post messages, or take actions in external services.
 ---
 
 # Connect Apps
 
-Connect Claude to 1000+ apps. Actually send emails, create issues, post messages - not just generate text about it.
+Connect Claude to 1000+ apps. Actually send emails, create issues, post messages - not just generate
+text about it.
 
 ## Quick Start
 
@@ -22,7 +25,9 @@ Connect Claude to 1000+ apps. Actually send emails, create issues, post messages
 ```
 
 This will:
-- Ask for your free API key (get one at [platform.composio.dev](https://platform.composio.dev/?utm_source=Github&utm_content=AwesomeSkills))
+
+- Ask for your free API key (get one at
+  [platform.composio.dev](https://platform.composio.dev/?utm_source=Github&utm_content=AwesomeSkills))
 - Configure Claude's connection to 1000+ apps
 - Take about 60 seconds
 
@@ -38,21 +43,18 @@ If it works, you're connected!
 
 ## What You Can Do
 
-| Ask Claude to... | What happens |
-|------------------|--------------|
+| Ask Claude to...                                | What happens             |
+| ----------------------------------------------- | ------------------------ |
 | "Send email to sarah@acme.com about the launch" | Actually sends the email |
-| "Create GitHub issue: fix login bug" | Creates the issue |
-| "Post to Slack #general: deploy complete" | Posts the message |
-| "Add meeting notes to Notion" | Adds to Notion |
+| "Create GitHub issue: fix login bug"            | Creates the issue        |
+| "Post to Slack #general: deploy complete"       | Posts the message        |
+| "Add meeting notes to Notion"                   | Adds to Notion           |
 
 ## Supported Apps
 
-**Email:** Gmail, Outlook, SendGrid
-**Chat:** Slack, Discord, Teams, Telegram
-**Dev:** GitHub, GitLab, Jira, Linear
-**Docs:** Notion, Google Docs, Confluence
-**Data:** Sheets, Airtable, PostgreSQL
-**And 1000+ more...**
+**Email:** Gmail, Outlook, SendGrid **Chat:** Slack, Discord, Teams, Telegram **Dev:** GitHub,
+GitLab, Jira, Linear **Docs:** Notion, Google Docs, Confluence **Data:** Sheets, Airtable,
+PostgreSQL **And 1000+ more...**
 
 ## How It Works
 

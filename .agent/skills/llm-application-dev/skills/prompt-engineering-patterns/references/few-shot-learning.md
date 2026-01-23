@@ -2,11 +2,14 @@
 
 ## Overview
 
-Few-shot learning enables LLMs to perform tasks by providing a small number of examples (typically 1-10) within the prompt. This technique is highly effective for tasks requiring specific formats, styles, or domain knowledge.
+Few-shot learning enables LLMs to perform tasks by providing a small number of examples (typically
+1-10) within the prompt. This technique is highly effective for tasks requiring specific formats,
+styles, or domain knowledge.
 
 ## Example Selection Strategies
 
 ### 1. Semantic Similarity
+
 Select examples most similar to the input query using embedding-based retrieval.
 
 ```python
@@ -29,6 +32,7 @@ class SemanticExampleSelector:
 **Best For**: Question answering, text classification, extraction tasks
 
 ### 2. Diversity Sampling
+
 Maximize coverage of different patterns and edge cases.
 
 ```python
@@ -58,6 +62,7 @@ class DiversityExampleSelector:
 **Best For**: Demonstrating task variability, edge case handling
 
 ### 3. Difficulty-Based Selection
+
 Gradually increase example complexity to scaffold learning.
 
 ```python
@@ -75,6 +80,7 @@ class ProgressiveExampleSelector:
 **Best For**: Complex reasoning tasks, code generation
 
 ### 4. Error-Based Selection
+
 Include examples that address common failure modes.
 
 ```python
@@ -98,6 +104,7 @@ class ErrorGuidedSelector:
 ## Example Construction Best Practices
 
 ### Format Consistency
+
 All examples should follow identical formatting:
 
 ```python
@@ -121,6 +128,7 @@ examples = [
 ```
 
 ### Input-Output Alignment
+
 Ensure examples demonstrate the exact task you want the model to perform:
 
 ```python
@@ -138,6 +146,7 @@ example = {
 ```
 
 ### Complexity Balance
+
 Include examples spanning the expected difficulty range:
 
 ```python
@@ -156,6 +165,7 @@ examples = [
 ## Context Window Management
 
 ### Token Budget Allocation
+
 Typical distribution for a 4K context window:
 
 ```
@@ -166,6 +176,7 @@ Response:            1500 tokens  (38%)
 ```
 
 ### Dynamic Example Truncation
+
 ```python
 class TokenAwareSelector:
     def __init__(self, examples, tokenizer, max_tokens=1500):
@@ -197,6 +208,7 @@ class TokenAwareSelector:
 ## Edge Case Handling
 
 ### Include Boundary Examples
+
 ```python
 edge_case_examples = [
     # Empty input
@@ -216,6 +228,7 @@ edge_case_examples = [
 ## Few-Shot Prompt Templates
 
 ### Classification Template
+
 ```python
 def build_classification_prompt(examples, query, labels):
     prompt = f"Classify the text into one of these categories: {', '.join(labels)}\n\n"
@@ -228,6 +241,7 @@ def build_classification_prompt(examples, query, labels):
 ```
 
 ### Extraction Template
+
 ```python
 def build_extraction_prompt(examples, query):
     prompt = "Extract structured information from the text.\n\n"
@@ -240,6 +254,7 @@ def build_extraction_prompt(examples, query):
 ```
 
 ### Transformation Template
+
 ```python
 def build_transformation_prompt(examples, query):
     prompt = "Transform the input according to the pattern shown in examples.\n\n"
@@ -254,6 +269,7 @@ def build_transformation_prompt(examples, query):
 ## Evaluation and Optimization
 
 ### Example Quality Metrics
+
 ```python
 def evaluate_example_quality(example, validation_set):
     metrics = {
@@ -266,6 +282,7 @@ def evaluate_example_quality(example, validation_set):
 ```
 
 ### A/B Testing Example Sets
+
 ```python
 class ExampleSetTester:
     def __init__(self, llm_client):
@@ -295,6 +312,7 @@ class ExampleSetTester:
 ## Advanced Techniques
 
 ### Meta-Learning (Learning to Select)
+
 Train a small model to predict which examples will be most effective:
 
 ```python
@@ -334,6 +352,7 @@ class LearnedExampleSelector:
 ```
 
 ### Adaptive Example Count
+
 Dynamically adjust the number of examples based on task difficulty:
 
 ```python

@@ -43,15 +43,9 @@ function App() {
       </div>
 
       <div className="status-section">
-        <div
-          className={`status-item ${
-            status?.isAuthenticated ? "connected" : "disconnected"
-          }`}
-        >
+        <div className={`status-item ${status?.isAuthenticated ? "connected" : "disconnected"}`}>
           <span className="label">連線狀態</span>
-          <span className="value">
-            {status?.isAuthenticated ? "✅ 已連線" : "❌ 未登入"}
-          </span>
+          <span className="value">{status?.isAuthenticated ? "✅ 已連線" : "❌ 未登入"}</span>
         </div>
 
         <div className="status-item">

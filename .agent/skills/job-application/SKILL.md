@@ -35,11 +35,13 @@ EDUCATION
 <!-- PASTE 1-2 COVER LETTERS YOU'VE WRITTEN THAT WORKED WELL -->
 
 ### Example 1
+
 ```
 [Paste a cover letter you're proud of]
 ```
 
 ### Example 2 (optional)
+
 ```
 [Another example if you have one]
 ```
@@ -47,16 +49,19 @@ EDUCATION
 ## Your Voice & Preferences
 
 ### Tone
+
 - Professional but not stiff
 - Confident without bragging
 - Specific about achievements, not generic
 
 ### Things to Emphasize
+
 - [What makes you unique]
 - [Key achievements to highlight]
 - [Skills you want to lead with]
 
 ### Things to Avoid
+
 - Generic phrases like "I'm a hard worker"
 - Repeating the job description back
 - Being too formal or robotic
@@ -67,6 +72,7 @@ EDUCATION
 2. Say: "Write a cover letter for this"
 
 Or be more specific:
+
 - "Write a cover letter emphasizing my backend experience"
 - "Make it shorter, 3 paragraphs max"
 - "Tailor this for a startup vs enterprise"
@@ -74,6 +80,7 @@ Or be more specific:
 ## Output Format
 
 When writing cover letters:
+
 - Keep it under 400 words unless asked otherwise
 - Lead with why you're interested in THIS role
 - Connect your experience to their specific needs

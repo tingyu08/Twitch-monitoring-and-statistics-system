@@ -1,14 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
+import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import { useTranslations } from "next-intl";
 import { viewerApi, type HourlyViewerStat } from "@/lib/api/viewer";
 import { X } from "lucide-react";
@@ -21,13 +15,7 @@ interface Props {
   title: string | null;
 }
 
-export function StreamHourlyDialog({
-  open,
-  onOpenChange,
-  channelId,
-  date,
-  title,
-}: Props) {
+export function StreamHourlyDialog({ open, onOpenChange, channelId, date, title }: Props) {
   const t = useTranslations();
   const [data, setData] = useState<HourlyViewerStat[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,9 +60,7 @@ export function StreamHourlyDialog({
           <h2 className="text-xl font-bold theme-text-primary mb-1">
             {date} {t("charts.hourlyAnalysis")}
           </h2>
-          <p className="theme-text-secondary text-sm line-clamp-2 pr-8">
-            {title}
-          </p>
+          <p className="theme-text-secondary text-sm line-clamp-2 pr-8">{title}</p>
         </div>
 
         <div className="py-2">
@@ -84,19 +70,10 @@ export function StreamHourlyDialog({
             </div>
           ) : data.length > 0 ? (
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={data}
-                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                >
+              <SafeResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
-                    <linearGradient
-                      id="colorViewers"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
+                    <linearGradient id="colorViewers" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.5} />
                       <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                     </linearGradient>
@@ -107,17 +84,12 @@ export function StreamHourlyDialog({
                     tickMargin={10}
                     tickFormatter={(timestamp) => {
                       const date = new Date(timestamp);
-                      return `${date
-                        .getHours()
-                        .toString()
-                        .padStart(2, "0")}:00`;
+                      return `${date.getHours().toString().padStart(2, "0")}:00`;
                     }}
                   />
                   <YAxis
                     tick={{ fill: "#9ca3af", fontSize: 11 }}
-                    tickFormatter={(val) =>
-                      val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val
-                    }
+                    tickFormatter={(val) => (val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val)}
                     width={40}
                   />
                   <Tooltip
@@ -133,8 +105,8 @@ export function StreamHourlyDialog({
                       strokeWidth: 1,
                       strokeDasharray: "4 4",
                     }}
-                    formatter={(value: number) => [
-                      value.toLocaleString(),
+                    formatter={(value) => [
+                      ((value as number) ?? 0).toLocaleString(),
                       t("charts.viewers"),
                     ]}
                   />
@@ -147,7 +119,7 @@ export function StreamHourlyDialog({
                     fill="url(#colorViewers)"
                   />
                 </AreaChart>
-              </ResponsiveContainer>
+              </SafeResponsiveContainer>
             </div>
           ) : (
             <div className="h-[300px] flex items-center justify-center text-gray-500 bg-gray-50 dark:bg-black/20 rounded-xl border border-dashed border-gray-200 dark:border-white/10">

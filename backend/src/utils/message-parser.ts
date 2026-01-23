@@ -53,9 +53,7 @@ export class MessageParser {
   /**
    * 標準化訊息類型
    */
-  private static normalizeMessageType(
-    type: string
-  ): ParsedMessage["messageType"] {
+  private static normalizeMessageType(type: string): ParsedMessage["messageType"] {
     switch (type.toUpperCase()) {
       case "CHAT":
         return "CHAT";
@@ -98,11 +96,7 @@ export class MessageParser {
   /**
    * 解析訂閱訊息
    */
-  static parseSubscription(
-    userId: string,
-    displayName: string,
-    message: string
-  ): ParsedMessage {
+  static parseSubscription(userId: string, displayName: string, message: string): ParsedMessage {
     return {
       twitchUserId: userId,
       displayName: displayName,

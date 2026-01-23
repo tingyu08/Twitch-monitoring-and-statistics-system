@@ -1,15 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useCallback } from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import type { SubscriptionDataPoint } from "@/lib/api/streamer";
 import type { ChartRange } from "../hooks/useChartData";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
@@ -48,8 +40,7 @@ export function SubscriptionTrendChart({
   );
 
   // 只在選擇 90d 且可用天數不足 90 天時顯示估算徽章
-  const showEstimateBadge =
-    range === "90d" && currentDataDays > 0 && currentDataDays < 90;
+  const showEstimateBadge = range === "90d" && currentDataDays > 0 && currentDataDays < 90;
 
   // Recharts Legend onClick payload 結構: { value, id, type, color, payload, dataKey }
   const handleLegendClick = useCallback((e: any) => {
@@ -72,16 +63,9 @@ export function SubscriptionTrendChart({
         </div>
       )}
       <SafeResponsiveContainer height={300}>
-        <LineChart
-          data={chartData}
-          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-        >
+        <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis
-            dataKey="date"
-            stroke="#9CA3AF"
-            tick={{ fill: "#9CA3AF", fontSize: 12 }}
-          />
+          <XAxis dataKey="date" stroke="#9CA3AF" tick={{ fill: "#9CA3AF", fontSize: 12 }} />
           <YAxis
             stroke="#9CA3AF"
             tick={{ fill: "#9CA3AF", fontSize: 12 }}
@@ -100,12 +84,13 @@ export function SubscriptionTrendChart({
               color: "#F3F4F6",
             }}
             labelStyle={{ color: "#D1D5DB" }}
-            formatter={(value: number, name: string) => {
+            formatter={(value, name) => {
               // name maps to Line's name prop, which is translated
-              if (name === t("netChange") && value > 0) {
-                return [`+${value}`, name];
+              const val = (value as number) ?? 0;
+              if (name === t("netChange") && val > 0) {
+                return [`+${val}`, name];
               }
-              return [value, name];
+              return [val, name];
             }}
           />
           <Legend

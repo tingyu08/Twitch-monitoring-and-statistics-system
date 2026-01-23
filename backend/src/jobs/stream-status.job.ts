@@ -126,15 +126,9 @@ export class StreamStatusJob {
     const liveStreamMap = new Map(liveStreams.map((s) => [s.userId, s]));
 
     // 診斷日誌：顯示監控頻道數和直播中頻道
-    logger.debug(
-      "JOB",
-      `正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`
-    );
+    logger.debug("JOB", `正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`);
     if (liveStreams.length > 0) {
-      logger.debug(
-        "JOB",
-        `直播中: ${liveStreams.map((s) => s.userName).join(", ")}`
-      );
+      logger.debug("JOB", `直播中: ${liveStreams.map((s) => s.userName).join(", ")}`);
     }
 
     // 3. 【優化】一次查詢所有 active sessions，避免 N+1
@@ -145,9 +139,7 @@ export class StreamStatusJob {
         endedAt: null,
       },
     });
-    const activeSessionMap = new Map(
-      activeSessions.map((s) => [s.channelId, s])
-    );
+    const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
     // 4. 處理每個頻道的狀態變化
     for (const channel of channels) {
@@ -287,10 +279,7 @@ export class StreamStatusJob {
       });
     }
 
-    logger.info(
-      "JOB",
-      `新開播: ${channel.channelName} - ${stream.title} (Metric recorded)`
-    );
+    logger.info("JOB", `新開播: ${channel.channelName} - ${stream.title} (Metric recorded)`);
   }
 
   /**
@@ -348,9 +337,7 @@ export class StreamStatusJob {
     if (!session) return;
 
     const endedAt = new Date();
-    const durationSeconds = Math.floor(
-      (endedAt.getTime() - session.startedAt.getTime()) / 1000
-    );
+    const durationSeconds = Math.floor((endedAt.getTime() - session.startedAt.getTime()) / 1000);
 
     await prisma.streamSession.update({
       where: { id: sessionId },
@@ -360,10 +347,7 @@ export class StreamStatusJob {
       },
     });
 
-    logger.info(
-      "JOB",
-      `下播: Session ${sessionId} (${Math.floor(durationSeconds / 60)} 分鐘)`
-    );
+    logger.info("JOB", `下播: Session ${sessionId} (${Math.floor(durationSeconds / 60)} 分鐘)`);
   }
 }
 

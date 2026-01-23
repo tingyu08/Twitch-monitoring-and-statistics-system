@@ -174,7 +174,7 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
                 return (
                   <div
                     key={`${dayOfWeek}-${hour}`}
-                    className="h-8 rounded hover:ring-2 hover:ring-blue-400 cursor-pointer transition-all duration-300 ease-in-out hover:scale-105"
+                    className="h-8 rounded hover:ring-2 hover:ring-blue-400 cursor-pointer transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-300 ease-in-out hover:scale-105"
                     style={{
                       backgroundColor: color,
                       animation: `fadeIn 0.5s ease-in-out ${

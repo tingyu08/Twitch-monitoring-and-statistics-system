@@ -29,7 +29,7 @@ export function QuickActionsPanel({
           onClick={onManageSettings}
           className="group flex items-center gap-3 p-4 bg-gradient-to-r from-purple-600/20 to-purple-500/10 
                      rounded-lg border border-purple-500/30 hover:border-purple-400/50 
-                     transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/10"
+                     transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/10"
         >
           <div className="p-2 bg-purple-500/20 rounded-lg group-hover:bg-purple-500/30 transition-colors">
             <Settings className="w-5 h-5 text-purple-400" />
@@ -47,7 +47,7 @@ export function QuickActionsPanel({
           href={`/${locale}/dashboard/streamer/videos`}
           className="group flex items-center gap-3 p-4 bg-gradient-to-r from-blue-600/20 to-blue-500/10 
                      rounded-lg border border-blue-500/30 hover:border-blue-400/50 
-                     transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/10"
+                     transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/10"
         >
           <div className="p-2 bg-blue-500/20 rounded-lg group-hover:bg-blue-500/30 transition-colors">
             <Video className="w-5 h-5 text-blue-400" />
@@ -67,7 +67,7 @@ export function QuickActionsPanel({
           href={`/${locale}/dashboard/streamer/revenue`}
           className="group flex items-center gap-3 p-4 bg-gradient-to-r from-green-600/20 to-green-500/10 
                      rounded-lg border border-green-500/30 hover:border-green-400/50 
-                     transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-green-500/10"
+                     transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-green-500/10"
         >
           <div className="p-2 bg-green-500/20 rounded-lg group-hover:bg-green-500/30 transition-colors">
             <DollarSign className="w-5 h-5 text-green-400" />

@@ -2,15 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import { Loader2, Zap, Trophy, TrendingUp } from "lucide-react";
 
 interface BitsData {
@@ -56,8 +49,7 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
           }),
         ]);
 
-        if (!bitsRes.ok || !supportersRes.ok)
-          throw new Error("Failed to fetch");
+        if (!bitsRes.ok || !supportersRes.ok) throw new Error("Failed to fetch");
 
         const [bitsJson, supportersJson] = await Promise.all([
           bitsRes.json(),
@@ -109,9 +101,7 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
             </div>
             <div>
               <p className="text-sm text-gray-400">{t("totalBits")}</p>
-              <p className="text-2xl font-bold text-white">
-                {totalBits.toLocaleString()}
-              </p>
+              <p className="text-2xl font-bold text-white">{totalBits.toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -123,9 +113,7 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
             </div>
             <div>
               <p className="text-sm text-gray-400">{t("estRevenue")}</p>
-              <p className="text-2xl font-bold text-white">
-                ${totalRevenue.toFixed(2)}
-              </p>
+              <p className="text-2xl font-bold text-white">${totalRevenue.toFixed(2)}</p>
             </div>
           </div>
         </div>
@@ -146,12 +134,10 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 每日 Bits 柱狀圖 */}
         <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-          <h3 className="text-lg font-semibold text-white mb-4">
-            {t("dailyBits")}
-          </h3>
+          <h3 className="text-lg font-semibold text-white mb-4">{t("dailyBits")}</h3>
           {data.length > 0 ? (
             <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
+              <SafeResponsiveContainer width="100%" height="100%">
                 <BarChart data={data}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                   <XAxis
@@ -160,10 +146,7 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
                     tick={{ fill: "#9CA3AF", fontSize: 12 }}
                     tickFormatter={(value) => value.slice(5)}
                   />
-                  <YAxis
-                    stroke="#9CA3AF"
-                    tick={{ fill: "#9CA3AF", fontSize: 12 }}
-                  />
+                  <YAxis stroke="#9CA3AF" tick={{ fill: "#9CA3AF", fontSize: 12 }} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#1F2937",
@@ -171,18 +154,11 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
                       borderRadius: "8px",
                     }}
                     labelStyle={{ color: "#E5E7EB" }}
-                    formatter={(value: number) => [
-                      value.toLocaleString(),
-                      "Bits",
-                    ]}
+                    formatter={(value) => [(value ?? 0).toLocaleString(), "Bits"]}
                   />
-                  <Bar
-                    dataKey="totalBits"
-                    fill="#F97316"
-                    radius={[4, 4, 0, 0]}
-                  />
+                  <Bar dataKey="totalBits" fill="#F97316" radius={[4, 4, 0, 0]} />
                 </BarChart>
-              </ResponsiveContainer>
+              </SafeResponsiveContainer>
             </div>
           ) : (
             <div className="h-[250px] flex items-center justify-center text-gray-500">
@@ -218,9 +194,7 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
                     >
                       {index + 1}
                     </span>
-                    <span className="text-white font-medium">
-                      {supporter.userName}
-                    </span>
+                    <span className="text-white font-medium">{supporter.userName}</span>
                   </div>
                   <div className="text-right">
                     <p className="text-orange-400 font-semibold">
@@ -242,9 +216,7 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
       </div>
 
       {/* 注意事項 */}
-      <p className="text-xs text-gray-500 text-center">
-        {t("revenueDisclaimer")}
-      </p>
+      <p className="text-xs text-gray-500 text-center">{t("revenueDisclaimer")}</p>
     </div>
   );
 }

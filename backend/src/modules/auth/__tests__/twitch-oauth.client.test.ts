@@ -1,9 +1,5 @@
 import axios from "axios";
-import {
-  TwitchOAuthClient,
-  exchangeCodeForToken,
-  fetchTwitchUser,
-} from "../twitch-oauth.client";
+import { TwitchOAuthClient, exchangeCodeForToken, fetchTwitchUser } from "../twitch-oauth.client";
 
 jest.mock("axios");
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -99,9 +95,7 @@ describe("TwitchOAuthClient", () => {
         isAxiosError: true,
         response: { status: 401 },
       });
-      await expect(
-        client.getBroadcasterSubscriptions("at", "id")
-      ).rejects.toThrow(/Unauthorized/);
+      await expect(client.getBroadcasterSubscriptions("at", "id")).rejects.toThrow(/Unauthorized/);
     });
 
     it("should handle 403 Forbidden", async () => {
@@ -109,9 +103,7 @@ describe("TwitchOAuthClient", () => {
         isAxiosError: true,
         response: { status: 403 },
       });
-      await expect(
-        client.getBroadcasterSubscriptions("at", "id")
-      ).rejects.toThrow(/Forbidden/);
+      await expect(client.getBroadcasterSubscriptions("at", "id")).rejects.toThrow(/Forbidden/);
     });
 
     it("should handle 429 Rate Limit", async () => {
@@ -119,16 +111,12 @@ describe("TwitchOAuthClient", () => {
         isAxiosError: true,
         response: { status: 429 },
       });
-      await expect(
-        client.getBroadcasterSubscriptions("at", "id")
-      ).rejects.toThrow(/Rate limit/);
+      await expect(client.getBroadcasterSubscriptions("at", "id")).rejects.toThrow(/Rate limit/);
     });
 
     it("should handle generic errors", async () => {
       mockedAxios.get.mockRejectedValueOnce(new Error("Network Error"));
-      await expect(
-        client.getBroadcasterSubscriptions("at", "id")
-      ).rejects.toThrow(/Failed to get/);
+      await expect(client.getBroadcasterSubscriptions("at", "id")).rejects.toThrow(/Failed to get/);
     });
   });
 });

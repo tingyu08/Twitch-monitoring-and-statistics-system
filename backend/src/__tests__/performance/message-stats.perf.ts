@@ -129,9 +129,7 @@ describe("Message Stats Performance Tests", () => {
       PERFORMANCE_THRESHOLDS.API_RESPONSE_P95_MS
     );
 
-    console.log(
-      `Message Stats Query: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`
-    );
+    console.log(`Message Stats Query: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`);
     expect(result.passed).toBe(true);
   }, 30000);
 
@@ -161,9 +159,7 @@ describe("Message Stats Performance Tests", () => {
       PERFORMANCE_THRESHOLDS.AGGREGATION_QUERY_MS
     );
 
-    console.log(
-      `Aggregation Query: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`
-    );
+    console.log(`Aggregation Query: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`);
     expect(result.passed).toBe(true);
   }, 30000);
 
@@ -193,9 +189,7 @@ describe("Message Stats Performance Tests", () => {
       PERFORMANCE_THRESHOLDS.AGGREGATION_QUERY_MS
     );
 
-    console.log(
-      `Batch Read: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`
-    );
+    console.log(`Batch Read: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`);
     expect(result.passed).toBe(true);
   }, 30000);
 });

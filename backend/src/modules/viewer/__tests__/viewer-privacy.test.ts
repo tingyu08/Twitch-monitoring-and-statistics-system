@@ -104,17 +104,13 @@ describe("Viewer Privacy Routes", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (mockPrismaClient.viewer.findUnique as jest.Mock).mockResolvedValue(
-      mockViewer
-    );
+    (mockPrismaClient.viewer.findUnique as jest.Mock).mockResolvedValue(mockViewer);
   });
 
   describe("GET /privacy/consent", () => {
     it("should return consent settings", async () => {
       const mockSettings = { collectDailyWatchTime: true };
-      (
-        privacyConsentService.getAllConsentStatus as jest.Mock
-      ).mockResolvedValue(mockSettings);
+      (privacyConsentService.getAllConsentStatus as jest.Mock).mockResolvedValue(mockSettings);
 
       const res = await request(app).get("/api/viewer/privacy/consent");
 
@@ -127,16 +123,10 @@ describe("Viewer Privacy Routes", () => {
   describe("PATCH /privacy/consent", () => {
     it("should update consent settings", async () => {
       const updatePayload = { collectDailyWatchTime: false };
-      (privacyConsentService.updateConsent as jest.Mock).mockResolvedValue(
-        updatePayload
-      );
-      (mockPrismaClient.privacyAuditLog.create as jest.Mock).mockResolvedValue(
-        {}
-      );
+      (privacyConsentService.updateConsent as jest.Mock).mockResolvedValue(updatePayload);
+      (mockPrismaClient.privacyAuditLog.create as jest.Mock).mockResolvedValue({});
 
-      const res = await request(app)
-        .patch("/api/viewer/privacy/consent")
-        .send(updatePayload);
+      const res = await request(app).patch("/api/viewer/privacy/consent").send(updatePayload);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -145,17 +135,13 @@ describe("Viewer Privacy Routes", () => {
 
   describe("POST /privacy/consent/accept-all", () => {
     it("should accept all consents", async () => {
-      (
-        privacyConsentService.createDefaultConsent as jest.Mock
-      ).mockResolvedValue({ consentVersion: 1 });
+      (privacyConsentService.createDefaultConsent as jest.Mock).mockResolvedValue({
+        consentVersion: 1,
+      });
       (mockPrismaClient.viewer.update as jest.Mock).mockResolvedValue({});
-      (mockPrismaClient.privacyAuditLog.create as jest.Mock).mockResolvedValue(
-        {}
-      );
+      (mockPrismaClient.privacyAuditLog.create as jest.Mock).mockResolvedValue({});
 
-      const res = await request(app).post(
-        "/api/viewer/privacy/consent/accept-all"
-      );
+      const res = await request(app).post("/api/viewer/privacy/consent/accept-all");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -180,18 +166,14 @@ describe("Viewer Privacy Routes", () => {
 
   describe("GET /privacy/data-summary", () => {
     it("should return data summary", async () => {
-      (
-        mockPrismaClient.viewerChannelMessage.count as jest.Mock
-      ).mockResolvedValue(100);
-      (
-        mockPrismaClient.viewerChannelMessageDailyAgg.count as jest.Mock
-      ).mockResolvedValue(10);
-      (
-        mockPrismaClient.viewerChannelMessage.groupBy as jest.Mock
-      ).mockResolvedValue([{ channelId: "c1" }]);
-      (
-        mockPrismaClient.viewerChannelMessage.findFirst as jest.Mock
-      ).mockResolvedValue({ timestamp: new Date() });
+      (mockPrismaClient.viewerChannelMessage.count as jest.Mock).mockResolvedValue(100);
+      (mockPrismaClient.viewerChannelMessageDailyAgg.count as jest.Mock).mockResolvedValue(10);
+      (mockPrismaClient.viewerChannelMessage.groupBy as jest.Mock).mockResolvedValue([
+        { channelId: "c1" },
+      ]);
+      (mockPrismaClient.viewerChannelMessage.findFirst as jest.Mock).mockResolvedValue({
+        timestamp: new Date(),
+      });
 
       const res = await request(app).get("/api/viewer/privacy/data-summary");
 
@@ -222,9 +204,7 @@ describe("Viewer Privacy Routes", () => {
         message: "Deletion cancelled",
       });
 
-      const res = await request(app).post(
-        "/api/viewer/privacy/cancel-deletion"
-      );
+      const res = await request(app).post("/api/viewer/privacy/cancel-deletion");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);

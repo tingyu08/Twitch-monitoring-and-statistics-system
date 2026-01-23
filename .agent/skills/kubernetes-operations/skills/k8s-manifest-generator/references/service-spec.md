@@ -1,10 +1,12 @@
 # Kubernetes Service Specification Reference
 
-Comprehensive reference for Kubernetes Service resources, covering service types, networking, load balancing, and service discovery patterns.
+Comprehensive reference for Kubernetes Service resources, covering service types, networking, load
+balancing, and service discovery patterns.
 
 ## Overview
 
-A Service provides stable network endpoints for accessing Pods. Services enable loose coupling between microservices by providing service discovery and load balancing.
+A Service provides stable network endpoints for accessing Pods. Services enable loose coupling
+between microservices by providing service discovery and load balancing.
 
 ## Service Types
 
@@ -23,14 +25,15 @@ spec:
   selector:
     app: backend
   ports:
-  - name: http
-    port: 80
-    targetPort: 8080
-    protocol: TCP
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
   sessionAffinity: None
 ```
 
 **Use cases:**
+
 - Internal microservice communication
 - Database services
 - Internal APIs
@@ -50,19 +53,21 @@ spec:
   selector:
     app: frontend
   ports:
-  - name: http
-    port: 80
-    targetPort: 8080
-    nodePort: 30080  # Optional, auto-assigned if omitted
-    protocol: TCP
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30080 # Optional, auto-assigned if omitted
+      protocol: TCP
 ```
 
 **Use cases:**
+
 - Development/testing external access
 - Small deployments without load balancer
 - Direct node access requirements
 
 **Limitations:**
+
 - Limited port range (30000-32767)
 - Must handle node failures
 - No built-in load balancing across nodes
@@ -84,20 +89,21 @@ spec:
   selector:
     app: api
   ports:
-  - name: https
-    port: 443
-    targetPort: 8443
-    protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
   loadBalancerSourceRanges:
-  - 203.0.113.0/24
+    - 203.0.113.0/24
 ```
 
 **Cloud-specific annotations:**
 
 **AWS:**
+
 ```yaml
 annotations:
-  service.beta.kubernetes.io/aws-load-balancer-type: "nlb"  # or "external"
+  service.beta.kubernetes.io/aws-load-balancer-type: "nlb" # or "external"
   service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
   service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
   service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:..."
@@ -105,6 +111,7 @@ annotations:
 ```
 
 **Azure:**
+
 ```yaml
 annotations:
   service.beta.kubernetes.io/azure-load-balancer-internal: "true"
@@ -112,6 +119,7 @@ annotations:
 ```
 
 **GCP:**
+
 ```yaml
 annotations:
   cloud.google.com/load-balancer-type: "Internal"
@@ -131,10 +139,11 @@ spec:
   type: ExternalName
   externalName: db.external.example.com
   ports:
-  - port: 5432
+    - port: 5432
 ```
 
 **Use cases:**
+
 - Accessing external services
 - Service migration scenarios
 - Multi-cluster service references
@@ -164,10 +173,10 @@ spec:
 
   # Ports configuration
   ports:
-  - name: http
-    port: 80           # Service port
-    targetPort: 8080   # Container port (or named port)
-    protocol: TCP      # TCP, UDP, or SCTP
+    - name: http
+      port: 80 # Service port
+      targetPort: 8080 # Container port (or named port)
+      protocol: TCP # TCP, UDP, or SCTP
 
   # Session affinity
   sessionAffinity: ClientIP
@@ -176,11 +185,11 @@ spec:
       timeoutSeconds: 10800
 
   # IP configuration
-  clusterIP: 10.0.0.10  # Optional: specific IP
+  clusterIP: 10.0.0.10 # Optional: specific IP
   clusterIPs:
-  - 10.0.0.10
+    - 10.0.0.10
   ipFamilies:
-  - IPv4
+    - IPv4
   ipFamilyPolicy: SingleStack
 
   # External traffic policy
@@ -195,11 +204,11 @@ spec:
   # Load balancer config (for type: LoadBalancer)
   loadBalancerIP: 203.0.113.100
   loadBalancerSourceRanges:
-  - 203.0.113.0/24
+    - 203.0.113.0/24
 
   # External IPs
   externalIPs:
-  - 80.11.12.10
+    - 80.11.12.10
 
   # Publishing strategy
   publishNotReadyAddresses: false
@@ -212,29 +221,31 @@ spec:
 Use named ports in Pods for flexibility:
 
 **Deployment:**
+
 ```yaml
 spec:
   template:
     spec:
       containers:
-      - name: app
-        ports:
-        - name: http
-          containerPort: 8080
-        - name: metrics
-          containerPort: 9090
+        - name: app
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9090
 ```
 
 **Service:**
+
 ```yaml
 spec:
   ports:
-  - name: http
-    port: 80
-    targetPort: http  # References named port
-  - name: metrics
-    port: 9090
-    targetPort: metrics
+    - name: http
+      port: 80
+      targetPort: http # References named port
+    - name: metrics
+      port: 9090
+      targetPort: metrics
 ```
 
 ### Multiple Ports
@@ -242,18 +253,18 @@ spec:
 ```yaml
 spec:
   ports:
-  - name: http
-    port: 80
-    targetPort: 8080
-    protocol: TCP
-  - name: https
-    port: 443
-    targetPort: 8443
-    protocol: TCP
-  - name: grpc
-    port: 9090
-    targetPort: 9090
-    protocol: TCP
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
+    - name: grpc
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
 ```
 
 ## Session Affinity
@@ -276,10 +287,11 @@ spec:
   sessionAffinity: ClientIP
   sessionAffinityConfig:
     clientIP:
-      timeoutSeconds: 10800  # 3 hours
+      timeoutSeconds: 10800 # 3 hours
 ```
 
 **Use cases:**
+
 - Stateful applications
 - Session-based applications
 - WebSocket connections
@@ -289,19 +301,23 @@ spec:
 ### External Traffic Policy
 
 **Cluster (Default):**
+
 ```yaml
 spec:
   externalTrafficPolicy: Cluster
 ```
+
 - Load balances across all nodes
 - May add extra network hop
 - Source IP is masked
 
 **Local:**
+
 ```yaml
 spec:
   externalTrafficPolicy: Local
 ```
+
 - Traffic goes only to pods on receiving node
 - Preserves client source IP
 - Better performance (no extra hop)
@@ -311,7 +327,7 @@ spec:
 
 ```yaml
 spec:
-  internalTrafficPolicy: Local  # or Cluster
+  internalTrafficPolicy: Local # or Cluster
 ```
 
 Controls traffic routing for cluster-internal clients.
@@ -326,21 +342,23 @@ kind: Service
 metadata:
   name: database
 spec:
-  clusterIP: None  # Headless
+  clusterIP: None # Headless
   selector:
     app: database
   ports:
-  - port: 5432
-    targetPort: 5432
+    - port: 5432
+      targetPort: 5432
 ```
 
 **Use cases:**
+
 - StatefulSet pod discovery
 - Direct pod-to-pod communication
 - Custom load balancing
 - Database clusters
 
 **DNS returns:**
+
 - Individual pod IPs instead of service IP
 - Format: `<pod-name>.<service-name>.<namespace>.svc.cluster.local`
 
@@ -349,21 +367,25 @@ spec:
 ### DNS
 
 **ClusterIP Service:**
+
 ```
 <service-name>.<namespace>.svc.cluster.local
 ```
 
 Example:
+
 ```bash
 curl http://backend-service.production.svc.cluster.local
 ```
 
 **Within same namespace:**
+
 ```bash
 curl http://backend-service
 ```
 
 **Headless Service (returns pod IPs):**
+
 ```
 <pod-name>.<service-name>.<namespace>.svc.cluster.local
 ```
@@ -390,6 +412,7 @@ BACKEND_SERVICE_SERVICE_PORT_HTTP=80
 Kubernetes uses random selection by default. For advanced load balancing:
 
 **Service Mesh (Istio example):**
+
 ```yaml
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
@@ -399,7 +422,7 @@ spec:
   host: my-service
   trafficPolicy:
     loadBalancer:
-      simple: LEAST_REQUEST  # or ROUND_ROBIN, RANDOM, PASSTHROUGH
+      simple: LEAST_REQUEST # or ROUND_ROBIN, RANDOM, PASSTHROUGH
     connectionPool:
       tcp:
         maxConnections: 100
@@ -432,25 +455,25 @@ metadata:
   name: my-service
 spec:
   hosts:
-  - my-service
+    - my-service
   http:
-  - match:
-    - headers:
-        version:
-          exact: v2
-    route:
-    - destination:
-        host: my-service
-        subset: v2
-  - route:
-    - destination:
-        host: my-service
-        subset: v1
-      weight: 90
-    - destination:
-        host: my-service
-        subset: v2
-      weight: 10
+    - match:
+        - headers:
+            version:
+              exact: v2
+      route:
+        - destination:
+            host: my-service
+            subset: v2
+    - route:
+        - destination:
+            host: my-service
+            subset: v1
+          weight: 90
+        - destination:
+            host: my-service
+            subset: v2
+          weight: 10
 ```
 
 ## Common Patterns
@@ -471,14 +494,14 @@ spec:
   selector:
     app: user-service
   ports:
-  - name: http
-    port: 8080
-    targetPort: http
-    protocol: TCP
-  - name: grpc
-    port: 9090
-    targetPort: grpc
-    protocol: TCP
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+      protocol: TCP
 ```
 
 ### Pattern 2: Public API with Load Balancer
@@ -497,12 +520,12 @@ spec:
   selector:
     app: api-gateway
   ports:
-  - name: https
-    port: 443
-    targetPort: 8443
-    protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
   loadBalancerSourceRanges:
-  - 0.0.0.0/0
+    - 0.0.0.0/0
 ```
 
 ### Pattern 3: StatefulSet with Headless Service
@@ -517,8 +540,8 @@ spec:
   selector:
     app: cassandra
   ports:
-  - port: 9042
-    targetPort: 9042
+    - port: 9042
+      targetPort: 9042
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -536,8 +559,8 @@ spec:
         app: cassandra
     spec:
       containers:
-      - name: cassandra
-        image: cassandra:4.0
+        - name: cassandra
+          image: cassandra:4.0
 ```
 
 ### Pattern 4: External Service Mapping
@@ -558,19 +581,19 @@ metadata:
   name: external-api
 spec:
   ports:
-  - port: 443
-    targetPort: 443
-    protocol: TCP
+    - port: 443
+      targetPort: 443
+      protocol: TCP
 ---
 apiVersion: v1
 kind: Endpoints
 metadata:
   name: external-api
 subsets:
-- addresses:
-  - ip: 203.0.113.100
-  ports:
-  - port: 443
+  - addresses:
+      - ip: 203.0.113.100
+    ports:
+      - port: 443
 ```
 
 ### Pattern 5: Multi-Port Service with Metrics
@@ -589,12 +612,12 @@ spec:
   selector:
     app: web-app
   ports:
-  - name: http
-    port: 80
-    targetPort: 8080
-  - name: metrics
-    port: 9090
-    targetPort: 9090
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: metrics
+      port: 9090
+      targetPort: 9090
 ```
 
 ## Network Policies
@@ -611,15 +634,15 @@ spec:
     matchLabels:
       app: backend
   policyTypes:
-  - Ingress
+    - Ingress
   ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: frontend
-    ports:
-    - protocol: TCP
-      port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
 ```
 
 ## Best Practices
@@ -651,6 +674,7 @@ spec:
 ### Performance Tuning
 
 **For high traffic:**
+
 ```yaml
 spec:
   externalTrafficPolicy: Local
@@ -661,12 +685,13 @@ spec:
 ```
 
 **For WebSocket/long connections:**
+
 ```yaml
 spec:
   sessionAffinity: ClientIP
   sessionAffinityConfig:
     clientIP:
-      timeoutSeconds: 86400  # 24 hours
+      timeoutSeconds: 86400 # 24 hours
 ```
 
 ## Troubleshooting
@@ -688,6 +713,7 @@ kubectl get pods -l app=<app-name>
 ```
 
 **Common issues:**
+
 - Selector doesn't match pod labels
 - No pods running (endpoints empty)
 - Ports misconfigured

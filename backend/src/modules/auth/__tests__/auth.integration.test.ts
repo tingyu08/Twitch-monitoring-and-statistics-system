@@ -16,11 +16,7 @@ describe("Auth Integration Tests", () => {
     app.use(express.json());
     app.use(cookieParser());
     // Wrap requireAuth to ensure it's treated as middleware (3 params), not error handler (4 params)
-    app.get(
-      "/api/auth/me",
-      (req, res, next) => requireAuth(req, res, next),
-      getMeHandler
-    );
+    app.get("/api/auth/me", (req, res, next) => requireAuth(req, res, next), getMeHandler);
   });
 
   describe("GET /api/auth/me", () => {
@@ -55,9 +51,7 @@ describe("Auth Integration Tests", () => {
       };
       const token = signAccessToken(payload);
 
-      const response = await request(app)
-        .get("/api/auth/me")
-        .set("Cookie", `auth_token=${token}`);
+      const response = await request(app).get("/api/auth/me").set("Cookie", `auth_token=${token}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({

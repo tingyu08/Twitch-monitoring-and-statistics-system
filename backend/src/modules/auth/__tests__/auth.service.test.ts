@@ -1,6 +1,5 @@
 import {
   handleStreamerTwitchCallback,
-  handleViewerTwitchCallback,
   getStreamerById,
   getStreamerByTwitchId,
 } from "../auth.service";
@@ -17,9 +16,7 @@ jest.mock("../../../db/prisma", () => {
     viewer: { upsert: jest.fn(), findUnique: jest.fn() },
     twitchToken: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
   };
-  mockPrisma.$transaction.mockImplementation((cb: (arg: unknown) => unknown) =>
-    cb(mockPrisma)
-  );
+  mockPrisma.$transaction.mockImplementation((cb: (arg: unknown) => unknown) => cb(mockPrisma));
   return { prisma: mockPrisma };
 });
 
@@ -42,12 +39,8 @@ describe("Auth Service", () => {
 
   describe("handleStreamerTwitchCallback", () => {
     it("should handle streamer callback and return tokens", async () => {
-      (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(
-        mockTokenResponse
-      );
-      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(
-        mockTwitchUser
-      );
+      (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(mockTokenResponse);
+      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(mockTwitchUser);
 
       (prisma.streamer.upsert as jest.Mock).mockResolvedValue({
         id: "s1",
@@ -67,12 +60,8 @@ describe("Auth Service", () => {
     });
 
     it("should update token if already exists", async () => {
-      (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(
-        mockTokenResponse
-      );
-      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(
-        mockTwitchUser
-      );
+      (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(mockTokenResponse);
+      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(mockTwitchUser);
       (prisma.streamer.upsert as jest.Mock).mockResolvedValue({ id: "s1" });
       (prisma.viewer.upsert as jest.Mock).mockResolvedValue({ id: "v1" });
       (prisma.twitchToken.findFirst as jest.Mock).mockResolvedValue({
@@ -81,27 +70,6 @@ describe("Auth Service", () => {
 
       await handleStreamerTwitchCallback("code");
       expect(prisma.twitchToken.update).toHaveBeenCalled();
-    });
-  });
-
-  describe("handleViewerTwitchCallback", () => {
-    it("should handle viewer callback", async () => {
-      (twitchOAuthClient.exchangeCodeForToken as jest.Mock).mockResolvedValue(
-        mockTokenResponse
-      );
-      (twitchOAuthClient.fetchTwitchUser as jest.Mock).mockResolvedValue(
-        mockTwitchUser
-      );
-      (prisma.viewer.upsert as jest.Mock).mockResolvedValue({
-        id: "v1",
-        twitchUserId: "t123",
-        consentedAt: null,
-      });
-      (prisma.twitchToken.findFirst as jest.Mock).mockResolvedValue(null);
-
-      const res = await handleViewerTwitchCallback("code");
-      expect(res.viewer.id).toBe("v1");
-      expect(prisma.twitchToken.create).toHaveBeenCalled();
     });
   });
 

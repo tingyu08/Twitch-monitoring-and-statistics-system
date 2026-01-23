@@ -127,10 +127,7 @@ export async function getStreamerSubscriptionTrend(
  * @returns 同步成功訊息
  */
 export async function syncSubscriptions(): Promise<{ message: string }> {
-  return httpClient<{ message: string }>(
-    `/api/streamer/me/sync-subscriptions`,
-    { method: "POST" }
-  );
+  return httpClient<{ message: string }>(`/api/streamer/me/sync-subscriptions`, { method: "POST" });
 }
 
 /**
@@ -179,13 +176,8 @@ export interface VideoResponse {
 /**
  * 取得實況主 VOD 列表
  */
-export async function getStreamerVideos(
-  page = 1,
-  limit = 20
-): Promise<VideoResponse> {
-  return httpClient<VideoResponse>(
-    `/api/streamer/me/videos?page=${page}&limit=${limit}`
-  );
+export async function getStreamerVideos(page = 1, limit = 20): Promise<VideoResponse> {
+  return httpClient<VideoResponse>(`/api/streamer/me/videos?page=${page}&limit=${limit}`);
 }
 
 /**
@@ -209,16 +201,12 @@ export interface ClipResponse {
   total: number;
   page: number;
   totalPages: number;
+  // pageParams: any; // React Query Infinite Query 需要
 }
 
 /**
  * 取得實況主 Clip 列表
  */
-export async function getStreamerClips(
-  page = 1,
-  limit = 20
-): Promise<ClipResponse> {
-  return httpClient<ClipResponse>(
-    `/api/streamer/me/clips?page=${page}&limit=${limit}`
-  );
+export async function getStreamerClips(page = 1, limit = 20): Promise<ClipResponse> {
+  return httpClient<ClipResponse>(`/api/streamer/me/clips?page=${page}&limit=${limit}`);
 }

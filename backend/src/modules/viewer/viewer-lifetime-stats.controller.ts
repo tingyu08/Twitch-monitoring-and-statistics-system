@@ -19,10 +19,7 @@ export class ViewerLifetimeStatsController {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      const result = await viewerLifetimeStatsService.getStats(
-        viewerId,
-        channelId
-      );
+      const result = await viewerLifetimeStatsService.getStats(viewerId, channelId);
 
       if (!result) {
         // 返回一個空的預設結構，方便前端渲染 "無數據" 狀態
@@ -72,15 +69,10 @@ export class ViewerLifetimeStatsController {
 
       res.json(result);
     } catch (error) {
-      logger.error(
-        "ViewerLifetimeStats",
-        "Error getting lifetime stats",
-        error
-      );
+      logger.error("ViewerLifetimeStats", "Error getting lifetime stats", error);
       res.status(500).json({ error: "Internal server error" });
     }
   };
 }
 
-export const viewerLifetimeStatsController =
-  new ViewerLifetimeStatsController();
+export const viewerLifetimeStatsController = new ViewerLifetimeStatsController();

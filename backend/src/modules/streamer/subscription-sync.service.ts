@@ -1,6 +1,6 @@
-import { prisma } from '../../db/prisma';
-import { TwitchOAuthClient } from '../auth/twitch-oauth.client';
-import { streamerLogger } from '../../utils/logger';
+import { prisma } from "../../db/prisma";
+import { TwitchOAuthClient } from "../auth/twitch-oauth.client";
+import { streamerLogger } from "../../utils/logger";
 
 const twitchClient = new TwitchOAuthClient();
 
@@ -41,7 +41,7 @@ export async function syncSubscriptionSnapshot(streamerId: string): Promise<void
     // 2. 取得實況主的 Twitch access token
     const token = await prisma.twitchToken.findFirst({
       where: {
-        ownerType: 'streamer',
+        ownerType: "streamer",
         streamerId,
       },
     });
@@ -103,10 +103,10 @@ export async function syncSubscriptionSnapshot(streamerId: string): Promise<void
     streamerLogger.info(`Subscription snapshot synced for streamer ${streamerId}`, {
       subsTotal: currentSubsTotal,
       subsDelta,
-      date: today.toISOString().split('T')[0],
+      date: today.toISOString().split("T")[0],
     });
   } catch (error) {
-    streamerLogger.error('Failed to sync subscription snapshot:', error);
+    streamerLogger.error("Failed to sync subscription snapshot:", error);
     throw error;
   }
 }
@@ -119,13 +119,13 @@ export async function syncSubscriptionSnapshot(streamerId: string): Promise<void
  */
 export async function getSubscriptionTrend(
   streamerId: string,
-  range: string = '30d'
+  range: string = "30d"
 ): Promise<SubscriptionTrendResponse> {
   // 1. 解析時間範圍
   const now = new Date();
   let days = 30;
-  if (range === '7d') days = 7;
-  if (range === '90d') days = 90;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
   cutoffDate.setHours(0, 0, 0, 0);
@@ -141,7 +141,7 @@ export async function getSubscriptionTrend(
       data: [],
       hasExactData: false,
       isEstimated: true,
-      estimateSource: 'daily_snapshot',
+      estimateSource: "daily_snapshot",
       minDataDays: 7,
       currentDataDays: 0,
       availableDays: 0,
@@ -165,13 +165,13 @@ export async function getSubscriptionTrend(
       subsDelta: true,
     },
     orderBy: {
-      date: 'asc',
+      date: "asc",
     },
   });
 
   // 4. 將資料轉換為 SubscriptionDataPoint[]
   const dataPoints: SubscriptionDataPoint[] = stats.map((stat) => ({
-    date: stat.date.toISOString().split('T')[0], // YYYY-MM-DD
+    date: stat.date.toISOString().split("T")[0], // YYYY-MM-DD
     subsTotal: stat.subsTotal,
     subsDelta: stat.subsDelta,
   }));
@@ -184,7 +184,7 @@ export async function getSubscriptionTrend(
     data: dataPoints,
     hasExactData: false, // 永遠是 false，因為是每日快照
     isEstimated: true, // 永遠是 true
-    estimateSource: 'daily_snapshot',
+    estimateSource: "daily_snapshot",
     minDataDays: 7, // 建議至少 7 天資料
     currentDataDays: availableDays,
     availableDays,

@@ -20,10 +20,7 @@ export class TwitchOAuthClient {
    * 生成 Twitch 授權 URL
    * @param state 防止 CSRF 的隨機字串
    */
-  public getOAuthUrl(
-    state: string,
-    options?: { redirectUri?: string; scopes?: string[] },
-  ): string {
+  public getOAuthUrl(state: string, options?: { redirectUri?: string; scopes?: string[] }): string {
     const scopes = options?.scopes ?? [
       "user:read:email",
       "channel:read:subscriptions",
@@ -33,10 +30,7 @@ export class TwitchOAuthClient {
 
     const url = new URL("https://id.twitch.tv/oauth2/authorize");
     url.searchParams.append("client_id", this.clientId);
-    url.searchParams.append(
-      "redirect_uri",
-      options?.redirectUri ?? this.redirectUri,
-    );
+    url.searchParams.append("redirect_uri", options?.redirectUri ?? this.redirectUri);
     url.searchParams.append("response_type", "code");
     url.searchParams.append("scope", scopes.join(" "));
     url.searchParams.append("state", state);
@@ -46,7 +40,7 @@ export class TwitchOAuthClient {
 
   public async getAccessToken(
     code: string,
-    options?: { redirectUri?: string },
+    options?: { redirectUri?: string }
   ): Promise<{
     access_token: string;
     refresh_token: string;
@@ -82,9 +76,7 @@ export class TwitchOAuthClient {
    * @param refreshToken 有效的 refresh token
    * @returns 新的 access token 和 refresh token
    */
-  public async refreshAccessToken(
-    refreshToken: string,
-  ): Promise<{
+  public async refreshAccessToken(refreshToken: string): Promise<{
     access_token: string;
     refresh_token: string;
     expires_in: number;
@@ -103,9 +95,7 @@ export class TwitchOAuthClient {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         if (status === 400 || status === 401) {
-          throw new Error(
-            "Refresh token is invalid or expired. User needs to re-authenticate.",
-          );
+          throw new Error("Refresh token is invalid or expired. User needs to re-authenticate.");
         }
       }
       throw new Error("Failed to refresh access token");
@@ -114,7 +104,7 @@ export class TwitchOAuthClient {
 
   public async getBroadcasterSubscriptions(
     broadcasterId: string,
-    accessToken: string,
+    accessToken: string
   ): Promise<{
     total: number;
     byTier: { tier1: number; tier2: number; tier3: number };
@@ -166,9 +156,7 @@ export class TwitchOAuthClient {
           throw new Error("Unauthorized: Token may be expired or invalid");
         }
         if (status === 403) {
-          throw new Error(
-            "Forbidden: Broadcaster ID does not match token user or missing scope",
-          );
+          throw new Error("Forbidden: Broadcaster ID does not match token user or missing scope");
         }
         if (status === 429) {
           throw new Error("Rate limit exceeded: Please try again later");
@@ -186,7 +174,7 @@ const clientInstance = new TwitchOAuthClient();
 
 export async function exchangeCodeForToken(
   code: string,
-  options?: { redirectUri?: string },
+  options?: { redirectUri?: string }
 ): Promise<{
   access_token: string;
   refresh_token: string;
@@ -195,8 +183,6 @@ export async function exchangeCodeForToken(
   return clientInstance.getAccessToken(code, options);
 }
 
-export async function fetchTwitchUser(
-  accessToken: string,
-): Promise<TwitchUser> {
+export async function fetchTwitchUser(accessToken: string): Promise<TwitchUser> {
   return clientInstance.getUserInfo(accessToken);
 }

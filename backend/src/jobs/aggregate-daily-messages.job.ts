@@ -143,9 +143,7 @@ export async function aggregateDailyMessages(): Promise<void> {
     }
 
     const duration = Date.now() - startTime;
-    console.log(
-      `✅ [Cron] 訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`
-    );
+    console.log(`✅ [Cron] 訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`);
   } catch (error) {
     console.error("❌ [Cron] 訊息聚合失敗:", error);
     throw error;
@@ -181,9 +179,7 @@ export async function manualAggregation(): Promise<{
   } catch (error) {
     return {
       success: false,
-      message: `聚合任務執行失敗: ${
-        error instanceof Error ? error.message : "未知錯誤"
-      }`,
+      message: `聚合任務執行失敗: ${error instanceof Error ? error.message : "未知錯誤"}`,
     };
   }
 }

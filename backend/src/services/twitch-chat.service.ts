@@ -43,9 +43,7 @@ export class TwurpleChatService {
    */
   public async initialize(): Promise<void> {
     try {
-      const { ChatClient } = await new Function(
-        'return import("@twurple/chat")'
-      )();
+      const { ChatClient } = await new Function('return import("@twurple/chat")')();
 
       // 從資料庫獲取第一個有 Token 的使用者（通常是您自己）
       const tokenRecord = await prisma.twitchToken.findFirst({
@@ -84,9 +82,7 @@ export class TwurpleChatService {
       const accessToken = decryptToken(tokenRecord.accessToken);
       const refreshToken = decryptToken(tokenRecord.refreshToken);
 
-      const { RefreshingAuthProvider } = await new Function(
-        'return import("@twurple/auth")'
-      )();
+      const { RefreshingAuthProvider } = await new Function('return import("@twurple/auth")')();
 
       const authProvider = new RefreshingAuthProvider({
         clientId,
@@ -164,11 +160,9 @@ export class TwurpleChatService {
     if (!this.chatClient) return;
 
     // 監聽一般訊息
-    this.chatClient.onMessage(
-      (channel: string, user: string, text: string, msg: any) => {
-        this.handleMessage(channel, user, text, msg);
-      }
-    );
+    this.chatClient.onMessage((channel: string, user: string, text: string, msg: any) => {
+      this.handleMessage(channel, user, text, msg);
+    });
 
     // 監聯訂閱事件
     this.chatClient.onSub((channel: any, user: any, subInfo: any, msg: any) => {
@@ -176,35 +170,27 @@ export class TwurpleChatService {
     });
 
     // 監聽續訂事件
-    this.chatClient.onResub(
-      (channel: any, user: any, subInfo: any, msg: any) => {
-        this.handleSubscription(channel, user, subInfo, msg);
-      }
-    );
+    this.chatClient.onResub((channel: any, user: any, subInfo: any, msg: any) => {
+      this.handleSubscription(channel, user, subInfo, msg);
+    });
 
     // 監聽贈送訂閱
-    this.chatClient.onSubGift(
-      (channel: any, user: any, subInfo: any, msg: any) => {
-        this.handleGiftSub(channel, user, subInfo, msg);
-      }
-    );
+    this.chatClient.onSubGift((channel: any, user: any, subInfo: any, msg: any) => {
+      this.handleGiftSub(channel, user, subInfo, msg);
+    });
 
     // 監聽揪團 (Raid)
-    this.chatClient.onRaid(
-      (channel: any, user: any, raidInfo: any, msg: any) => {
-        this.handleRaid(channel, user, raidInfo, msg);
-      }
-    );
+    this.chatClient.onRaid((channel: any, user: any, raidInfo: any, msg: any) => {
+      this.handleRaid(channel, user, raidInfo, msg);
+    });
 
     // 監聽斷線事件
-    this.chatClient.onDisconnect(
-      (manually: boolean, reason: Error | undefined) => {
-        this.isConnected = false;
-        if (!manually) {
-          logger.warn("Twurple Chat", `已斷線: ${reason}`);
-        }
+    this.chatClient.onDisconnect((manually: boolean, reason: Error | undefined) => {
+      this.isConnected = false;
+      if (!manually) {
+        logger.warn("Twurple Chat", `已斷線: ${reason}`);
       }
-    );
+    });
 
     // 監聽重連事件
     this.chatClient.onConnect(() => {
@@ -231,11 +217,7 @@ export class TwurpleChatService {
         // logger.info("Twurple Chat", `Joined channel: ${channelName}`);
       }
     } catch (error) {
-      logger.error(
-        "Twurple Chat",
-        `Failed to join channel ${channelName}`,
-        error
-      );
+      logger.error("Twurple Chat", `Failed to join channel ${channelName}`, error);
     }
   }
 
@@ -254,23 +236,14 @@ export class TwurpleChatService {
         // logger.info("Twurple Chat", `Left channel: ${channelName}`);
       }
     } catch (error) {
-      logger.error(
-        "Twurple Chat",
-        `Failed to leave channel ${channelName}`,
-        error
-      );
+      logger.error("Twurple Chat", `Failed to leave channel ${channelName}`, error);
     }
   }
 
   /**
    * 處理一般訊息
    */
-  private handleMessage(
-    channel: string,
-    user: string,
-    text: string,
-    msg: any
-  ): void {
+  private handleMessage(channel: string, user: string, text: string, msg: any): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -344,12 +317,7 @@ export class TwurpleChatService {
   /**
    * 處理訂閱事件
    */
-  private handleSubscription(
-    channel: string,
-    user: string,
-    subInfo: any,
-    msg: any
-  ): void {
+  private handleSubscription(channel: string, user: string, subInfo: any, msg: any): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -360,9 +328,9 @@ export class TwurpleChatService {
         messageText: subInfo.message || "",
         messageType: "SUBSCRIPTION",
         timestamp: new Date(),
-        badges: null,
-        bitsAmount: null,
-        emotesUsed: null,
+        badges: null as any,
+        bitsAmount: null as number | null,
+        emotesUsed: null as any,
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
@@ -379,12 +347,7 @@ export class TwurpleChatService {
   /**
    * 處理贈送訂閱
    */
-  private handleGiftSub(
-    channel: string,
-    user: string,
-    subInfo: any,
-    msg: any
-  ): void {
+  private handleGiftSub(channel: string, user: string, subInfo: any, msg: any): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -395,9 +358,9 @@ export class TwurpleChatService {
         messageText: `Gifted sub to ${subInfo.displayName}`,
         messageType: "GIFT_SUBSCRIPTION",
         timestamp: new Date(),
-        badges: null,
-        bitsAmount: null,
-        emotesUsed: null,
+        badges: null as any,
+        bitsAmount: null as number | null,
+        emotesUsed: null as any,
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
@@ -411,12 +374,7 @@ export class TwurpleChatService {
   /**
    * 處理揪團 (Raid)
    */
-  private handleRaid(
-    channel: string,
-    user: string,
-    raidInfo: any,
-    msg: any
-  ): void {
+  private handleRaid(channel: string, user: string, raidInfo: any, msg: any): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -428,9 +386,9 @@ export class TwurpleChatService {
         messageText: `Raid with ${viewerCount} viewers`,
         messageType: "RAID",
         timestamp: new Date(),
-        badges: null,
-        bitsAmount: null,
-        emotesUsed: null,
+        badges: null as any,
+        bitsAmount: null as number | null,
+        emotesUsed: null as any,
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);

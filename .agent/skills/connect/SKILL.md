@@ -1,6 +1,8 @@
 ---
 name: connect
-description: Connect Claude to any app. Send emails, create issues, post messages, update databases - take real actions across Gmail, Slack, GitHub, Notion, and 1000+ services.
+description:
+  Connect Claude to any app. Send emails, create issues, post messages, update databases - take real
+  actions across Gmail, Slack, GitHub, Notion, and 1000+ services.
 ---
 
 # Connect
@@ -18,12 +20,12 @@ Use this skill when you need Claude to:
 
 ## What Changes
 
-| Without Connect | With Connect |
-|-----------------|--------------|
-| "Here's a draft email..." | Sends the email |
+| Without Connect                 | With Connect      |
+| ------------------------------- | ----------------- |
+| "Here's a draft email..."       | Sends the email   |
 | "You should create an issue..." | Creates the issue |
-| "Post this to Slack..." | Posts it |
-| "Add this to Notion..." | Adds it |
+| "Post this to Slack..."         | Posts it          |
+| "Add this to Notion..."         | Adds it           |
 
 ## Supported Apps
 
@@ -42,7 +44,8 @@ Use this skill when you need Claude to:
 
 ### 1. Get API Key
 
-Get your free key at [platform.composio.dev](https://platform.composio.dev/?utm_source=Github&utm_content=AwesomeSkills)
+Get your free key at
+[platform.composio.dev](https://platform.composio.dev/?utm_source=Github&utm_content=AwesomeSkills)
 
 ### 2. Set Environment Variable
 
@@ -62,21 +65,25 @@ Done. Claude can now connect to any app.
 ## Examples
 
 ### Send Email
+
 ```
 Email sarah@acme.com - Subject: "Shipped!" Body: "v2.0 is live, let me know if issues"
 ```
 
 ### Create GitHub Issue
+
 ```
 Create issue in my-org/repo: "Mobile timeout bug" with label:bug
 ```
 
 ### Post to Slack
+
 ```
 Post to #engineering: "Deploy complete - v2.4.0 live"
 ```
 
 ### Chain Actions
+
 ```
 Find GitHub issues labeled "bug" from this week, summarize, post to #bugs on Slack
 ```
@@ -119,6 +126,7 @@ async with ClaudeSDKClient(options) as client:
 ## Auth Flow
 
 First time using an app:
+
 ```
 To send emails, I need Gmail access.
 Authorize here: https://...
@@ -129,13 +137,13 @@ Connection persists after that.
 
 ## Framework Support
 
-| Framework | Install |
-|-----------|---------|
-| Claude Agent SDK | `pip install composio claude-agent-sdk` |
-| OpenAI Agents | `pip install composio openai-agents` |
-| Vercel AI | `npm install @composio/core @composio/vercel` |
-| LangChain | `pip install composio-langchain` |
-| Any MCP Client | Use `session.mcp.url` |
+| Framework        | Install                                       |
+| ---------------- | --------------------------------------------- |
+| Claude Agent SDK | `pip install composio claude-agent-sdk`       |
+| OpenAI Agents    | `pip install composio openai-agents`          |
+| Vercel AI        | `npm install @composio/core @composio/vercel` |
+| LangChain        | `pip install composio-langchain`              |
+| Any MCP Client   | Use `session.mcp.url`                         |
 
 ## Troubleshooting
 

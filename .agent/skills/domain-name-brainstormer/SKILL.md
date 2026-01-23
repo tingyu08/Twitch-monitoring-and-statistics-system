@@ -1,11 +1,14 @@
 ---
 name: domain-name-brainstormer
-description: Generates creative domain name ideas for your project and checks availability across multiple TLDs (.com, .io, .dev, .ai, etc.). Saves hours of brainstorming and manual checking.
+description:
+  Generates creative domain name ideas for your project and checks availability across multiple TLDs
+  (.com, .io, .dev, .ai, etc.). Saves hours of brainstorming and manual checking.
 ---
 
 # Domain Name Brainstormer
 
-This skill helps you find the perfect domain name for your project by generating creative options and checking what's actually available to register.
+This skill helps you find the perfect domain name for your project by generating creative options
+and checking what's actually available to register.
 
 ## When to Use This Skill
 
@@ -30,7 +33,7 @@ This skill helps you find the perfect domain name for your project by generating
 ### Basic Brainstorming
 
 ```
-I'm building a project management tool for remote teams. 
+I'm building a project management tool for remote teams.
 Suggest domain names.
 ```
 
@@ -41,22 +44,24 @@ Help me brainstorm domain names for a personal finance app
 ### Specific Preferences
 
 ```
-I need a domain name for my AI writing assistant. 
+I need a domain name for my AI writing assistant.
 Prefer short names with .ai or .io extension.
 ```
 
 ### With Keywords
 
 ```
-Suggest domain names using the words "pixel" or "studio" 
+Suggest domain names using the words "pixel" or "studio"
 for my design agency
 ```
 
 ## Example
 
-**User**: "I'm building a tool for developers to share code snippets. Suggest creative domain names."
+**User**: "I'm building a tool for developers to share code snippets. Suggest creative domain
+names."
 
 **Output**:
+
 ```
 Analyzing your project...
 Target audience: Developers
@@ -92,7 +97,7 @@ Key features: Code sharing, snippets, collaboration
 
 🏆 Top Pick: snippet.dev
 - Perfect for developer audience
-- Short and memorable  
+- Short and memorable
 - .dev extension adds credibility
 - Available now!
 
@@ -113,12 +118,9 @@ Next steps:
 
 ### What Makes a Good Domain
 
-✓ **Short**: Under 15 characters ideal
-✓ **Memorable**: Easy to recall and spell
-✓ **Pronounceable**: Can be said in conversation
-✓ **Descriptive**: Hints at what you do
-✓ **Brandable**: Unique enough to stand out
-✓ **No hyphens**: Easier to share verbally
+✓ **Short**: Under 15 characters ideal ✓ **Memorable**: Easy to recall and spell ✓
+**Pronounceable**: Can be said in conversation ✓ **Descriptive**: Hints at what you do ✓
+**Brandable**: Unique enough to stand out ✓ **No hyphens**: Easier to share verbally
 
 ### TLD Guide
 
@@ -137,34 +139,35 @@ Next steps:
 ### Check Similar Variations
 
 ```
-Check availability for "codebase" and similar variations 
+Check availability for "codebase" and similar variations
 across .com, .io, .dev
 ```
 
 ### Industry-Specific
 
 ```
-Suggest domain names for a sustainable fashion brand, 
+Suggest domain names for a sustainable fashion brand,
 checking .eco and .fashion TLDs
 ```
 
 ### Multilingual Options
 
 ```
-Brainstorm domain names in English and Spanish for 
+Brainstorm domain names in English and Spanish for
 a language learning app
 ```
 
 ### Competitor Analysis
 
 ```
-Show me domain patterns used by successful project 
+Show me domain patterns used by successful project
 management tools, then suggest similar available ones
 ```
 
 ## Example Workflows
 
 ### Startup Launch
+
 1. Describe your startup idea
 2. Get 10-15 domain suggestions across TLDs
 3. Review availability and pricing
@@ -172,12 +175,14 @@ management tools, then suggest similar available ones
 5. Register immediately
 
 ### Personal Brand
+
 1. Share your name and profession
 2. Get variations (firstname.com, firstnamelastname.dev, etc.)
 3. Check social media handle availability too
 4. Register consistent brand across platforms
 
 ### Product Naming
+
 1. Describe product and target market
 2. Get creative, brandable names
 3. Check trademark conflicts
@@ -197,6 +202,7 @@ management tools, then suggest similar available ones
 ## Pricing Context
 
 When suggesting domains, I'll note:
+
 - Standard domains: ~$10-15/year
 - Premium TLDs (.io, .ai): ~$30-50/year
 - Taken domains: Market price if listed
@@ -205,8 +211,8 @@ When suggesting domains, I'll note:
 ## Related Tools
 
 After picking a domain:
+
 - Check logo design options
 - Verify social media handles
 - Research trademark availability
 - Plan brand identity colors/fonts
-

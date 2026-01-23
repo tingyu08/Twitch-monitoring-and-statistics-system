@@ -34,9 +34,7 @@ export function calculateWatchSessions(
   }
 
   // 確保訊息按時間排序
-  const sorted = [...messageTimestamps].sort(
-    (a, b) => a.getTime() - b.getTime()
-  );
+  const sorted = [...messageTimestamps].sort((a, b) => a.getTime() - b.getTime());
 
   const sessions: WatchSession[] = [];
   let currentSession: { start: Date; lastMessage: Date } | null = null;
@@ -44,9 +42,7 @@ export function calculateWatchSessions(
   for (const msgTime of sorted) {
     if (!currentSession) {
       // 開始新區段
-      let startTime = new Date(
-        msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000
-      );
+      let startTime = new Date(msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000);
 
       // 不早於直播開始時間
       if (streamStartTime && startTime < streamStartTime) {
@@ -60,8 +56,7 @@ export function calculateWatchSessions(
     } else {
       // 檢查是否需要開始新區段
       const previousSessionEnd = new Date(
-        currentSession.lastMessage.getTime() +
-          POST_MESSAGE_BUFFER_MIN * 60 * 1000
+        currentSession.lastMessage.getTime() + POST_MESSAGE_BUFFER_MIN * 60 * 1000
       );
 
       if (msgTime > previousSessionEnd) {
@@ -76,16 +71,11 @@ export function calculateWatchSessions(
         sessions.push({
           startTime: currentSession.start,
           endTime,
-          durationSeconds: Math.max(
-            0,
-            (endTime.getTime() - currentSession.start.getTime()) / 1000
-          ),
+          durationSeconds: Math.max(0, (endTime.getTime() - currentSession.start.getTime()) / 1000),
         });
 
         // 開始新區段
-        let startTime = new Date(
-          msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000
-        );
+        let startTime = new Date(msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000);
         if (streamStartTime && startTime < streamStartTime) {
           startTime = streamStartTime;
         }
@@ -114,10 +104,7 @@ export function calculateWatchSessions(
     sessions.push({
       startTime: currentSession.start,
       endTime,
-      durationSeconds: Math.max(
-        0,
-        (endTime.getTime() - currentSession.start.getTime()) / 1000
-      ),
+      durationSeconds: Math.max(0, (endTime.getTime() - currentSession.start.getTime()) / 1000),
     });
   }
 
@@ -196,11 +183,7 @@ export async function updateViewerWatchTime(
 
     // 計算觀看區段
     const timestamps = messages.map((m) => m.timestamp);
-    const sessions = calculateWatchSessions(
-      timestamps,
-      streamStartTime,
-      streamEndTime
-    );
+    const sessions = calculateWatchSessions(timestamps, streamStartTime, streamEndTime);
     const totalWatchSeconds = calculateTotalWatchSeconds(sessions);
 
     // 更新資料庫

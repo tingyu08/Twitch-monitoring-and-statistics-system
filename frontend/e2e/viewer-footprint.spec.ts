@@ -109,10 +109,9 @@ test.describe("Viewer Footprint Dashboard", () => {
     await page.goto("/dashboard/viewer/footprint/ch_1");
 
     // Wait for page title
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "觀眾足跡總覽",
-      { timeout: 30000 }
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("觀眾足跡總覽", {
+      timeout: 30000,
+    });
 
     // Check for channel name displayed (use exact match to avoid multiple elements)
     await expect(page.getByText("Shroud", { exact: true }).first()).toBeVisible();
@@ -131,10 +130,9 @@ test.describe("Viewer Footprint Dashboard", () => {
     await page.goto("/dashboard/viewer/footprint/ch_1");
 
     // Wait for page to load
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "觀眾足跡總覽",
-      { timeout: 30000 }
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("觀眾足跡總覽", {
+      timeout: 30000,
+    });
 
     // Verify stat cards are visible
     await expect(page.getByText("總觀看時數")).toBeVisible();
@@ -145,10 +143,9 @@ test.describe("Viewer Footprint Dashboard", () => {
     await page.goto("/dashboard/viewer/footprint/ch_1");
 
     // Wait for page to load
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "觀眾足跡總覽",
-      { timeout: 30000 }
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("觀眾足跡總覽", {
+      timeout: 30000,
+    });
 
     // Verify radar chart card is visible
     await expect(page.getByText("投入分析")).toBeVisible();
@@ -158,10 +155,9 @@ test.describe("Viewer Footprint Dashboard", () => {
     await page.goto("/dashboard/viewer/footprint/ch_1");
 
     // Wait for page to load
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "觀眾足跡總覽",
-      { timeout: 30000 }
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("觀眾足跡總覽", {
+      timeout: 30000,
+    });
 
     // Verify badges card is visible
     await expect(page.getByText("成就徽章")).toBeVisible();

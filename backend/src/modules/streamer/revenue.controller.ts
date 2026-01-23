@@ -36,9 +36,7 @@ export class RevenueController {
       return res.json(stats);
     } catch (error) {
       console.error("Get subscription stats error:", error);
-      return res
-        .status(500)
-        .json({ error: "Failed to get subscription stats" });
+      return res.status(500).json({ error: "Failed to get subscription stats" });
     }
   }
 
@@ -72,10 +70,7 @@ export class RevenueController {
       }
 
       const limit = parseInt(req.query.limit as string) || 10;
-      const supporters = await revenueService.getTopSupporters(
-        streamerId,
-        limit
-      );
+      const supporters = await revenueService.getTopSupporters(streamerId, limit);
       return res.json(supporters);
     } catch (error) {
       console.error("Get top supporters error:", error);
@@ -160,15 +155,10 @@ export class RevenueController {
         ]);
       }
 
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
-        "\n"
-      );
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 
       res.setHeader("Content-Type", "text/csv");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="revenue-report-${days}days.csv"`
-      );
+      res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.csv"`);
       return res.send(csv);
     } catch (error) {
       console.error("Export report error:", error);

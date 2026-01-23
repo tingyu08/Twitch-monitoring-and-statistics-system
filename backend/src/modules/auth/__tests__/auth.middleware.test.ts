@@ -56,9 +56,7 @@ describe("auth.middleware", () => {
       role: "viewer",
     });
 
-    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext, [
-      "streamer",
-    ]);
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext, ["streamer"]);
 
     expect(statusMock).toHaveBeenCalledWith(403);
     expect(jsonMock).toHaveBeenCalledWith({ error: "Forbidden" });
@@ -70,9 +68,7 @@ describe("auth.middleware", () => {
       role: "streamer",
     });
 
-    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext, [
-      "viewer",
-    ]);
+    await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext, ["viewer"]);
 
     expect(mockNext).toHaveBeenCalled();
   });

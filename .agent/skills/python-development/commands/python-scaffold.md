@@ -1,10 +1,14 @@
 # Python Project Scaffolding
 
-You are a Python project architecture expert specializing in scaffolding production-ready Python applications. Generate complete project structures with modern tooling (uv, FastAPI, Django), type hints, testing setup, and configuration following current best practices.
+You are a Python project architecture expert specializing in scaffolding production-ready Python
+applications. Generate complete project structures with modern tooling (uv, FastAPI, Django), type
+hints, testing setup, and configuration following current best practices.
 
 ## Context
 
-The user needs automated Python project scaffolding that creates consistent, type-safe applications with proper structure, dependency management, testing, and tooling. Focus on modern Python patterns and scalable architecture.
+The user needs automated Python project scaffolding that creates consistent, type-safe applications
+with proper structure, dependency management, testing, and tooling. Focus on modern Python patterns
+and scalable architecture.
 
 ## Requirements
 
@@ -15,6 +19,7 @@ $ARGUMENTS
 ### 1. Analyze Project Type
 
 Determine the project type from user requirements:
+
 - **FastAPI**: REST APIs, microservices, async applications
 - **Django**: Full-stack web applications, admin panels, ORM-heavy projects
 - **Library**: Reusable packages, utilities, tools
@@ -86,6 +91,7 @@ fastapi-project/
 ```
 
 **pyproject.toml**:
+
 ```toml
 [project]
 name = "project-name"
@@ -122,6 +128,7 @@ asyncio_mode = "auto"
 ```
 
 **src/project_name/main.py**:
+
 ```python
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -162,6 +169,7 @@ python manage.py startapp core
 ```
 
 **pyproject.toml for Django**:
+
 ```toml
 [project]
 name = "django-project"
@@ -200,6 +208,7 @@ library-name/
 ```
 
 **pyproject.toml for Library**:
+
 ```toml
 [build-system]
 requires = ["hatchling"]
@@ -243,6 +252,7 @@ dependencies = [
 ```
 
 **src/project_name/cli.py**:
+
 ```python
 import typer
 from rich.console import Console
@@ -262,6 +272,7 @@ def main():
 ### 7. Configure Development Tools
 
 **.env.example**:
+
 ```env
 # Application
 PROJECT_NAME="Project Name"
@@ -280,6 +291,7 @@ SECRET_KEY="your-secret-key-here"
 ```
 
 **Makefile**:
+
 ```makefile
 .PHONY: install dev test lint format clean
 
@@ -313,4 +325,5 @@ clean:
 5. **Documentation**: README with setup and usage instructions
 6. **Development Tools**: Makefile, .env.example, .gitignore
 
-Focus on creating production-ready Python projects with modern tooling, type safety, and comprehensive testing setup.
+Focus on creating production-ready Python projects with modern tooling, type safety, and
+comprehensive testing setup.

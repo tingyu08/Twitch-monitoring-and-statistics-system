@@ -1,6 +1,7 @@
 # 環境變數設定說明
 
 ## 問題
+
 如果看到 "missing client id" 錯誤，表示缺少 Twitch OAuth 憑證。
 
 ## 解決步驟
@@ -54,6 +55,7 @@ npm run dev
 ### 4. 驗證設定
 
 重新啟動後，檢查終端輸出：
+
 - 不應該看到 "[backend/env] TWITCH_CLIENT_ID 或 TWITCH_CLIENT_SECRET 尚未設定" 的警告
 - 如果仍有警告，請確認 `.env` 檔案路徑正確且格式正確
 
@@ -62,4 +64,3 @@ npm run dev
 - **不要**將 `.env` 檔案 commit 到版本控制系統
 - `.env` 檔案應在 `.gitignore` 中
 - 生產環境請使用環境變數管理服務（如 AWS Secrets Manager、Azure Key Vault 等）
-

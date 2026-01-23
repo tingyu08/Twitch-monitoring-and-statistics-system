@@ -62,10 +62,7 @@ export class UnifiedTwitchService {
     if (helixHealthy) {
       logger.info("Twitch Service", "Helix API 連線正常 (Twurple)");
     } else {
-      logger.warn(
-        "Twitch Service",
-        "Helix API 連線失敗 - 部分功能可能無法使用"
-      );
+      logger.warn("Twitch Service", "Helix API 連線失敗 - 部分功能可能無法使用");
     }
 
     // 啟動排程任務
@@ -107,11 +104,7 @@ export class UnifiedTwitchService {
         followerCount,
       };
     } catch (error) {
-      logger.error(
-        "Twitch Service",
-        `獲取頻道資訊失敗: ${channelLogin}`,
-        error
-      );
+      logger.error("Twitch Service", `獲取頻道資訊失敗: ${channelLogin}`, error);
       return null;
     }
   }
@@ -126,9 +119,7 @@ export class UnifiedTwitchService {
     const batchSize = 20;
     for (let i = 0; i < channelLogins.length; i += batchSize) {
       const batch = channelLogins.slice(i, i + batchSize);
-      const batchResults = await Promise.all(
-        batch.map((login) => this.getChannelInfo(login))
-      );
+      const batchResults = await Promise.all(batch.map((login) => this.getChannelInfo(login)));
       results.push(...batchResults.filter((r): r is ChannelInfo => r !== null));
     }
 
@@ -140,26 +131,16 @@ export class UnifiedTwitchService {
   /**
    * 獲取用戶對頻道的追蹤資訊
    */
-  async getUserFollowInfo(
-    channelLogin: string,
-    userLogin: string
-  ): Promise<UserFollowInfo> {
+  async getUserFollowInfo(channelLogin: string, userLogin: string): Promise<UserFollowInfo> {
     try {
-      const followage = await decApiService.getFollowage(
-        channelLogin,
-        userLogin
-      );
+      const followage = await decApiService.getFollowage(channelLogin, userLogin);
       return {
         isFollowing: followage.isFollowing,
         followedAt: followage.followedAt,
         followDuration: followage.duration,
       };
     } catch (error) {
-      logger.error(
-        "Twitch Service",
-        `獲取追蹤資訊失敗: ${userLogin} -> ${channelLogin}`,
-        error
-      );
+      logger.error("Twitch Service", `獲取追蹤資訊失敗: ${userLogin} -> ${channelLogin}`, error);
       return { isFollowing: false };
     }
   }

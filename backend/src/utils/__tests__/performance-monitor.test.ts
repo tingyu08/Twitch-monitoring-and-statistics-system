@@ -69,7 +69,7 @@ describe("PerformanceMonitor", () => {
 
     const stats = monitor.getStats();
     expect(stats.p50).toBeDefined();
-    expect(stats.slowRequests).toBe(1); // 500 > 200
+    expect(stats.slowRequests).toBe(0); // 預設 slowThreshold 是 1000ms，500ms 不算慢
   });
 
   it("should reset metrics", () => {

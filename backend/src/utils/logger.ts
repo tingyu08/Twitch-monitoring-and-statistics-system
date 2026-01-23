@@ -12,12 +12,7 @@ class Logger {
     this.isDevelopment = process.env.NODE_ENV !== "production";
   }
 
-  private log(
-    level: LogLevel,
-    category: string,
-    message: string,
-    ...args: unknown[]
-  ): void {
+  private log(level: LogLevel, category: string, message: string, ...args: unknown[]): void {
     const prefix = `[${level.toUpperCase()}] [${category}]`;
 
     switch (level) {
@@ -60,34 +55,22 @@ export const logger = new Logger();
 
 // 導出特定類別的 logger
 export const authLogger = {
-  debug: (message: string, ...args: unknown[]) =>
-    logger.debug("AUTH", message, ...args),
-  info: (message: string, ...args: unknown[]) =>
-    logger.info("AUTH", message, ...args),
-  warn: (message: string, ...args: unknown[]) =>
-    logger.warn("AUTH", message, ...args),
-  error: (message: string, ...args: unknown[]) =>
-    logger.error("AUTH", message, ...args),
+  debug: (message: string, ...args: unknown[]) => logger.debug("AUTH", message, ...args),
+  info: (message: string, ...args: unknown[]) => logger.info("AUTH", message, ...args),
+  warn: (message: string, ...args: unknown[]) => logger.warn("AUTH", message, ...args),
+  error: (message: string, ...args: unknown[]) => logger.error("AUTH", message, ...args),
 };
 
 export const streamerLogger = {
-  debug: (message: string, ...args: unknown[]) =>
-    logger.debug("STREAMER", message, ...args),
-  info: (message: string, ...args: unknown[]) =>
-    logger.info("STREAMER", message, ...args),
-  warn: (message: string, ...args: unknown[]) =>
-    logger.warn("STREAMER", message, ...args),
-  error: (message: string, ...args: unknown[]) =>
-    logger.error("STREAMER", message, ...args),
+  debug: (message: string, ...args: unknown[]) => logger.debug("STREAMER", message, ...args),
+  info: (message: string, ...args: unknown[]) => logger.info("STREAMER", message, ...args),
+  warn: (message: string, ...args: unknown[]) => logger.warn("STREAMER", message, ...args),
+  error: (message: string, ...args: unknown[]) => logger.error("STREAMER", message, ...args),
 };
 
 export const dbLogger = {
-  debug: (message: string, ...args: unknown[]) =>
-    logger.debug("DATABASE", message, ...args),
-  info: (message: string, ...args: unknown[]) =>
-    logger.info("DATABASE", message, ...args),
-  warn: (message: string, ...args: unknown[]) =>
-    logger.warn("DATABASE", message, ...args),
-  error: (message: string, ...args: unknown[]) =>
-    logger.error("DATABASE", message, ...args),
+  debug: (message: string, ...args: unknown[]) => logger.debug("DATABASE", message, ...args),
+  info: (message: string, ...args: unknown[]) => logger.info("DATABASE", message, ...args),
+  warn: (message: string, ...args: unknown[]) => logger.warn("DATABASE", message, ...args),
+  error: (message: string, ...args: unknown[]) => logger.error("DATABASE", message, ...args),
 };

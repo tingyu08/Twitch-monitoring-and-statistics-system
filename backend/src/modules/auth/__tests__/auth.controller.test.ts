@@ -114,39 +114,23 @@ describe("AuthController", () => {
       mockReq.query = { state: "state1", code: "valid_code" };
       mockReq.cookies = { twitch_auth_state: "state1" };
 
-      (AuthService.handleStreamerTwitchCallback as jest.Mock).mockResolvedValue(
-        {
-          accessToken: "at",
-          refreshToken: "rt",
-        }
-      );
+      (AuthService.handleStreamerTwitchCallback as jest.Mock).mockResolvedValue({
+        accessToken: "at",
+        refreshToken: "rt",
+      });
 
       await controller.twitchCallback(mockReq as Request, mockRes as Response);
 
-      expect(AuthService.handleStreamerTwitchCallback).toHaveBeenCalledWith(
-        "valid_code"
-      );
-      expect(cookieMock).toHaveBeenCalledWith(
-        "auth_token",
-        "at",
-        expect.any(Object)
-      );
-      expect(cookieMock).toHaveBeenCalledWith(
-        "refresh_token",
-        "rt",
-        expect.any(Object)
-      );
-      expect(redirectMock).toHaveBeenCalledWith(
-        expect.stringContaining("/dashboard/viewer")
-      );
+      expect(AuthService.handleStreamerTwitchCallback).toHaveBeenCalledWith("valid_code");
+      expect(cookieMock).toHaveBeenCalledWith("auth_token", "at", expect.any(Object));
+      expect(cookieMock).toHaveBeenCalledWith("refresh_token", "rt", expect.any(Object));
+      expect(redirectMock).toHaveBeenCalledWith(expect.stringContaining("/dashboard/viewer"));
     });
 
     it("should redirect to error on service failure", async () => {
       mockReq.query = { state: "state1", code: "code1" };
       mockReq.cookies = { twitch_auth_state: "state1" };
-      (AuthService.handleStreamerTwitchCallback as jest.Mock).mockRejectedValue(
-        new Error("Fail")
-      );
+      (AuthService.handleStreamerTwitchCallback as jest.Mock).mockRejectedValue(new Error("Fail"));
 
       await controller.twitchCallback(mockReq as Request, mockRes as Response);
 
@@ -163,100 +147,6 @@ describe("AuthController", () => {
       await controller.twitchCallback(mockReq as Request, mockRes as Response);
       expect(redirectMock).toHaveBeenCalledWith(
         expect.stringContaining("/auth/error?reason=access_denied")
-      );
-    });
-  });
-
-  describe("viewerLogin", () => {
-    it("should redirect to twitch auth url", async () => {
-      (crypto.randomBytes as jest.Mock).mockReturnValue({
-        toString: () => "v_state",
-      });
-      mockTwitchClient.getOAuthUrl.mockReturnValue("http://v.url");
-
-      await controller.viewerLogin(mockReq as Request, mockRes as Response);
-
-      expect(cookieMock).toHaveBeenCalledWith(
-        "twitch_viewer_auth_state",
-        "v_state",
-        expect.any(Object)
-      );
-      expect(redirectMock).toHaveBeenCalledWith("http://v.url");
-    });
-
-    it("should handle unexpected errors with 500", async () => {
-      (crypto.randomBytes as jest.Mock).mockImplementation(() => {
-        throw new Error("fail");
-      });
-      await controller.viewerLogin(mockReq as Request, mockRes as Response);
-      expect(statusMock).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe("viewerCallback", () => {
-    it("should handle success and consent redirect", async () => {
-      mockReq.query = { state: "s1", code: "c1" };
-      mockReq.cookies = { twitch_viewer_auth_state: "s1" };
-
-      (AuthService.handleViewerTwitchCallback as jest.Mock).mockResolvedValue({
-        viewer: { consentedAt: null },
-        accessToken: "at",
-        refreshToken: "rt",
-      });
-
-      await controller.viewerCallback(mockReq as Request, mockRes as Response);
-      expect(redirectMock).toHaveBeenCalledWith(
-        expect.stringContaining("/auth/viewer/consent")
-      );
-    });
-
-    it("should handle twitch errors", async () => {
-      mockReq.query = { error: "v_fail" };
-      await controller.viewerCallback(mockReq as Request, mockRes as Response);
-      expect(redirectMock).toHaveBeenCalledWith(
-        expect.stringContaining("/auth/error?reason=v_fail")
-      );
-    });
-
-    it("should handle state mismatch", async () => {
-      mockReq.query = { state: "a" };
-      mockReq.cookies = { twitch_viewer_auth_state: "b" };
-      await controller.viewerCallback(mockReq as Request, mockRes as Response);
-      expect(statusMock).toHaveBeenCalledWith(403);
-    });
-
-    it("should handle missing code", async () => {
-      mockReq.query = { state: "s1" };
-      mockReq.cookies = { twitch_viewer_auth_state: "s1" };
-      await controller.viewerCallback(mockReq as Request, mockRes as Response);
-      expect(statusMock).toHaveBeenCalledWith(400);
-    });
-
-    it("should handle internal errors", async () => {
-      mockReq.query = { state: "s1", code: "c1" };
-      mockReq.cookies = { twitch_viewer_auth_state: "s1" };
-      (AuthService.handleViewerTwitchCallback as jest.Mock).mockRejectedValue(
-        new Error("fail")
-      );
-      await controller.viewerCallback(mockReq as Request, mockRes as Response);
-      expect(redirectMock).toHaveBeenCalledWith(
-        expect.stringContaining("/auth/error?reason=internal_error")
-      );
-    });
-
-    it("should redirect to dashboard if already consented", async () => {
-      mockReq.query = { state: "s1", code: "c1" };
-      mockReq.cookies = { twitch_viewer_auth_state: "s1" };
-
-      (AuthService.handleViewerTwitchCallback as jest.Mock).mockResolvedValue({
-        viewer: { consentedAt: new Date() },
-        accessToken: "at",
-        refreshToken: "rt",
-      });
-
-      await controller.viewerCallback(mockReq as Request, mockRes as Response);
-      expect(redirectMock).toHaveBeenCalledWith(
-        expect.stringContaining("/dashboard/viewer")
       );
     });
   });
@@ -279,13 +169,16 @@ describe("AuthController", () => {
   describe("logout", () => {
     it("should clear cookies", async () => {
       await controller.logout(mockReq as Request, mockRes as Response);
-      expect(clearCookieMock).toHaveBeenCalledWith(
+      // The controller uses res.cookie with maxAge: -1 to clear cookies
+      expect(cookieMock).toHaveBeenCalledWith(
         "auth_token",
-        expect.any(Object)
+        "deleted",
+        expect.objectContaining({ maxAge: -1 })
       );
-      expect(clearCookieMock).toHaveBeenCalledWith(
+      expect(cookieMock).toHaveBeenCalledWith(
         "refresh_token",
-        expect.any(Object)
+        "deleted",
+        expect.objectContaining({ maxAge: -1 })
       );
     });
   });
@@ -301,11 +194,7 @@ describe("AuthController", () => {
 
       await controller.refresh(mockReq as Request, mockRes as Response);
 
-      expect(cookieMock).toHaveBeenCalledWith(
-        "auth_token",
-        "at2",
-        expect.any(Object)
-      );
+      expect(cookieMock).toHaveBeenCalledWith("auth_token", "at2", expect.any(Object));
       expect(jsonMock).toHaveBeenCalledWith({ message: "refreshed" });
     });
 

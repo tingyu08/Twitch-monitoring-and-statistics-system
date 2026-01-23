@@ -16,8 +16,7 @@ import { randomUUID } from "node:crypto";
 
 // ========== 配置常數 ==========
 
-const INSTANCE_ID =
-  process.env.INSTANCE_ID || `instance-${randomUUID().slice(0, 8)}`;
+const INSTANCE_ID = process.env.INSTANCE_ID || `instance-${randomUUID().slice(0, 8)}`;
 const HEARTBEAT_INTERVAL_MS = 30 * 1000; // 30 秒
 const LOCK_TIMEOUT_MS = 60 * 1000; // 60 秒無心跳視為死亡
 const MAX_CHANNELS_PER_INSTANCE = 80;
@@ -63,10 +62,7 @@ export class DistributedListenerCoordinator {
   public async start(): Promise<void> {
     if (this.isStarted) return;
 
-    logger.info(
-      "DistributedCoordinator",
-      `Starting with instance ID: ${this.instanceId}`
-    );
+    logger.info("DistributedCoordinator", `Starting with instance ID: ${this.instanceId}`);
 
     // 確保資料表存在
     await this.ensureTablesExist();
@@ -134,11 +130,7 @@ export class DistributedListenerCoordinator {
 
       return acquired;
     } catch (error) {
-      logger.error(
-        "DistributedCoordinator",
-        `Failed to acquire channel: ${channelId}`,
-        error
-      );
+      logger.error("DistributedCoordinator", `Failed to acquire channel: ${channelId}`, error);
       return false;
     }
   }
@@ -155,11 +147,7 @@ export class DistributedListenerCoordinator {
         `Released channel: ${channelId} (total: ${this.acquiredChannels.size})`
       );
     } catch (error) {
-      logger.error(
-        "DistributedCoordinator",
-        `Failed to release channel: ${channelId}`,
-        error
-      );
+      logger.error("DistributedCoordinator", `Failed to release channel: ${channelId}`, error);
     }
   }
 
@@ -182,8 +170,7 @@ export class DistributedListenerCoordinator {
         instanceId: inst.instanceId,
         channelCount: inst.channelCount,
         lastHeartbeat: inst.lastHeartbeat,
-        isHealthy:
-          now.getTime() - inst.lastHeartbeat.getTime() < LOCK_TIMEOUT_MS,
+        isHealthy: now.getTime() - inst.lastHeartbeat.getTime() < LOCK_TIMEOUT_MS,
       }));
     } catch {
       return [];
@@ -217,11 +204,7 @@ export class DistributedListenerCoordinator {
     try {
       await prisma.$queryRaw`SELECT 1`;
     } catch (error) {
-      logger.error(
-        "DistributedCoordinator",
-        "Database connection failed",
-        error
-      );
+      logger.error("DistributedCoordinator", "Database connection failed", error);
       throw error;
     }
   }
@@ -245,11 +228,7 @@ export class DistributedListenerCoordinator {
         },
       });
     } catch (error) {
-      logger.error(
-        "DistributedCoordinator",
-        "Failed to register instance",
-        error
-      );
+      logger.error("DistributedCoordinator", "Failed to register instance", error);
     }
   }
 
@@ -346,11 +325,7 @@ export class DistributedListenerCoordinator {
       });
       this.acquiredChannels.clear();
     } catch (error) {
-      logger.error(
-        "DistributedCoordinator",
-        "Failed to release all channels",
-        error
-      );
+      logger.error("DistributedCoordinator", "Failed to release all channels", error);
     }
   }
 
@@ -413,10 +388,7 @@ export class DistributedListenerCoordinator {
       });
 
       if (expired.count > 0) {
-        logger.info(
-          "DistributedCoordinator",
-          `Cleaned up ${expired.count} expired channel locks`
-        );
+        logger.info("DistributedCoordinator", `Cleaned up ${expired.count} expired channel locks`);
       }
 
       // 刪除過期的實例

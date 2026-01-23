@@ -1,11 +1,14 @@
 ---
 name: shellcheck-configuration
-description: Master ShellCheck static analysis configuration and usage for shell script quality. Use when setting up linting infrastructure, fixing code issues, or ensuring script portability.
+description:
+  Master ShellCheck static analysis configuration and usage for shell script quality. Use when
+  setting up linting infrastructure, fixing code issues, or ensuring script portability.
 ---
 
 # ShellCheck Configuration and Static Analysis
 
-Comprehensive guidance for configuring and using ShellCheck to improve shell script quality, catch common pitfalls, and enforce best practices through static code analysis.
+Comprehensive guidance for configuring and using ShellCheck to improve shell script quality, catch
+common pitfalls, and enforce best practices through static code analysis.
 
 ## When to Use This Skill
 
@@ -22,7 +25,9 @@ Comprehensive guidance for configuring and using ShellCheck to improve shell scr
 
 ### What is ShellCheck?
 
-ShellCheck is a static analysis tool that analyzes shell scripts and detects problematic patterns. It supports:
+ShellCheck is a static analysis tool that analyzes shell scripts and detects problematic patterns.
+It supports:
+
 - Bash, sh, dash, ksh, and other POSIX shells
 - Over 100 different warnings and errors
 - Configuration for target shell and flags
@@ -82,6 +87,7 @@ export SHELLCHECK_CONFIG=~/.shellcheckrc
 ## Common ShellCheck Error Codes
 
 ### SC1000-1099: Parser Errors
+
 ```bash
 # SC1004: Backslash continuation not followed by newline
 echo hello\

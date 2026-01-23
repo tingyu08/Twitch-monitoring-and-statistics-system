@@ -1,9 +1,5 @@
 import { exchangeCodeForToken, fetchTwitchUser } from "./twitch-oauth.client";
-import {
-  signAccessToken,
-  signRefreshToken,
-  type JWTPayload,
-} from "./jwt.utils";
+import { signAccessToken, signRefreshToken, type JWTPayload } from "./jwt.utils";
 import { prisma } from "../../db/prisma";
 import { encryptToken } from "../../utils/crypto.utils";
 import { env } from "../../config/env";
@@ -72,10 +68,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
     },
   });
 
-  logger.info(
-    "Auth",
-    `Processing unified login for: ${user.display_name} (${user.id})`,
-  );
+  logger.info("Auth", `Processing unified login for: ${user.display_name} (${user.id})`);
 
   // 同時 Check/Create Viewer record (實況主也是觀眾)
   const viewerRecord = await prisma.viewer.upsert({
@@ -97,9 +90,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   logger.info("Auth", `Viewer record upserted: ${viewerRecord.id}`);
 
   const encryptedAccess = encryptToken(tokenData.access_token);
-  const encryptedRefresh = tokenData.refresh_token
-    ? encryptToken(tokenData.refresh_token)
-    : null;
+  const encryptedRefresh = tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null;
 
   const expiresAt = tokenData.expires_in
     ? new Date(Date.now() + tokenData.expires_in * 1000)
@@ -180,23 +171,16 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   const refreshToken = signRefreshToken(jwtPayload);
 
   // 非同步觸發追蹤名單同步（不阻塞登入流程）
-  triggerFollowSyncForUser(
-    result.viewerRecord.id,
-    tokenData.access_token,
-  ).catch((err: unknown) =>
-    logger.error("Auth", "Follow sync failed after login", err),
+  triggerFollowSyncForUser(result.viewerRecord.id, tokenData.access_token).catch((err: unknown) =>
+    logger.error("Auth", "Follow sync failed after login", err)
   );
 
   // 非同步觸發聊天室服務重新初始化（不阻塞登入流程）
-  import("../../services/twitch-chat.service").then(
-    ({ twurpleChatService }) => {
-      twurpleChatService
-        .initialize()
-        .catch((err: unknown) =>
-          logger.error("Auth", "Chat service reinit failed after login", err),
-        );
-    },
-  );
+  import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
+    twurpleChatService
+      .initialize()
+      .catch((err: unknown) => logger.error("Auth", "Chat service reinit failed after login", err));
+  });
 
   return { streamer, accessToken, refreshToken };
 }
@@ -206,9 +190,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
 /**
  * 根據 Streamer ID 取得 Streamer 資訊
  */
-export async function getStreamerById(
-  streamerId: string,
-): Promise<Streamer | null> {
+export async function getStreamerById(streamerId: string): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { id: streamerId },
     include: {
@@ -227,18 +209,14 @@ export async function getStreamerById(
     twitchUserId: streamerRecord.twitchUserId,
     displayName: streamerRecord.displayName,
     avatarUrl: streamerRecord.avatarUrl || "",
-    channelUrl:
-      channel?.channelUrl ||
-      `https://www.twitch.tv/${channel?.channelName || ""}`,
+    channelUrl: channel?.channelUrl || `https://www.twitch.tv/${channel?.channelName || ""}`,
   };
 }
 
 /**
  * 根據 Twitch User ID 取得 Streamer 資訊
  */
-export async function getStreamerByTwitchId(
-  twitchUserId: string,
-): Promise<Streamer | null> {
+export async function getStreamerByTwitchId(twitchUserId: string): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { twitchUserId },
     include: {
@@ -257,8 +235,6 @@ export async function getStreamerByTwitchId(
     twitchUserId: streamerRecord.twitchUserId,
     displayName: streamerRecord.displayName,
     avatarUrl: streamerRecord.avatarUrl || "",
-    channelUrl:
-      channel?.channelUrl ||
-      `https://www.twitch.tv/${channel?.channelName || ""}`,
+    channelUrl: channel?.channelUrl || `https://www.twitch.tv/${channel?.channelName || ""}`,
   };
 }

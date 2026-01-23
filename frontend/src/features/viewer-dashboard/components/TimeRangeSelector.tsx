@@ -47,10 +47,7 @@ export function TimeRangeSelector({
       role="group"
       aria-label={t("label")}
     >
-      <span
-        id="time-range-label"
-        className="text-sm theme-text-secondary whitespace-nowrap"
-      >
+      <span id="time-range-label" className="text-sm theme-text-secondary whitespace-nowrap">
         {t("label")}
       </span>
 
@@ -69,7 +66,7 @@ export function TimeRangeSelector({
               onClick={() => onRangeChange(option.value as TimeRange)}
               disabled={disabled}
               className={`
-                px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all duration-200
+                px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200
                 ${
                   currentRange === option.value
                     ? "bg-purple-600 text-white shadow-sm shadow-purple-900/20"
@@ -84,10 +81,7 @@ export function TimeRangeSelector({
         </div>
 
         <div className="flex items-center">
-          <DateRangePicker
-            onRangeSelect={onCustomRangeChange}
-            disabled={disabled}
-          />
+          <DateRangePicker onRangeSelect={onCustomRangeChange} disabled={disabled} />
         </div>
       </div>
 
@@ -106,9 +100,7 @@ export function getRangeDays(range: TimeRange): number {
 }
 
 export function getCustomRangeDays(range: CustomDateRange): number {
-  const diffTime = Math.abs(
-    range.endDate.getTime() - range.startDate.getTime()
-  );
+  const diffTime = Math.abs(range.endDate.getTime() - range.startDate.getTime());
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays + 1;
 }

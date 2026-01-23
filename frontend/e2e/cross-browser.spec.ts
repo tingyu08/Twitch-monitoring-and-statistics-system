@@ -46,9 +46,7 @@ test.describe("跨瀏覽器兼容性測試", () => {
     test("應該顯示主要導航元素", async ({ page, browserName }) => {
       await page.goto("/");
       // 使用 toBeVisible 自動等待，避免 Loading 狀態導致失敗
-      const authButton = page
-        .locator('button, a[href*="auth"], a[href*="login"]')
-        .first();
+      const authButton = page.locator('button, a[href*="auth"], a[href*="login"]').first();
       await expect(authButton).toBeVisible();
       console.log(`[${browserName}] 導航元素檢查通過`);
     });
@@ -111,9 +109,7 @@ test.describe("跨瀏覽器兼容性測試", () => {
 
   test.describe("CSS 樣式兼容性", () => {
     test.beforeEach(async ({ page }) => {
-      await page.route("**/api/auth/me", (route) =>
-        route.fulfill({ status: 401 })
-      );
+      await page.route("**/api/auth/me", (route) => route.fulfill({ status: 401 }));
     });
     test("Flexbox 佈局應該正常運作", async ({ page, browserName }) => {
       await page.goto("/");
@@ -162,9 +158,7 @@ test.describe("跨瀏覽器兼容性測試", () => {
     });
 
     test("事件處理應該正常運作", async ({ page, browserName }) => {
-      await page.route("**/api/auth/me", (route) =>
-        route.fulfill({ status: 401 })
-      );
+      await page.route("**/api/auth/me", (route) => route.fulfill({ status: 401 }));
       await page.goto("/");
       const clickableElements = page.locator("button, a").first();
       if ((await clickableElements.count()) > 0) {
@@ -177,9 +171,7 @@ test.describe("跨瀏覽器兼容性測試", () => {
 
   test.describe("可訪問性 (A11y)", () => {
     test.beforeEach(async ({ page }) => {
-      await page.route("**/api/auth/me", (route) =>
-        route.fulfill({ status: 401 })
-      );
+      await page.route("**/api/auth/me", (route) => route.fulfill({ status: 401 }));
     });
     test("頁面應該有正確的語義結構", async ({ page, browserName }) => {
       await page.goto("/");
@@ -202,9 +194,7 @@ test.describe("跨瀏覽器兼容性測試", () => {
       );
       await page.goto("/dashboard/streamer");
       await page.waitForLoadState("networkidle");
-      const ariaElements = await page
-        .locator("[aria-label], [aria-labelledby], [role]")
-        .count();
+      const ariaElements = await page.locator("[aria-label], [aria-labelledby], [role]").count();
       console.log(`[${browserName}] 發現 ${ariaElements} 個 ARIA 標記元素`);
       expect(ariaElements).toBeGreaterThanOrEqual(0);
     });
@@ -216,9 +206,7 @@ test.describe("跨瀏覽器兼容性測試", () => {
       if (imageCount > 0) {
         for (let i = 0; i < Math.min(imageCount, 5); i++) {
           const hasAlt = await images.nth(i).getAttribute("alt");
-          console.log(
-            `[${browserName}] 圖片 ${i + 1} alt: ${hasAlt ?? "(無)"}`
-          );
+          console.log(`[${browserName}] 圖片 ${i + 1} alt: ${hasAlt ?? "(無)"}`);
         }
       }
       console.log(`[${browserName}] 發現 ${imageCount} 個圖片`);
@@ -227,22 +215,15 @@ test.describe("跨瀏覽器兼容性測試", () => {
 
   test.describe("響應式設計", () => {
     test.beforeEach(async ({ page }) => {
-      await page.route("**/api/auth/me", (route) =>
-        route.fulfill({ status: 401 })
-      );
+      await page.route("**/api/auth/me", (route) => route.fulfill({ status: 401 }));
     });
     test("應該在桌面視窗正常顯示", async ({ page, browserName }) => {
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.goto("/");
       const hasHorizontalScroll = await page.evaluate(() => {
-        return (
-          document.documentElement.scrollWidth >
-          document.documentElement.clientWidth + 20
-        );
+        return document.documentElement.scrollWidth > document.documentElement.clientWidth + 20;
       });
-      console.log(
-        `[${browserName}] 桌面視窗 (1920x1080) 水平滾動: ${hasHorizontalScroll}`
-      );
+      console.log(`[${browserName}] 桌面視窗 (1920x1080) 水平滾動: ${hasHorizontalScroll}`);
       expect(hasHorizontalScroll).toBe(false);
     });
 

@@ -22,10 +22,7 @@ export class WatchTimeIncrementJob {
   private isRunning = false;
 
   start(): void {
-    logger.info(
-      "Jobs",
-      `📋 Watch Time Increment Job 已排程: ${WATCH_TIME_INCREMENT_CRON}`
-    );
+    logger.info("Jobs", `📋 Watch Time Increment Job 已排程: ${WATCH_TIME_INCREMENT_CRON}`);
 
     cron.schedule(WATCH_TIME_INCREMENT_CRON, async () => {
       await this.execute();
@@ -42,9 +39,7 @@ export class WatchTimeIncrementJob {
 
     try {
       const now = new Date();
-      const activeWindowStart = new Date(
-        now.getTime() - ACTIVE_WINDOW_MINUTES * 60 * 1000
-      );
+      const activeWindowStart = new Date(now.getTime() - ACTIVE_WINDOW_MINUTES * 60 * 1000);
 
       // 今天的日期（正規化到 00:00:00）
       const today = new Date(now);
@@ -106,11 +101,7 @@ export class WatchTimeIncrementJob {
           });
           updatedCount++;
         } catch (error) {
-          logger.error(
-            "Jobs",
-            `更新觀看時間失敗: viewer=${viewerId}, channel=${channelId}`,
-            error
-          );
+          logger.error("Jobs", `更新觀看時間失敗: viewer=${viewerId}, channel=${channelId}`, error);
         }
       }
 

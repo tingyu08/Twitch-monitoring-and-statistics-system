@@ -1,11 +1,15 @@
 ---
 name: bash-defensive-patterns
-description: Master defensive Bash programming techniques for production-grade scripts. Use when writing robust shell scripts, CI/CD pipelines, or system utilities requiring fault tolerance and safety.
+description:
+  Master defensive Bash programming techniques for production-grade scripts. Use when writing robust
+  shell scripts, CI/CD pipelines, or system utilities requiring fault tolerance and safety.
 ---
 
 # Bash Defensive Patterns
 
-Comprehensive guidance for writing production-ready Bash scripts using defensive programming techniques, error handling, and safety best practices to prevent common pitfalls and ensure reliability.
+Comprehensive guidance for writing production-ready Bash scripts using defensive programming
+techniques, error handling, and safety best practices to prevent common pitfalls and ensure
+reliability.
 
 ## When to Use This Skill
 
@@ -21,6 +25,7 @@ Comprehensive guidance for writing production-ready Bash scripts using defensive
 ## Core Defensive Principles
 
 ### 1. Strict Mode
+
 Enable bash strict mode at the start of every script to catch errors early.
 
 ```bash
@@ -29,12 +34,14 @@ set -Eeuo pipefail  # Exit on error, unset variables, pipe failures
 ```
 
 **Key flags:**
+
 - `set -E`: Inherit ERR trap in functions
 - `set -e`: Exit on any error (command returns non-zero)
 - `set -u`: Exit on undefined variable reference
 - `set -o pipefail`: Pipe fails if any command fails (not just last)
 
 ### 2. Error Trapping and Cleanup
+
 Implement proper cleanup on script exit or error.
 
 ```bash
@@ -49,6 +56,7 @@ TMPDIR=$(mktemp -d)
 ```
 
 ### 3. Variable Safety
+
 Always quote variables to prevent word splitting and globbing issues.
 
 ```bash
@@ -63,6 +71,7 @@ cp "$source" "$dest"
 ```
 
 ### 4. Array Handling
+
 Use arrays safely for complex data handling.
 
 ```bash
@@ -79,6 +88,7 @@ readarray -t numbers < <(seq 1 10)
 ```
 
 ### 5. Conditional Safety
+
 Use `[[ ]]` for Bash-specific features, `[ ]` for POSIX.
 
 ```bash
@@ -513,7 +523,7 @@ check_dependencies
 
 1. **Always use strict mode** - `set -Eeuo pipefail`
 2. **Quote all variables** - `"$variable"` prevents word splitting
-3. **Use [[ ]] conditionals** - More robust than [ ]
+3. **Use [[]] conditionals** - More robust than [ ]
 4. **Implement error trapping** - Catch and handle errors gracefully
 5. **Validate all inputs** - Check file existence, permissions, formats
 6. **Use functions for reusability** - Prefix with meaningful names

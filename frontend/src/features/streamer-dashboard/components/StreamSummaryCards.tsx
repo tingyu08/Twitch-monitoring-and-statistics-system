@@ -35,8 +35,7 @@ export function StreamSummaryCards() {
     fetchSummary();
   }, [range]);
 
-  const getDays = (r: DateRange) =>
-    r === "7d" ? "7" : r === "30d" ? "30" : "90";
+  const getDays = (r: DateRange) => (r === "7d" ? "7" : r === "30d" ? "30" : "90");
 
   if (error) {
     return (
@@ -69,11 +68,7 @@ export function StreamSummaryCards() {
           aria-label={t("loadingCharts")}
         >
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="theme-card p-6 animate-pulse"
-              aria-hidden="true"
-            >
+            <div key={i} className="theme-card p-6 animate-pulse" aria-hidden="true">
               <div className="h-4 bg-gray-700 rounded w-24 mb-4"></div>
               <div className="h-10 bg-gray-700 rounded w-32 mb-2"></div>
               <div className="h-3 bg-gray-700 rounded w-16"></div>
@@ -88,9 +83,7 @@ export function StreamSummaryCards() {
         summary.avgStreamDurationMinutes === 0 ? (
           <div className="theme-card p-12 text-center">
             <p className="theme-text-secondary text-lg">{t("noStreamData")}</p>
-            <p className="theme-text-muted text-sm mt-2">
-              {t("startStreamHint")}
-            </p>
+            <p className="theme-text-muted text-sm mt-2">{t("startStreamHint")}</p>
             {summary.isEstimated && (
               <p className="text-yellow-500 text-xs mt-4 px-3 py-1 bg-yellow-900/20 border border-yellow-700 rounded inline-block">
                 ⚠️ {t("summary.dataSyncing")}
@@ -125,9 +118,7 @@ export function StreamSummaryCards() {
       ) : (
         <div className="theme-card p-12 text-center">
           <p className="theme-text-secondary text-lg">{t("noStreamData")}</p>
-          <p className="theme-text-muted text-sm mt-2">
-            {t("startStreamHint")}
-          </p>
+          <p className="theme-text-muted text-sm mt-2">{t("startStreamHint")}</p>
         </div>
       )}
     </section>

@@ -32,22 +32,17 @@ export async function updateLiveStatusFn() {
     });
 
     // 建立當前狀態 Map 用於比較
-    const previousStatusMap = new Map(
-      channels.map((c) => [c.twitchChannelId, c.isLive]),
-    );
+    const previousStatusMap = new Map(channels.map((c) => [c.twitchChannelId, c.isLive]));
 
     if (channels.length === 0) {
       logger.warn(
         "Jobs",
-        "⚠️ No monitored channels found (isMonitored=true). Check if channels are correctly synced.",
+        "⚠️ No monitored channels found (isMonitored=true). Check if channels are correctly synced."
       );
       return;
     }
 
-    logger.debug(
-      "Jobs",
-      `📊 Found ${channels.length} monitored channels to check`,
-    );
+    logger.debug("Jobs", `📊 Found ${channels.length} monitored channels to check`);
 
     // 2. 初始化 API Client
     const { ApiClient } = await new Function('return import("@twurple/api")')();
@@ -132,7 +127,7 @@ export async function updateLiveStatusFn() {
           currentStreamStartedAt: update.startedAt,
           lastLiveCheckAt: now,
         },
-      }),
+      })
     );
 
     // 分批執行 Transaction 避免過大
@@ -193,12 +188,12 @@ export async function updateLiveStatusFn() {
     if (onlineChanges > 0 || offlineChanges > 0) {
       logger.info(
         "Jobs",
-        `Update Live Status: ${onlineChanges} went online, ${offlineChanges} went offline (${liveCount} live, ${offlineCount} offline)`,
+        `Update Live Status: ${onlineChanges} went online, ${offlineChanges} went offline (${liveCount} live, ${offlineCount} offline)`
       );
     } else {
       logger.debug(
         "Jobs",
-        `✅ Update Live Status: ${updates.length} channels checked, ${liveCount} LIVE, ${offlineCount} offline`,
+        `✅ Update Live Status: ${updates.length} channels checked, ${liveCount} LIVE, ${offlineCount} offline`
       );
     }
   } catch (error) {

@@ -1,11 +1,14 @@
 ---
 name: image-enhancer
-description: Improves the quality of images, especially screenshots, by enhancing resolution, sharpness, and clarity. Perfect for preparing images for presentations, documentation, or social media posts.
+description:
+  Improves the quality of images, especially screenshots, by enhancing resolution, sharpness, and
+  clarity. Perfect for preparing images for presentations, documentation, or social media posts.
 ---
 
 # Image Enhancer
 
-This skill takes your images and screenshots and makes them look better—sharper, clearer, and more professional.
+This skill takes your images and screenshots and makes them look better—sharper, clearer, and more
+professional.
 
 ## When to Use This Skill
 
@@ -61,6 +64,7 @@ Improve the quality of all PNG files in this directory
 **User**: "Improve the image quality of screenshot-2024.png"
 
 **Output**:
+
 ```
 Analyzing screenshot-2024.png...
 
@@ -79,7 +83,8 @@ Saved as: screenshot-2024-enhanced.png
 Original preserved as: screenshot-2024-original.png
 ```
 
-**Inspired by:** Lenny Rachitsky's workflow from his newsletter - used for screenshots in his articles
+**Inspired by:** Lenny Rachitsky's workflow from his newsletter - used for screenshots in his
+articles
 
 ## Tips
 
@@ -96,4 +101,3 @@ Original preserved as: screenshot-2024-original.png
 - **Social Media**: Optimize images for Twitter, LinkedIn, Instagram
 - **Presentations**: Upscale images for large screens
 - **Print Materials**: Increase resolution for physical media
-

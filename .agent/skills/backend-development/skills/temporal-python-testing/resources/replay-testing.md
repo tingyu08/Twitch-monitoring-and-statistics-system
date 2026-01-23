@@ -1,18 +1,22 @@
 # Replay Testing for Determinism and Compatibility
 
-Comprehensive guide for validating workflow determinism and ensuring safe code changes using replay testing.
+Comprehensive guide for validating workflow determinism and ensuring safe code changes using replay
+testing.
 
 ## What is Replay Testing?
 
-**Purpose**: Verify that workflow code changes are backward-compatible with existing workflow executions
+**Purpose**: Verify that workflow code changes are backward-compatible with existing workflow
+executions
 
 **How it works**:
+
 1. Temporal records every workflow decision as Event History
 2. Replay testing re-executes workflow code against recorded history
 3. If new code makes same decisions → deterministic (safe to deploy)
 4. If decisions differ → non-deterministic (breaking change)
 
 **Critical Use Cases**:
+
 - Deploying workflow code changes to production
 - Validating refactoring doesn't break running workflows
 - CI/CD automated compatibility checks
@@ -78,6 +82,7 @@ async def test_replay_multiple_workflows():
 ### Common Non-Deterministic Patterns
 
 **Problem: Random Number Generation**
+
 ```python
 # ❌ Non-deterministic (breaks replay)
 @workflow.defn
@@ -95,6 +100,7 @@ class GoodWorkflow:
 ```
 
 **Problem: Current Time**
+
 ```python
 # ❌ Non-deterministic
 @workflow.defn
@@ -114,6 +120,7 @@ class GoodWorkflow:
 ```
 
 **Problem: Direct External Calls**
+
 ```python
 # ❌ Non-deterministic
 @workflow.defn
@@ -432,6 +439,7 @@ class MigratedWorkflow:
 ## Common Replay Errors
 
 **Non-Deterministic Error**:
+
 ```
 WorkflowNonDeterministicError: Workflow command mismatch at position 5
 Expected: ScheduleActivityTask(activity_id='activity-1')
@@ -441,6 +449,7 @@ Got: ScheduleActivityTask(activity_id='activity-2')
 **Solution**: Code change altered workflow decision sequence
 
 **Version Mismatch Error**:
+
 ```
 WorkflowVersionError: Workflow version changed from 1 to 2 without using get_version()
 ```

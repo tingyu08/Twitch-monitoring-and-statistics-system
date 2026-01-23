@@ -22,6 +22,13 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Production: Remove console.log but keep console.error and console.warn for monitoring
+  compiler: {
+    removeConsole:
+      process.env.NODE_ENV === "production"
+        ? { exclude: ["error", "warn"] }
+        : false,
+  },
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000", "app.localhost:3000"],

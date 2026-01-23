@@ -141,9 +141,7 @@ test.describe("Viewer Stats & Charts", () => {
     }
   });
 
-  test("should display time range selector on channel detail page", async ({
-    page,
-  }) => {
+  test("should display time range selector on channel detail page", async ({ page }) => {
     // 導航到詳情頁
     await page.goto("/dashboard/viewer/ch_1");
 
@@ -160,9 +158,7 @@ test.describe("Viewer Stats & Charts", () => {
     await expect(page.getByText("顯示過去 30 天的資料")).toBeVisible();
   });
 
-  test("should change time range when clicking different options", async ({
-    page,
-  }) => {
+  test("should change time range when clicking different options", async ({ page }) => {
     // 導航到詳情頁
     await page.goto("/dashboard/viewer/ch_1");
 

@@ -54,10 +54,7 @@ class TokenValidationService {
 
       if (response.status === 200) {
         const data: TwitchValidateResponse = response.data;
-        logger.debug(
-          "Token Validation",
-          `Token valid, expires in ${data.expires_in}s`
-        );
+        logger.debug("Token Validation", `Token valid, expires in ${data.expires_in}s`);
         return {
           isValid: true,
           status: TokenStatus.ACTIVE,
@@ -139,10 +136,7 @@ class TokenValidationService {
     } else {
       // Token 無效，增加失敗計數
       const newFailureCount = token.failureCount + 1;
-      const newStatus =
-        newFailureCount >= this.MAX_FAILURE_COUNT
-          ? result.status
-          : token.status;
+      const newStatus = newFailureCount >= this.MAX_FAILURE_COUNT ? result.status : token.status;
 
       await prisma.twitchToken.update({
         where: { id: tokenId },
@@ -183,10 +177,7 @@ class TokenValidationService {
       },
     });
 
-    logger.info(
-      "Token Validation",
-      `Validating ${tokens.length} active tokens`
-    );
+    logger.info("Token Validation", `Validating ${tokens.length} active tokens`);
 
     let valid = 0;
     let invalid = 0;
@@ -199,9 +190,7 @@ class TokenValidationService {
           valid++;
         } else {
           invalid++;
-          errors.push(
-            `Token ${token.id} (${token.ownerType}): ${result.message}`
-          );
+          errors.push(`Token ${token.id} (${token.ownerType}): ${result.message}`);
         }
 
         // 避免速率限制，每個請求間隔 100ms
@@ -209,9 +198,7 @@ class TokenValidationService {
       } catch (error) {
         invalid++;
         errors.push(
-          `Token ${token.id}: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`
+          `Token ${token.id}: ${error instanceof Error ? error.message : "Unknown error"}`
         );
       }
     }
@@ -232,11 +219,7 @@ class TokenValidationService {
   /**
    * 標記 Token 為特定狀態
    */
-  async markTokenStatus(
-    tokenId: string,
-    status: TokenStatusType,
-    reason?: string
-  ): Promise<void> {
+  async markTokenStatus(tokenId: string, status: TokenStatusType, reason?: string): Promise<void> {
     await prisma.twitchToken.update({
       where: { id: tokenId },
       data: {
@@ -329,10 +312,13 @@ class TokenValidationService {
       _count: { status: true },
     });
 
-    return stats.reduce((acc, stat) => {
-      acc[stat.status] = stat._count.status;
-      return acc;
-    }, {} as Record<string, number>);
+    return stats.reduce(
+      (acc, stat) => {
+        acc[stat.status] = stat._count.status;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
   }
 }
 

@@ -34,9 +34,7 @@ app.use(
   })
 );
 
-app.post("/eventsub/callback", verifyEventSubSignature, (req, res) =>
-  res.status(200).send("OK")
-);
+app.post("/eventsub/callback", verifyEventSubSignature, (req, res) => res.status(200).send("OK"));
 
 describe("Story 3.3: EventSub Middleware", () => {
   beforeEach(() => {
@@ -45,9 +43,7 @@ describe("Story 3.3: EventSub Middleware", () => {
   });
 
   it("should reject request with missing signature", async () => {
-    const res = await request(app)
-      .post("/eventsub/callback")
-      .send({ some: "data" });
+    const res = await request(app).post("/eventsub/callback").send({ some: "data" });
     expect(res.status).toBe(403);
   });
 

@@ -25,9 +25,7 @@ export class ViewerMessageStatsController {
     // AC 6: GET /api/viewer/{viewerId}/channels/{channelId}/message-stats
 
     if (req.params.viewerId && req.params.viewerId !== req.user.viewerId) {
-      return res
-        .status(403)
-        .json({ error: "Forbidden: Cannot access other viewer stats" });
+      return res.status(403).json({ error: "Forbidden: Cannot access other viewer stats" });
     }
 
     // 解析時間範圍參數
@@ -48,12 +46,7 @@ export class ViewerMessageStatsController {
     }
 
     try {
-      const stats = await this.getStats(
-        req.user.viewerId,
-        channelId,
-        startDate,
-        endDate
-      );
+      const stats = await this.getStats(req.user.viewerId, channelId, startDate, endDate);
       return res.json(stats);
     } catch (error) {
       console.error("Error fetching message stats:", error);
@@ -61,12 +54,7 @@ export class ViewerMessageStatsController {
     }
   };
 
-  private async getStats(
-    viewerId: string,
-    channelId: string,
-    startDate: Date,
-    endDate: Date
-  ) {
+  private async getStats(viewerId: string, channelId: string, startDate: Date, endDate: Date) {
     // 1. 查詢聚合數據
     const aggs = await prisma.viewerChannelMessageDailyAgg.findMany({
       where: {
@@ -140,9 +128,7 @@ export class ViewerMessageStatsController {
     });
 
     // 格式化最活躍日期
-    const mostActiveDateStr = mostActive.date
-      ? mostActive.date.toISOString().split("T")[0]
-      : null;
+    const mostActiveDateStr = mostActive.date ? mostActive.date.toISOString().split("T")[0] : null;
 
     // 4. 構建響應
     return {

@@ -149,8 +149,7 @@ class PerformanceMonitor {
       }
       const stats = requestsByPath[key];
       stats.count++;
-      stats.avgDuration =
-        (stats.avgDuration * (stats.count - 1) + metric.duration) / stats.count;
+      stats.avgDuration = (stats.avgDuration * (stats.count - 1) + metric.duration) / stats.count;
       stats.maxDuration = Math.max(stats.maxDuration, metric.duration);
       stats.minDuration = Math.min(stats.minDuration, metric.duration);
     }
@@ -161,18 +160,14 @@ class PerformanceMonitor {
         requestsByPath[key].minDuration = 0;
       }
       // 保留兩位小數
-      requestsByPath[key].avgDuration =
-        Math.round(requestsByPath[key].avgDuration * 100) / 100;
+      requestsByPath[key].avgDuration = Math.round(requestsByPath[key].avgDuration * 100) / 100;
     }
 
-    const slowRequests = this.metrics.filter(
-      (m) => m.duration > this.config.slowThreshold
-    ).length;
+    const slowRequests = this.metrics.filter((m) => m.duration > this.config.slowThreshold).length;
 
     return {
       totalRequests: total,
-      averageResponseTime:
-        Math.round((durations.reduce((a, b) => a + b, 0) / total) * 100) / 100,
+      averageResponseTime: Math.round((durations.reduce((a, b) => a + b, 0) / total) * 100) / 100,
       slowRequests,
       fastRequests: total - slowRequests,
       p50: getPercentile(50),
@@ -209,14 +204,10 @@ export const performanceMonitor = new PerformanceMonitor();
 
 // 效能日誌輔助函數
 export const performanceLogger = {
-  debug: (message: string, ...args: unknown[]) =>
-    logger.debug("PERFORMANCE", message, ...args),
-  info: (message: string, ...args: unknown[]) =>
-    logger.info("PERFORMANCE", message, ...args),
-  warn: (message: string, ...args: unknown[]) =>
-    logger.warn("PERFORMANCE", message, ...args),
-  error: (message: string, ...args: unknown[]) =>
-    logger.error("PERFORMANCE", message, ...args),
+  debug: (message: string, ...args: unknown[]) => logger.debug("PERFORMANCE", message, ...args),
+  info: (message: string, ...args: unknown[]) => logger.info("PERFORMANCE", message, ...args),
+  warn: (message: string, ...args: unknown[]) => logger.warn("PERFORMANCE", message, ...args),
+  error: (message: string, ...args: unknown[]) => logger.error("PERFORMANCE", message, ...args),
 };
 
 // 導出類型

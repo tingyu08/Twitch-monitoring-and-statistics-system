@@ -152,10 +152,7 @@ class TwurpleHelixService {
   async getUsersByIds(ids: string[]): Promise<TwitchUser[]> {
     if (ids.length === 0) return [];
     if (ids.length > 100) {
-      logger.warn(
-        "Twurple Helix",
-        "getUsersByIds: 請求超過 100 個用戶，已截斷"
-      );
+      logger.warn("Twurple Helix", "getUsersByIds: 請求超過 100 個用戶，已截斷");
       ids = ids.slice(0, 100);
     }
 
@@ -201,11 +198,7 @@ class TwurpleHelixService {
         title: channel.title,
       };
     } catch (error) {
-      logger.error(
-        "Twurple Helix",
-        `獲取頻道資訊失敗: ${broadcasterId}`,
-        error
-      );
+      logger.error("Twurple Helix", `獲取頻道資訊失敗: ${broadcasterId}`, error);
       return null;
     }
   }
@@ -296,11 +289,7 @@ class TwurpleHelixService {
       const result = await api.channels.getChannelFollowerCount(broadcasterId);
       return result;
     } catch (error) {
-      logger.error(
-        "Twurple Helix",
-        `獲取追蹤者數量失敗: ${broadcasterId}`,
-        error
-      );
+      logger.error("Twurple Helix", `獲取追蹤者數量失敗: ${broadcasterId}`, error);
       return 0;
     }
   }
@@ -362,11 +351,7 @@ class TwurpleHelixService {
               },
             });
           } catch (dbError) {
-            logger.error(
-              "Twurple Helix",
-              `Token 刷新後更新資料庫失敗`,
-              dbError
-            );
+            logger.error("Twurple Helix", `Token 刷新後更新資料庫失敗`, dbError);
           }
         });
 
@@ -376,9 +361,7 @@ class TwurpleHelixService {
             accessToken: tokenInfo.accessToken,
             refreshToken: tokenInfo.refreshToken,
             expiresIn: tokenInfo.expiresAt
-              ? Math.floor(
-                  (tokenInfo.expiresAt.getTime() - Date.now()) / 1000
-                )
+              ? Math.floor((tokenInfo.expiresAt.getTime() - Date.now()) / 1000)
               : null,
             obtainmentTimestamp: Date.now(),
           },
@@ -394,19 +377,13 @@ class TwurpleHelixService {
         const { ApiClient } = await importTwurpleApi();
         const { StaticAuthProvider } = await importTwurpleAuth();
         const clientId = twurpleAuthService.getClientId();
-        const userAuthProvider = new StaticAuthProvider(
-          clientId,
-          userAccessToken
-        );
+        const userAuthProvider = new StaticAuthProvider(clientId, userAccessToken);
         api = new ApiClient({
           authProvider: userAuthProvider,
           logger: { minLevel: "error" },
         });
         // 登入時使用的 token 是新的，不需要刷新，所以用 debug 級別
-        logger.debug(
-          "Twurple Helix",
-          `使用 StaticAuthProvider（不支援自動刷新）`
-        );
+        logger.debug("Twurple Helix", `使用 StaticAuthProvider（不支援自動刷新）`);
       } else {
         // 回退到 App Token（但通常不會成功，因為需要 user:read:follows）
         api = await this.getApiClient();
@@ -426,10 +403,7 @@ class TwurpleHelixService {
         });
       }
 
-      logger.info(
-        "Twurple Helix",
-        `已獲取 ${results.length} 個追蹤頻道 (User ID: ${userId})`
-      );
+      logger.info("Twurple Helix", `已獲取 ${results.length} 個追蹤頻道 (User ID: ${userId})`);
       return results;
     } catch (error) {
       logger.error("Twurple Helix", `獲取用戶追蹤列表失敗: ${userId}`, error);

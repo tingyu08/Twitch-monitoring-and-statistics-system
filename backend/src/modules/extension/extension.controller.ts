@@ -17,10 +17,7 @@ interface HeartbeatBody {
  * POST /api/extension/heartbeat
  * 接收並處理觀看心跳
  */
-export async function postHeartbeatHandler(
-  req: Request,
-  res: Response
-): Promise<void> {
+export async function postHeartbeatHandler(req: Request, res: Response): Promise<void> {
   try {
     // 從 Authorization header 取得 viewerId
     // 格式: "Bearer {viewerId}"

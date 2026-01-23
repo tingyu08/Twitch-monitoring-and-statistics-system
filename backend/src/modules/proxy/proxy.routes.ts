@@ -25,9 +25,7 @@ router.get("/avatar", async (req, res) => {
   const { url } = req.query;
 
   if (!url || typeof url !== "string") {
-    return res
-      .status(400)
-      .json({ error: "Missing or invalid 'url' parameter" });
+    return res.status(400).json({ error: "Missing or invalid 'url' parameter" });
   }
 
   try {
@@ -35,11 +33,7 @@ router.get("/avatar", async (req, res) => {
     const decodedUrl = decodeURIComponent(url);
 
     // 驗證 URL 是合法的 Twitch CDN 或 ui-avatars
-    const allowedDomains = [
-      "static-cdn.jtvnw.net",
-      "ui-avatars.com",
-      "assets.twitch.tv",
-    ];
+    const allowedDomains = ["static-cdn.jtvnw.net", "ui-avatars.com", "assets.twitch.tv"];
 
     const urlObj = new URL(decodedUrl);
 
@@ -74,9 +68,7 @@ router.get("/avatar", async (req, res) => {
     console.error("[Avatar Proxy] Error:", error);
 
     // 返回預設頭像
-    return res.redirect(
-      `https://ui-avatars.com/api/?name=User&background=random&size=128`
-    );
+    return res.redirect(`https://ui-avatars.com/api/?name=User&background=random&size=128`);
   }
 });
 

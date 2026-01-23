@@ -21,17 +21,15 @@
 ### 2.1 組成元件
 
 - **前端 Web App**
-
-  - Next.js（React + TypeScript + Tailwind），實作 Landing、Streamer Dashboard、Viewer Dashboard、Settings 等頁。
+  - Next.js（React + TypeScript + Tailwind），實作 Landing、Streamer Dashboard、Viewer
+    Dashboard、Settings 等頁。
   - 僅透過自家後端 API 取得彙總後統計資料。
 
 - **後端 API Server**
-
   - 提供 REST API /（可選）GraphQL API 給前端呼叫。
   - 負責：Twitch OAuth 流程、存取 Token、商業邏輯與彙總查詢。
 
 - **資料收集與排程 Job**
-
   - 週期性（5–15 分鐘級）向 Twitch API 抓取最新數據。
   - 寫入本地資料庫的「開台紀錄與互動統計」彙總表。
 
@@ -127,37 +125,31 @@ backend/
 對應 PRD 4.3 / FR-P2，僅存「彙總後」統計，避免儲存所有原始聊天內容。
 
 - `Streamer`
-
   - `id`（內部 UUID）
   - `twitchUserId`, `displayName`, `avatarUrl`
   - `createdAt`, `updatedAt`
 
 - `Viewer`
-
   - `id`（內部 UUID）
   - `twitchUserId`, `displayName`（可選）
   - `createdAt`, `updatedAt`
 
 - `Channel`（通常 1:1 對應 Streamer，也可預留多頻道）
-
   - `id`, `streamerId`, `twitchChannelId`
 
 - `StreamSession`（開台紀錄，粗粒度）
-
   - `id`, `channelId`
   - `startedAt`, `endedAt`
   - `durationSeconds`
   - 其他：平均同時在線（若 API 可得）、標題、分類等（可選）。
 
 - `ViewerChannelDailyStat`（觀眾在某頻道每日彙總）
-
   - `id`, `viewerId`, `channelId`, `date`
   - `watchSeconds`
   - `messageCount`
   - `emoteCount`（視 Twitch API 能力）
 
 - `ChannelDailyStat`（實況主每日彙總）
-
   - `id`, `channelId`, `date`
   - `streamSeconds`（當日開台總秒數）
   - `streamCount`
@@ -174,7 +166,8 @@ backend/
 對應 FR-V5 / NFR-S2–S3：
 
 - 觀眾要求刪除 / 匿名化時：
-  - 可選擇「軟刪除」：移除 `Viewer` 與 `ViewerChannelDailyStat` 之間的關聯（以匿名 ID 替代），但保留總體統計。
+  - 可選擇「軟刪除」：移除 `Viewer` 與 `ViewerChannelDailyStat`
+    之間的關聯（以匿名 ID 替代），但保留總體統計。
   - 或「硬刪除」：刪除 `Viewer` 相關所有記錄（取決於實際隱私策略）。
 
 ---
@@ -194,8 +187,10 @@ backend/
 ### 5.2 排程 Job
 
 - Job 類型（可視實際資源分拆）：
-  1. **Streamer Stats Job**：抓取實況主的開台紀錄、訂閱等統計，寫入 `StreamSession` / `ChannelDailyStat`。
-  2. **Viewer Engagement Job**：在合法前提下，從聊天/觀看資料來源取得觀眾觀看與互動彙總，寫入 `ViewerChannelDailyStat`。
+  1. **Streamer Stats Job**：抓取實況主的開台紀錄、訂閱等統計，寫入 `StreamSession` /
+     `ChannelDailyStat`。
+  2. **Viewer Engagement Job**：在合法前提下，從聊天/觀看資料來源取得觀眾觀看與互動彙總，寫入
+     `ViewerChannelDailyStat`。
 - 頻率：
   - 核心統計（開台時數等）：5–15 分鐘一次。
   - 較重的統計（例如大型觀眾清單彙總）：可拉長至 30–60 分鐘。

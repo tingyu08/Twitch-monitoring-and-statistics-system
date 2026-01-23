@@ -25,9 +25,7 @@ export class ChannelStatsSyncJob {
    * Start Cron Job
    */
   start(): void {
-    console.log(
-      `INFO: Channel Stats Sync Job scheduled: ${CHANNEL_STATS_CRON}`
-    );
+    console.log(`INFO: Channel Stats Sync Job scheduled: ${CHANNEL_STATS_CRON}`);
 
     cron.schedule(CHANNEL_STATS_CRON, async () => {
       await this.execute();
@@ -73,10 +71,7 @@ export class ChannelStatsSyncJob {
           await this.syncChannelStats(channel);
           result.synced++;
         } catch (error) {
-          console.error(
-            `ERROR: Failed to sync channel ${channel.channelName}:`,
-            error
-          );
+          console.error(`ERROR: Failed to sync channel ${channel.channelName}:`, error);
           result.failed++;
         }
       }
@@ -107,9 +102,7 @@ export class ChannelStatsSyncJob {
     twitchChannelId: string;
   }): Promise<void> {
     // Get channel info
-    const channelInfo = await unifiedTwitchService.getChannelInfo(
-      channel.channelName
-    );
+    const channelInfo = await unifiedTwitchService.getChannelInfo(channel.channelName);
 
     if (!channelInfo) {
       console.warn(`WARN: Could not get channel info: ${channel.channelName}`);
@@ -128,10 +121,7 @@ export class ChannelStatsSyncJob {
 
       if (activeSession && channelInfo.viewerCount !== undefined) {
         // Update peak viewers
-        const newPeak = Math.max(
-          activeSession.peakViewers || 0,
-          channelInfo.viewerCount
-        );
+        const newPeak = Math.max(activeSession.peakViewers || 0, channelInfo.viewerCount);
 
         // Update avg viewers
         const currentAvg = activeSession.avgViewers || channelInfo.viewerCount;
@@ -207,10 +197,7 @@ export class ChannelStatsSyncJob {
       existing.streamSeconds += session.durationSeconds || 0;
       existing.streamCount += 1;
       existing.totalViewers += session.avgViewers || 0;
-      existing.peakViewers = Math.max(
-        existing.peakViewers,
-        session.peakViewers || 0
-      );
+      existing.peakViewers = Math.max(existing.peakViewers, session.peakViewers || 0);
 
       channelStats.set(session.channelId, existing);
     }
@@ -220,9 +207,7 @@ export class ChannelStatsSyncJob {
     // console.log(`[DEBUG] Updating stats for ${channelStats.size} channels.`);
     for (const [channelId, stats] of channelStats) {
       const avgViewers =
-        stats.streamCount > 0
-          ? Math.round(stats.totalViewers / stats.streamCount)
-          : null;
+        stats.streamCount > 0 ? Math.round(stats.totalViewers / stats.streamCount) : null;
 
       // console.log(`[DEBUG] Upserting stats for channel: ${channelId}`);
       await prisma.channelDailyStat.upsert({

@@ -27,11 +27,7 @@ const DEFAULT_COOKIE_OPTIONS = {
   path: "/",
 };
 
-function setAuthCookies(
-  res: Response,
-  accessToken: string,
-  refreshToken: string
-) {
+function setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
   res.cookie("auth_token", accessToken, {
     ...DEFAULT_COOKIE_OPTIONS,
     maxAge: 60 * 60 * 1000, // 1h
@@ -132,9 +128,7 @@ export class AuthController {
       const storedState = req.cookies[STREAMER_STATE_COOKIE];
       if (!state || !storedState || state !== storedState) {
         authLogger.error("CSRF State Mismatch");
-        return res
-          .status(403)
-          .json({ message: "Invalid state parameter (CSRF detected)" });
+        return res.status(403).json({ message: "Invalid state parameter (CSRF detected)" });
       }
 
       res.clearCookie(STREAMER_STATE_COOKIE);
@@ -143,9 +137,7 @@ export class AuthController {
         return res.status(400).json({ message: "Authorization code missing" });
       }
 
-      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(
-        code
-      );
+      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(code);
 
       setAuthCookies(res, accessToken, refreshToken);
 
@@ -169,11 +161,9 @@ export class AuthController {
       // 例如：https://www.twitch.tv/capookawaii -> capookawaii
       const channelLogin = req.user.channelUrl.split("/").pop();
       if (channelLogin) {
-        import("../../services/twitch-chat.service").then(
-          ({ twurpleChatService }) => {
-            twurpleChatService.joinChannel(channelLogin).catch(() => {});
-          }
-        );
+        import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
+          twurpleChatService.joinChannel(channelLogin).catch(() => {});
+        });
       }
     }
 

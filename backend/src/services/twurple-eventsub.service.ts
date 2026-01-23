@@ -57,10 +57,7 @@ class TwurpleEventSubService {
    * @param app Express 應用實例
    * @param config EventSub 配置
    */
-  public async initialize(
-    app: Application,
-    config: EventSubConfig
-  ): Promise<void> {
+  public async initialize(app: Application, config: EventSubConfig): Promise<void> {
     if (this.isInitialized) {
       logger.warn("TwurpleEventSub", "Service already initialized");
       return;
@@ -77,9 +74,7 @@ class TwurpleEventSubService {
 
       // 2. 獲取 App Auth Provider
       const authProvider = await twurpleAuthService.getAppAuthProvider();
-      const { ApiClient } = await new Function(
-        'return import("@twurple/api")'
-      )();
+      const { ApiClient } = await new Function('return import("@twurple/api")')();
       this.apiClient = new ApiClient({
         authProvider,
         logger: { minLevel: "error" }, // 隱藏 rate-limit 警告
@@ -140,16 +135,10 @@ class TwurpleEventSubService {
         select: { twitchChannelId: true, channelName: true },
       });
 
-      logger.info(
-        "TwurpleEventSub",
-        `發現 ${channels.length} 個需要監控的頻道`
-      );
+      logger.info("TwurpleEventSub", `發現 ${channels.length} 個需要監控的頻道`);
 
       for (const channel of channels) {
-        await this.subscribeToChannel(
-          channel.twitchChannelId,
-          channel.channelName
-        );
+        await this.subscribeToChannel(channel.twitchChannelId, channel.channelName);
       }
 
       logger.info("TwurpleEventSub", "所有監控頻道訂閱完成");
@@ -161,24 +150,15 @@ class TwurpleEventSubService {
   /**
    * 訂閱單一頻道的事件
    */
-  public async subscribeToChannel(
-    twitchChannelId: string,
-    channelName?: string
-  ): Promise<void> {
+  public async subscribeToChannel(twitchChannelId: string, channelName?: string): Promise<void> {
     if (!this.middleware) {
-      logger.error(
-        "TwurpleEventSub",
-        "Cannot subscribe: middleware not initialized"
-      );
+      logger.error("TwurpleEventSub", "Cannot subscribe: middleware not initialized");
       return;
     }
 
     // 避免重複訂閱
     if (this.subscribedChannels.has(twitchChannelId)) {
-      logger.info(
-        "TwurpleEventSub",
-        `Already subscribed to ${channelName || twitchChannelId}`
-      );
+      logger.info("TwurpleEventSub", `Already subscribed to ${channelName || twitchChannelId}`);
       return;
     }
 
@@ -187,62 +167,44 @@ class TwurpleEventSubService {
     try {
       /* eslint-disable @typescript-eslint/no-explicit-any */
       // 訂閱 stream.online 事件
-      await this.middleware.onStreamOnline(
-        twitchChannelId,
-        async (event: any) => {
-          logger.info(
-            "TwurpleEventSub",
-            `🟢 STREAM ONLINE: ${event.broadcasterDisplayName}`
-          );
-          await this.handleStreamOnline(event.broadcasterId, {
-            displayName: event.broadcasterDisplayName,
-            startedAt: event.startDate,
-          });
-        }
-      );
+      await this.middleware.onStreamOnline(twitchChannelId, async (event: any) => {
+        logger.info("TwurpleEventSub", `🟢 STREAM ONLINE: ${event.broadcasterDisplayName}`);
+        await this.handleStreamOnline(event.broadcasterId, {
+          displayName: event.broadcasterDisplayName,
+          startedAt: event.startDate,
+        });
+      });
 
       // 訂閱 stream.offline 事件
-      await this.middleware.onStreamOffline(
-        twitchChannelId,
-        async (event: any) => {
-          logger.info(
-            "TwurpleEventSub",
-            `🔴 STREAM OFFLINE: ${event.broadcasterDisplayName}`
-          );
-          await this.handleStreamOffline(event.broadcasterId);
-        }
-      );
+      await this.middleware.onStreamOffline(twitchChannelId, async (event: any) => {
+        logger.info("TwurpleEventSub", `🔴 STREAM OFFLINE: ${event.broadcasterDisplayName}`);
+        await this.handleStreamOffline(event.broadcasterId);
+      });
 
       // 訂閱 channel.update 事件
-      await this.middleware.onChannelUpdate(
-        twitchChannelId,
-        async (event: any) => {
-          logger.info(
-            "TwurpleEventSub",
-            `📝 CHANNEL UPDATE: ${event.broadcasterDisplayName} - "${event.streamTitle}" [${event.categoryName}]`
-          );
-          await this.handleChannelUpdate(event.broadcasterId, {
-            title: event.streamTitle,
-            category: event.categoryName,
-          });
-        }
-      );
+      await this.middleware.onChannelUpdate(twitchChannelId, async (event: any) => {
+        logger.info(
+          "TwurpleEventSub",
+          `📝 CHANNEL UPDATE: ${event.broadcasterDisplayName} - "${event.streamTitle}" [${event.categoryName}]`
+        );
+        await this.handleChannelUpdate(event.broadcasterId, {
+          title: event.streamTitle,
+          category: event.categoryName,
+        });
+      });
 
       // 訂閱 channel.cheer 事件 (Bits 贊助)
       // 注意：需要 bits:read 權限，僅對有授權的實況主頻道有效
       try {
-        await this.middleware.onChannelCheer(
-          twitchChannelId,
-          async (event: any) => {
-            logger.info(
-              "TwurpleEventSub",
-              `💎 CHEER: ${event.userDisplayName || "Anonymous"} cheered ${
-                event.bits
-              } bits to ${event.broadcasterDisplayName}`
-            );
-            await this.handleChannelCheer(event);
-          }
-        );
+        await this.middleware.onChannelCheer(twitchChannelId, async (event: any) => {
+          logger.info(
+            "TwurpleEventSub",
+            `💎 CHEER: ${event.userDisplayName || "Anonymous"} cheered ${
+              event.bits
+            } bits to ${event.broadcasterDisplayName}`
+          );
+          await this.handleChannelCheer(event);
+        });
       } catch {
         // bits:read 權限可能不足，忽略此錯誤
         logger.debug(
@@ -255,11 +217,7 @@ class TwurpleEventSubService {
       this.subscribedChannels.add(twitchChannelId);
       // logger.info("TwurpleEventSub", `✅ Subscribed to: ${displayName}`);
     } catch (error) {
-      logger.error(
-        "TwurpleEventSub",
-        `Failed to subscribe to ${displayName}`,
-        error
-      );
+      logger.error("TwurpleEventSub", `Failed to subscribe to ${displayName}`, error);
     }
   }
 
@@ -289,10 +247,7 @@ class TwurpleEventSubService {
       });
 
       if (existingSession) {
-        logger.info(
-          "TwurpleEventSub",
-          `Session already exists for ${data.displayName}`
-        );
+        logger.info("TwurpleEventSub", `Session already exists for ${data.displayName}`);
         return;
       }
 
@@ -322,10 +277,7 @@ class TwurpleEventSubService {
         startedAt: data.startedAt,
       });
 
-      logger.info(
-        "TwurpleEventSub",
-        `Stream online: ${data.displayName} (WebSocket event sent)`
-      );
+      logger.info("TwurpleEventSub", `Stream online: ${data.displayName} (WebSocket event sent)`);
     } catch (error) {
       logger.error("TwurpleEventSub", "Error handling stream.online", error);
     }
@@ -355,10 +307,7 @@ class TwurpleEventSubService {
       });
 
       if (!openSession) {
-        logger.warn(
-          "TwurpleEventSub",
-          `No open session found for ${channel.channelName}`
-        );
+        logger.warn("TwurpleEventSub", `No open session found for ${channel.channelName}`);
         return;
       }
 
@@ -432,10 +381,7 @@ class TwurpleEventSubService {
             category: data.category,
           },
         });
-        logger.info(
-          "TwurpleEventSub",
-          `Updated session info for ${channel.channelName}`
-        );
+        logger.info("TwurpleEventSub", `Updated session info for ${channel.channelName}`);
       }
     } catch (error) {
       logger.error("TwurpleEventSub", "Error handling channel.update", error);
@@ -509,29 +455,20 @@ class TwurpleEventSubService {
         const condition = sub.condition as { broadcaster_user_id?: string };
         if (condition.broadcaster_user_id === twitchChannelId) {
           await this.apiClient.eventSub.deleteSubscription(sub.id);
-          logger.info(
-            "TwurpleEventSub",
-            `Unsubscribed: ${sub.type} for ${twitchChannelId}`
-          );
+          logger.info("TwurpleEventSub", `Unsubscribed: ${sub.type} for ${twitchChannelId}`);
         }
       }
 
       this.subscribedChannels.delete(twitchChannelId);
     } catch (error) {
-      logger.error(
-        "TwurpleEventSub",
-        `Failed to unsubscribe from ${twitchChannelId}`,
-        error
-      );
+      logger.error("TwurpleEventSub", `Failed to unsubscribe from ${twitchChannelId}`, error);
     }
   }
 
   /**
    * 列出所有訂閱
    */
-  public async listSubscriptions(): Promise<
-    { type: string; status: string; id: string }[]
-  > {
+  public async listSubscriptions(): Promise<{ type: string; status: string; id: string }[]> {
     if (!this.apiClient) {
       logger.error("TwurpleEventSub", "API client not initialized");
       return [];
@@ -540,10 +477,12 @@ class TwurpleEventSubService {
     try {
       const subscriptions = await this.apiClient.eventSub.getSubscriptions();
 
-      const result = subscriptions.data.map((sub) => ({
+      logger.info("EventSub", `Currently active subscriptions: ${subscriptions.data.length}`);
+
+      const result = subscriptions.data.map((sub: any) => ({
+        id: sub.id,
         type: sub.type,
         status: sub.status,
-        id: sub.id,
       }));
 
       logger.info("TwurpleEventSub", `Total subscriptions: ${result.length}`);

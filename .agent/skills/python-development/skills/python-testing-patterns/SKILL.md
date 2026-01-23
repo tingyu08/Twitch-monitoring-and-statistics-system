@@ -1,11 +1,15 @@
 ---
 name: python-testing-patterns
-description: Implement comprehensive testing strategies with pytest, fixtures, mocking, and test-driven development. Use when writing Python tests, setting up test suites, or implementing testing best practices.
+description:
+  Implement comprehensive testing strategies with pytest, fixtures, mocking, and test-driven
+  development. Use when writing Python tests, setting up test suites, or implementing testing best
+  practices.
 ---
 
 # Python Testing Patterns
 
-Comprehensive guide to implementing robust testing strategies in Python using pytest, fixtures, mocking, parameterization, and test-driven development practices.
+Comprehensive guide to implementing robust testing strategies in Python using pytest, fixtures,
+mocking, parameterization, and test-driven development practices.
 
 ## When to Use This Skill
 
@@ -23,22 +27,26 @@ Comprehensive guide to implementing robust testing strategies in Python using py
 ## Core Concepts
 
 ### 1. Test Types
+
 - **Unit Tests**: Test individual functions/classes in isolation
 - **Integration Tests**: Test interaction between components
 - **Functional Tests**: Test complete features end-to-end
 - **Performance Tests**: Measure speed and resource usage
 
 ### 2. Test Structure (AAA Pattern)
+
 - **Arrange**: Set up test data and preconditions
 - **Act**: Execute the code under test
 - **Assert**: Verify the results
 
 ### 3. Test Coverage
+
 - Measure what code is exercised by tests
 - Identify untested code paths
 - Aim for meaningful coverage, not just high percentages
 
 ### 4. Test Isolation
+
 - Tests should be independent
 - No shared state between tests
 - Each test should clean up after itself

@@ -243,13 +243,13 @@ export default function PrivacyPolicyPage() {
           <div className="flex justify-center gap-4">
             <a
               href="/dashboard/viewer/settings"
-              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all duration-300"
+              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-full shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-300"
             >
               前往隱私設定
             </a>
             <a
               href="/"
-              className="px-8 py-3 bg-white/5 border border-white/10 text-white font-medium rounded-full hover:bg-white/10 transition-all duration-300"
+              className="px-8 py-3 bg-white/5 border border-white/10 text-white font-medium rounded-full hover:bg-white/10 transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-300"
             >
               回首頁
             </a>

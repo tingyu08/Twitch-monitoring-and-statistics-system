@@ -1,6 +1,8 @@
 ---
 name: code-documentation
-description: Writing effective code documentation - API docs, README files, inline comments, and technical guides. Use for documenting codebases, APIs, or writing developer guides.
+description:
+  Writing effective code documentation - API docs, README files, inline comments, and technical
+  guides. Use for documenting codebases, APIs, or writing developer guides.
 source: wshobson/agents
 license: MIT
 ---
@@ -10,6 +12,7 @@ license: MIT
 ## README Structure
 
 ### Standard README Template
+
 ```markdown
 # Project Name
 
@@ -17,10 +20,7 @@ Brief description of what this project does.
 
 ## Quick Start
 
-\`\`\`bash
-npm install
-npm run dev
-\`\`\`
+\`\`\`bash npm install npm run dev \`\`\`
 
 ## Installation
 
@@ -28,12 +28,9 @@ Detailed installation instructions...
 
 ## Usage
 
-\`\`\`typescript
-import { something } from 'project';
+\`\`\`typescript import { something } from 'project';
 
-// Example usage
-const result = something.doThing();
-\`\`\`
+// Example usage const result = something.doThing(); \`\`\`
 
 ## API Reference
 
@@ -42,19 +39,17 @@ const result = something.doThing();
 Description of what the function does.
 
 **Parameters:**
+
 - `param` - Description of parameter
 
 **Returns:** Description of return value
 
-**Example:**
-\`\`\`typescript
-const result = functionName('value');
-\`\`\`
+**Example:** \`\`\`typescript const result = functionName('value'); \`\`\`
 
 ## Configuration
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| Option    | Type     | Default     | Description  |
+| --------- | -------- | ----------- | ------------ |
 | `option1` | `string` | `'default'` | What it does |
 
 ## Contributing
@@ -69,7 +64,8 @@ MIT
 ## API Documentation
 
 ### JSDoc/TSDoc Style
-```typescript
+
+````typescript
 /**
  * Creates a new user account.
  *
@@ -85,10 +81,7 @@ MIT
  * });
  * ```
  */
-async function createUser(
-  userData: UserInput,
-  options?: CreateOptions
-): Promise<User> {
+async function createUser(userData: UserInput, options?: CreateOptions): Promise<User> {
   // Implementation
 }
 
@@ -103,9 +96,10 @@ interface ClientConfig {
   /** Custom headers to include in requests */
   headers?: Record<string, string>;
 }
-```
+````
 
 ### OpenAPI/Swagger
+
 ```yaml
 openapi: 3.0.0
 info:
@@ -122,15 +116,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserInput'
+              $ref: "#/components/schemas/UserInput"
       responses:
-        '201':
+        "201":
           description: User created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
-        '400':
+                $ref: "#/components/schemas/User"
+        "400":
           description: Invalid input
 
 components:
@@ -163,6 +157,7 @@ components:
 ## Inline Comments
 
 ### When to Comment
+
 ```typescript
 // GOOD: Explain WHY, not WHAT
 
@@ -186,6 +181,7 @@ if (!window.IntersectionObserver) {
 ```
 
 ### When NOT to Comment
+
 ```typescript
 // BAD: Stating the obvious
 // Increment counter by 1
@@ -205,50 +201,61 @@ function getUserIdentifier(user) {
 ## Architecture Documentation
 
 ### ADR (Architecture Decision Record)
+
 ```markdown
 # ADR-001: Use PostgreSQL for Primary Database
 
 ## Status
+
 Accepted
 
 ## Context
-We need a database for storing user data and transactions.
-Options considered: PostgreSQL, MySQL, MongoDB, DynamoDB.
+
+We need a database for storing user data and transactions. Options considered: PostgreSQL, MySQL,
+MongoDB, DynamoDB.
 
 ## Decision
+
 Use PostgreSQL with Supabase hosting.
 
 ## Rationale
+
 - Strong ACID compliance needed for financial data
 - Team has PostgreSQL experience
 - Supabase provides auth and realtime features
 - pgvector extension for future AI features
 
 ## Consequences
+
 - Need to manage schema migrations
 - May need read replicas for scale
 - Team needs to learn Supabase-specific features
 ```
 
 ### Component Documentation
+
 ```markdown
 ## Authentication Module
 
 ### Overview
+
 Handles user authentication using JWT tokens with refresh rotation.
 
 ### Flow
+
 1. User submits credentials to `/auth/login`
 2. Server validates and returns access + refresh tokens
 3. Access token used for API requests (15min expiry)
 4. Refresh token used to get new access token (7d expiry)
 
 ### Dependencies
+
 - `jsonwebtoken` - Token generation/validation
 - `bcrypt` - Password hashing
 - `redis` - Refresh token storage
 
 ### Configuration
+
 - `JWT_SECRET` - Secret for signing tokens
 - `ACCESS_TOKEN_EXPIRY` - Access token lifetime
 - `REFRESH_TOKEN_EXPIRY` - Refresh token lifetime

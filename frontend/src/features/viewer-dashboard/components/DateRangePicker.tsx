@@ -12,10 +12,7 @@ interface DateRangePickerProps {
   disabled?: boolean;
 }
 
-export function DateRangePicker({
-  onRangeSelect,
-  disabled = false,
-}: DateRangePickerProps) {
+export function DateRangePicker({ onRangeSelect, disabled = false }: DateRangePickerProps) {
   const t = useTranslations("datePicker");
   const localeStr = useLocale();
   const dateFnsLocale = localeStr === "zh-TW" ? zhTW : enUS;
@@ -27,10 +24,7 @@ export function DateRangePicker({
   // 點擊外部關閉
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     }
@@ -72,7 +66,7 @@ export function DateRangePicker({
             : t("selectRange")
         }
         className={`
-          px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200
+          px-3 py-1.5 rounded-md text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200
           border
           ${
             range?.from && range?.to
@@ -123,7 +117,7 @@ export function DateRangePicker({
               .rdp-caption_label { color: #111827; font-weight: 600; }
               .rdp-head_cell { color: #6b7280; font-weight: 500; }
               .rdp-day_selected { color: white; }
-              
+
               /* 深色模式適配 */
               :global(.dark) .rdp { color: #e5e7eb; }
               :global(.dark) .rdp-button:hover:not([disabled]):not(.rdp-day_selected) { background-color: #374151; }
@@ -160,8 +154,7 @@ export function DateRangePicker({
                   ? t("selectedDays", {
                       days:
                         Math.ceil(
-                          (range.to.getTime() - range.from.getTime()) /
-                            (1000 * 60 * 60 * 24)
+                          (range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24)
                         ) + 1,
                     })
                   : t("selectEnd")
@@ -183,5 +176,3 @@ export function DateRangePicker({
     </div>
   );
 }
-
-export default DateRangePicker;

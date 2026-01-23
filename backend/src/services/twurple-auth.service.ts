@@ -7,11 +7,7 @@
  * - Token 失效自動標記
  */
 
-import type {
-  AppTokenAuthProvider,
-  RefreshingAuthProvider,
-  AccessToken,
-} from "@twurple/auth";
+import type { AppTokenAuthProvider, RefreshingAuthProvider, AccessToken } from "@twurple/auth";
 import { logger } from "../utils/logger";
 
 // ========== 類型定義 ==========
@@ -65,13 +61,8 @@ class TwurpleAuthService {
       if (!this.hasCredentials()) {
         throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET");
       }
-      const { AppTokenAuthProvider } = await new Function(
-        'return import("@twurple/auth")'
-      )();
-      this.appAuthProvider = new AppTokenAuthProvider(
-        this.clientId,
-        this.clientSecret
-      );
+      const { AppTokenAuthProvider } = await new Function('return import("@twurple/auth")')();
+      this.appAuthProvider = new AppTokenAuthProvider(this.clientId, this.clientSecret);
       logger.info("Twurple Auth", "App Auth Provider initialized");
     }
     return this.appAuthProvider;
@@ -88,9 +79,7 @@ class TwurpleAuthService {
     tokenData: TokenData,
     onRefresh?: (userId: string, newTokenData: TokenData) => Promise<void>
   ): Promise<RefreshingAuthProvider> {
-    const { RefreshingAuthProvider } = await new Function(
-      'return import("@twurple/auth")'
-    )();
+    const { RefreshingAuthProvider } = await new Function('return import("@twurple/auth")')();
 
     const authProvider = new RefreshingAuthProvider({
       clientId: this.clientId,
@@ -111,7 +100,8 @@ class TwurpleAuthService {
 
     // 設定 Token 刷新成功回調
     if (onRefresh) {
-      authProvider.onRefresh(async (userId, newTokenData: AccessToken) => {
+      // 閮身 Token 憿舐內 (敺賊鞈摨)
+      authProvider.onRefresh(async (userId: any, newTokenData: AccessToken) => {
         logger.info("Twurple Auth", `Token refreshed for user: ${userId}`);
         await onRefresh(userId, {
           accessToken: newTokenData.accessToken,
@@ -122,28 +112,17 @@ class TwurpleAuthService {
       });
     }
 
-    // 設定 Token 刷新失敗回調
-    authProvider.onRefreshFailure(async (userId, error) => {
-      logger.error(
-        "Twurple Auth",
-        `Token refresh failed for user: ${userId}`,
-        error
-      );
+    // 閮身 Token 憿舐內 (敺賊鞈摨)
+    authProvider.onRefreshFailure(async (userId: any, error: any) => {
+      logger.error("Twurple Auth", `Token refresh failed for user: ${userId}`, error);
 
       // 判斷失敗原因
       const errorMessage = error.message.toLowerCase();
-      let reason: "refresh_failed" | "invalid_token" | "revoked" =
-        "refresh_failed";
+      let reason: "refresh_failed" | "invalid_token" | "revoked" = "refresh_failed";
 
-      if (
-        errorMessage.includes("invalid") ||
-        errorMessage.includes("unauthorized")
-      ) {
+      if (errorMessage.includes("invalid") || errorMessage.includes("unauthorized")) {
         reason = "invalid_token";
-      } else if (
-        errorMessage.includes("revoked") ||
-        errorMessage.includes("access denied")
-      ) {
+      } else if (errorMessage.includes("revoked") || errorMessage.includes("access denied")) {
         reason = "revoked";
       }
 
@@ -152,11 +131,7 @@ class TwurpleAuthService {
         try {
           await this.onTokenFailure(userId, error, reason);
         } catch (callbackError) {
-          logger.error(
-            "Twurple Auth",
-            "Failed to execute token failure callback",
-            callbackError
-          );
+          logger.error("Twurple Auth", "Failed to execute token failure callback", callbackError);
         }
       }
 

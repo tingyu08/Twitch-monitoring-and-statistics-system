@@ -1,11 +1,15 @@
 ---
 name: stripe-integration
-description: Implement Stripe payment processing for robust, PCI-compliant payment flows including checkout, subscriptions, and webhooks. Use when integrating Stripe payments, building subscription systems, or implementing secure checkout flows.
+description:
+  Implement Stripe payment processing for robust, PCI-compliant payment flows including checkout,
+  subscriptions, and webhooks. Use when integrating Stripe payments, building subscription systems,
+  or implementing secure checkout flows.
 ---
 
 # Stripe Integration
 
-Master Stripe payment processing integration for robust, PCI-compliant payment flows including checkout, subscriptions, webhooks, and refunds.
+Master Stripe payment processing integration for robust, PCI-compliant payment flows including
+checkout, subscriptions, webhooks, and refunds.
 
 ## When to Use This Skill
 
@@ -20,25 +24,31 @@ Master Stripe payment processing integration for robust, PCI-compliant payment f
 ## Core Concepts
 
 ### 1. Payment Flows
+
 **Checkout Session (Hosted)**
+
 - Stripe-hosted payment page
 - Minimal PCI compliance burden
 - Fastest implementation
 - Supports one-time and recurring payments
 
 **Payment Intents (Custom UI)**
+
 - Full control over payment UI
 - Requires Stripe.js for PCI compliance
 - More complex implementation
 - Better customization options
 
 **Setup Intents (Save Payment Methods)**
+
 - Collect payment method without charging
 - Used for subscriptions and future payments
 - Requires customer confirmation
 
 ### 2. Webhooks
+
 **Critical Events:**
+
 - `payment_intent.succeeded`: Payment completed
 - `payment_intent.payment_failed`: Payment failed
 - `customer.subscription.updated`: Subscription changed
@@ -47,13 +57,16 @@ Master Stripe payment processing integration for robust, PCI-compliant payment f
 - `invoice.payment_succeeded`: Subscription payment successful
 
 ### 3. Subscriptions
+
 **Components:**
+
 - **Product**: What you're selling
 - **Price**: How much and how often
 - **Subscription**: Customer's recurring payment
 - **Invoice**: Generated for each billing cycle
 
 ### 4. Customer Management
+
 - Create and manage customer records
 - Store multiple payment methods
 - Track customer metadata
@@ -94,6 +107,7 @@ print(session.url)
 ## Payment Implementation Patterns
 
 ### Pattern 1: One-Time Payment (Hosted Checkout)
+
 ```python
 def create_checkout_session(amount, currency='usd'):
     """Create a one-time payment checkout session."""
@@ -127,6 +141,7 @@ def create_checkout_session(amount, currency='usd'):
 ```
 
 ### Pattern 2: Custom Payment Intent Flow
+
 ```python
 def create_payment_intent(amount, currency='usd', customer_id=None):
     """Create a payment intent for custom checkout UI."""
@@ -171,6 +186,7 @@ if (error) {
 ```
 
 ### Pattern 3: Subscription Creation
+
 ```python
 def create_subscription(customer_id, price_id):
     """Create a subscription for a customer."""
@@ -193,6 +209,7 @@ def create_subscription(customer_id, price_id):
 ```
 
 ### Pattern 4: Customer Portal
+
 ```python
 def create_customer_portal_session(customer_id):
     """Create a portal session for customers to manage subscriptions."""
@@ -206,6 +223,7 @@ def create_customer_portal_session(customer_id):
 ## Webhook Handling
 
 ### Secure Webhook Endpoint
+
 ```python
 from flask import Flask, request
 import stripe
@@ -270,6 +288,7 @@ def handle_subscription_canceled(subscription):
 ```
 
 ### Webhook Best Practices
+
 ```python
 import hashlib
 import hmac

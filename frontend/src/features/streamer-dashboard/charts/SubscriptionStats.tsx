@@ -2,16 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import { Loader2, TrendingUp, Users, DollarSign } from "lucide-react";
 
 interface SubscriptionData {
@@ -43,10 +35,9 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `${apiBaseUrl}/api/streamer/revenue/subscriptions?days=${days}`,
-          { credentials: "include" },
-        );
+        const res = await fetch(`${apiBaseUrl}/api/streamer/revenue/subscriptions?days=${days}`, {
+          credentials: "include",
+        });
         if (!res.ok) throw new Error("Failed to fetch");
         const json = await res.json();
         setData(json);
@@ -100,9 +91,7 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
             </div>
             <div>
               <p className="text-sm text-gray-400">{t("totalSubs")}</p>
-              <p className="text-2xl font-bold text-white">
-                {latestData?.totalSubscribers || 0}
-              </p>
+              <p className="text-2xl font-bold text-white">{latestData?.totalSubscribers || 0}</p>
             </div>
           </div>
         </div>
@@ -143,11 +132,9 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
 
       {/* 層級分佈堆疊圖 */}
       <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-        <h3 className="text-lg font-semibold text-white mb-4">
-          {t("tierDistribution")}
-        </h3>
+        <h3 className="text-lg font-semibold text-white mb-4">{t("tierDistribution")}</h3>
         <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+          <SafeResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis
@@ -156,10 +143,7 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
                 tick={{ fill: "#9CA3AF", fontSize: 12 }}
                 tickFormatter={(value) => value.slice(5)} // MM-DD
               />
-              <YAxis
-                stroke="#9CA3AF"
-                tick={{ fill: "#9CA3AF", fontSize: 12 }}
-              />
+              <YAxis stroke="#9CA3AF" tick={{ fill: "#9CA3AF", fontSize: 12 }} />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "#1F2937",
@@ -169,33 +153,16 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
                 labelStyle={{ color: "#E5E7EB" }}
               />
               <Legend />
-              <Bar
-                dataKey="tier1Count"
-                name="Tier 1"
-                stackId="a"
-                fill="#8B5CF6"
-              />
-              <Bar
-                dataKey="tier2Count"
-                name="Tier 2"
-                stackId="a"
-                fill="#6366F1"
-              />
-              <Bar
-                dataKey="tier3Count"
-                name="Tier 3"
-                stackId="a"
-                fill="#4F46E5"
-              />
+              <Bar dataKey="tier1Count" name="Tier 1" stackId="a" fill="#8B5CF6" />
+              <Bar dataKey="tier2Count" name="Tier 2" stackId="a" fill="#6366F1" />
+              <Bar dataKey="tier3Count" name="Tier 3" stackId="a" fill="#4F46E5" />
             </BarChart>
-          </ResponsiveContainer>
+          </SafeResponsiveContainer>
         </div>
       </div>
 
       {/* 注意事項 */}
-      <p className="text-xs text-gray-500 text-center">
-        {t("revenueDisclaimer")}
-      </p>
+      <p className="text-xs text-gray-500 text-center">{t("revenueDisclaimer")}</p>
     </div>
   );
 }

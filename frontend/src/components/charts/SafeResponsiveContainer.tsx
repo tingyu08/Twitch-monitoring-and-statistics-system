@@ -1,12 +1,6 @@
 "use client";
 
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  ReactElement,
-  cloneElement,
-} from "react";
+import React, { useState, useEffect, useRef, ReactElement, cloneElement } from "react";
 
 interface SafeChartContainerProps {
   children: ReactElement;
@@ -33,48 +27,33 @@ export function SafeResponsiveContainer({
     width: number;
     height: number;
   } | null>(null);
-  const rafRef = useRef<number | null>(null);
-
   useEffect(() => {
     let mounted = true;
 
-    const measureDimensions = () => {
-      if (!mounted || !containerRef.current) return;
-
-      // Use requestAnimationFrame to batch DOM reads
-      // This happens during the browser's paint phase, avoiding forced reflow
-      rafRef.current = requestAnimationFrame(() => {
-        if (!mounted || !containerRef.current) return;
-
-        const { clientWidth, clientHeight } = containerRef.current;
-        if (clientWidth > 0 && clientHeight > 0) {
-          setDimensions((prev) => {
-            // Only update if dimensions changed to avoid unnecessary re-renders
-            if (prev?.width === clientWidth && prev?.height === clientHeight) {
-              return prev;
-            }
-            return { width: clientWidth, height: clientHeight };
-          });
-        }
-      });
-    };
-
     // Use ResizeObserver which is already optimized and batched
+    // We rely solely on this to avoid "Forced Reflow" violations caused by manual DOM reads
     const resizeObserver = new ResizeObserver((entries) => {
       if (!mounted) return;
 
-      // ResizeObserver provides dimensions directly, no need to read DOM
       const entry = entries[0];
       if (entry) {
+        // Use contentRect for precise fractional values, or invoke Math.floor if needed
         const { width: w, height: h } = entry.contentRect;
+
+        // Ensure dimensions are valid before updating
         if (w > 0 && h > 0) {
-          setDimensions((prev) => {
-            const newWidth = Math.floor(w);
-            const newHeight = Math.floor(h);
-            if (prev?.width === newWidth && prev?.height === newHeight) {
-              return prev;
-            }
-            return { width: newWidth, height: newHeight };
+          // Wrap in RAF to avoid synchronous layout thrashing/reflow during observer callback
+          requestAnimationFrame(() => {
+            if (!mounted) return;
+            setDimensions((prev) => {
+              const newWidth = Math.floor(w);
+              const newHeight = Math.floor(h);
+              // Dedupe updates
+              if (prev?.width === newWidth && prev?.height === newHeight) {
+                return prev;
+              }
+              return { width: newWidth, height: newHeight };
+            });
           });
         }
       }
@@ -84,20 +63,19 @@ export function SafeResponsiveContainer({
       resizeObserver.observe(containerRef.current);
     }
 
-    // Initial measurement using RAF
-    measureDimensions();
-
     return () => {
       mounted = false;
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
       resizeObserver.disconnect();
     };
   }, []);
 
   // Clone the chart element and inject explicit dimensions
   const renderChart = () => {
+    if (!children || !children.type) {
+      console.warn("SafeResponsiveContainer: Invalid children provided", children);
+      return null;
+    }
+
     if (!dimensions) {
       return (
         <div className="flex items-center justify-center h-full text-slate-500 text-sm animate-pulse">

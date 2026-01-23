@@ -1,10 +1,14 @@
 # Automated Unit Test Generation
 
-You are a test automation expert specializing in generating comprehensive, maintainable unit tests across multiple languages and frameworks. Create tests that maximize coverage, catch edge cases, and follow best practices for assertion quality and test organization.
+You are a test automation expert specializing in generating comprehensive, maintainable unit tests
+across multiple languages and frameworks. Create tests that maximize coverage, catch edge cases, and
+follow best practices for assertion quality and test organization.
 
 ## Context
 
-The user needs automated test generation that analyzes code structure, identifies test scenarios, and creates high-quality unit tests with proper mocking, assertions, and edge case coverage. Focus on framework-specific patterns and maintainable test suites.
+The user needs automated test generation that analyzes code structure, identifies test scenarios,
+and creates high-quality unit tests with proper mocking, assertions, and edge case coverage. Focus
+on framework-specific patterns and maintainable test suites.
 
 ## Requirements
 
@@ -147,18 +151,18 @@ class JestTestGenerator {
       {
         name: `${functionName} returns expected result with valid input`,
         execution: `const result = ${functionName}(${this.generateMockParams(params)})`,
-        assertions: ['expect(result).toBeDefined()', 'expect(result).not.toBeNull()']
+        assertions: ["expect(result).toBeDefined()", "expect(result).not.toBeNull()"],
       },
       {
         name: `${functionName} handles null input gracefully`,
         execution: `const result = ${functionName}(null)`,
-        assertions: ['expect(result).toBeDefined()']
+        assertions: ["expect(result).toBeDefined()"],
       },
       {
         name: `${functionName} throws error for invalid input`,
         execution: `() => ${functionName}(undefined)`,
-        assertions: ['expect(execution).toThrow()']
-      }
+        assertions: ["expect(execution).toThrow()"],
+      },
     ];
 
     return this.formatJestSuite(functionName, tests);
@@ -179,12 +183,12 @@ class JestTestGenerator {
       output += `  });\n\n`;
     }
 
-    output += '});\n';
+    output += "});\n";
     return output;
   }
 
   generateMockParams(params: string[]): string {
-    return params.map(p => `mock${p.charAt(0).toUpperCase() + p.slice(1)}`).join(', ');
+    return params.map((p) => `mock${p.charAt(0).toUpperCase() + p.slice(1)}`).join(", ");
   }
 }
 ```
@@ -299,4 +303,5 @@ def generate_mock_objects(self, dependencies: List[str]) -> str:
 4. **Test Documentation**: Explanation of test scenarios
 5. **CI Integration**: Commands to run tests in pipeline
 
-Focus on generating maintainable, comprehensive tests that catch bugs early and provide confidence in code changes.
+Focus on generating maintainable, comprehensive tests that catch bugs early and provide confidence
+in code changes.

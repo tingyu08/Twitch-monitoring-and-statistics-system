@@ -1,6 +1,8 @@
 ---
 name: python-development
-description: Modern Python development with Python 3.12+, Django, FastAPI, async patterns, and production best practices. Use for Python projects, APIs, data processing, or automation scripts.
+description:
+  Modern Python development with Python 3.12+, Django, FastAPI, async patterns, and production best
+  practices. Use for Python projects, APIs, data processing, or automation scripts.
 source: wshobson/agents
 license: MIT
 ---
@@ -10,6 +12,7 @@ license: MIT
 ## Project Setup
 
 ### Modern Python Project Structure
+
 ```
 my-project/
 ├── src/
@@ -26,6 +29,7 @@ my-project/
 ```
 
 ### pyproject.toml
+
 ```toml
 [project]
 name = "my-project"

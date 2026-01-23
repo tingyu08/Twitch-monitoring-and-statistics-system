@@ -15,15 +15,10 @@ export class AutoJoinLiveChannelsJob {
   private timeoutHandle: NodeJS.Timeout | null = null;
 
   start(): void {
-    logger.info(
-      "Jobs",
-      `📋 Auto Join Live Channels Job 已排程: ${CHECK_LIVE_CRON}`,
-    );
+    logger.info("Jobs", `📋 Auto Join Live Channels Job 已排程: ${CHECK_LIVE_CRON}`);
 
     // 啟動時立即執行一次
-    this.execute().catch((err) =>
-      logger.error("Jobs", "Initial auto-join execution failed", err),
-    );
+    this.execute().catch((err) => logger.error("Jobs", "Initial auto-join execution failed", err));
 
     cron.schedule(CHECK_LIVE_CRON, async () => {
       await this.execute();
@@ -66,8 +61,7 @@ export class AutoJoinLiveChannelsJob {
         const twitchIds = batch.map((c) => c.twitchChannelId);
 
         try {
-          const streams =
-            await twurpleHelixService.getStreamsByUserIds(twitchIds);
+          const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);
           const liveStreamMap = new Map(streams.map((s) => [s.userId, s]));
 
           // 3. 更新狀態並加入聊天室
@@ -104,8 +98,15 @@ export class AutoJoinLiveChannelsJob {
               });
 
               if (!activeSession && stream) {
-                await prisma.streamSession.create({
-                  data: {
+                // 使用 upsert 避免唯一約束衝突
+                await prisma.streamSession.upsert({
+                  where: { twitchStreamId: stream.id },
+                  update: {
+                    // 如果已存在，更新相關資訊
+                    title: stream.title,
+                    category: stream.gameName,
+                  },
+                  create: {
                     channelId: channel.id,
                     twitchStreamId: stream.id,
                     startedAt: stream.startedAt,

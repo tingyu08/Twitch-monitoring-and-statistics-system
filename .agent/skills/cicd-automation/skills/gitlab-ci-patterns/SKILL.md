@@ -1,6 +1,9 @@
 ---
 name: gitlab-ci-patterns
-description: Build GitLab CI/CD pipelines with multi-stage workflows, caching, and distributed runners for scalable automation. Use when implementing GitLab CI/CD, optimizing pipeline performance, or setting up automated testing and deployment.
+description:
+  Build GitLab CI/CD pipelines with multi-stage workflows, caching, and distributed runners for
+  scalable automation. Use when implementing GitLab CI/CD, optimizing pipeline performance, or
+  setting up automated testing and deployment.
 ---
 
 # GitLab CI Patterns
@@ -9,7 +12,8 @@ Comprehensive GitLab CI/CD pipeline patterns for automated testing, building, an
 
 ## Purpose
 
-Create efficient GitLab CI pipelines with proper stage organization, caching, and deployment strategies.
+Create efficient GitLab CI pipelines with proper stage organization, caching, and deployment
+strategies.
 
 ## When to Use
 

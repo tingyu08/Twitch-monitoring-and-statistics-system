@@ -8,15 +8,11 @@ module.exports = {
     "^.+\\.(js|jsx|mjs)$": "babel-jest",
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(@twurple|@d-fischer|axios|@libsql|uuid|p-limit|p-locate|yocto-queue|fetch-blob|node-fetch|data-uri-to-buffer|formdata-polyfill|nanoid)/)'
+    "node_modules/(?!(@twurple|@d-fischer|axios|@libsql|uuid|p-limit|p-locate|yocto-queue|fetch-blob|node-fetch|data-uri-to-buffer|formdata-polyfill|nanoid)/)",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
   },
   testPathIgnorePatterns: ["/node_modules/", "setup.ts"],
-  collectCoverageFrom: [
-    "src/**/*.ts",
-    "!src/**/*.d.ts",
-    "!src/**/__tests__/**",
-  ],
+  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts", "!src/**/__tests__/**"],
 };

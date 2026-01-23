@@ -1,15 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import type { ViewerTrendPoint } from "@/lib/api/viewer";
 
 interface Props {
@@ -53,7 +46,7 @@ export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
         </span>
       </h3>
       <div className="h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <SafeResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
             margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
@@ -78,11 +71,9 @@ export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
                 borderRadius: "8px",
               }}
               wrapperStyle={{ pointerEvents: "none" }} // 關鍵：讓點擊穿透 Tooltip
-              formatter={(value: number, name: string) => [
-                value.toLocaleString(),
-                name === "avgViewers"
-                  ? t("charts.avgViewers")
-                  : t("charts.peakViewers"),
+              formatter={(value, name) => [
+                ((value as number) ?? 0).toLocaleString(),
+                name === "avgViewers" ? t("charts.avgViewers") : t("charts.peakViewers"),
               ]}
               labelFormatter={(label, payload) => {
                 if (payload && payload[0]) {
@@ -93,9 +84,7 @@ export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
             />
             <Legend
               formatter={(value) =>
-                value === "avgViewers"
-                  ? t("charts.avgViewers")
-                  : t("charts.peakViewers")
+                value === "avgViewers" ? t("charts.avgViewers") : t("charts.peakViewers")
               }
             />
             <Line
@@ -135,7 +124,7 @@ export function ViewerTrendsChart({ data, loading, onPointClick }: Props) {
               }}
             />
           </LineChart>
-        </ResponsiveContainer>
+        </SafeResponsiveContainer>
       </div>
       <p className="text-xs theme-text-muted mt-3 text-center">
         {t("charts.viewerTrendsDesc", { count: data.length })}

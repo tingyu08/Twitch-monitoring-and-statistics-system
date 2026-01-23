@@ -29,8 +29,7 @@ export interface AccountAgeResult {
 
 class DecApiService {
   private readonly api: AxiosInstance;
-  private readonly cache: Map<string, { data: unknown; expiresAt: number }> =
-    new Map();
+  private readonly cache: Map<string, { data: unknown; expiresAt: number }> = new Map();
 
   constructor() {
     this.api = axios.create({
@@ -76,9 +75,7 @@ class DecApiService {
 
     try {
       // 獲取追蹤時長（人類可讀格式）
-      const durationResponse = await this.api.get<string>(
-        `/twitch/followage/${channel}/${user}`
-      );
+      const durationResponse = await this.api.get<string>(`/twitch/followage/${channel}/${user}`);
       const duration = durationResponse.data;
 
       // 檢查是否未追蹤
@@ -92,10 +89,9 @@ class DecApiService {
       }
 
       // 獲取追蹤日期
-      const dateResponse = await this.api.get<string>(
-        `/twitch/followed/${channel}/${user}`,
-        { params: { format: "Y-m-d H:i:s" } }
-      );
+      const dateResponse = await this.api.get<string>(`/twitch/followed/${channel}/${user}`, {
+        params: { format: "Y-m-d H:i:s" },
+      });
 
       const result: FollowageResult = {
         isFollowing: true,
@@ -105,11 +101,7 @@ class DecApiService {
       this.setCache(cacheKey, result, 1800); // 30 分鐘快取
       return result;
     } catch (error) {
-      logger.error(
-        "DecAPI",
-        `Failed to get followage: ${channel}/${user}`,
-        error
-      );
+      logger.error("DecAPI", `Failed to get followage: ${channel}/${user}`, error);
       return { isFollowing: false, error: "查詢失敗" };
     }
   }
@@ -127,15 +119,12 @@ class DecApiService {
 
     try {
       // 獲取帳號年齡（人類可讀格式）
-      const ageResponse = await this.api.get<string>(
-        `/twitch/accountage/${user}`
-      );
+      const ageResponse = await this.api.get<string>(`/twitch/accountage/${user}`);
 
       // 獲取創建日期
-      const dateResponse = await this.api.get<string>(
-        `/twitch/creation/${user}`,
-        { params: { format: "Y-m-d H:i:s" } }
-      );
+      const dateResponse = await this.api.get<string>(`/twitch/creation/${user}`, {
+        params: { format: "Y-m-d H:i:s" },
+      });
 
       const result: AccountAgeResult = {
         age: ageResponse.data,

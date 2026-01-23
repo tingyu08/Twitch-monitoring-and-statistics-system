@@ -109,10 +109,7 @@ export class PrivacyConsentService {
   /**
    * 檢查特定類別是否同意收集
    */
-  async checkConsent(
-    viewerId: string,
-    category: PrivacyCategory
-  ): Promise<boolean> {
+  async checkConsent(viewerId: string, category: PrivacyCategory): Promise<boolean> {
     const consent = await this.getConsent(viewerId);
 
     // 若無設定，預設為同意（Opt-Out 模式）
@@ -133,10 +130,7 @@ export class PrivacyConsentService {
   ): Promise<Record<PrivacyCategory, boolean>> {
     const consent = await this.getConsent(viewerId);
 
-    const result: Record<PrivacyCategory, boolean> = {} as Record<
-      PrivacyCategory,
-      boolean
-    >;
+    const result: Record<PrivacyCategory, boolean> = {} as Record<PrivacyCategory, boolean>;
 
     for (const category of categories) {
       if (!consent) {

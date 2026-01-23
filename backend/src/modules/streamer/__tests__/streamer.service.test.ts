@@ -1,8 +1,4 @@
-﻿import {
-  getStreamerSummary,
-  getStreamerTimeSeries,
-  getStreamerHeatmap,
-} from "../streamer.service";
+﻿import { getStreamerSummary, getStreamerTimeSeries, getStreamerHeatmap } from "../streamer.service";
 import { prisma } from "../../../db/prisma";
 
 jest.mock("../../../db/prisma", () => ({
@@ -25,9 +21,7 @@ describe("StreamerService", () => {
     it("should return empty zeros if channel not found", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue(null);
       const res = await getStreamerSummary("s1", "7d");
-      expect(res).toEqual(
-        expect.objectContaining({ totalStreamSessions: 0, range: "7d" })
-      );
+      expect(res).toEqual(expect.objectContaining({ totalStreamSessions: 0, range: "7d" }));
     });
 
     it("should calc stats correctly", async () => {

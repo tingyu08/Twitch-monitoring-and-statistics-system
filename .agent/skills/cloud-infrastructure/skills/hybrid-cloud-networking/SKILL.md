@@ -1,15 +1,20 @@
 ---
 name: hybrid-cloud-networking
-description: Configure secure, high-performance connectivity between on-premises infrastructure and cloud platforms using VPN and dedicated connections. Use when building hybrid cloud architectures, connecting data centers to cloud, or implementing secure cross-premises networking.
+description:
+  Configure secure, high-performance connectivity between on-premises infrastructure and cloud
+  platforms using VPN and dedicated connections. Use when building hybrid cloud architectures,
+  connecting data centers to cloud, or implementing secure cross-premises networking.
 ---
 
 # Hybrid Cloud Networking
 
-Configure secure, high-performance connectivity between on-premises and cloud environments using VPN, Direct Connect, and ExpressRoute.
+Configure secure, high-performance connectivity between on-premises and cloud environments using
+VPN, Direct Connect, and ExpressRoute.
 
 ## Purpose
 
-Establish secure, reliable network connectivity between on-premises data centers and cloud providers (AWS, Azure, GCP).
+Establish secure, reliable network connectivity between on-premises data centers and cloud providers
+(AWS, Azure, GCP).
 
 ## When to Use
 
@@ -24,6 +29,7 @@ Establish secure, reliable network connectivity between on-premises data centers
 ### AWS Connectivity
 
 #### 1. Site-to-Site VPN
+
 - IPSec VPN over internet
 - Up to 1.25 Gbps per tunnel
 - Cost-effective for moderate bandwidth
@@ -52,6 +58,7 @@ resource "aws_vpn_connection" "main" {
 ```
 
 #### 2. AWS Direct Connect
+
 - Dedicated network connection
 - 1 Gbps to 100 Gbps
 - Lower latency, consistent bandwidth
@@ -62,6 +69,7 @@ resource "aws_vpn_connection" "main" {
 ### Azure Connectivity
 
 #### 1. Site-to-Site VPN
+
 ```hcl
 resource "azurerm_virtual_network_gateway" "vpn" {
   name                = "vpn-gateway"
@@ -82,6 +90,7 @@ resource "azurerm_virtual_network_gateway" "vpn" {
 ```
 
 #### 2. Azure ExpressRoute
+
 - Private connection via connectivity provider
 - Up to 100 Gbps
 - Low latency, high reliability
@@ -90,11 +99,13 @@ resource "azurerm_virtual_network_gateway" "vpn" {
 ### GCP Connectivity
 
 #### 1. Cloud VPN
+
 - IPSec VPN (Classic or HA VPN)
 - HA VPN: 99.99% SLA
 - Up to 3 Gbps per tunnel
 
 #### 2. Cloud Interconnect
+
 - Dedicated (10 Gbps, 100 Gbps)
 - Partner (50 Mbps to 50 Gbps)
 - Lower latency than VPN
@@ -102,6 +113,7 @@ resource "azurerm_virtual_network_gateway" "vpn" {
 ## Hybrid Network Patterns
 
 ### Pattern 1: Hub-and-Spoke
+
 ```
 On-Premises Datacenter
          ↓
@@ -115,6 +127,7 @@ On-Premises Datacenter
 ```
 
 ### Pattern 2: Multi-Region Hybrid
+
 ```
 On-Premises
     ├─ Direct Connect → us-east-1
@@ -124,6 +137,7 @@ On-Premises
 ```
 
 ### Pattern 3: Multi-Cloud Hybrid
+
 ```
 On-Premises Datacenter
     ├─ Direct Connect → AWS
@@ -134,6 +148,7 @@ On-Premises Datacenter
 ## Routing Configuration
 
 ### BGP Configuration
+
 ```
 On-Premises Router:
 - AS Number: 65000
@@ -145,6 +160,7 @@ Cloud Router:
 ```
 
 ### Route Propagation
+
 - Enable route propagation on route tables
 - Use BGP for dynamic routing
 - Implement route filtering
@@ -166,6 +182,7 @@ Cloud Router:
 ## High Availability
 
 ### Dual VPN Tunnels
+
 ```hcl
 resource "aws_vpn_connection" "primary" {
   vpn_gateway_id      = aws_vpn_gateway.main.id
@@ -181,6 +198,7 @@ resource "aws_vpn_connection" "secondary" {
 ```
 
 ### Active-Active Configuration
+
 - Multiple connections from different locations
 - BGP for automatic failover
 - Equal-cost multi-path (ECMP) routing
@@ -189,6 +207,7 @@ resource "aws_vpn_connection" "secondary" {
 ## Monitoring and Troubleshooting
 
 ### Key Metrics
+
 - Tunnel status (up/down)
 - Bytes in/out
 - Packet loss
@@ -196,6 +215,7 @@ resource "aws_vpn_connection" "secondary" {
 - BGP session status
 
 ### Troubleshooting
+
 ```bash
 # AWS VPN
 aws ec2 describe-vpn-connections

@@ -35,39 +35,25 @@ describe("StreamerController", () => {
       (StreamerService.getStreamerSummary as jest.Mock).mockResolvedValue({
         total: 10,
       });
-      await StreamerController.getSummaryHandler(
-        mockReq as AuthRequest,
-        mockRes as Response
-      );
+      await StreamerController.getSummaryHandler(mockReq as AuthRequest, mockRes as Response);
       expect(jsonMock).toHaveBeenCalledWith({ total: 10 });
     });
 
     it("should 400 for invalid range", async () => {
       mockReq.query = { range: "invalid" };
-      await StreamerController.getSummaryHandler(
-        mockReq as AuthRequest,
-        mockRes as Response
-      );
+      await StreamerController.getSummaryHandler(mockReq as AuthRequest, mockRes as Response);
       expect(statusMock).toHaveBeenCalledWith(400);
     });
 
     it("should 401 if no streamerId", async () => {
       mockReq.user = undefined;
-      await StreamerController.getSummaryHandler(
-        mockReq as AuthRequest,
-        mockRes as Response
-      );
+      await StreamerController.getSummaryHandler(mockReq as AuthRequest, mockRes as Response);
       expect(statusMock).toHaveBeenCalledWith(401);
     });
 
     it("should 500 on error", async () => {
-      (StreamerService.getStreamerSummary as jest.Mock).mockRejectedValue(
-        new Error("err")
-      );
-      await StreamerController.getSummaryHandler(
-        mockReq as AuthRequest,
-        mockRes as Response
-      );
+      (StreamerService.getStreamerSummary as jest.Mock).mockRejectedValue(new Error("err"));
+      await StreamerController.getSummaryHandler(mockReq as AuthRequest, mockRes as Response);
       expect(statusMock).toHaveBeenCalledWith(500);
     });
   });
@@ -108,22 +94,14 @@ describe("StreamerController", () => {
   describe("getTimeSeriesHandler", () => {
     it("should return time series", async () => {
       mockReq.query = { range: "30d", granularity: "day" };
-      (StreamerService.getStreamerTimeSeries as jest.Mock).mockResolvedValue(
-        []
-      );
-      await StreamerController.getTimeSeriesHandler(
-        mockReq as AuthRequest,
-        mockRes as Response
-      );
+      (StreamerService.getStreamerTimeSeries as jest.Mock).mockResolvedValue([]);
+      await StreamerController.getTimeSeriesHandler(mockReq as AuthRequest, mockRes as Response);
       expect(jsonMock).toHaveBeenCalled();
     });
 
     it("should 400 for invalid granularity", async () => {
       mockReq.query = { granularity: "invalid" };
-      await StreamerController.getTimeSeriesHandler(
-        mockReq as AuthRequest,
-        mockRes as Response
-      );
+      await StreamerController.getTimeSeriesHandler(mockReq as AuthRequest, mockRes as Response);
       expect(statusMock).toHaveBeenCalledWith(400);
     });
   });
@@ -131,10 +109,7 @@ describe("StreamerController", () => {
   describe("getHeatmapHandler", () => {
     it("should return heatmap", async () => {
       (StreamerService.getStreamerHeatmap as jest.Mock).mockResolvedValue({});
-      await StreamerController.getHeatmapHandler(
-        mockReq as AuthRequest,
-        mockRes as Response
-      );
+      await StreamerController.getHeatmapHandler(mockReq as AuthRequest, mockRes as Response);
       expect(jsonMock).toHaveBeenCalled();
     });
   });
@@ -161,9 +136,9 @@ describe("StreamerController", () => {
       ];
 
       for (const pair of errorPairs) {
-        (
-          SubService.syncSubscriptionSnapshot as jest.Mock
-        ).mockRejectedValueOnce(new Error(pair.msg));
+        (SubService.syncSubscriptionSnapshot as jest.Mock).mockRejectedValueOnce(
+          new Error(pair.msg)
+        );
         await StreamerController.syncSubscriptionsHandler(
           mockReq as AuthRequest,
           mockRes as Response
@@ -173,9 +148,7 @@ describe("StreamerController", () => {
     });
 
     it("should handle non-error objects gracefully", async () => {
-      (SubService.syncSubscriptionSnapshot as jest.Mock).mockRejectedValueOnce(
-        "String error"
-      );
+      (SubService.syncSubscriptionSnapshot as jest.Mock).mockRejectedValueOnce("String error");
       await StreamerController.syncSubscriptionsHandler(
         mockReq as AuthRequest,
         mockRes as Response

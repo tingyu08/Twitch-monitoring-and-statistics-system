@@ -1,6 +1,7 @@
 ﻿# 🎮 Twitch Analytics - 直播數據分析平台
 
-一個功能完整的全端 Web 應用程式，為 **實況主** 和 **觀眾** 提供深度的 Twitch 直播數據分析與個人統計追蹤。
+一個功能完整的全端 Web 應用程式，為 **實況主** 和 **觀眾**
+提供深度的 Twitch 直播數據分析與個人統計追蹤。
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=flat-square&logo=next.js&logoColor=white)
@@ -201,7 +202,6 @@
 ### 未來規劃 (Epic 6~7)
 
 - **Epic 6**: 使用者體驗優化
-
   - 深色/淺色主題切換
   - 行動裝置 RWD 優化
   - 多語言支援 (i18n)
@@ -370,7 +370,9 @@ npm run dev
 
 **下載 cloudflared**
 
-從 [Cloudflare 官方](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) 下載對應平台的 `cloudflared` 執行檔，放置於專案根目錄。
+從
+[Cloudflare 官方](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+下載對應平台的 `cloudflared` 執行檔，放置於專案根目錄。
 
 **啟動 Tunnel** (Terminal 3)
 
@@ -564,7 +566,8 @@ MIT License - 詳見 [LICENSE](LICENSE) 檔案
 
 - 提交 [Issue](https://github.com/tingyu08/Twitch-monitoring-and-statistics-system/issues)
 - 發送 Email: terryapp0815@gmail.com
-- 在 [Discussions](https://github.com/tingyu08/Twitch-monitoring-and-statistics-system/discussions) 討論
+- 在 [Discussions](https://github.com/tingyu08/Twitch-monitoring-and-statistics-system/discussions)
+  討論
 
 ---
 

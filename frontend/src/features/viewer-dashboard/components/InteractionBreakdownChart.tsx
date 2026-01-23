@@ -2,10 +2,7 @@
 
 import { InteractionBreakdown } from "@/lib/api/viewer";
 import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
-import {
-  InteractionDetailModal,
-  useInteractionDetailModal,
-} from "./InteractionDetailModal";
+import { InteractionDetailModal, useInteractionDetailModal } from "./InteractionDetailModal";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 
 import { useTranslations } from "next-intl";
@@ -15,13 +12,9 @@ interface InteractionBreakdownChartProps {
   height?: number;
 }
 
-export function InteractionBreakdownChart({
-  data,
-  height = 350,
-}: InteractionBreakdownChartProps) {
+export function InteractionBreakdownChart({ data, height = 350 }: InteractionBreakdownChartProps) {
   const t = useTranslations();
-  const { isOpen, selectedType, openModal, closeModal } =
-    useInteractionDetailModal();
+  const { isOpen, selectedType, openModal, closeModal } = useInteractionDetailModal();
 
   const chartData = [
     {
@@ -78,9 +71,7 @@ export function InteractionBreakdownChart({
           <h3 className="font-semibold leading-none tracking-tight">
             {t("stats.interactionParams")}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {t("stats.clickToView")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t("stats.clickToView")}</p>
         </div>
         <div className="p-6 pt-0">
           <SafeResponsiveContainer height={height}>
@@ -106,10 +97,7 @@ export function InteractionBreakdownChart({
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => [
-                  value.toLocaleString(),
-                  t("stats.count"),
-                ]}
+                formatter={(value) => [((value as number) ?? 0).toLocaleString(), t("stats.count")]}
                 contentStyle={{
                   borderRadius: "8px",
                   border: "1px solid #e2e8f0",

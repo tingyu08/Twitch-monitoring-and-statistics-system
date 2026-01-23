@@ -1,6 +1,10 @@
 ---
 name: docx
-description: Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. When Claude needs to work with professional documents (.docx files) for creating new documents, modifying content, working with tracked changes, or adding comments.
+description:
+  Comprehensive document creation, editing, and analysis with support for tracked changes, comments,
+  formatting preservation, and text extraction. When Claude needs to work with professional
+  documents (.docx files) for creating new documents, modifying content, working with tracked
+  changes, or adding comments.
 source: anthropics/skills
 license: Apache-2.0
 ---
@@ -16,12 +20,14 @@ license: Apache-2.0
 ## Reading Content
 
 ### Text Extraction with Pandoc
+
 ```bash
 # Convert to markdown with tracked changes
 pandoc --track-changes=all file.docx -o output.md
 ```
 
 ### Raw XML Access
+
 ```bash
 # Unpack document
 unzip document.docx -d unpacked/
@@ -34,34 +40,38 @@ unzip document.docx -d unpacked/
 ## Creating New Documents (docx-js)
 
 ```javascript
-import { Document, Paragraph, TextRun, Packer } from 'docx';
-import fs from 'fs';
+import { Document, Paragraph, TextRun, Packer } from "docx";
+import fs from "fs";
 
 const doc = new Document({
-  sections: [{
-    children: [
-      new Paragraph({
-        children: [
-          new TextRun({ text: "Hello ", bold: true }),
-          new TextRun({ text: "World", italics: true })
-        ]
-      })
-    ]
-  }]
+  sections: [
+    {
+      children: [
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Hello ", bold: true }),
+            new TextRun({ text: "World", italics: true }),
+          ],
+        }),
+      ],
+    },
+  ],
 });
 
 const buffer = await Packer.toBuffer(doc);
-fs.writeFileSync('document.docx', buffer);
+fs.writeFileSync("document.docx", buffer);
 ```
 
 ## Editing Existing Documents
 
 ### Simple Edits
+
 1. Unpack: `unzip doc.docx -d unpacked/`
 2. Edit `word/document.xml`
 3. Repack: `cd unpacked && zip -r ../edited.docx .`
 
 ### Tracked Changes (Redlining)
+
 For professional documents, use tracked changes:
 
 ```xml

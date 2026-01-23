@@ -41,11 +41,10 @@ export class StreamerSettingsService {
    */
   private async refreshAndSaveToken(
     tokenId: string,
-    encryptedRefreshToken: string,
+    encryptedRefreshToken: string
   ): Promise<string> {
     const refreshToken = decryptToken(encryptedRefreshToken);
-    const newTokenData =
-      await this.twitchClient.refreshAccessToken(refreshToken);
+    const newTokenData = await this.twitchClient.refreshAccessToken(refreshToken);
 
     // 更新資料庫
     await prisma.twitchToken.update({
@@ -59,9 +58,7 @@ export class StreamerSettingsService {
       },
     });
 
-    console.log(
-      `[StreamerSettingsService] Token ${tokenId} refreshed successfully`,
-    );
+    console.log(`[StreamerSettingsService] Token ${tokenId} refreshed successfully`);
     return newTokenData.access_token;
   }
 
@@ -81,9 +78,7 @@ export class StreamerSettingsService {
     });
 
     if (!streamer || streamer.twitchTokens.length === 0) {
-      console.warn(
-        `[StreamerSettingsService] No active token found for streamer ${streamerId}`,
-      );
+      console.warn(`[StreamerSettingsService] No active token found for streamer ${streamerId}`);
       return null;
     }
 
@@ -99,19 +94,16 @@ export class StreamerSettingsService {
           "Client-Id": env.twitchClientId,
           Authorization: `Bearer ${accessToken}`,
         },
-      },
+      }
     );
 
     // 如果 Token 過期 (401)，嘗試刷新
     if (response.status === 401 && tokenRecord.refreshToken) {
       console.log(
-        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`,
+        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`
       );
       try {
-        accessToken = await this.refreshAndSaveToken(
-          tokenRecord.id,
-          tokenRecord.refreshToken,
-        );
+        accessToken = await this.refreshAndSaveToken(tokenRecord.id, tokenRecord.refreshToken);
 
         // 重試請求
         response = await fetch(
@@ -121,21 +113,16 @@ export class StreamerSettingsService {
               "Client-Id": env.twitchClientId,
               Authorization: `Bearer ${accessToken}`,
             },
-          },
+          }
         );
       } catch (refreshError) {
-        console.error(
-          "[StreamerSettingsService] Token refresh failed:",
-          refreshError,
-        );
+        console.error("[StreamerSettingsService] Token refresh failed:", refreshError);
         // 標記 Token 為失效
         await prisma.twitchToken.update({
           where: { id: tokenRecord.id },
           data: { status: "expired", failureCount: { increment: 1 } },
         });
-        throw new Error(
-          "Token expired and refresh failed. Please re-authenticate.",
-        );
+        throw new Error("Token expired and refresh failed. Please re-authenticate.");
       }
     }
 
@@ -162,10 +149,7 @@ export class StreamerSettingsService {
   /**
    * 更新實況主頻道設定到 Twitch
    */
-  async updateChannelInfo(
-    streamerId: string,
-    data: UpdateChannelInfoDto,
-  ): Promise<boolean> {
+  async updateChannelInfo(streamerId: string, data: UpdateChannelInfoDto): Promise<boolean> {
     const streamer = await prisma.streamer.findUnique({
       where: { id: streamerId },
       include: {
@@ -203,19 +187,16 @@ export class StreamerSettingsService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
-      },
+      }
     );
 
     // 如果 Token 過期 (401)，嘗試刷新
     if (response.status === 401 && tokenRecord.refreshToken) {
       console.log(
-        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`,
+        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`
       );
       try {
-        accessToken = await this.refreshAndSaveToken(
-          tokenRecord.id,
-          tokenRecord.refreshToken,
-        );
+        accessToken = await this.refreshAndSaveToken(tokenRecord.id, tokenRecord.refreshToken);
 
         // 重試請求
         response = await fetch(
@@ -228,29 +209,21 @@ export class StreamerSettingsService {
               "Content-Type": "application/json",
             },
             body: JSON.stringify(body),
-          },
+          }
         );
       } catch (refreshError) {
-        console.error(
-          "[StreamerSettingsService] Token refresh failed:",
-          refreshError,
-        );
+        console.error("[StreamerSettingsService] Token refresh failed:", refreshError);
         await prisma.twitchToken.update({
           where: { id: tokenRecord.id },
           data: { status: "expired", failureCount: { increment: 1 } },
         });
-        throw new Error(
-          "Token expired and refresh failed. Please re-authenticate.",
-        );
+        throw new Error("Token expired and refresh failed. Please re-authenticate.");
       }
     }
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(
-        "[StreamerSettingsService] updateChannelInfo error:",
-        errorText,
-      );
+      console.error("[StreamerSettingsService] updateChannelInfo error:", errorText);
       throw new Error(`Twitch API error: ${response.status}`);
     }
 
@@ -261,7 +234,7 @@ export class StreamerSettingsService {
    * 搜尋遊戲分類
    */
   async searchGames(
-    query: string,
+    query: string
   ): Promise<Array<{ id: string; name: string; boxArtUrl: string }>> {
     if (!query || query.length < 2) {
       return [];
@@ -281,15 +254,13 @@ export class StreamerSettingsService {
     try {
       const accessToken = decryptToken(token.accessToken);
       const response = await fetch(
-        `https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(
-          query,
-        )}&first=10`,
+        `https://api.twitch.tv/helix/search/categories?query=${encodeURIComponent(query)}&first=10`,
         {
           headers: {
             "Client-Id": env.twitchClientId,
             Authorization: `Bearer ${accessToken}`,
           },
-        },
+        }
       );
 
       if (!response.ok) {
@@ -297,16 +268,11 @@ export class StreamerSettingsService {
       }
 
       const data = await response.json();
-      return (data.data || []).map(
-        (game: { id: string; name: string; box_art_url: string }) => ({
-          id: game.id,
-          name: game.name,
-          boxArtUrl:
-            game.box_art_url
-              ?.replace("{width}", "52")
-              .replace("{height}", "72") || "",
-        }),
-      );
+      return (data.data || []).map((game: { id: string; name: string; box_art_url: string }) => ({
+        id: game.id,
+        name: game.name,
+        boxArtUrl: game.box_art_url?.replace("{width}", "52").replace("{height}", "72") || "",
+      }));
     } catch {
       return [];
     }
@@ -324,7 +290,7 @@ export class StreamerSettingsService {
       gameName?: string;
       tags?: string[];
       language?: string;
-    },
+    }
   ) {
     return prisma.streamerSettingTemplate.create({
       data: {

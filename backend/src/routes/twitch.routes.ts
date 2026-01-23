@@ -70,10 +70,7 @@ router.post("/channels", async (req: Request, res: Response) => {
 router.get("/followage/:channel/:user", async (req: Request, res: Response) => {
   try {
     const { channel, user } = req.params;
-    const followInfo = await unifiedTwitchService.getUserFollowInfo(
-      channel,
-      user
-    );
+    const followInfo = await unifiedTwitchService.getUserFollowInfo(channel, user);
 
     return res.json(followInfo);
   } catch (error) {
@@ -86,27 +83,21 @@ router.get("/followage/:channel/:user", async (req: Request, res: Response) => {
  * GET /api/twitch/relation/:channel/:viewer
  * 獲取觀眾與頻道的完整關係資訊
  */
-router.get(
-  "/relation/:channel/:viewer",
-  async (req: Request, res: Response) => {
-    try {
-      const { channel, viewer } = req.params;
-      const relation = await unifiedTwitchService.getViewerChannelRelation(
-        channel,
-        viewer
-      );
+router.get("/relation/:channel/:viewer", async (req: Request, res: Response) => {
+  try {
+    const { channel, viewer } = req.params;
+    const relation = await unifiedTwitchService.getViewerChannelRelation(channel, viewer);
 
-      if (!relation) {
-        return res.status(404).json({ error: "無法獲取關係資訊" });
-      }
-
-      return res.json(relation);
-    } catch (error) {
-      logger.error("Twitch API", "Failed to get relation info", error);
-      return res.status(500).json({ error: "伺服器錯誤" });
+    if (!relation) {
+      return res.status(404).json({ error: "無法獲取關係資訊" });
     }
+
+    return res.json(relation);
+  } catch (error) {
+    logger.error("Twitch API", "Failed to get relation info", error);
+    return res.status(500).json({ error: "伺服器錯誤" });
   }
-);
+});
 
 // ========== 直播狀態 ==========
 

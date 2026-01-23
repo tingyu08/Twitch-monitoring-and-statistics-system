@@ -11,8 +11,7 @@ test.describe("Viewer Privacy Settings", () => {
           viewerId: "v1",
           twitchUserId: "t1",
           displayName: "TestViewer",
-          avatarUrl:
-            "https://static-cdn.jtvnw.net/jtv_user_pictures/test-avatar-70x70.png",
+          avatarUrl: "https://static-cdn.jtvnw.net/jtv_user_pictures/test-avatar-70x70.png",
           role: "viewer",
           isViewer: true,
           consentedAt: "2025-01-01T00:00:00Z",
@@ -81,8 +80,7 @@ test.describe("Viewer Privacy Settings", () => {
     // Start waiting for request before clicking
     const requestPromise = page.waitForRequest(
       (request) =>
-        request.url().includes("/api/viewer/privacy/consent") &&
-        request.method() === "PATCH"
+        request.url().includes("/api/viewer/privacy/consent") && request.method() === "PATCH"
     );
 
     await switchButton.click();

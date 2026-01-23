@@ -1,11 +1,14 @@
 ---
 name: godot-gdscript-patterns
-description: Master Godot 4 GDScript patterns including signals, scenes, state machines, and optimization. Use when building Godot games, implementing game systems, or learning GDScript best practices.
+description:
+  Master Godot 4 GDScript patterns including signals, scenes, state machines, and optimization. Use
+  when building Godot games, implementing game systems, or learning GDScript best practices.
 ---
 
 # Godot GDScript Patterns
 
-Production patterns for Godot 4.x game development with GDScript, covering architecture, signals, scenes, and optimization.
+Production patterns for Godot 4.x game development with GDScript, covering architecture, signals,
+scenes, and optimization.
 
 ## When to Use This Skill
 
@@ -785,6 +788,7 @@ func _on_off_screen() -> void:
 ## Best Practices
 
 ### Do's
+
 - **Use signals for decoupling** - Avoid direct references
 - **Type everything** - Static typing catches errors
 - **Use resources for data** - Separate data from logic
@@ -792,6 +796,7 @@ func _on_off_screen() -> void:
 - **Use Autoloads sparingly** - Only for truly global systems
 
 ### Don'ts
+
 - **Don't use `get_node()` in loops** - Cache references
 - **Don't couple scenes tightly** - Use signals
 - **Don't put logic in resources** - Keep them data-only

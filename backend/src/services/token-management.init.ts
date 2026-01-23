@@ -23,11 +23,9 @@ export async function initializeTokenManagement(): Promise<void> {
 
   // 設定 Token 刷新失敗回調
   twurpleAuthService.setOnTokenFailure(async (userId, error, reason) => {
-    logger.warn(
-      "Token Management",
-      `Token failure detected for user ${userId}: ${reason}`,
-      { error: error.message }
-    );
+    logger.warn("Token Management", `Token failure detected for user ${userId}: ${reason}`, {
+      error: error.message,
+    });
 
     // 根據失敗原因決定狀態
     let status: TokenStatusType;
@@ -80,16 +78,9 @@ export async function initializeTokenManagement(): Promise<void> {
         return;
       }
 
-      logger.warn(
-        "Token Management",
-        `No token found for Twitch user ${userId}`
-      );
+      logger.warn("Token Management", `No token found for Twitch user ${userId}`);
     } catch (dbError) {
-      logger.error(
-        "Token Management",
-        `Failed to update token status for user ${userId}`,
-        dbError
-      );
+      logger.error("Token Management", `Failed to update token status for user ${userId}`, dbError);
     }
   });
 

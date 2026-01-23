@@ -52,7 +52,7 @@ export function ChannelVideosSection({ channelId }: Props) {
         <div className="flex bg-gray-100 dark:bg-white/5 rounded-lg p-1">
           <button
             onClick={() => setActiveTab("vods")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
               activeTab === "vods"
                 ? "bg-white dark:bg-purple-600 text-purple-600 dark:text-white shadow-sm"
                 : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
@@ -62,7 +62,7 @@ export function ChannelVideosSection({ channelId }: Props) {
           </button>
           <button
             onClick={() => setActiveTab("clips")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
               activeTab === "clips"
                 ? "bg-white dark:bg-purple-600 text-purple-600 dark:text-white shadow-sm"
                 : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
@@ -90,7 +90,7 @@ export function ChannelVideosSection({ channelId }: Props) {
                 href={v.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative block overflow-hidden theme-card hover:shadow-lg hover:shadow-purple-500/10 transition-all"
+                className="group relative block overflow-hidden theme-card hover:shadow-lg hover:shadow-purple-500/10 transition-[color,background-color,border-color,box-shadow,transform,opacity]"
               >
                 <div className="aspect-video relative">
                   {v.thumbnailUrl ? (
@@ -140,7 +140,7 @@ export function ChannelVideosSection({ channelId }: Props) {
               href={c.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group relative block overflow-hidden theme-card hover:shadow-lg hover:shadow-purple-500/10 transition-all"
+              className="group relative block overflow-hidden theme-card hover:shadow-lg hover:shadow-purple-500/10 transition-[color,background-color,border-color,box-shadow,transform,opacity]"
             >
               <div className="aspect-video relative">
                 {c.thumbnailUrl ? (

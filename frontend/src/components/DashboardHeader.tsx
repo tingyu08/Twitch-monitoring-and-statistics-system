@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { ThemeToggle, ThemeToggleSimple } from "@/features/theme";
-import { LocaleSwitcher } from "@/components/LocaleSwitcher";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
 import { Menu, X, User, Settings, LogOut, LayoutDashboard } from "lucide-react";
 
 interface DashboardHeaderProps {
@@ -49,7 +49,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 type="button"
                 onClick={() => !isViewer && router.push("/dashboard/viewer")}
                 onMouseEnter={() => router.prefetch("/dashboard/viewer")}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
                   isViewer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
                     : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
@@ -59,11 +59,9 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  !isStreamer && router.push("/dashboard/streamer")
-                }
+                onClick={() => !isStreamer && router.push("/dashboard/streamer")}
                 onMouseEnter={() => router.prefetch("/dashboard/streamer")}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
                   isStreamer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
                     : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
@@ -107,7 +105,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                     setMobileMenuOpen(false);
                   }}
                   onMouseEnter={() => router.prefetch("/dashboard/viewer")}
-                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all ${
+                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
                     isViewer
                       ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
                       : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
@@ -128,7 +126,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                     setMobileMenuOpen(false);
                   }}
                   onMouseEnter={() => router.prefetch("/dashboard/streamer")}
-                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all ${
+                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
                     isStreamer
                       ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
                       : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
@@ -164,7 +162,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                       router.push("/dashboard/viewer/settings");
                       setMobileMenuOpen(false);
                     }}
-                    className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10 transition-all"
+                    className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10 transition-[color,background-color,border-color,box-shadow,transform,opacity]"
                   >
                     <Settings size={18} />
                     <span>{t("nav.settings")}</span>
@@ -173,7 +171,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-red-100/30 dark:bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-100/50 dark:hover:bg-red-500/20 transition-all"
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-red-100/30 dark:bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-100/50 dark:hover:bg-red-500/20 transition-[color,background-color,border-color,box-shadow,transform,opacity]"
                 >
                   <LogOut size={18} />
                   <span>{t("common.logout")}</span>

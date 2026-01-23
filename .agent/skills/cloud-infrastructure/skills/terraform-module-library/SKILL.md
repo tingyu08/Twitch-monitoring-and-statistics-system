@@ -1,6 +1,9 @@
 ---
 name: terraform-module-library
-description: Build reusable Terraform modules for AWS, Azure, and GCP infrastructure following infrastructure-as-code best practices. Use when creating infrastructure modules, standardizing cloud provisioning, or implementing reusable IaC components.
+description:
+  Build reusable Terraform modules for AWS, Azure, and GCP infrastructure following
+  infrastructure-as-code best practices. Use when creating infrastructure modules, standardizing
+  cloud provisioning, or implementing reusable IaC components.
 ---
 
 # Terraform Module Library
@@ -9,7 +12,8 @@ Production-ready Terraform module patterns for AWS, Azure, and GCP infrastructur
 
 ## Purpose
 
-Create reusable, well-tested Terraform modules for common cloud infrastructure patterns across multiple cloud providers.
+Create reusable, well-tested Terraform modules for common cloud infrastructure patterns across
+multiple cloud providers.
 
 ## When to Use
 
@@ -58,6 +62,7 @@ module-name/
 ## AWS VPC Module Example
 
 **main.tf:**
+
 ```hcl
 resource "aws_vpc" "main" {
   cidr_block           = var.cidr_block
@@ -101,6 +106,7 @@ resource "aws_internet_gateway" "main" {
 ```
 
 **variables.tf:**
+
 ```hcl
 variable "name" {
   description = "Name of the VPC"
@@ -141,6 +147,7 @@ variable "tags" {
 ```
 
 **outputs.tf:**
+
 ```hcl
 output "vpc_id" {
   description = "ID of the VPC"

@@ -1,6 +1,8 @@
 ---
 name: threat-mitigation-mapping
-description: Map identified threats to appropriate security controls and mitigations. Use when prioritizing security investments, creating remediation plans, or validating control effectiveness.
+description:
+  Map identified threats to appropriate security controls and mitigations. Use when prioritizing
+  security investments, creating remediation plans, or validating control effectiveness.
 ---
 
 # Threat Mitigation Mapping
@@ -33,13 +35,13 @@ Corrective ────► Respond and recover from attacks
 
 ### 2. Control Layers
 
-| Layer | Examples |
-|-------|----------|
-| **Network** | Firewall, WAF, DDoS protection |
-| **Application** | Input validation, authentication |
-| **Data** | Encryption, access controls |
-| **Endpoint** | EDR, patch management |
-| **Process** | Security training, incident response |
+| Layer           | Examples                             |
+| --------------- | ------------------------------------ |
+| **Network**     | Firewall, WAF, DDoS protection       |
+| **Application** | Input validation, authentication     |
+| **Data**        | Encryption, access controls          |
+| **Endpoint**    | EDR, patch management                |
+| **Process**     | Security training, incident response |
 
 ### 3. Defense in Depth
 
@@ -725,6 +727,7 @@ class ControlTester:
 ## Best Practices
 
 ### Do's
+
 - **Map all threats** - No threat should be unmapped
 - **Layer controls** - Defense in depth is essential
 - **Mix control types** - Preventive, detective, corrective
@@ -732,6 +735,7 @@ class ControlTester:
 - **Review regularly** - Controls degrade over time
 
 ### Don'ts
+
 - **Don't rely on single controls** - Single points of failure
 - **Don't ignore cost** - ROI matters
 - **Don't skip testing** - Untested controls may fail

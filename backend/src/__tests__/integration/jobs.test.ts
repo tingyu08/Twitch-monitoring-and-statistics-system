@@ -14,6 +14,7 @@ jest.mock("../../db/prisma", () => ({
   prisma: {
     channel: {
       findMany: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
     },
     streamSession: {
       create: jest.fn(),
@@ -21,6 +22,10 @@ jest.mock("../../db/prisma", () => ({
       update: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
+      upsert: jest.fn(),
+    },
+    streamMetric: {
+      create: jest.fn(),
     },
     channelDailyStat: {
       upsert: jest.fn(),
@@ -41,23 +46,22 @@ describe("Story 3.3: Jobs Integration", () => {
         { id: "c1", twitchChannelId: "t1", channelName: "User" },
       ]);
       (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue(null);
-      (unifiedTwitchService.getStreamsByUserIds as jest.Mock).mockResolvedValue(
-        [
-          {
-            id: "s1",
-            userId: "t1",
-            userName: "User",
-            title: "Live",
-            gameName: "Game",
-            viewerCount: 10,
-            startedAt: new Date(),
-          },
-        ]
-      );
+      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([]); // Mock active sessions
+      (unifiedTwitchService.getStreamsByUserIds as jest.Mock).mockResolvedValue([
+        {
+          id: "s1",
+          userId: "t1",
+          userName: "User",
+          title: "Live",
+          gameName: "Game",
+          viewerCount: 10,
+          startedAt: new Date(),
+        },
+      ]);
 
       await streamStatusJob.execute();
 
-      expect(prisma.streamSession.create).toHaveBeenCalled();
+      expect(prisma.streamSession.upsert).toHaveBeenCalled();
     });
 
     it("should update session if already live", async () => {
@@ -74,17 +78,18 @@ describe("Story 3.3: Jobs Integration", () => {
         peakViewers: 10,
         avgViewers: 10,
       });
-      (unifiedTwitchService.getStreamsByUserIds as jest.Mock).mockResolvedValue(
-        [
-          {
-            id: "s1",
-            userId: "t1",
-            title: "Live",
-            gameName: "Game",
-            viewerCount: 20,
-          },
-        ]
-      );
+      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
+        { id: "s1", channelId: "c1" },
+      ]); // Mock active sessions
+      (unifiedTwitchService.getStreamsByUserIds as jest.Mock).mockResolvedValue([
+        {
+          id: "s1",
+          userId: "t1",
+          title: "Live",
+          gameName: "Game",
+          viewerCount: 20,
+        },
+      ]);
 
       await streamStatusJob.execute();
 

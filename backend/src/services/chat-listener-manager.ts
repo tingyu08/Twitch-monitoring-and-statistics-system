@@ -158,11 +158,7 @@ export class ChatListenerManager {
   /**
    * 更新頻道狀態（直播中/離線）
    */
-  public updateChannelStatus(
-    channelName: string,
-    isLive: boolean,
-    viewerCount?: number
-  ): void {
+  public updateChannelStatus(channelName: string, isLive: boolean, viewerCount?: number): void {
     const normalizedName = channelName.toLowerCase().replace(/^#/, "");
     const info = this.channels.get(normalizedName);
 
@@ -245,10 +241,7 @@ export class ChatListenerManager {
       }
 
       if (channelsToRemove.length > 0) {
-        logger.info(
-          "ListenerManager",
-          `健康檢查: 已移除 ${channelsToRemove.length} 個非活躍頻道`
-        );
+        logger.info("ListenerManager", `健康檢查: 已移除 ${channelsToRemove.length} 個非活躍頻道`);
       }
     } catch (error) {
       this.isHealthy = false;
@@ -277,9 +270,7 @@ export class ChatListenerManager {
       pausedChannels: pausedCount,
       lastHealthCheck: this.lastHealthCheck,
       isHealthy: this.isHealthy,
-      instanceId: ENABLE_DISTRIBUTED_MODE
-        ? distributedCoordinator.getInstanceId()
-        : "standalone",
+      instanceId: ENABLE_DISTRIBUTED_MODE ? distributedCoordinator.getInstanceId() : "standalone",
     };
   }
 

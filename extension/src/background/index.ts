@@ -7,8 +7,7 @@
  */
 
 // ============ 常數定義 ============
-const API_BASE_URL =
-  "https://twitch-monitoring-and-statistics-system.onrender.com";
+const API_BASE_URL = "https://twitch-monitoring-and-statistics-system.onrender.com";
 const SUBMIT_INTERVAL_MS = 60 * 1000; // 60 秒提交一次
 
 // ============ 狀態管理 ============
@@ -71,9 +70,7 @@ function handleHeartbeat(channel: string, timestamp: string) {
     console.log(`[Bmad BG] New session: ${channel}`);
   } else {
     currentSession.heartbeatCount++;
-    console.log(
-      `[Bmad BG] Heartbeat #${currentSession.heartbeatCount} for ${channel}`
-    );
+    console.log(`[Bmad BG] Heartbeat #${currentSession.heartbeatCount} for ${channel}`);
   }
 }
 
@@ -102,9 +99,7 @@ async function submitSession(session: WatchSession) {
     });
 
     if (response.ok) {
-      console.log(
-        `[Bmad BG] Submitted ${durationSeconds}s for ${session.channel}`
-      );
+      console.log(`[Bmad BG] Submitted ${durationSeconds}s for ${session.channel}`);
     } else {
       console.error("[Bmad BG] Submit failed:", response.status);
     }

@@ -35,17 +35,10 @@ export const syncSubscriptionsJob = cron.schedule("0 0 * * *", async () => {
       try {
         await revenueService.syncSubscriptionSnapshot(streamer.id);
         successCount++;
-        logger.debug(
-          "Jobs",
-          `Synced subscription snapshot for ${streamer.displayName}`
-        );
+        logger.debug("Jobs", `Synced subscription snapshot for ${streamer.displayName}`);
       } catch (error) {
         failCount++;
-        logger.error(
-          "Jobs",
-          `Failed to sync subscriptions for ${streamer.displayName}`,
-          error
-        );
+        logger.error("Jobs", `Failed to sync subscriptions for ${streamer.displayName}`, error);
       }
 
       // 簡單延遲防止 Rate Limit

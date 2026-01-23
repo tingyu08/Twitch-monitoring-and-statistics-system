@@ -1,11 +1,14 @@
 ---
 name: risk-metrics-calculation
-description: Calculate portfolio risk metrics including VaR, CVaR, Sharpe, Sortino, and drawdown analysis. Use when measuring portfolio risk, implementing risk limits, or building risk monitoring systems.
+description:
+  Calculate portfolio risk metrics including VaR, CVaR, Sharpe, Sortino, and drawdown analysis. Use
+  when measuring portfolio risk, implementing risk limits, or building risk monitoring systems.
 ---
 
 # Risk Metrics Calculation
 
-Comprehensive risk measurement toolkit for portfolio management, including Value at Risk, Expected Shortfall, and drawdown analysis.
+Comprehensive risk measurement toolkit for portfolio management, including Value at Risk, Expected
+Shortfall, and drawdown analysis.
 
 ## When to Use This Skill
 
@@ -20,12 +23,12 @@ Comprehensive risk measurement toolkit for portfolio management, including Value
 
 ### 1. Risk Metric Categories
 
-| Category | Metrics | Use Case |
-|----------|---------|----------|
-| **Volatility** | Std Dev, Beta | General risk |
-| **Tail Risk** | VaR, CVaR | Extreme losses |
-| **Drawdown** | Max DD, Calmar | Capital preservation |
-| **Risk-Adjusted** | Sharpe, Sortino | Performance |
+| Category          | Metrics         | Use Case             |
+| ----------------- | --------------- | -------------------- |
+| **Volatility**    | Std Dev, Beta   | General risk         |
+| **Tail Risk**     | VaR, CVaR       | Extreme losses       |
+| **Drawdown**      | Max DD, Calmar  | Capital preservation |
+| **Risk-Adjusted** | Sharpe, Sortino | Performance          |
 
 ### 2. Time Horizons
 
@@ -535,6 +538,7 @@ for metric, value in summary.items():
 ## Best Practices
 
 ### Do's
+
 - **Use multiple metrics** - No single metric captures all risk
 - **Consider tail risk** - VaR isn't enough, use CVaR
 - **Rolling analysis** - Risk changes over time
@@ -542,6 +546,7 @@ for metric, value in summary.items():
 - **Document assumptions** - Distribution, lookback, etc.
 
 ### Don'ts
+
 - **Don't rely on VaR alone** - Underestimates tail risk
 - **Don't assume normality** - Returns are fat-tailed
 - **Don't ignore correlation** - Increases in stress

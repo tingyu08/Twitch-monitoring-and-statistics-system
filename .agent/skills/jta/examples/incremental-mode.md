@@ -1,10 +1,13 @@
 # Example: Incremental Translation
 
-This example demonstrates how to update existing translations when you add new content to your source file.
+This example demonstrates how to update existing translations when you add new content to your
+source file.
 
 ## Scenario
 
-User has already translated `en.json` to Chinese (`zh.json`). Now they've added 5 new keys and modified 2 existing keys in `en.json`. They want to update `zh.json` without re-translating everything.
+User has already translated `en.json` to Chinese (`zh.json`). Now they've added 5 new keys and
+modified 2 existing keys in `en.json`. They want to update `zh.json` without re-translating
+everything.
 
 ## User Request
 
@@ -15,6 +18,7 @@ User has already translated `en.json` to Chinese (`zh.json`). Now they've added 
 ### Step 1: Understand the Context
 
 Claude recognizes:
+
 - **Task**: Update existing translation
 - **Source file**: en.json
 - **Target**: Chinese (zh.json already exists)
@@ -28,6 +32,7 @@ ls -lh locales/en.json locales/zh.json
 ```
 
 Output:
+
 ```
 -rw-r--r--  1 user  staff   2.8K  en.json (modified 5 minutes ago)
 -rw-r--r--  1 user  staff   2.6K  zh.json (created 2 days ago)
@@ -43,6 +48,7 @@ jta locales/en.json --to zh --incremental
 ### Step 4: Analyze Changes
 
 Console output:
+
 ```
 📄 Loading source file...
 ✓ Source file loaded (105 keys)
@@ -79,6 +85,7 @@ Continue with incremental translation? [Y/n]
 ### Step 5: User Confirms
 
 Since the request included "update", Claude proceeds:
+
 ```bash
 # Continue (non-interactive with -y would skip prompt)
 # User presses Y or Claude proceeds automatically
@@ -87,6 +94,7 @@ Since the request included "update", Claude proceeds:
 ### Step 6: Translate Only Changes
 
 Console output:
+
 ```
 📚 Loading terminology...
 ✓ Terminology loaded (8 terms from .jta/)
@@ -167,9 +175,11 @@ Would you like to update other languages as well?
 ## Comparison: Incremental vs Full Translation
 
 ### Full Translation (without --incremental)
+
 ```bash
 jta en.json --to zh
 ```
+
 - Translates all 105 keys
 - Takes ~45 seconds
 - 15 API calls
@@ -177,9 +187,11 @@ jta en.json --to zh
 - May lose existing manual refinements
 
 ### Incremental Translation (with --incremental)
+
 ```bash
 jta en.json --to zh --incremental
 ```
+
 - Translates only 7 changed keys
 - Takes ~8 seconds
 - 2 API calls
@@ -208,6 +220,7 @@ Jta uses content hashing to detect changes:
 ## Sample Changes
 
 ### Before (en.json - 2 days ago)
+
 ```json
 {
   "app": {
@@ -221,6 +234,7 @@ Jta uses content hashing to detect changes:
 ```
 
 ### After (en.json - now)
+
 ```json
 {
   "app": {
@@ -246,11 +260,14 @@ Jta uses content hashing to detect changes:
 ```
 
 ### Changes Detected
-- ✨ **New**: `app.features.newFeature`, `user.preferences.theme`, `user.preferences.language`, `settings.notification.email`, `settings.notification.push`
-- ✏️  **Modified**: `app.welcome`, `user.credits`
-- 🗑️  **Deleted**: `app.deprecated`
+
+- ✨ **New**: `app.features.newFeature`, `user.preferences.theme`, `user.preferences.language`,
+  `settings.notification.email`, `settings.notification.push`
+- ✏️ **Modified**: `app.welcome`, `user.credits`
+- 🗑️ **Deleted**: `app.deprecated`
 
 ### Updated Translation (zh.json)
+
 ```json
 {
   "app": {
@@ -278,6 +295,7 @@ Jta uses content hashing to detect changes:
 ## Best Practices
 
 1. **Always use incremental mode for updates**
+
    ```bash
    jta en.json --to zh --incremental
    ```
@@ -286,11 +304,13 @@ Jta uses content hashing to detect changes:
    - After major terminology changes
    - When quality is unsatisfactory
    - When starting fresh
+
    ```bash
    jta en.json --to zh  # without --incremental
    ```
 
 3. **CI/CD integration**
+
    ```bash
    # In your CI pipeline
    jta locales/en.json --to zh,ja,ko --incremental -y

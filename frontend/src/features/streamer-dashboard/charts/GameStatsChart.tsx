@@ -2,15 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { getStreamerGameStats, type GameStats } from "@/lib/api/streamer";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
+import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import { ChartLoading, ChartError, ChartEmpty } from "./ChartStates";
 import { useTranslations } from "next-intl";
 
@@ -62,14 +55,8 @@ export function GameStatsChart({
   if (isLoading) return <ChartLoading />;
   // Simple retry by callback
   if (error)
-    return (
-      <ChartError
-        error={t("noGameStats")}
-        onRetry={() => window.location.reload()}
-      />
-    );
-  if (displayData.length === 0)
-    return <ChartEmpty description={t("noGameStatsDesc")} />;
+    return <ChartError error={t("noGameStats")} onRetry={() => window.location.reload()} />;
+  if (displayData.length === 0) return <ChartEmpty description={t("noGameStatsDesc")} />;
 
   // Take top 5
   const chartData = displayData.slice(0, 5);
@@ -83,7 +70,7 @@ export function GameStatsChart({
       </div>
 
       <div className="w-full h-[250px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <SafeResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"
             data={chartData}
@@ -106,18 +93,15 @@ export function GameStatsChart({
                 borderRadius: "8px",
               }}
               itemStyle={{ color: "#c084fc" }} // purple-400 for value text
-              formatter={(value: number) => [`${value} hrs`, t("totalHours")]}
+              formatter={(value) => [`${value ?? 0} hrs`, t("totalHours")]}
             />
             <Bar dataKey="totalHours" radius={[0, 4, 4, 0]} barSize={20}>
               {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={COLORS[index % COLORS.length]}
-                />
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Bar>
           </BarChart>
-        </ResponsiveContainer>
+        </SafeResponsiveContainer>
       </div>
     </div>
   );

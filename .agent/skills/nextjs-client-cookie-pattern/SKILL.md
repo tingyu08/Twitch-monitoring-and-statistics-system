@@ -1,6 +1,10 @@
 ---
 name: nextjs-client-cookie-pattern
-description: Pattern for client components calling server actions to set cookies in Next.js. Covers the two-file pattern of a client component with user interaction (onClick, form submission) that calls a server action to modify cookies. Use when building features like authentication, preferences, or session management where client-side triggers need to set/modify server-side cookies.
+description:
+  Pattern for client components calling server actions to set cookies in Next.js. Covers the
+  two-file pattern of a client component with user interaction (onClick, form submission) that calls
+  a server action to modify cookies. Use when building features like authentication, preferences, or
+  session management where client-side triggers need to set/modify server-side cookies.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
@@ -8,9 +12,11 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 
 ## Pattern Overview
 
-This pattern handles a common Next.js requirement: **client-side interaction (button click) that needs to set server-side cookies**.
+This pattern handles a common Next.js requirement: **client-side interaction (button click) that
+needs to set server-side cookies**.
 
 **Why Two Files?**
+
 - Client components (`'use client'`) can have onClick handlers
 - Only server code can set cookies (security requirement)
 - Solution: Client component calls a server action that sets cookies
@@ -20,11 +26,13 @@ This pattern handles a common Next.js requirement: **client-side interaction (bu
 **Scenario:** A button that sets a cookie when clicked
 
 **File 1: Client Component** (`app/CookieButton.tsx`)
+
 - Has `'use client'` directive
 - Has onClick handler
 - Imports and calls server action
 
 **File 2: Server Action** (`app/actions.ts`)
+
 - Has `'use server'` directive
 - Uses `cookies()` from `next/headers`
 - Sets the cookie
@@ -56,17 +64,17 @@ export default function CookieButton() {
 
 ```typescript
 // app/actions.ts
-'use server';
+"use server";
 
-import { cookies } from 'next/headers';
+import { cookies } from "next/headers";
 
 export async function setPreference(key: string, value: string) {
   const cookieStore = await cookies();
 
   cookieStore.set(key, value, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     maxAge: 60 * 60 * 24 * 365, // 1 year
   });
 }
@@ -215,12 +223,12 @@ export async function setLanguage(lang: string) {
 ## Cookie Options
 
 ```typescript
-cookieStore.set('name', 'value', {
-  httpOnly: true,    // Prevents JavaScript access (security)
-  secure: true,      // Only send over HTTPS
-  sameSite: 'lax',   // CSRF protection
-  maxAge: 3600,      // Expires in 1 hour (seconds)
-  path: '/',         // Available on all routes
+cookieStore.set("name", "value", {
+  httpOnly: true, // Prevents JavaScript access (security)
+  secure: true, // Only send over HTTPS
+  sameSite: "lax", // CSRF protection
+  maxAge: 3600, // Expires in 1 hour (seconds)
+  path: "/", // Available on all routes
 });
 ```
 
@@ -266,10 +274,10 @@ export async function savePreferences(formData: FormData) {
 
 ```typescript
 // app/actions.ts
-'use server';
+"use server";
 
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export async function login(email: string, password: string) {
   // Authenticate user
@@ -277,25 +285,26 @@ export async function login(email: string, password: string) {
 
   // Set session cookie
   const cookieStore = await cookies();
-  cookieStore.set('session', session.token, {
+  cookieStore.set("session", session.token, {
     httpOnly: true,
     secure: true,
-    sameSite: 'lax',
+    sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7, // 1 week
   });
 
   // Redirect to dashboard
-  redirect('/dashboard');
+  redirect("/dashboard");
 }
 ```
 
 ## Why This Pattern?
 
-**Can't client components set cookies directly?**
-No. Client components run in the browser, and modern browsers restrict cookie manipulation for security. Server actions run on the server where cookie-setting is allowed.
+**Can't client components set cookies directly?** No. Client components run in the browser, and
+modern browsers restrict cookie manipulation for security. Server actions run on the server where
+cookie-setting is allowed.
 
-**Why not use a Route Handler (API route)?**
-You can! But server actions are simpler and more integrated with the Next.js App Router pattern.
+**Why not use a Route Handler (API route)?** You can! But server actions are simpler and more
+integrated with the Next.js App Router pattern.
 
 ```typescript
 // Alternative: Route Handler approach
@@ -306,21 +315,22 @@ export async function POST(request: Request) {
   return new Response(null, {
     status: 200,
     headers: {
-      'Set-Cookie': `${name}=${value}; HttpOnly; Path=/; Max-Age=31536000`,
+      "Set-Cookie": `${name}=${value}; HttpOnly; Path=/; Max-Age=31536000`,
     },
   });
 }
 
 // Client component
 async function setCookie() {
-  await fetch('/api/set-cookie', {
-    method: 'POST',
-    body: JSON.stringify({ name: 'theme', value: 'dark' }),
+  await fetch("/api/set-cookie", {
+    method: "POST",
+    body: JSON.stringify({ name: "theme", value: "dark" }),
   });
 }
 ```
 
 Server actions are preferred because they're:
+
 - More type-safe
 - Less boilerplate
 - Better integrated with forms
@@ -329,6 +339,7 @@ Server actions are preferred because they're:
 ## Reading Cookies
 
 **In Server Components:**
+
 ```typescript
 // app/page.tsx
 import { cookies } from 'next/headers';
@@ -342,6 +353,7 @@ export default async function Page() {
 ```
 
 **In Client Components:**
+
 ```typescript
 // Can't use next/headers in client components!
 // Use document.cookie or a state management library
@@ -383,10 +395,12 @@ When you need to set cookies from a button click:
 ## Summary
 
 **Client-Server Cookie Pattern:**
+
 - ✅ Client component handles user interaction
 - ✅ Server action sets the cookie
 - ✅ Two files: component + actions
 - ✅ Type-safe with proper TypeScript
 - ✅ Secure (httpOnly, secure, sameSite options)
 
-This pattern is the recommended way to handle client-triggered cookie operations in Next.js App Router.
+This pattern is the recommended way to handle client-triggered cookie operations in Next.js App
+Router.

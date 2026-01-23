@@ -85,15 +85,10 @@ export async function getStreamerSummary(
 
   // 4. è¨ˆç®—çµ±è¨ˆæ•¸æ“š
   const totalStreamSessions = sessions.length;
-  const totalSeconds = sessions.reduce(
-    (sum, s) => sum + (s.durationSeconds || 0),
-    0
-  );
+  const totalSeconds = sessions.reduce((sum, s) => sum + (s.durationSeconds || 0), 0);
   const totalStreamHours = Math.round((totalSeconds / 3600) * 10) / 10; // å–å°æ•¸é»å¾Œä¸€ä½
   const avgStreamDurationMinutes =
-    totalStreamSessions > 0
-      ? Math.round(totalSeconds / 60 / totalStreamSessions)
-      : 0;
+    totalStreamSessions > 0 ? Math.round(totalSeconds / 60 / totalStreamSessions) : 0;
 
   return {
     range,
@@ -175,9 +170,7 @@ function aggregateByDay(
   const dataMap = new Map<string, { totalSeconds: number; count: number }>();
 
   // åˆå§‹åŒ–æ‰€æœ‰æ—¥æœŸç‚º 0
-  const dayCount = Math.ceil(
-    (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)
-  );
+  const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
   for (let i = 0; i < dayCount; i++) {
     const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
     const dateKey = date.toISOString().split("T")[0];
@@ -382,7 +375,7 @@ export interface GameStats {
 }
 
 /**
- * ¨ú±o¹êªp¥D¦U¹CÀ¸/¤ÀÃşªº²Î­p¼Æ¾Ú
+ * ï¿½ï¿½ï¿½oï¿½ï¿½pï¿½Dï¿½Uï¿½Cï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î­pï¿½Æ¾ï¿½
  */
 export async function getStreamerGameStats(
   streamerId: string,
@@ -404,10 +397,13 @@ export async function getStreamerGameStats(
     },
   });
 
-  const statsMap = new Map<string, { totalSeconds: number; weightedViewersSum: number; peakViewers: number; count: number }>();
+  const statsMap = new Map<
+    string,
+    { totalSeconds: number; weightedViewersSum: number; peakViewers: number; count: number }
+  >();
   let totalAllSeconds = 0;
 
-  sessions.forEach(session => {
+  sessions.forEach((session) => {
     const game = session.category || "Uncategorized";
     const duration = session.durationSeconds || 0;
     const avgViewers = session.avgViewers || 0;
@@ -415,7 +411,12 @@ export async function getStreamerGameStats(
 
     totalAllSeconds += duration;
 
-    const current = statsMap.get(game) || { totalSeconds: 0, weightedViewersSum: 0, peakViewers: 0, count: 0 };
+    const current = statsMap.get(game) || {
+      totalSeconds: 0,
+      weightedViewersSum: 0,
+      peakViewers: 0,
+      count: 0,
+    };
     current.totalSeconds += duration;
     current.weightedViewersSum += avgViewers * duration; // Weighted by duration
     current.peakViewers = Math.max(current.peakViewers, peakViewers);
@@ -423,14 +424,18 @@ export async function getStreamerGameStats(
     statsMap.set(game, current);
   });
 
-  return Array.from(statsMap.entries()).map(([gameName, data]) => ({
-    gameName,
-    totalHours: Math.round((data.totalSeconds / 3600) * 10) / 10,
-    avgViewers: data.totalSeconds > 0 ? Math.round(data.weightedViewersSum / data.totalSeconds) : 0,
-    peakViewers: data.peakViewers,
-    streamCount: data.count,
-    percentage: totalAllSeconds > 0 ? Math.round((data.totalSeconds / totalAllSeconds) * 1000) / 10 : 0
-  })).sort((a, b) => b.totalHours - a.totalHours);
+  return Array.from(statsMap.entries())
+    .map(([gameName, data]) => ({
+      gameName,
+      totalHours: Math.round((data.totalSeconds / 3600) * 10) / 10,
+      avgViewers:
+        data.totalSeconds > 0 ? Math.round(data.weightedViewersSum / data.totalSeconds) : 0,
+      peakViewers: data.peakViewers,
+      streamCount: data.count,
+      percentage:
+        totalAllSeconds > 0 ? Math.round((data.totalSeconds / totalAllSeconds) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.totalHours - a.totalHours);
 }
 
 // ========== Story 6.4 Helpers ==========
@@ -442,9 +447,9 @@ export async function getStreamerVideos(streamerId: string, limit = 20, page = 1
       where: { streamerId },
       orderBy: { createdAt: "desc" },
       take: limit,
-      skip
+      skip,
     }),
-    prisma.video.count({ where: { streamerId } })
+    prisma.video.count({ where: { streamerId } }),
   ]);
   return { data, total, page, totalPages: Math.ceil(total / limit) };
 }
@@ -456,10 +461,9 @@ export async function getStreamerClips(streamerId: string, limit = 20, page = 1)
       where: { streamerId },
       orderBy: { viewCount: "desc" }, // Clips usually ordered by views or date. Let's default to views/popularity for clips.
       take: limit,
-      skip
+      skip,
     }),
-    prisma.clip.count({ where: { streamerId } })
+    prisma.clip.count({ where: { streamerId } }),
   ]);
   return { data, total, page, totalPages: Math.ceil(total / limit) };
 }
-

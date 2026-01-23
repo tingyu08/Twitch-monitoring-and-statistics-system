@@ -37,43 +37,28 @@ describe("ViewerLifetimeStatsController", () => {
 
   describe("GET /:viewerId/channels/:channelId/lifetime-stats", () => {
     it("should return stats successfully", async () => {
-      (viewerLifetimeStatsService.getStats as jest.Mock).mockResolvedValue(
-        mockStats
-      );
+      (viewerLifetimeStatsService.getStats as jest.Mock).mockResolvedValue(mockStats);
 
-      const res = await request(app).get(
-        "/api/viewer/v1/channels/c1/lifetime-stats"
-      );
+      const res = await request(app).get("/api/viewer/v1/channels/c1/lifetime-stats");
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(mockStats);
-      expect(viewerLifetimeStatsService.getStats).toHaveBeenCalledWith(
-        "v1",
-        "c1"
-      );
+      expect(viewerLifetimeStatsService.getStats).toHaveBeenCalledWith("v1", "c1");
     });
 
     it("should return empty structure when service returns null", async () => {
-      (viewerLifetimeStatsService.getStats as jest.Mock).mockResolvedValue(
-        null
-      );
+      (viewerLifetimeStatsService.getStats as jest.Mock).mockResolvedValue(null);
 
-      const res = await request(app).get(
-        "/api/viewer/v1/channels/c1/lifetime-stats"
-      );
+      const res = await request(app).get("/api/viewer/v1/channels/c1/lifetime-stats");
 
       expect(res.status).toBe(200);
       expect(res.body.lifetimeStats.watchTime.totalMinutes).toBe(0);
     });
 
     it("should handle service errors", async () => {
-      (viewerLifetimeStatsService.getStats as jest.Mock).mockRejectedValue(
-        new Error("DB Error")
-      );
+      (viewerLifetimeStatsService.getStats as jest.Mock).mockRejectedValue(new Error("DB Error"));
 
-      const res = await request(app).get(
-        "/api/viewer/v1/channels/c1/lifetime-stats"
-      );
+      const res = await request(app).get("/api/viewer/v1/channels/c1/lifetime-stats");
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: "Internal server error" });

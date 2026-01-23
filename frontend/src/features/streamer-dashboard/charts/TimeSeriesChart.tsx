@@ -1,14 +1,6 @@
 ﻿"use client";
 
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import type { TimeSeriesDataPoint } from "@/lib/api/streamer";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import { useTranslations } from "next-intl";
@@ -50,10 +42,7 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
       aria-label={t("ariaLabel", { summary: generateDataSummary() })}
     >
       <SafeResponsiveContainer height={300}>
-        <LineChart
-          data={data}
-          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-        >
+        <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
           <XAxis
             dataKey="date"
@@ -78,15 +67,14 @@ export function TimeSeriesChart({ data, granularity }: TimeSeriesChartProps) {
               borderRadius: "8px",
               color: "#f9fafb",
             }}
-            labelFormatter={(value) =>
-              t("tooltipDate", { date: formatDate(value as string) })
-            }
-            formatter={(value: number, name: string) => {
+            labelFormatter={(value) => t("tooltipDate", { date: formatDate(value as string) })}
+            formatter={(value, name) => {
+              const val = (value as number) ?? 0;
               if (name === "totalHours")
-                return [t("tooltipHours", { value }), t("labelHours")];
+                return [t("tooltipHours", { value: val }), t("labelHours")];
               if (name === "sessionCount")
-                return [t("tooltipSessions", { value }), t("labelSessions")];
-              return [value, name];
+                return [t("tooltipSessions", { value: val }), t("labelSessions")];
+              return [val, name];
             }}
             animationDuration={300}
             animationEasing="ease-in-out"

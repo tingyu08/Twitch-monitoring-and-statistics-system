@@ -1,6 +1,10 @@
 ---
 name: nextjs-dynamic-routes-params
-description: Guide for Next.js App Router dynamic routes and pathname parameters. Use when building pages that depend on URL segments (IDs, slugs, nested paths), accessing the `params` prop, or fetching resources by identifier. Helps avoid over-nesting by defaulting to the simplest route structure (e.g., `app/[id]` instead of `app/products/[id]` unless the URL calls for it).
+description:
+  Guide for Next.js App Router dynamic routes and pathname parameters. Use when building pages that
+  depend on URL segments (IDs, slugs, nested paths), accessing the `params` prop, or fetching
+  resources by identifier. Helps avoid over-nesting by defaulting to the simplest route structure
+  (e.g., `app/[id]` instead of `app/products/[id]` unless the URL calls for it).
 allowed-tools:
   - Read
   - Write
@@ -15,6 +19,7 @@ allowed-tools:
 ## When to Use This Skill
 
 Use this skill when:
+
 - Creating dynamic route segments (e.g., blog/[slug], users/[id])
 - Accessing URL pathname parameters in Server or Client Components
 - Building pages that fetch data based on route parameters
@@ -25,13 +30,16 @@ Use this skill when:
 
 **Look for requirements that tie data to the URL path.**
 
-Create a dynamic segment (`[param]`) whenever the UI depends on part of the pathname. Typical signals include:
+Create a dynamic segment (`[param]`) whenever the UI depends on part of the pathname. Typical
+signals include:
+
 - Details pages that reference “the item’s ID/slug from the URL”
 - Copy that calls out path segments (e.g., `/products/{id}`, `/blog/{slug}`)
 - Requirements to fetch data “based on whichever resource is being visited”
 - Navigation flows where one page links to `/something/{identifier}`
 
 **✅ Dynamic route response**
+
 ```
 Requirement: display product information based on whichever ID appears in the URL
 Implementation: app/[id]/page.tsx
@@ -39,12 +47,15 @@ Access parameter with: const { id } = await params;
 ```
 
 **❌ Static-page response**
+
 ```
 Implementation: app/page.tsx  ← cannot access per-path identifiers
 ```
 
 **Example requirements that lead to dynamic routes**
-1. “Show a product page that loads whichever product ID appears in the URL” → `app/[id]/page.tsx` or `app/products/[id]/page.tsx`
+
+1. “Show a product page that loads whichever product ID appears in the URL” → `app/[id]/page.tsx` or
+   `app/products/[id]/page.tsx`
 2. “Render a blog article based on its slug” → `app/blog/[slug]/page.tsx` or `app/[slug]/page.tsx`
 3. “Support nested docs such as /docs/getting-started/installation” → `app/docs/[...slug]/page.tsx`
 
@@ -54,17 +65,21 @@ Implementation: app/page.tsx  ← cannot access per-path identifiers
 
 **MOST COMMON MISTAKE:** Adding unnecessary nesting to routes.
 
-**Default Rule:** When creating a dynamic route, use `app/[id]/page.tsx` or `app/[slug]/page.tsx` unless:
+**Default Rule:** When creating a dynamic route, use `app/[id]/page.tsx` or `app/[slug]/page.tsx`
+unless:
+
 - The URL structure is explicitly specified (e.g., "create route at /products/[id]")
 - You're building multiple resource types that need namespacing
 - The requirements clearly show a nested URL structure
 
 **Do NOT infer nesting from resource names:**
+
 - "Fetch a product by ID" → `app/[id]/page.tsx` ✅ (not `app/products/[id]`)
 - "Show user profile" → `app/[userId]/page.tsx` ✅ (not `app/users/[userId]`)
 - "Display blog post" → `app/[slug]/page.tsx` ✅ (not `app/blog/[slug]`)
 
 **Only nest when explicitly told:**
+
 - "Create a route at /blog/[slug]" → `app/blog/[slug]/page.tsx` ✅
 - "Products should be at /products/[id]" → `app/products/[id]/page.tsx` ✅
 
@@ -88,7 +103,8 @@ app/
 
 **CRITICAL RULE: Do NOT infer route structure from resource type names!**
 
-Just because you're fetching a "product" or "user" doesn't mean you need `/products/[id]` or `/users/[id]`. **Unless explicitly told otherwise, prefer the simplest structure.**
+Just because you're fetching a "product" or "user" doesn't mean you need `/products/[id]` or
+`/users/[id]`. **Unless explicitly told otherwise, prefer the simplest structure.**
 
 **When deciding on route structure:**
 
@@ -112,15 +128,17 @@ Just because you're fetching a "product" or "user" doesn't mean you need `/produ
    - Examples: `/shop/electronics/123`
    - Pattern: Multiple levels of categorization
 
-**⚠️ COMMON MISTAKE:** Creating `app/products/[id]/page.tsx` when you should create `app/[id]/page.tsx`
+**⚠️ COMMON MISTAKE:** Creating `app/products/[id]/page.tsx` when you should create
+`app/[id]/page.tsx`
 
-❌ **WRONG:** "Fetch a product by ID" → `app/products/[id]/page.tsx`
-✅ **CORRECT:** "Fetch a product by ID" → `app/[id]/page.tsx`
+❌ **WRONG:** "Fetch a product by ID" → `app/products/[id]/page.tsx` ✅ **CORRECT:** "Fetch a
+product by ID" → `app/[id]/page.tsx`
 
-❌ **WRONG:** "Create a dynamic route for users" → `app/users/[userId]/page.tsx`
-✅ **CORRECT:** "Create a dynamic route for users" → `app/[userId]/page.tsx`
+❌ **WRONG:** "Create a dynamic route for users" → `app/users/[userId]/page.tsx` ✅ **CORRECT:**
+"Create a dynamic route for users" → `app/[userId]/page.tsx`
 
 **Only add the category prefix when:**
+
 - The requirement explicitly says "at /products/..." or similar
 - You're building multiple resource types that need namespacing
 - The URL structure is specified in requirements
@@ -152,7 +170,7 @@ export default async function ProductPage({
 export default async function ProductPage({
   params,
 }: {
-  params: { id: string };  // Missing Promise wrapper
+  params: { id: string }; // Missing Promise wrapper
 }) {
   const product = await fetch(`https://api.example.com/products/${params.id}`);
   // This will fail because params is a Promise!
@@ -160,6 +178,7 @@ export default async function ProductPage({
 ```
 
 **For Next.js 14 and earlier:**
+
 ```typescript
 // Next.js 14 - params is synchronous
 export default async function ProductPage({
@@ -178,10 +197,7 @@ export default async function ProductPage({
 
 ```typescript
 // app/api/products/[id]/route.ts
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const product = await db.products.findById(id);
@@ -194,10 +210,11 @@ export async function GET(
 **You CANNOT access `params` directly in Client Components.** Instead:
 
 1. **Use `useParams()` hook:**
-```typescript
-'use client';
 
-import { useParams } from 'next/navigation';
+```typescript
+"use client";
+
+import { useParams } from "next/navigation";
 
 export function ProductClient() {
   const params = useParams<{ id: string }>();
@@ -208,6 +225,7 @@ export function ProductClient() {
 ```
 
 2. **Pass params from Server Component:**
+
 ```typescript
 // app/products/[id]/page.tsx (Server Component)
 export default async function ProductPage({
@@ -405,7 +423,7 @@ export default async function PostPage({ params, searchParams }: PostPageProps) 
 ```typescript
 // ❌ WRONG
 export default async function Page({ params }: { params: { id: string } }) {
-  const product = await getProduct(params.id);  // Error: params is Promise
+  const product = await getProduct(params.id); // Error: params is Promise
 }
 
 // ✅ CORRECT
@@ -610,16 +628,18 @@ Before implementing a dynamic route, verify:
 
 ## Quick Reference
 
-| Scenario | Route Structure | Params Access |
-|----------|----------------|---------------|
-| Single resource by ID | `app/[id]/page.tsx` | `const { id } = await params` |
-| Category + resource | `app/category/[id]/page.tsx` | `const { id } = await params` |
-| Blog with slugs | `app/blog/[slug]/page.tsx` | `const { slug } = await params` |
-| Nested resources | `app/[cat]/[id]/page.tsx` | `const { cat, id } = await params` |
-| Flexible paths | `app/docs/[...slug]/page.tsx` | `const { slug } = await params` (slug is array) |
-| Optional paths | `app/[[...slug]]/page.tsx` | `const { slug = [] } = await params` |
-| Client Component | Use `useParams()` hook | `const params = useParams<{ id: string }>()` |
+| Scenario              | Route Structure               | Params Access                                   |
+| --------------------- | ----------------------------- | ----------------------------------------------- |
+| Single resource by ID | `app/[id]/page.tsx`           | `const { id } = await params`                   |
+| Category + resource   | `app/category/[id]/page.tsx`  | `const { id } = await params`                   |
+| Blog with slugs       | `app/blog/[slug]/page.tsx`    | `const { slug } = await params`                 |
+| Nested resources      | `app/[cat]/[id]/page.tsx`     | `const { cat, id } = await params`              |
+| Flexible paths        | `app/docs/[...slug]/page.tsx` | `const { slug } = await params` (slug is array) |
+| Optional paths        | `app/[[...slug]]/page.tsx`    | `const { slug = [] } = await params`            |
+| Client Component      | Use `useParams()` hook        | `const params = useParams<{ id: string }>()`    |
 
 ---
 
-**Remember:** Dynamic routes in Next.js are file-system based. The folder structure with `[brackets]` creates the dynamic segments, and the `params` prop (or `useParams()` hook) provides access to those values.
+**Remember:** Dynamic routes in Next.js are file-system based. The folder structure with
+`[brackets]` creates the dynamic segments, and the `params` prop (or `useParams()` hook) provides
+access to those values.

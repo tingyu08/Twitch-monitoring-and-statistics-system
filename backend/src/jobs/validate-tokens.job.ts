@@ -70,9 +70,7 @@ export async function validateTokensJob(): Promise<JobResult> {
       if (invalidRate > 10) {
         logger.warn(
           JOB_NAME,
-          `High token failure rate: ${invalidRate.toFixed(1)}% (${
-            result.invalid
-          }/${result.total})`
+          `High token failure rate: ${invalidRate.toFixed(1)}% (${result.invalid}/${result.total})`
         );
       }
     }

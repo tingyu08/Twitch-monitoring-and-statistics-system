@@ -11,8 +11,7 @@ import { dataExportService } from "../services/data-export.service";
 import { prisma } from "../db/prisma";
 
 // 每日凌晨 3 點執行
-const DATA_RETENTION_CRON =
-  process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 * * *";
+const DATA_RETENTION_CRON = process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 * * *";
 
 export class DataRetentionJob {
   private isRunning = false;
@@ -43,8 +42,7 @@ export class DataRetentionJob {
     try {
       // 1. 執行到期的帳號刪除請求
       console.log("📋 檢查到期的刪除請求...");
-      const deletionResult =
-        await accountDeletionService.executeExpiredDeletions();
+      const deletionResult = await accountDeletionService.executeExpiredDeletions();
       console.log(
         `   處理了 ${deletionResult.processed} 個刪除請求 (成功: ${deletionResult.success}, 失敗: ${deletionResult.failed})`
       );
@@ -65,9 +63,7 @@ export class DataRetentionJob {
       const deletedClips = await prisma.clip.deleteMany({
         where: { createdAt: { lt: sevenDaysAgo } },
       });
-      console.log(
-        `   清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯`
-      );
+      console.log(`   清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯`);
 
       console.log("✅ Data Retention Job 執行完成");
     } catch (error) {

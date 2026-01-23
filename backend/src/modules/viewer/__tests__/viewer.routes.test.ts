@@ -60,18 +60,14 @@ describe("Viewer Routes", () => {
       // Tests should reflect that if the logic is in controller.
     });
 
-    it("should handle empty list by auto-seeding (mock behavior)", async () => {
-      // Mock empty return first, then seeded return
-      (getFollowedChannels as jest.Mock)
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { id: "ch_1", channelName: "shroud", displayName: "Shroud" },
-        ]);
+    it("should handle empty list", async () => {
+      // Mock empty return - 控制器直接返回空陣列，沒有自動種子資料邏輯
+      (getFollowedChannels as jest.Mock).mockResolvedValue([]);
 
       const res = await request(app).get("/api/viewer/channels");
 
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(1);
+      expect(res.body).toHaveLength(0);
     });
   });
 });

@@ -1,11 +1,15 @@
 ---
 name: git-advanced-workflows
-description: Master advanced Git workflows including rebasing, cherry-picking, bisect, worktrees, and reflog to maintain clean history and recover from any situation. Use when managing complex Git histories, collaborating on feature branches, or troubleshooting repository issues.
+description:
+  Master advanced Git workflows including rebasing, cherry-picking, bisect, worktrees, and reflog to
+  maintain clean history and recover from any situation. Use when managing complex Git histories,
+  collaborating on feature branches, or troubleshooting repository issues.
 ---
 
 # Git Advanced Workflows
 
-Master advanced Git techniques to maintain clean history, collaborate effectively, and recover from any situation with confidence.
+Master advanced Git techniques to maintain clean history, collaborate effectively, and recover from
+any situation with confidence.
 
 ## When to Use This Skill
 
@@ -25,6 +29,7 @@ Master advanced Git techniques to maintain clean history, collaborate effectivel
 Interactive rebase is the Swiss Army knife of Git history editing.
 
 **Common Operations:**
+
 - `pick`: Keep commit as-is
 - `reword`: Change commit message
 - `edit`: Amend commit content
@@ -33,6 +38,7 @@ Interactive rebase is the Swiss Army knife of Git history editing.
 - `drop`: Remove commit entirely
 
 **Basic Usage:**
+
 ```bash
 # Rebase last 5 commits
 git rebase -i HEAD~5
@@ -86,6 +92,7 @@ git bisect reset
 ```
 
 **Automated Bisect:**
+
 ```bash
 # Use script to test automatically
 git bisect start HEAD v1.0.0
@@ -251,11 +258,13 @@ git branch recovery def456
 ### Rebase vs Merge Strategy
 
 **When to Rebase:**
+
 - Cleaning up local commits before pushing
 - Keeping feature branch up-to-date with main
 - Creating linear history for easier review
 
 **When to Merge:**
+
 - Integrating completed features into main
 - Preserving exact history of collaboration
 - Public branches used by others

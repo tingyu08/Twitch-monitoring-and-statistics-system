@@ -30,11 +30,7 @@ router.use("/", streamerSettingsRoutes);
 router.use("/revenue", revenueRoutes);
 
 // GET /api/streamer/me/summary?range=30d - 查詢自己的統計
-router.get(
-  "/me/summary",
-  (req, res, next) => requireAuth(req, res, next),
-  getSummaryHandler
-);
+router.get("/me/summary", (req, res, next) => requireAuth(req, res, next), getSummaryHandler);
 
 // GET /api/streamer/me/time-series?range=30d&granularity=day - 查詢時間序列資料
 router.get(
@@ -44,11 +40,7 @@ router.get(
 );
 
 // GET /api/streamer/me/heatmap?range=30d - 查詢 Heatmap 資料
-router.get(
-  "/me/heatmap",
-  (req, res, next) => requireAuth(req, res, next),
-  getHeatmapHandler
-);
+router.get("/me/heatmap", (req, res, next) => requireAuth(req, res, next), getHeatmapHandler);
 
 // GET /api/streamer/me/subscription-trend?range=30d - 查詢訂閱趨勢資料
 router.get(
@@ -58,25 +50,13 @@ router.get(
 );
 
 // GET /api/streamer/me/game-stats - 遊戲/分類統計
-router.get(
-  "/me/game-stats",
-  (req, res, next) => requireAuth(req, res, next),
-  getGameStatsHandler
-);
+router.get("/me/game-stats", (req, res, next) => requireAuth(req, res, next), getGameStatsHandler);
 
 // GET /api/streamer/me/videos - VOD 列表
-router.get(
-  "/me/videos",
-  (req, res, next) => requireAuth(req, res, next),
-  getVideosHandler
-);
+router.get("/me/videos", (req, res, next) => requireAuth(req, res, next), getVideosHandler);
 
 // GET /api/streamer/me/clips - Clips 列表
-router.get(
-  "/me/clips",
-  (req, res, next) => requireAuth(req, res, next),
-  getClipsHandler
-);
+router.get("/me/clips", (req, res, next) => requireAuth(req, res, next), getClipsHandler);
 
 // POST /api/streamer/me/sync-subscriptions - 手動同步訂閱數據
 router.post("/me/sync-subscriptions", requireAuth, syncSubscriptionsHandler);

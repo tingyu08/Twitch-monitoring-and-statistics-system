@@ -2,10 +2,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const MOCK_CHANNEL_MAP: Record<
-  string,
-  { name: string; display: string; avatarUrl: string }
-> = {
+const MOCK_CHANNEL_MAP: Record<string, { name: string; display: string; avatarUrl: string }> = {
   ch_1: {
     name: "shroud",
     display: "Shroud",
@@ -29,8 +26,7 @@ const MOCK_CHANNEL_MAP: Record<
   ch_5: {
     name: "disguisedtoast",
     display: "DisguisedToast",
-    avatarUrl:
-      "https://ui-avatars.com/api/?name=DisguisedToast&background=random",
+    avatarUrl: "https://ui-avatars.com/api/?name=DisguisedToast&background=random",
   },
 };
 

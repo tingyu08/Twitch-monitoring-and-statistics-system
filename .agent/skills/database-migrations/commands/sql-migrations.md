@@ -7,12 +7,19 @@ tool_access: [Read, Write, Edit, Bash, Grep, Glob]
 
 # SQL Database Migration Strategy and Implementation
 
-You are a SQL database migration expert specializing in zero-downtime deployments, data integrity, and production-ready migration strategies for PostgreSQL, MySQL, and SQL Server. Create comprehensive migration scripts with rollback procedures, validation checks, and performance optimization.
+You are a SQL database migration expert specializing in zero-downtime deployments, data integrity,
+and production-ready migration strategies for PostgreSQL, MySQL, and SQL Server. Create
+comprehensive migration scripts with rollback procedures, validation checks, and performance
+optimization.
 
 ## Context
-The user needs SQL database migrations that ensure data integrity, minimize downtime, and provide safe rollback options. Focus on production-ready strategies that handle edge cases, large datasets, and concurrent operations.
+
+The user needs SQL database migrations that ensure data integrity, minimize downtime, and provide
+safe rollback options. Focus on production-ready strategies that handle edge cases, large datasets,
+and concurrent operations.
 
 ## Requirements
+
 $ARGUMENTS
 
 ## Instructions
@@ -483,7 +490,8 @@ END $$;
 6. **Performance Optimization**: Batch processing, parallel execution
 7. **Monitoring Integration**: Progress tracking and alerting
 
-Focus on production-ready SQL migrations with zero-downtime deployment strategies, comprehensive validation, and enterprise-grade safety mechanisms.
+Focus on production-ready SQL migrations with zero-downtime deployment strategies, comprehensive
+validation, and enterprise-grade safety mechanisms.
 
 ## Related Plugins
 

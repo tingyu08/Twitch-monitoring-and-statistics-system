@@ -10,14 +10,22 @@ import {
 
 // Mock DateRangePicker to avoid complex date picker testing
 jest.mock("../DateRangePicker", () => ({
-  DateRangePicker: ({ onRangeSelect, disabled }: { onRangeSelect: (range: { startDate: Date; endDate: Date }) => void; disabled?: boolean }) => (
+  DateRangePicker: ({
+    onRangeSelect,
+    disabled,
+  }: {
+    onRangeSelect: (range: { startDate: Date; endDate: Date }) => void;
+    disabled?: boolean;
+  }) => (
     <button
       data-testid="date-range-picker"
       disabled={disabled}
-      onClick={() => onRangeSelect({
-        startDate: new Date("2025-01-01"),
-        endDate: new Date("2025-01-10"),
-      })}
+      onClick={() =>
+        onRangeSelect({
+          startDate: new Date("2025-01-01"),
+          endDate: new Date("2025-01-10"),
+        })
+      }
     >
       自訂日期
     </button>
@@ -37,6 +45,7 @@ describe("TimeRangeSelector", () => {
       <TimeRangeSelector
         currentRange="30"
         onRangeChange={mockOnRangeChange}
+        onCustomRangeChange={jest.fn()}
       />
     );
 
@@ -52,6 +61,7 @@ describe("TimeRangeSelector", () => {
       <TimeRangeSelector
         currentRange="30"
         onRangeChange={mockOnRangeChange}
+        onCustomRangeChange={jest.fn()}
       />
     );
 
@@ -65,6 +75,7 @@ describe("TimeRangeSelector", () => {
       <TimeRangeSelector
         currentRange="30"
         onRangeChange={mockOnRangeChange}
+        onCustomRangeChange={jest.fn()}
       />
     );
 
@@ -83,6 +94,7 @@ describe("TimeRangeSelector", () => {
       <TimeRangeSelector
         currentRange="30"
         onRangeChange={mockOnRangeChange}
+        onCustomRangeChange={jest.fn()}
         disabled={true}
       />
     );
@@ -100,6 +112,7 @@ describe("TimeRangeSelector", () => {
       <TimeRangeSelector
         currentRange="30"
         onRangeChange={mockOnRangeChange}
+        onCustomRangeChange={jest.fn()}
         disabled={true}
       />
     );
@@ -120,17 +133,6 @@ describe("TimeRangeSelector", () => {
     expect(screen.getByTestId("date-range-picker")).toBeInTheDocument();
   });
 
-  it("does not render DateRangePicker when onCustomRangeChange is not provided", () => {
-    render(
-      <TimeRangeSelector
-        currentRange="30"
-        onRangeChange={mockOnRangeChange}
-      />
-    );
-
-    expect(screen.queryByTestId("date-range-picker")).not.toBeInTheDocument();
-  });
-
   it("calls onCustomRangeChange and onRangeChange with 'custom' when custom date is selected", () => {
     render(
       <TimeRangeSelector
@@ -141,7 +143,7 @@ describe("TimeRangeSelector", () => {
     );
 
     fireEvent.click(screen.getByTestId("date-range-picker"));
-    
+
     expect(mockOnCustomRangeChange).toHaveBeenCalledWith({
       startDate: new Date("2025-01-01"),
       endDate: new Date("2025-01-10"),

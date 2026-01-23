@@ -1,6 +1,9 @@
 ---
 name: service-mesh-observability
-description: Implement comprehensive observability for service meshes including distributed tracing, metrics, and visualization. Use when setting up mesh monitoring, debugging latency issues, or implementing SLOs for service communication.
+description:
+  Implement comprehensive observability for service meshes including distributed tracing, metrics,
+  and visualization. Use when setting up mesh monitoring, debugging latency issues, or implementing
+  SLOs for service communication.
 ---
 
 # Service Mesh Observability
@@ -35,12 +38,12 @@ Complete guide to observability patterns for Istio, Linkerd, and service mesh de
 
 ### 2. Golden Signals for Mesh
 
-| Signal | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| **Latency** | Request duration P50, P99 | P99 > 500ms |
-| **Traffic** | Requests per second | Anomaly detection |
-| **Errors** | 5xx error rate | > 1% |
-| **Saturation** | Resource utilization | > 80% |
+| Signal         | Description               | Alert Threshold   |
+| -------------- | ------------------------- | ----------------- |
+| **Latency**    | Request duration P50, P99 | P99 > 500ms       |
+| **Traffic**    | Requests per second       | Anomaly detection |
+| **Errors**     | 5xx error rate            | > 1%              |
+| **Saturation** | Resource utilization      | > 80%             |
 
 ## Templates
 
@@ -119,7 +122,7 @@ spec:
     enableTracing: true
     defaultConfig:
       tracing:
-        sampling: 100.0  # 100% in dev, lower in prod
+        sampling: 100.0 # 100% in dev, lower in prod
         zipkin:
           address: jaeger-collector.istio-system:9411
 ---
@@ -142,14 +145,14 @@ spec:
         - name: jaeger
           image: jaegertracing/all-in-one:1.50
           ports:
-            - containerPort: 5775   # UDP
-            - containerPort: 6831   # Thrift
-            - containerPort: 6832   # Thrift
-            - containerPort: 5778   # Config
-            - containerPort: 16686  # UI
-            - containerPort: 14268  # HTTP
-            - containerPort: 14250  # gRPC
-            - containerPort: 9411   # Zipkin
+            - containerPort: 5775 # UDP
+            - containerPort: 6831 # Thrift
+            - containerPort: 6832 # Thrift
+            - containerPort: 5778 # Config
+            - containerPort: 16686 # UI
+            - containerPort: 14268 # HTTP
+            - containerPort: 14250 # gRPC
+            - containerPort: 9411 # Zipkin
           env:
             - name: COLLECTOR_ZIPKIN_HOST_PORT
               value: ":9411"
@@ -207,9 +210,9 @@ linkerd viz edges deployment -n my-namespace
           "defaults": {
             "thresholds": {
               "steps": [
-                {"value": 0, "color": "green"},
-                {"value": 1, "color": "yellow"},
-                {"value": 5, "color": "red"}
+                { "value": 0, "color": "green" },
+                { "value": 1, "color": "yellow" },
+                { "value": 5, "color": "red" }
               ]
             }
           }
@@ -250,7 +253,7 @@ metadata:
   namespace: istio-system
 spec:
   auth:
-    strategy: anonymous  # or openid, token
+    strategy: anonymous # or openid, token
   deployment:
     accessible_namespaces:
       - "**"
@@ -363,6 +366,7 @@ spec:
 ## Best Practices
 
 ### Do's
+
 - **Sample appropriately** - 100% in dev, 1-10% in prod
 - **Use trace context** - Propagate headers consistently
 - **Set up alerts** - For golden signals
@@ -370,6 +374,7 @@ spec:
 - **Retain strategically** - Hot/cold storage tiers
 
 ### Don'ts
+
 - **Don't over-sample** - Storage costs add up
 - **Don't ignore cardinality** - Limit label values
 - **Don't skip dashboards** - Visualize dependencies

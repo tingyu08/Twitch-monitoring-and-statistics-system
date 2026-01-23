@@ -113,9 +113,7 @@ export class DataExportService {
 
       return {
         success: false,
-        message: `匯出失敗: ${
-          error instanceof Error ? error.message : "未知錯誤"
-        }`,
+        message: `匯出失敗: ${error instanceof Error ? error.message : "未知錯誤"}`,
         job,
       };
     }
@@ -124,15 +122,9 @@ export class DataExportService {
   /**
    * 生成匯出資料並打包成 ZIP
    */
-  private async generateExport(
-    viewerId: string,
-    _jobId: string
-  ): Promise<string> {
+  private async generateExport(viewerId: string, _jobId: string): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const exportName = `viewer-data-export-${viewerId.slice(
-      0,
-      8
-    )}-${timestamp}`;
+    const exportName = `viewer-data-export-${viewerId.slice(0, 8)}-${timestamp}`;
     const exportDir = path.join(EXPORT_DIR, exportName);
     const zipPath = path.join(EXPORT_DIR, `${exportName}.zip`);
 
@@ -226,10 +218,7 @@ export class DataExportService {
       createdAt: data.viewer.createdAt,
       updatedAt: data.viewer.updatedAt,
     };
-    fs.writeFileSync(
-      path.join(jsonDir, "profile.json"),
-      JSON.stringify(profile, null, 2)
-    );
+    fs.writeFileSync(path.join(jsonDir, "profile.json"), JSON.stringify(profile, null, 2));
 
     // watch-time-stats.json - 觀看時數記錄
     const watchTimeStats = data.dailyStats.map((stat) => ({
@@ -287,14 +276,11 @@ export class DataExportService {
         consentVersion: data.viewer.privacyConsent.consentVersion,
         consentGivenAt: data.viewer.privacyConsent.consentGivenAt,
         collectDailyWatchTime: data.viewer.privacyConsent.collectDailyWatchTime,
-        collectWatchTimeDistribution:
-          data.viewer.privacyConsent.collectWatchTimeDistribution,
-        collectMonthlyAggregates:
-          data.viewer.privacyConsent.collectMonthlyAggregates,
+        collectWatchTimeDistribution: data.viewer.privacyConsent.collectWatchTimeDistribution,
+        collectMonthlyAggregates: data.viewer.privacyConsent.collectMonthlyAggregates,
         collectChatMessages: data.viewer.privacyConsent.collectChatMessages,
         collectInteractions: data.viewer.privacyConsent.collectInteractions,
-        collectInteractionFrequency:
-          data.viewer.privacyConsent.collectInteractionFrequency,
+        collectInteractionFrequency: data.viewer.privacyConsent.collectInteractionFrequency,
         collectBadgeProgress: data.viewer.privacyConsent.collectBadgeProgress,
         collectFootprintData: data.viewer.privacyConsent.collectFootprintData,
         collectRankings: data.viewer.privacyConsent.collectRankings,
@@ -332,10 +318,7 @@ export class DataExportService {
           },${stat.emoteCount}`
       ),
     ].join("\n");
-    fs.writeFileSync(
-      path.join(csvDir, "watch-time-daily.csv"),
-      "\ufeff" + watchTimeCsv
-    ); // BOM for Excel
+    fs.writeFileSync(path.join(csvDir, "watch-time-daily.csv"), "\ufeff" + watchTimeCsv); // BOM for Excel
 
     // messages-daily.csv
     const messagesCsv = [
@@ -349,10 +332,7 @@ export class DataExportService {
           },${agg.giftSubs},${agg.raids},${agg.totalBits || 0}`
       ),
     ].join("\n");
-    fs.writeFileSync(
-      path.join(csvDir, "messages-daily.csv"),
-      "\ufeff" + messagesCsv
-    );
+    fs.writeFileSync(path.join(csvDir, "messages-daily.csv"), "\ufeff" + messagesCsv);
   }
 
   /**

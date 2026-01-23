@@ -50,7 +50,9 @@ async function updateMissingAvatars() {
               displayName: user.displayName || streamer.displayName,
             },
           });
-          console.log(`✅ 更新: ${streamer.displayName} -> ${user.profileImageUrl.substring(0, 50)}...`);
+          console.log(
+            `✅ 更新: ${streamer.displayName} -> ${user.profileImageUrl.substring(0, 50)}...`
+          );
           updated++;
         } else {
           console.log(`⚠️ 跳過: ${streamer.displayName} (無法獲取資訊)`);

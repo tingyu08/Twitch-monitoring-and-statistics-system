@@ -1,11 +1,15 @@
 ---
 name: rust-async-patterns
-description: Master Rust async programming with Tokio, async traits, error handling, and concurrent patterns. Use when building async Rust applications, implementing concurrent systems, or debugging async code.
+description:
+  Master Rust async programming with Tokio, async traits, error handling, and concurrent patterns.
+  Use when building async Rust applications, implementing concurrent systems, or debugging async
+  code.
 ---
 
 # Rust Async Patterns
 
-Production patterns for async Rust programming with Tokio runtime, including tasks, channels, streams, and error handling.
+Production patterns for async Rust programming with Tokio runtime, including tasks, channels,
+streams, and error handling.
 
 ## When to Use This Skill
 
@@ -28,13 +32,13 @@ Future (lazy) → poll() → Ready(value) | Pending
 
 ### 2. Key Abstractions
 
-| Concept | Purpose |
-|---------|---------|
-| `Future` | Lazy computation that may complete later |
-| `async fn` | Function returning impl Future |
-| `await` | Suspend until future completes |
-| `Task` | Spawned future running concurrently |
-| `Runtime` | Executor that polls futures |
+| Concept    | Purpose                                  |
+| ---------- | ---------------------------------------- |
+| `Future`   | Lazy computation that may complete later |
+| `async fn` | Function returning impl Future           |
+| `await`    | Suspend until future completes           |
+| `Task`     | Spawned future running concurrently      |
+| `Runtime`  | Executor that polls futures              |
 
 ## Quick Start
 
@@ -497,6 +501,7 @@ tokio::spawn(async move {
 ## Best Practices
 
 ### Do's
+
 - **Use `tokio::select!`** - For racing futures
 - **Prefer channels** - Over shared state when possible
 - **Use `JoinSet`** - For managing multiple tasks
@@ -504,6 +509,7 @@ tokio::spawn(async move {
 - **Handle cancellation** - Check `CancellationToken`
 
 ### Don'ts
+
 - **Don't block** - Never use `std::thread::sleep` in async
 - **Don't hold locks across awaits** - Causes deadlocks
 - **Don't spawn unboundedly** - Use semaphores for limits

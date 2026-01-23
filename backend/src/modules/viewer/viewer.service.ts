@@ -11,11 +11,7 @@ export async function recordConsent(viewerId: string, consentVersion = 1) {
       },
     });
   } catch (error) {
-    logger.error(
-      "ViewerService",
-      `recordConsent 失敗 (viewerId: ${viewerId})`,
-      error,
-    );
+    logger.error("ViewerService", `recordConsent 失敗 (viewerId: ${viewerId})`, error);
     throw error;
   }
 }
@@ -49,7 +45,7 @@ export async function getChannelStats(
   channelId: string,
   days?: number,
   startDate?: Date,
-  endDate?: Date,
+  endDate?: Date
 ): Promise<ViewerChannelStatsResponse> {
   try {
     // 計算日期範圍
@@ -60,10 +56,7 @@ export async function getChannelStats(
     if (startDate && endDate) {
       queryStartDate = startDate;
       queryEndDate = endDate;
-      actualDays =
-        Math.ceil(
-          (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-        ) + 1;
+      actualDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     } else {
       const daysToQuery = days ?? 30;
       queryEndDate = new Date();
@@ -106,7 +99,7 @@ export async function getChannelStats(
     logger.error(
       "ViewerService",
       `getChannelStats 失敗 (viewerId: ${viewerId}, channelId: ${channelId})`,
-      error,
+      error
     );
     throw error;
   }
@@ -150,9 +143,7 @@ export async function getFollowedChannels(viewerId: string) {
     // 3. 合併頻道 ID 列表 (去重)
     const statsChannelIds = new Set(stats.map((s) => s.channelId));
     const followChannelIds = new Set(follows.map((f) => f.channelId));
-    const allChannelIds = Array.from(
-      new Set([...statsChannelIds, ...followChannelIds]),
-    );
+    const allChannelIds = Array.from(new Set([...statsChannelIds, ...followChannelIds]));
 
     if (allChannelIds.length === 0) {
       return [];
@@ -191,8 +182,7 @@ export async function getFollowedChannels(viewerId: string) {
 
       // 使用 DB 中的快取狀態，並以 StreamSession 作為備用判斷
       // 優先使用 isLive（每分鐘更新），若為 false 則檢查是否有進行中的 StreamSession
-      const hasActiveSession =
-        channel.streamSessions && channel.streamSessions.length > 0;
+      const hasActiveSession = channel.streamSessions && channel.streamSessions.length > 0;
       const isLive = channel.isLive || hasActiveSession;
 
       const displayName = channel.streamer?.displayName || channel.channelName;
@@ -237,11 +227,7 @@ export async function getFollowedChannels(viewerId: string) {
       return a.displayName.localeCompare(b.displayName);
     });
   } catch (error) {
-    logger.error(
-      "ViewerService",
-      `getFollowedChannels 失敗 (viewerId: ${viewerId})`,
-      error,
-    );
+    logger.error("ViewerService", `getFollowedChannels 失敗 (viewerId: ${viewerId})`, error);
     throw error;
   }
 }

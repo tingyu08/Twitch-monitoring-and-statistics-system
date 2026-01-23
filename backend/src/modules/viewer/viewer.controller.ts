@@ -1,9 +1,5 @@
 import type { Response } from "express";
-import {
-  recordConsent,
-  getChannelStats,
-  getFollowedChannels,
-} from "./viewer.service";
+import { recordConsent, getChannelStats, getFollowedChannels } from "./viewer.service";
 import type { AuthRequest } from "../auth/auth.middleware";
 
 export class ViewerController {
@@ -54,32 +50,20 @@ export class ViewerController {
 
       // 驗證日期
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        return res
-          .status(400)
-          .json({ error: "Invalid date format. Use YYYY-MM-DD" });
+        return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
       }
       if (startDate > endDate) {
-        return res
-          .status(400)
-          .json({ error: "startDate must be before endDate" });
+        return res.status(400).json({ error: "startDate must be before endDate" });
       }
     } else {
       days = parseInt((req.query.days as string) || "30");
       if (isNaN(days) || days < 1 || days > 365) {
-        return res
-          .status(400)
-          .json({ error: "days must be between 1 and 365" });
+        return res.status(400).json({ error: "days must be between 1 and 365" });
       }
     }
 
     try {
-      const stats = await getChannelStats(
-        req.user.viewerId,
-        channelId,
-        days,
-        startDate,
-        endDate
-      );
+      const stats = await getChannelStats(req.user.viewerId, channelId, days, startDate, endDate);
 
       // 效能監控：僅記錄慢查詢 (> 200ms)
       const duration = Date.now() - requestStart;

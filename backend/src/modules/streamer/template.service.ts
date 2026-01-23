@@ -31,10 +31,7 @@ export class TemplateService {
   /**
    * 建立新模板
    */
-  async create(
-    streamerId: string,
-    data: CreateTemplateDto
-  ): Promise<TemplateResponse> {
+  async create(streamerId: string, data: CreateTemplateDto): Promise<TemplateResponse> {
     const template = await prisma.streamerSettingTemplate.create({
       data: {
         streamerId,
@@ -64,10 +61,7 @@ export class TemplateService {
   /**
    * 取得單一模板
    */
-  async findById(
-    id: string,
-    streamerId: string
-  ): Promise<TemplateResponse | null> {
+  async findById(id: string, streamerId: string): Promise<TemplateResponse | null> {
     const template = await prisma.streamerSettingTemplate.findFirst({
       where: { id, streamerId },
     });

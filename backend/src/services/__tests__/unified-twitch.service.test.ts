@@ -62,23 +62,15 @@ describe("UnifiedTwitchService Integration Test", () => {
       };
 
       // Mock Implementation
-      (twurpleHelixService.getUserByLogin as jest.Mock).mockResolvedValue(
-        mockHelixUser
-      );
-      (twurpleHelixService.getStream as jest.Mock).mockResolvedValue(
-        mockStream
-      );
-      (twurpleHelixService.getFollowerCount as jest.Mock).mockResolvedValue(
-        500
-      );
+      (twurpleHelixService.getUserByLogin as jest.Mock).mockResolvedValue(mockHelixUser);
+      (twurpleHelixService.getStream as jest.Mock).mockResolvedValue(mockStream);
+      (twurpleHelixService.getFollowerCount as jest.Mock).mockResolvedValue(500);
 
       // Execute
       const result = await unifiedTwitchService.getChannelInfo("testuser");
 
       // Verify
-      expect(twurpleHelixService.getUserByLogin).toHaveBeenCalledWith(
-        "testuser"
-      );
+      expect(twurpleHelixService.getUserByLogin).toHaveBeenCalledWith("testuser");
       expect(result).not.toBeNull();
       expect(result?.login).toBe("testuser");
       expect(result?.isLive).toBe(true);
@@ -99,21 +91,11 @@ describe("UnifiedTwitchService Integration Test", () => {
         { userId: "2", type: "live", viewers: 50 },
       ];
 
-      (twurpleHelixService.getStreamsByUserIds as jest.Mock).mockResolvedValue(
-        mockStreams
-      );
+      (twurpleHelixService.getStreamsByUserIds as jest.Mock).mockResolvedValue(mockStreams);
 
-      const result = await unifiedTwitchService.getStreamsByUserIds([
-        "1",
-        "2",
-        "3",
-      ]);
+      const result = await unifiedTwitchService.getStreamsByUserIds(["1", "2", "3"]);
 
-      expect(twurpleHelixService.getStreamsByUserIds).toHaveBeenCalledWith([
-        "1",
-        "2",
-        "3",
-      ]);
+      expect(twurpleHelixService.getStreamsByUserIds).toHaveBeenCalledWith(["1", "2", "3"]);
       expect(result).toHaveLength(2);
     });
   });
@@ -125,19 +107,11 @@ describe("UnifiedTwitchService Integration Test", () => {
         followedAt: "2023-01-01",
         duration: "1 year",
       };
-      (decApiService.getFollowage as jest.Mock).mockResolvedValue(
-        mockFollowage
-      );
+      (decApiService.getFollowage as jest.Mock).mockResolvedValue(mockFollowage);
 
-      const result = await unifiedTwitchService.getUserFollowInfo(
-        "channel",
-        "user"
-      );
+      const result = await unifiedTwitchService.getUserFollowInfo("channel", "user");
 
-      expect(decApiService.getFollowage).toHaveBeenCalledWith(
-        "channel",
-        "user"
-      );
+      expect(decApiService.getFollowage).toHaveBeenCalledWith("channel", "user");
       expect(result.isFollowing).toBe(true);
       expect(result.followedAt).toBe("2023-01-01");
     });
@@ -153,18 +127,11 @@ describe("UnifiedTwitchService Integration Test", () => {
       const mockFollow = { isFollowing: true };
       const mockAge = { age: "2 years" };
 
-      jest
-        .spyOn(unifiedTwitchService, "getChannelInfo")
-        .mockResolvedValue(mockChannel as any);
-      jest
-        .spyOn(unifiedTwitchService, "getUserFollowInfo")
-        .mockResolvedValue(mockFollow as any);
+      jest.spyOn(unifiedTwitchService, "getChannelInfo").mockResolvedValue(mockChannel as any);
+      jest.spyOn(unifiedTwitchService, "getUserFollowInfo").mockResolvedValue(mockFollow as any);
       (decApiService.getAccountAge as jest.Mock).mockResolvedValue(mockAge);
 
-      const result = await unifiedTwitchService.getViewerChannelRelation(
-        "channel",
-        "viewer"
-      );
+      const result = await unifiedTwitchService.getViewerChannelRelation("channel", "viewer");
 
       expect(result?.channel).toEqual(mockChannel);
       expect(result?.followInfo).toEqual(mockFollow);
@@ -187,9 +154,7 @@ describe("UnifiedTwitchService Integration Test", () => {
   describe("checkLiveStatus", () => {
     it("should return a map of live status", async () => {
       const mockStreams = [{ userId: "1" }];
-      (twurpleHelixService.getStreamsByUserIds as jest.Mock).mockResolvedValue(
-        mockStreams
-      );
+      (twurpleHelixService.getStreamsByUserIds as jest.Mock).mockResolvedValue(mockStreams);
 
       const result = await unifiedTwitchService.checkLiveStatus(["1", "2"]);
 

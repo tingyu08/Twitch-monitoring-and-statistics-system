@@ -1,20 +1,10 @@
 import type { Request, Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
-import {
-  getStreamerSummary,
-  getStreamerTimeSeries,
-  getStreamerHeatmap,
-} from "./streamer.service";
-import {
-  getSubscriptionTrend,
-  syncSubscriptionSnapshot,
-} from "./subscription-sync.service";
+import { getStreamerSummary, getStreamerTimeSeries, getStreamerHeatmap } from "./streamer.service";
+import { getSubscriptionTrend, syncSubscriptionSnapshot } from "./subscription-sync.service";
 import { streamerLogger } from "../../utils/logger";
 
-export async function getSummaryHandler(
-  req: AuthRequest,
-  res: Response
-): Promise<void> {
+export async function getSummaryHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
 
@@ -27,9 +17,7 @@ export async function getSummaryHandler(
 
     // 驗證 range 參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res
-        .status(400)
-        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -46,10 +34,7 @@ export async function getSummaryHandler(
  * GET /api/streamer/:streamerId/summary?range=30d
  * ⚠️ 僅限開發環境使用，生產環境不會註冊此路由
  */
-export async function getStreamerSummaryByIdHandler(
-  req: Request,
-  res: Response
-): Promise<void> {
+export async function getStreamerSummaryByIdHandler(req: Request, res: Response): Promise<void> {
   try {
     const { streamerId } = req.params;
     const range = (req.query.range as string) || "30d";
@@ -60,9 +45,7 @@ export async function getStreamerSummaryByIdHandler(
     }
 
     if (!["7d", "30d", "90d"].includes(range)) {
-      res
-        .status(400)
-        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -78,10 +61,7 @@ export async function getStreamerSummaryByIdHandler(
  * 取得時間序列資料（每日或每週開台統計）
  * GET /api/streamer/me/time-series?range=30d&granularity=day
  */
-export async function getTimeSeriesHandler(
-  req: AuthRequest,
-  res: Response
-): Promise<void> {
+export async function getTimeSeriesHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
 
@@ -95,16 +75,12 @@ export async function getTimeSeriesHandler(
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res
-        .status(400)
-        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
     if (!["day", "week"].includes(granularity)) {
-      res
-        .status(400)
-        .json({ error: "Invalid granularity parameter. Use day or week." });
+      res.status(400).json({ error: "Invalid granularity parameter. Use day or week." });
       return;
     }
 
@@ -124,10 +100,7 @@ export async function getTimeSeriesHandler(
  * 取得 Heatmap 資料（一週 × 24 小時的開台分布）
  * GET /api/streamer/me/heatmap?range=30d
  */
-export async function getHeatmapHandler(
-  req: AuthRequest,
-  res: Response
-): Promise<void> {
+export async function getHeatmapHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
 
@@ -140,9 +113,7 @@ export async function getHeatmapHandler(
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res
-        .status(400)
-        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -158,10 +129,7 @@ export async function getHeatmapHandler(
  * 取得訂閱趨勢資料
  * GET /api/streamer/me/subscription-trend?range=30d
  */
-export async function getSubscriptionTrendHandler(
-  req: AuthRequest,
-  res: Response
-): Promise<void> {
+export async function getSubscriptionTrendHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
 
@@ -174,9 +142,7 @@ export async function getSubscriptionTrendHandler(
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
-      res
-        .status(400)
-        .json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
+      res.status(400).json({ error: "Invalid range parameter. Use 7d, 30d, or 90d." });
       return;
     }
 
@@ -192,10 +158,7 @@ export async function getSubscriptionTrendHandler(
  * 手動同步訂閱數據
  * POST /api/streamer/me/sync-subscriptions
  */
-export async function syncSubscriptionsHandler(
-  req: AuthRequest,
-  res: Response
-): Promise<void> {
+export async function syncSubscriptionsHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
 
@@ -216,18 +179,12 @@ export async function syncSubscriptionsHandler(
         return;
       }
       if (error.message.includes("No Twitch token found")) {
-        res
-          .status(401)
-          .json({ error: "Twitch token not found. Please re-authenticate." });
+        res.status(401).json({ error: "Twitch token not found. Please re-authenticate." });
         return;
       }
-      if (
-        error.message.includes("Unauthorized") ||
-        error.message.includes("Forbidden")
-      ) {
+      if (error.message.includes("Unauthorized") || error.message.includes("Forbidden")) {
         res.status(403).json({
-          error:
-            "Unable to access subscription data. Please check permissions.",
+          error: "Unable to access subscription data. Please check permissions.",
         });
         return;
       }

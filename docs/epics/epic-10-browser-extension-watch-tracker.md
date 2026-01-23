@@ -1,9 +1,6 @@
 # Epic 10: 瀏覽器擴充功能 - 觀看時數追蹤器
 
-**建立日期**: 2025-12-31
-**狀態**: 📋 已規劃
-**優先級**: 高
-**預估工時**: 5 小時
+**建立日期**: 2025-12-31 **狀態**: 📋 已規劃 **優先級**: 高 **預估工時**: 5 小時
 
 ---
 
@@ -361,10 +358,7 @@ async handleHeartbeat(req: AuthenticatedRequest, res: Response) {
   "version": "1.0.0",
   "description": "自動追蹤您的 Twitch 觀看時數",
   "permissions": ["storage", "alarms"],
-  "host_permissions": [
-    "https://www.twitch.tv/*",
-    "https://your-backend-url.com/*"
-  ],
+  "host_permissions": ["https://www.twitch.tv/*", "https://your-backend-url.com/*"],
   "background": {
     "service_worker": "dist/background.js"
   },

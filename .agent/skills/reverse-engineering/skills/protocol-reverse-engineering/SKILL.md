@@ -1,11 +1,15 @@
 ---
 name: protocol-reverse-engineering
-description: Master network protocol reverse engineering including packet analysis, protocol dissection, and custom protocol documentation. Use when analyzing network traffic, understanding proprietary protocols, or debugging network communication.
+description:
+  Master network protocol reverse engineering including packet analysis, protocol dissection, and
+  custom protocol documentation. Use when analyzing network traffic, understanding proprietary
+  protocols, or debugging network communication.
 ---
 
 # Protocol Reverse Engineering
 
-Comprehensive techniques for capturing, analyzing, and documenting network protocols for security research, interoperability, and debugging.
+Comprehensive techniques for capturing, analyzing, and documenting network protocols for security
+research, interoperability, and debugging.
 
 ## Traffic Capture
 
@@ -330,9 +334,11 @@ export SSLKEYLOGFILE=/tmp/keys.log
 # Protocol Name Specification
 
 ## Overview
+
 Brief description of protocol purpose and design.
 
 ## Transport
+
 - Layer: TCP/UDP
 - Port: XXXX
 - Encryption: TLS 1.2+
@@ -340,44 +346,47 @@ Brief description of protocol purpose and design.
 ## Message Format
 
 ### Header (12 bytes)
-| Offset | Size | Field       | Description              |
-|--------|------|-------------|--------------------------|
-| 0      | 4    | Magic       | 0x50524F54 ("PROT")     |
-| 4      | 2    | Version     | Protocol version (1)     |
-| 6      | 2    | Type        | Message type identifier  |
-| 8      | 4    | Length      | Payload length in bytes  |
+
+| Offset | Size | Field   | Description             |
+| ------ | ---- | ------- | ----------------------- |
+| 0      | 4    | Magic   | 0x50524F54 ("PROT")     |
+| 4      | 2    | Version | Protocol version (1)    |
+| 6      | 2    | Type    | Message type identifier |
+| 8      | 4    | Length  | Payload length in bytes |
 
 ### Message Types
-| Type | Name          | Description              |
-|------|---------------|--------------------------|
-| 0x01 | HELLO         | Connection initiation    |
-| 0x02 | HELLO_ACK     | Connection accepted      |
-| 0x03 | DATA          | Application data         |
-| 0x04 | CLOSE         | Connection termination   |
+
+| Type | Name      | Description            |
+| ---- | --------- | ---------------------- |
+| 0x01 | HELLO     | Connection initiation  |
+| 0x02 | HELLO_ACK | Connection accepted    |
+| 0x03 | DATA      | Application data       |
+| 0x04 | CLOSE     | Connection termination |
 
 ### Type 0x01: HELLO
-| Offset | Size | Field       | Description              |
-|--------|------|-------------|--------------------------|
-| 0      | 4    | ClientID    | Unique client identifier |
-| 4      | 2    | Flags       | Connection flags         |
-| 6      | var  | Extensions  | TLV-encoded extensions   |
+
+| Offset | Size | Field      | Description              |
+| ------ | ---- | ---------- | ------------------------ |
+| 0      | 4    | ClientID   | Unique client identifier |
+| 4      | 2    | Flags      | Connection flags         |
+| 6      | var  | Extensions | TLV-encoded extensions   |
 
 ## State Machine
 ```
-[INIT] --HELLO--> [WAIT_ACK] --HELLO_ACK--> [CONNECTED]
-                                                  |
-                                             DATA/DATA
-                                                  |
-                              [CLOSED] <--CLOSE--+
+
+[INIT] --HELLO--> [WAIT_ACK] --HELLO_ACK--> [CONNECTED] | DATA/DATA | [CLOSED] <--CLOSE--+
+
 ```
 
 ## Examples
 ### Connection Establishment
 ```
-Client -> Server: HELLO (ClientID=0x12345678)
-Server -> Client: HELLO_ACK (Status=OK)
-Client -> Server: DATA (payload)
+
+Client -> Server: HELLO (ClientID=0x12345678) Server -> Client: HELLO_ACK (Status=OK) Client ->
+Server: DATA (payload)
+
 ```
+
 ```
 
 ### Wireshark Dissector (Lua)

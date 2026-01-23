@@ -8,10 +8,7 @@
  */
 
 import { Router, Request, Response } from "express";
-import {
-  performanceMonitor,
-  performanceLogger,
-} from "../../utils/performance-monitor";
+import { performanceMonitor, performanceLogger } from "../../utils/performance-monitor";
 
 const router = Router();
 
@@ -22,9 +19,7 @@ const router = Router();
 router.get("/stats", (req: Request, res: Response) => {
   try {
     const stats = performanceMonitor.getStats();
-    performanceLogger.info(
-      `Performance stats requested: ${stats.totalRequests} total requests`
-    );
+    performanceLogger.info(`Performance stats requested: ${stats.totalRequests} total requests`);
     res.json({
       success: true,
       data: {
@@ -49,9 +44,7 @@ router.get("/stats", (req: Request, res: Response) => {
 router.get("/slow", (req: Request, res: Response) => {
   try {
     const slowRequests = performanceMonitor.getSlowRequests();
-    performanceLogger.info(
-      `Slow requests requested: ${slowRequests.length} slow requests found`
-    );
+    performanceLogger.info(`Slow requests requested: ${slowRequests.length} slow requests found`);
     res.json({
       success: true,
       data: {

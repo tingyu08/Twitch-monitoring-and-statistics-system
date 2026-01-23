@@ -1,6 +1,11 @@
 ---
 name: vercel-ai-sdk
-description: Guide for Vercel AI SDK v5 implementation patterns including generateText, streamText, useChat hook, tool calling, embeddings, and MCP integration. Use when implementing AI chat interfaces, streaming responses, tool/function calling, text embeddings, or working with convertToModelMessages and toUIMessageStreamResponse. Activates for AI SDK integration, useChat hook usage, message streaming, or tool calling tasks.
+description:
+  Guide for Vercel AI SDK v5 implementation patterns including generateText, streamText, useChat
+  hook, tool calling, embeddings, and MCP integration. Use when implementing AI chat interfaces,
+  streaming responses, tool/function calling, text embeddings, or working with
+  convertToModelMessages and toUIMessageStreamResponse. Activates for AI SDK integration, useChat
+  hook usage, message streaming, or tool calling tasks.
 allowed-tools:
   - Read
   - Write
@@ -16,6 +21,7 @@ allowed-tools:
 ## When to Use This Skill
 
 Use this skill when:
+
 - Implementing AI chat interfaces with `useChat` hook
 - Creating API routes that generate or stream AI responses
 - Adding tool calling / function calling capabilities
@@ -99,6 +105,7 @@ Use this skill when:
       - @modelcontextprotocol/sdk (MCP integration)
       - zod (for tool schemas)
     </critical>
+
   </step>
 
   <step id="6" name="verify-build">
@@ -164,6 +171,7 @@ Use this skill when:
       You must achieve FULL PASSING status
       This is what it means to be an autonomous agent
     </critical>
+
   </step>
 </workflow>
 
@@ -172,6 +180,7 @@ Use this skill when:
 **You are not just writing code - you are COMPLETING TASKS AUTONOMOUSLY.**
 
 This means:
+
 1. ✅ Write correct implementation
 2. ✅ **Install any required dependencies**
 3. ✅ **Run build and fix ALL errors**
@@ -184,26 +193,28 @@ This means:
 ❌ **WRONG:** "The code is correct, but the package isn't installed - that's an environment issue"
 ✅ **CORRECT:** "Build failed due to missing package - installing it now with npm install [package]"
 
-❌ **WRONG:** "Tests pass but build fails - not my problem"
-✅ **CORRECT:** "Build is failing - debugging the error and fixing it now"
+❌ **WRONG:** "Tests pass but build fails - not my problem" ✅ **CORRECT:** "Build is failing -
+debugging the error and fixing it now"
 
-❌ **WRONG:** "There's a framework bug, can't fix it"
-✅ **CORRECT:** "Framework error detected - researching the issue, trying workarounds, debugging until I find a solution"
+❌ **WRONG:** "There's a framework bug, can't fix it" ✅ **CORRECT:** "Framework error detected -
+researching the issue, trying workarounds, debugging until I find a solution"
 
-❌ **WRONG:** "The implementation is complete" (with failing tests)
-✅ **CORRECT:** "Tests are failing - debugging and fixing until they all pass"
+❌ **WRONG:** "The implementation is complete" (with failing tests) ✅ **CORRECT:** "Tests are
+failing - debugging and fixing until they all pass"
 
 ### Dependency Installation Workflow
 
 When you encounter "Module not found" errors:
 
 1. **Detect the package manager FIRST** - Check for lockfiles:
+
    ```bash
    ls -la | grep -E "lock"
    # Look for: pnpm-lock.yaml, package-lock.json, yarn.lock, bun.lockb
    ```
 
 2. **Identify the package** from the import statement
+
    ```
    Error: Cannot find module '@ai-sdk/openai'
    Import: import { openai } from '@ai-sdk/openai'
@@ -211,6 +222,7 @@ When you encounter "Module not found" errors:
    ```
 
 3. **Install with the CORRECT package manager**
+
    ```bash
    # If pnpm-lock.yaml exists (MOST COMMON for Next.js evals):
    pnpm install @ai-sdk/openai
@@ -228,6 +240,7 @@ When you encounter "Module not found" errors:
    ```
 
 4. **Re-run build** to verify
+
    ```bash
    npm run build
    # or pnpm run build, yarn build, bun run build
@@ -235,8 +248,9 @@ When you encounter "Module not found" errors:
 
 5. **Fix any new errors** that appear
 
-**⚠️ CRITICAL WARNING:**
-Using the WRONG package manager (e.g., npm when the project uses pnpm) will:
+**⚠️ CRITICAL WARNING:** Using the WRONG package manager (e.g., npm when the project uses pnpm)
+will:
+
 - Create a second conflicting lockfile
 - Install different versions of dependencies
 - Cause dependency version mismatches
@@ -270,6 +284,7 @@ When tests fail:
 ### Success Criteria
 
 Task is ONLY complete when:
+
 - ✅ Build passes (`npm run build` succeeds)
 - ✅ Lint passes (`npm run lint` succeeds)
 - ✅ Tests pass (`npm run test` succeeds)
@@ -295,7 +310,8 @@ tools: {
 }
 ```
 
-**This will fail with:** `Type '{ description: string; parameters: ... }' is not assignable to type '{ inputSchema: FlexibleSchema<any>; ... }'`
+**This will fail with:**
+`Type '{ description: string; parameters: ... }' is not assignable to type '{ inputSchema: FlexibleSchema<any>; ... }'`
 
 ### ✅ CORRECT - Use tool() Helper (REQUIRED)
 
@@ -316,6 +332,7 @@ tools: {
 ### Tool Calling Checklist
 
 Before implementing any tool, verify:
+
 - [ ] Imported `tool` from 'ai' package: `import { tool } from 'ai';`
 - [ ] Wrapped tool definition with `tool({ ... })`
 - [ ] Used `inputSchema` property (NOT `parameters`)
@@ -328,17 +345,19 @@ Before implementing any tool, verify:
 ### 1. useChat Hook Changes
 
 **❌ WRONG (v4 pattern):**
+
 ```typescript
 const { messages, input, setInput, append } = useChat();
 
 // Sending message
-append({ content: text, role: 'user' });
+append({ content: text, role: "user" });
 ```
 
 **✅ CORRECT (v5 pattern):**
+
 ```typescript
 const { messages, sendMessage } = useChat();
-const [input, setInput] = useState('');
+const [input, setInput] = useState("");
 
 // Sending message
 sendMessage({ text: input });
@@ -347,11 +366,13 @@ sendMessage({ text: input });
 ### 2. Message Structure
 
 **❌ WRONG (v4 simple content):**
+
 ```typescript
 <div>{message.content}</div>
 ```
 
 **✅ CORRECT (v5 parts-based):**
+
 ```typescript
 <div>
   {message.parts.map((part, index) =>
@@ -363,23 +384,25 @@ sendMessage({ text: input });
 ### 3. Model Specification
 
 **✅ PREFER: String-based (v5 recommended):**
+
 ```typescript
-import { generateText } from 'ai';
+import { generateText } from "ai";
 
 const result = await generateText({
-  model: 'openai/gpt-4o',  // String format
-  prompt: 'Hello',
+  model: "openai/gpt-4o", // String format
+  prompt: "Hello",
 });
 ```
 
 **✅ ALSO WORKS: Function-based (legacy support):**
+
 ```typescript
-import { openai } from '@ai-sdk/openai';
-import { generateText } from 'ai';
+import { openai } from "@ai-sdk/openai";
+import { generateText } from "ai";
 
 const result = await generateText({
-  model: openai('gpt-4o'),  // Function format
-  prompt: 'Hello',
+  model: openai("gpt-4o"), // Function format
+  prompt: "Hello",
 });
 ```
 
@@ -387,9 +410,11 @@ const result = await generateText({
 
 ### 1. generateText - Non-Streaming Text Generation
 
-**Purpose:** Generate text for non-interactive use cases (email drafts, summaries, agents with tools).
+**Purpose:** Generate text for non-interactive use cases (email drafts, summaries, agents with
+tools).
 
 **Signature:**
+
 ```typescript
 import { generateText } from 'ai';
 
@@ -403,6 +428,7 @@ const result = await generateText({
 ```
 
 **Return Value:**
+
 ```typescript
 {
   text: string;              // Generated text output
@@ -415,14 +441,15 @@ const result = await generateText({
 ```
 
 **Example:**
+
 ```typescript
 // app/api/generate/route.ts
-import { generateText } from 'ai';
+import { generateText } from "ai";
 
 export async function GET() {
   const result = await generateText({
-    model: 'anthropic/claude-4-sonnet',
-    prompt: 'Why is the sky blue?',
+    model: "anthropic/claude-4-sonnet",
+    prompt: "Why is the sky blue?",
   });
 
   return Response.json({ text: result.text });
@@ -434,6 +461,7 @@ export async function GET() {
 **Purpose:** Stream responses for interactive chat applications.
 
 **Signature:**
+
 ```typescript
 import { streamText } from 'ai';
 
@@ -449,6 +477,7 @@ const result = streamText({
 ```
 
 **Return Methods:**
+
 ```typescript
 // For chat applications with useChat hook
 result.toUIMessageStreamResponse();
@@ -458,17 +487,18 @@ result.toTextStreamResponse();
 ```
 
 **Example - Chat API Route:**
+
 ```typescript
 // app/api/chat/route.ts
-import { streamText, convertToModelMessages } from 'ai';
-import type { UIMessage } from 'ai';
+import { streamText, convertToModelMessages } from "ai";
+import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: 'openai/gpt-4o',
-    system: 'You are a helpful assistant.',
+    model: "openai/gpt-4o",
+    system: "You are a helpful assistant.",
     messages: convertToModelMessages(messages),
   });
 
@@ -481,6 +511,7 @@ export async function POST(req: Request) {
 **Purpose:** Build interactive chat UIs with streaming support.
 
 **Signature:**
+
 ```typescript
 import { useChat } from 'ai/react';
 
@@ -501,6 +532,7 @@ const {
 ```
 
 **Complete Example:**
+
 ```typescript
 'use client';
 
@@ -555,15 +587,16 @@ export default function ChatPage() {
 **Purpose:** Enable AI models to call functions with structured parameters.
 
 **Defining Tools:**
+
 ```typescript
-import { tool } from 'ai';
-import { z } from 'zod';
+import { tool } from "ai";
+import { z } from "zod";
 
 const weatherTool = tool({
-  description: 'Get the weather in a location',
+  description: "Get the weather in a location",
   inputSchema: z.object({
-    location: z.string().describe('The location to get the weather for'),
-    unit: z.enum(['C', 'F']).describe('Temperature unit'),
+    location: z.string().describe("The location to get the weather for"),
+    unit: z.enum(["C", "F"]).describe("Temperature unit"),
   }),
   execute: async ({ location, unit }) => {
     // Fetch or mock weather data
@@ -571,31 +604,32 @@ const weatherTool = tool({
       location,
       temperature: 24,
       unit,
-      condition: 'Sunny',
+      condition: "Sunny",
     };
   },
 });
 ```
 
 **Using Tools with generateText/streamText:**
+
 ```typescript
 // app/api/chat/route.ts
-import { streamText, convertToModelMessages, tool } from 'ai';
-import { z } from 'zod';
-import type { UIMessage } from 'ai';
+import { streamText, convertToModelMessages, tool } from "ai";
+import { z } from "zod";
+import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: 'openai/gpt-4o',
+    model: "openai/gpt-4o",
     messages: convertToModelMessages(messages),
     tools: {
       getWeather: tool({
-        description: 'Get the weather for a location',
+        description: "Get the weather for a location",
         inputSchema: z.object({
-          city: z.string().describe('The city to get the weather for'),
-          unit: z.enum(['C', 'F']).describe('The unit to display the temperature in'),
+          city: z.string().describe("The city to get the weather for"),
+          unit: z.enum(["C", "F"]).describe("The unit to display the temperature in"),
         }),
         execute: async ({ city, unit }) => {
           // Mock response
@@ -610,15 +644,16 @@ export async function POST(req: Request) {
 ```
 
 **Multi-Step Tool Calling:**
+
 ```typescript
 const result = await generateText({
-  model: 'openai/gpt-4o',
+  model: "openai/gpt-4o",
   tools: {
     weather: weatherTool,
     search: searchTool,
   },
-  prompt: 'What is the weather in San Francisco and find hotels there?',
-  maxSteps: 5,  // Allow up to 5 tool call steps
+  prompt: "What is the weather in San Francisco and find hotels there?",
+  maxSteps: 5, // Allow up to 5 tool call steps
 });
 ```
 
@@ -627,17 +662,19 @@ const result = await generateText({
 **Purpose:** Convert text into numerical vectors for semantic search, RAG, or similarity.
 
 **Signature:**
+
 ```typescript
-import { embed } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { embed } from "ai";
+import { openai } from "@ai-sdk/openai";
 
 const result = await embed({
-  model: openai.textEmbeddingModel('text-embedding-3-small'),
-  value: 'Text to embed',
+  model: openai.textEmbeddingModel("text-embedding-3-small"),
+  value: "Text to embed",
 });
 ```
 
 **Return Value:**
+
 ```typescript
 {
   embedding: number[];  // Numerical array representing the text
@@ -647,15 +684,16 @@ const result = await embed({
 ```
 
 **Example - Embedding API Route:**
+
 ```typescript
 // app/api/embed/route.ts
-import { embed } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { embed } from "ai";
+import { openai } from "@ai-sdk/openai";
 
 export async function GET() {
   const { embedding, usage } = await embed({
-    model: openai.textEmbeddingModel('text-embedding-3-small'),
-    value: 'sunny day at the beach',
+    model: openai.textEmbeddingModel("text-embedding-3-small"),
+    value: "sunny day at the beach",
   });
 
   return Response.json({ embedding, usage });
@@ -663,34 +701,31 @@ export async function GET() {
 ```
 
 **Batch Embeddings:**
+
 ```typescript
-import { embedMany } from 'ai';
+import { embedMany } from "ai";
 
 const { embeddings, usage } = await embedMany({
-  model: openai.textEmbeddingModel('text-embedding-3-small'),
-  values: [
-    'sunny day at the beach',
-    'rainy afternoon in the city',
-    'snowy mountain landscape',
-  ],
+  model: openai.textEmbeddingModel("text-embedding-3-small"),
+  values: ["sunny day at the beach", "rainy afternoon in the city", "snowy mountain landscape"],
 });
 ```
 
 ### 6. Message Utilities
 
-**convertToModelMessages:**
-Converts UI messages from `useChat` into `ModelMessage` objects for AI functions.
+**convertToModelMessages:** Converts UI messages from `useChat` into `ModelMessage` objects for AI
+functions.
 
 ```typescript
-import { convertToModelMessages } from 'ai';
-import type { UIMessage } from 'ai';
+import { convertToModelMessages } from "ai";
+import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: 'openai/gpt-4o',
-    messages: convertToModelMessages(messages),  // Convert for model
+    model: "openai/gpt-4o",
+    messages: convertToModelMessages(messages), // Convert for model
   });
 
   return result.toUIMessageStreamResponse();
@@ -702,19 +737,18 @@ export async function POST(req: Request) {
 **Purpose:** Connect to external MCP servers for dynamic tool access.
 
 **Example:**
+
 ```typescript
 // app/api/chat/route.ts
-import { experimental_createMCPClient, streamText } from 'ai';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { experimental_createMCPClient, streamText } from "ai";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 export async function POST(req: Request) {
   const { prompt }: { prompt: string } = await req.json();
 
   try {
     // Connect to MCP server
-    const httpTransport = new StreamableHTTPClientTransport(
-      new URL('http://localhost:3000/mcp')
-    );
+    const httpTransport = new StreamableHTTPClientTransport(new URL("http://localhost:3000/mcp"));
 
     const httpClient = await experimental_createMCPClient({
       transport: httpTransport,
@@ -724,25 +758,26 @@ export async function POST(req: Request) {
     const tools = await httpClient.tools();
 
     const response = streamText({
-      model: 'openai/gpt-4o',
+      model: "openai/gpt-4o",
       tools,
       prompt,
       onFinish: async () => {
-        await httpClient.close();  // Clean up
+        await httpClient.close(); // Clean up
       },
       onError: async () => {
-        await httpClient.close();  // Clean up on error
+        await httpClient.close(); // Clean up on error
       },
     });
 
     return response.toTextStreamResponse();
   } catch (error) {
-    return new Response('Internal Server Error', { status: 500 });
+    return new Response("Internal Server Error", { status: 500 });
   }
 }
 ```
 
 **Key Points:**
+
 - Use `experimental_createMCPClient` (note: experimental API)
 - Always close the client in `onFinish` and `onError`
 - Tools are fetched dynamically with `httpClient.tools()`
@@ -754,29 +789,29 @@ export async function POST(req: Request) {
 
 ```typescript
 // Format: 'provider/model-id'
-model: 'openai/gpt-4o'
-model: 'anthropic/claude-4-sonnet'
-model: 'google/gemini-2.0-flash'
+model: "openai/gpt-4o";
+model: "anthropic/claude-4-sonnet";
+model: "google/gemini-2.0-flash";
 ```
 
 ### Function-Based (Legacy Support)
 
 ```typescript
-import { openai } from '@ai-sdk/openai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { openai } from "@ai-sdk/openai";
+import { anthropic } from "@ai-sdk/anthropic";
 
-model: openai('gpt-4o')
-model: anthropic('claude-4-sonnet')
+model: openai("gpt-4o");
+model: anthropic("claude-4-sonnet");
 ```
 
 ### Embedding Models
 
 ```typescript
-import { openai } from '@ai-sdk/openai';
+import { openai } from "@ai-sdk/openai";
 
 // Text embeddings use a different method
-openai.textEmbeddingModel('text-embedding-3-small')
-openai.textEmbeddingModel('text-embedding-3-large')
+openai.textEmbeddingModel("text-embedding-3-small");
+openai.textEmbeddingModel("text-embedding-3-large");
 ```
 
 ## TypeScript Best Practices
@@ -785,22 +820,22 @@ openai.textEmbeddingModel('text-embedding-3-large')
 
 ```typescript
 import type {
-  UIMessage,           // Message type from useChat
-  ModelMessage,        // Message type for model functions
-  ToolCall,            // Tool call information
-  TokenUsage,          // Token consumption data
-} from 'ai';
+  UIMessage, // Message type from useChat
+  ModelMessage, // Message type for model functions
+  ToolCall, // Tool call information
+  TokenUsage, // Token consumption data
+} from "ai";
 ```
 
 ### Strongly Typed Tools
 
 ```typescript
-import { tool } from 'ai';
-import { z } from 'zod';
+import { tool } from "ai";
+import { z } from "zod";
 
 // Tool helper infers execute parameter types
 const myTool = tool({
-  description: 'My tool',
+  description: "My tool",
   inputSchema: z.object({
     param1: z.string(),
     param2: z.number(),
@@ -808,7 +843,7 @@ const myTool = tool({
   execute: async ({ param1, param2 }) => {
     // param1 is inferred as string
     // param2 is inferred as number
-    return { result: 'success' };
+    return { result: "success" };
   },
 });
 ```
@@ -817,7 +852,7 @@ const myTool = tool({
 
 ```typescript
 // app/api/chat/route.ts
-import type { UIMessage } from 'ai';
+import type { UIMessage } from "ai";
 
 export async function POST(req: Request): Promise<Response> {
   const { messages }: { messages: UIMessage[] } = await req.json();
@@ -831,6 +866,7 @@ export async function POST(req: Request): Promise<Response> {
 ### Pattern 1: Simple Chat Application
 
 **Client (`app/page.tsx`):**
+
 ```typescript
 'use client';
 
@@ -865,16 +901,17 @@ export default function Chat() {
 ```
 
 **Server (`app/api/chat/route.ts`):**
+
 ```typescript
-import { streamText, convertToModelMessages } from 'ai';
-import type { UIMessage } from 'ai';
+import { streamText, convertToModelMessages } from "ai";
+import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: 'openai/gpt-4o',
-    system: 'You are a helpful assistant.',
+    model: "openai/gpt-4o",
+    system: "You are a helpful assistant.",
     messages: convertToModelMessages(messages),
   });
 
@@ -885,36 +922,37 @@ export async function POST(req: Request) {
 ### Pattern 2: Chat with Tools
 
 **Server with tool calling:**
+
 ```typescript
-import { streamText, convertToModelMessages, tool } from 'ai';
-import { z } from 'zod';
-import type { UIMessage } from 'ai';
+import { streamText, convertToModelMessages, tool } from "ai";
+import { z } from "zod";
+import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: 'openai/gpt-4o',
+    model: "openai/gpt-4o",
     messages: convertToModelMessages(messages),
     tools: {
       getWeather: tool({
-        description: 'Get weather for a city',
+        description: "Get weather for a city",
         inputSchema: z.object({
           city: z.string(),
         }),
         execute: async ({ city }) => {
           // API call or mock data
-          return { city, temp: 72, condition: 'Sunny' };
+          return { city, temp: 72, condition: "Sunny" };
         },
       }),
       searchWeb: tool({
-        description: 'Search the web',
+        description: "Search the web",
         inputSchema: z.object({
           query: z.string(),
         }),
         execute: async ({ query }) => {
           // Search implementation
-          return { results: ['...'] };
+          return { results: ["..."] };
         },
       }),
     },
@@ -928,14 +966,14 @@ export async function POST(req: Request) {
 
 ```typescript
 // app/api/summarize/route.ts
-import { generateText } from 'ai';
+import { generateText } from "ai";
 
 export async function POST(req: Request) {
   const { text } = await req.json();
 
   const result = await generateText({
-    model: 'anthropic/claude-4-sonnet',
-    system: 'You are a summarization expert.',
+    model: "anthropic/claude-4-sonnet",
+    system: "You are a summarization expert.",
     prompt: `Summarize this text:\n\n${text}`,
   });
 
@@ -947,15 +985,15 @@ export async function POST(req: Request) {
 
 ```typescript
 // app/api/search/route.ts
-import { embed } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { embed } from "ai";
+import { openai } from "@ai-sdk/openai";
 
 export async function POST(req: Request) {
   const { query } = await req.json();
 
   // Generate embedding for search query
   const { embedding } = await embed({
-    model: openai.textEmbeddingModel('text-embedding-3-small'),
+    model: openai.textEmbeddingModel("text-embedding-3-small"),
     value: query,
   });
 
@@ -1007,12 +1045,12 @@ tools: {
 ```typescript
 // ❌ WRONG - v4 pattern
 const { input, setInput, append } = useChat();
-append({ content: 'Hello', role: 'user' });
+append({ content: "Hello", role: "user" });
 
 // ✅ CORRECT - v5 pattern
 const { sendMessage } = useChat();
-const [input, setInput] = useState('');
-sendMessage({ text: 'Hello' });
+const [input, setInput] = useState("");
+sendMessage({ text: "Hello" });
 ```
 
 ### Pitfall 3: Accessing message.content instead of message.parts
@@ -1034,13 +1072,13 @@ sendMessage({ text: 'Hello' });
 ```typescript
 // ❌ WRONG - passing UIMessages directly
 const result = streamText({
-  model: 'openai/gpt-4o',
-  messages: messages,  // UIMessage[] - type error
+  model: "openai/gpt-4o",
+  messages: messages, // UIMessage[] - type error
 });
 
 // ✅ CORRECT - convert to ModelMessage[]
 const result = streamText({
-  model: 'openai/gpt-4o',
+  model: "openai/gpt-4o",
   messages: convertToModelMessages(messages),
 });
 ```
@@ -1074,7 +1112,7 @@ const response = streamText({
 
 ```typescript
 // ❌ WRONG - using text stream for useChat
-return result.toTextStreamResponse();  // Won't work with useChat hook
+return result.toTextStreamResponse(); // Won't work with useChat hook
 
 // ✅ CORRECT - use UI message stream for useChat
 return result.toUIMessageStreamResponse();
@@ -1089,14 +1127,14 @@ return result.toTextStreamResponse();
 ```typescript
 // ❌ WRONG - using regular model method
 const { embedding } = await embed({
-  model: openai('text-embedding-3-small'),  // Wrong method
-  value: 'text',
+  model: openai("text-embedding-3-small"), // Wrong method
+  value: "text",
 });
 
 // ✅ CORRECT - use textEmbeddingModel
 const { embedding } = await embed({
-  model: openai.textEmbeddingModel('text-embedding-3-small'),
-  value: 'text',
+  model: openai.textEmbeddingModel("text-embedding-3-small"),
+  value: "text",
 });
 ```
 
@@ -1149,22 +1187,24 @@ When implementing AI SDK features, ask:
 
 ## Quick Reference
 
-| Task | Function | Key Parameters |
-|------|----------|----------------|
-| Generate text | `generateText()` | `model`, `prompt`, `system`, `tools` |
-| Stream text | `streamText()` | `model`, `messages`, `tools`, `onFinish` |
-| Chat UI | `useChat()` | `api`, `onFinish`, `onError` |
-| Tool calling | `tool()` | `description`, `inputSchema`, `execute` |
-| Text embedding | `embed()` | `model`, `value` |
-| Batch embedding | `embedMany()` | `model`, `values` |
-| Message conversion | `convertToModelMessages()` | `messages` (UIMessage[]) |
-| MCP integration | `experimental_createMCPClient()` | `transport` |
+| Task               | Function                         | Key Parameters                           |
+| ------------------ | -------------------------------- | ---------------------------------------- |
+| Generate text      | `generateText()`                 | `model`, `prompt`, `system`, `tools`     |
+| Stream text        | `streamText()`                   | `model`, `messages`, `tools`, `onFinish` |
+| Chat UI            | `useChat()`                      | `api`, `onFinish`, `onError`             |
+| Tool calling       | `tool()`                         | `description`, `inputSchema`, `execute`  |
+| Text embedding     | `embed()`                        | `model`, `value`                         |
+| Batch embedding    | `embedMany()`                    | `model`, `values`                        |
+| Message conversion | `convertToModelMessages()`       | `messages` (UIMessage[])                 |
+| MCP integration    | `experimental_createMCPClient()` | `transport`                              |
 
 ## Additional Resources
 
 When in doubt, check the official documentation:
+
 - Main docs: https://ai-sdk.dev/docs
 - API reference: https://ai-sdk.dev/docs/reference
 - Examples: https://ai-sdk.dev/examples
 
-**Remember:** AI SDK v5 uses string-based model specification, parts-based messages, `sendMessage` instead of `append`, and requires `convertToModelMessages` in API routes.
+**Remember:** AI SDK v5 uses string-based model specification, parts-based messages, `sendMessage`
+instead of `append`, and requires `convertToModelMessages` in API routes.

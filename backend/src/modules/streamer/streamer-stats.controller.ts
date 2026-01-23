@@ -1,21 +1,14 @@
 import type { Request, Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
 import { prisma } from "../../db/prisma";
-import {
-  getStreamerGameStats,
-  getStreamerVideos,
-  getStreamerClips,
-} from "./streamer.service";
+import { getStreamerGameStats, getStreamerVideos, getStreamerClips } from "./streamer.service";
 import { streamerLogger } from "../../utils/logger";
 
 /**
  * 取得遊戲/分類統計
  * GET /api/streamer/me/game-stats?range=30d
  */
-export async function getGameStatsHandler(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function getGameStatsHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
     if (!streamerId) {
@@ -28,10 +21,7 @@ export async function getGameStatsHandler(
       return;
     }
     // Cast strict type
-    const stats = await getStreamerGameStats(
-      streamerId,
-      range as "7d" | "30d" | "90d",
-    );
+    const stats = await getStreamerGameStats(streamerId, range as "7d" | "30d" | "90d");
     res.json(stats);
   } catch (error) {
     streamerLogger.error("Get Game Stats Error:", error);
@@ -43,10 +33,7 @@ export async function getGameStatsHandler(
  * 公開: 取得指定頻道的遊戲/分類統計
  * GET /api/streamer/:channelId/game-stats?range=30d
  */
-export async function getPublicGameStatsHandler(
-  req: Request,
-  res: Response,
-): Promise<void> {
+export async function getPublicGameStatsHandler(req: Request, res: Response): Promise<void> {
   try {
     const { streamerId: channelId } = req.params;
     if (!channelId) {
@@ -70,10 +57,7 @@ export async function getPublicGameStatsHandler(
       return;
     }
 
-    const stats = await getStreamerGameStats(
-      channel.streamerId,
-      range as "7d" | "30d" | "90d",
-    );
+    const stats = await getStreamerGameStats(channel.streamerId, range as "7d" | "30d" | "90d");
     res.json(stats);
   } catch (error) {
     streamerLogger.error("Get Public Game Stats Error:", error);
@@ -85,10 +69,7 @@ export async function getPublicGameStatsHandler(
  * 取得 VOD 列表
  * GET /api/streamer/me/videos?page=1&limit=20
  */
-export async function getVideosHandler(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function getVideosHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
     if (!streamerId) {
@@ -113,10 +94,7 @@ export async function getVideosHandler(
  * 取得 Clips 列表
  * GET /api/streamer/me/clips?page=1&limit=20
  */
-export async function getClipsHandler(
-  req: AuthRequest,
-  res: Response,
-): Promise<void> {
+export async function getClipsHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     const streamerId = req.user?.streamerId;
     if (!streamerId) {
@@ -140,10 +118,7 @@ export async function getClipsHandler(
  * GET /api/streamer/:channelId/videos
  * 注意: 這裡的 channelId 是 Channel 表的 UUID，需要轉換成 streamerId
  */
-export async function getPublicVideosHandler(
-  req: Request,
-  res: Response,
-): Promise<void> {
+export async function getPublicVideosHandler(req: Request, res: Response): Promise<void> {
   try {
     const { streamerId: channelId } = req.params; // 參數名稱是 streamerId 但其實是 channelId
     if (!channelId) {
@@ -193,10 +168,7 @@ export async function getPublicVideosHandler(
  * GET /api/streamer/:channelId/clips
  * 注意: 這裡的 channelId 是 Channel 表的 UUID，需要轉換成 streamerId
  */
-export async function getPublicClipsHandler(
-  req: Request,
-  res: Response,
-): Promise<void> {
+export async function getPublicClipsHandler(req: Request, res: Response): Promise<void> {
   try {
     const { streamerId: channelId } = req.params; // 參數名稱是 streamerId 但其實是 channelId
     if (!channelId) {
@@ -245,10 +217,7 @@ export async function getPublicClipsHandler(
  * 公開: 取得指定頻道的觀眾人數趨勢
  * GET /api/streamer/:channelId/viewer-trends?range=30d
  */
-export async function getPublicViewerTrendsHandler(
-  req: Request,
-  res: Response,
-): Promise<void> {
+export async function getPublicViewerTrendsHandler(req: Request, res: Response): Promise<void> {
   try {
     const { streamerId: channelId } = req.params;
     if (!channelId) {
@@ -308,10 +277,7 @@ export async function getPublicViewerTrendsHandler(
  * 公開: 取得特定直播的小時觀眾分佈
  * GET /api/streamer/:channelId/stream-hourly?date=YYYY-MM-DD
  */
-export async function getPublicStreamHourlyHandler(
-  req: Request,
-  res: Response,
-): Promise<void> {
+export async function getPublicStreamHourlyHandler(req: Request, res: Response): Promise<void> {
   try {
     const { streamerId: channelId } = req.params;
     const { date } = req.query;
@@ -393,9 +359,7 @@ export async function getPublicStreamHourlyHandler(
       viewers = Math.min(peak, Math.max(0, viewers));
 
       // 計算該小時的準確時間
-      const pointTime = new Date(
-        session.startedAt.getTime() + i * 60 * 60 * 1000,
-      );
+      const pointTime = new Date(session.startedAt.getTime() + i * 60 * 60 * 1000);
 
       result.push({
         timestamp: pointTime.toISOString(),

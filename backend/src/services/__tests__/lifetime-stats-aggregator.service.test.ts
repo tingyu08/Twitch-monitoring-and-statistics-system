@@ -35,9 +35,7 @@ describe("LifetimeStatsAggregatorService", () => {
 
   it("should aggregate empty stats when no records found", async () => {
     (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValue([]);
-    (
-      prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock
-    ).mockResolvedValue([]);
+    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([]);
 
     await service.aggregateStats(viewerId, channelId);
 
@@ -61,9 +59,7 @@ describe("LifetimeStatsAggregatorService", () => {
       { date: new Date("2025-12-02"), watchSeconds: 1800 }, // 30 min
     ]);
 
-    (
-      prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock
-    ).mockResolvedValue([
+    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([
       {
         date: new Date("2025-12-01"),
         totalMessages: 10,
@@ -101,20 +97,12 @@ describe("LifetimeStatsAggregatorService", () => {
   it("should calculate streak correctly", async () => {
     // Dates: 1st, 2nd, 3rd (Streak 3), 5th, 6th (Streak 2)
     // Longest: 3
-    const dates = [
-      "2025-12-01",
-      "2025-12-02",
-      "2025-12-03",
-      "2025-12-05",
-      "2025-12-06",
-    ];
+    const dates = ["2025-12-01", "2025-12-02", "2025-12-03", "2025-12-05", "2025-12-06"];
 
     (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValue(
       dates.map((d) => ({ date: new Date(d), watchSeconds: 300 }))
     );
-    (
-      prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock
-    ).mockResolvedValue([]);
+    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([]);
 
     await service.aggregateStats(viewerId, channelId);
 
@@ -135,9 +123,7 @@ describe("LifetimeStatsAggregatorService", () => {
     (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValue(
       dates.map((d) => ({ date: new Date(d), watchSeconds: 300 }))
     );
-    (
-      prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock
-    ).mockResolvedValue([]);
+    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([]);
 
     await service.aggregateStats(viewerId, channelId);
 

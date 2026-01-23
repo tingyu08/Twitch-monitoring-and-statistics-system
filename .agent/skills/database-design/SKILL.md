@@ -1,6 +1,8 @@
 ---
 name: database-design
-description: Database schema design, optimization, and migration patterns for PostgreSQL, MySQL, and NoSQL databases. Use for designing schemas, writing migrations, or optimizing queries.
+description:
+  Database schema design, optimization, and migration patterns for PostgreSQL, MySQL, and NoSQL
+  databases. Use for designing schemas, writing migrations, or optimizing queries.
 source: wshobson/agents
 license: MIT
 ---
@@ -10,6 +12,7 @@ license: MIT
 ## Schema Design Principles
 
 ### Normalization Guidelines
+
 ```sql
 -- 1NF: Atomic values, no repeating groups
 -- 2NF: No partial dependencies on composite keys
@@ -34,6 +37,7 @@ CREATE TABLE addresses (
 ```
 
 ### Denormalization for Performance
+
 ```sql
 -- When read performance matters more than write consistency
 CREATE TABLE order_summaries (
@@ -49,6 +53,7 @@ CREATE TABLE order_summaries (
 ## Index Design
 
 ### Common Index Patterns
+
 ```sql
 -- B-tree (default) for equality and range queries
 CREATE INDEX idx_users_email ON users(email);
@@ -67,6 +72,7 @@ CREATE INDEX idx_orders_covering ON orders(user_id) INCLUDE (total, status);
 ```
 
 ### Index Analysis
+
 ```sql
 -- Check index usage
 SELECT
@@ -87,6 +93,7 @@ ORDER BY seq_tup_read DESC;
 ## Migration Patterns
 
 ### Safe Migration Template
+
 ```sql
 -- Always use transactions
 BEGIN;
@@ -104,6 +111,7 @@ COMMIT;
 ```
 
 ### Zero-Downtime Migrations
+
 ```
 1. Add new column (nullable)
 2. Deploy code that writes to both columns
@@ -115,6 +123,7 @@ COMMIT;
 ## Query Optimization
 
 ### EXPLAIN Analysis
+
 ```sql
 -- Always use EXPLAIN ANALYZE
 EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
@@ -127,6 +136,7 @@ SELECT * FROM orders WHERE user_id = 123 AND status = 'pending';
 ```
 
 ### Common Optimizations
+
 ```sql
 -- Use EXISTS instead of IN for large sets
 SELECT * FROM users u

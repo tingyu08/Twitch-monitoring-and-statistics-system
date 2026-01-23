@@ -1,6 +1,9 @@
 ---
 name: code-review
-description: Automated code review for pull requests using specialized review patterns. Analyzes code for quality, security, performance, and best practices. Use when reviewing code changes, PRs, or doing code audits.
+description:
+  Automated code review for pull requests using specialized review patterns. Analyzes code for
+  quality, security, performance, and best practices. Use when reviewing code changes, PRs, or doing
+  code audits.
 source: anthropics/claude-code
 license: Apache-2.0
 ---
@@ -10,7 +13,9 @@ license: Apache-2.0
 ## Review Categories
 
 ### 1. Security Review
+
 Check for:
+
 - SQL injection vulnerabilities
 - XSS (Cross-Site Scripting)
 - Command injection
@@ -20,7 +25,9 @@ Check for:
 - Insecure direct object references
 
 ### 2. Performance Review
+
 Check for:
+
 - N+1 queries
 - Missing database indexes
 - Unnecessary re-renders (React)
@@ -30,7 +37,9 @@ Check for:
 - Large bundle sizes
 
 ### 3. Code Quality Review
+
 Check for:
+
 - Code duplication (DRY violations)
 - Functions doing too much (SRP violations)
 - Deep nesting / complex conditionals
@@ -40,7 +49,9 @@ Check for:
 - Incomplete type coverage
 
 ### 4. Testing Review
+
 Check for:
+
 - Missing test coverage for new code
 - Tests that don't test behavior
 - Flaky test patterns
@@ -53,47 +64,54 @@ Check for:
 ## Code Review Summary
 
 ### 🔴 Critical (Must Fix)
+
 - **[File:Line]** [Issue description]
   - **Why:** [Explanation]
   - **Fix:** [Suggested fix]
 
 ### 🟡 Suggestions (Should Consider)
+
 - **[File:Line]** [Issue description]
   - **Why:** [Explanation]
   - **Fix:** [Suggested fix]
 
 ### 🟢 Nits (Optional)
+
 - **[File:Line]** [Minor suggestion]
 
 ### ✅ What's Good
+
 - [Positive feedback on good patterns]
 ```
 
 ## Common Patterns to Flag
 
 ### Security
+
 ```javascript
 // BAD: SQL injection
 const query = `SELECT * FROM users WHERE id = ${userId}`;
 
 // GOOD: Parameterized query
-const query = 'SELECT * FROM users WHERE id = $1';
+const query = "SELECT * FROM users WHERE id = $1";
 await db.query(query, [userId]);
 ```
 
 ### Performance
+
 ```javascript
 // BAD: N+1 query
-users.forEach(async user => {
+users.forEach(async (user) => {
   const posts = await getPosts(user.id);
 });
 
 // GOOD: Batch query
-const userIds = users.map(u => u.id);
+const userIds = users.map((u) => u.id);
 const posts = await getPostsForUsers(userIds);
 ```
 
 ### Error Handling
+
 ```javascript
 // BAD: Swallowing errors
 try {
@@ -104,8 +122,8 @@ try {
 try {
   await riskyOperation();
 } catch (e) {
-  logger.error('Operation failed', { error: e });
-  throw new AppError('Operation failed', { cause: e });
+  logger.error("Operation failed", { error: e });
+  throw new AppError("Operation failed", { cause: e });
 }
 ```
 

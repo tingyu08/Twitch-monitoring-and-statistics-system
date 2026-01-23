@@ -1,6 +1,7 @@
 # Integration Testing with Mocked Activities
 
-Comprehensive patterns for testing workflows with mocked external dependencies, error injection, and complex scenarios.
+Comprehensive patterns for testing workflows with mocked external dependencies, error injection, and
+complex scenarios.
 
 ## Activity Mocking Strategy
 
@@ -51,6 +52,7 @@ async def test_workflow_with_mocked_activity(workflow_env):
 ### Dynamic Mock Responses
 
 **Scenario-Based Mocking**:
+
 ```python
 @pytest.mark.asyncio
 async def test_workflow_multiple_mock_scenarios(workflow_env):
@@ -106,6 +108,7 @@ async def test_workflow_multiple_mock_scenarios(workflow_env):
 ### Testing Transient Failures
 
 **Retry Behavior**:
+
 ```python
 @pytest.mark.asyncio
 async def test_workflow_transient_errors(workflow_env):
@@ -154,6 +157,7 @@ async def test_workflow_transient_errors(workflow_env):
 ### Testing Non-Retryable Errors
 
 **Business Validation Failures**:
+
 ```python
 @pytest.mark.asyncio
 async def test_workflow_non_retryable_error(workflow_env):

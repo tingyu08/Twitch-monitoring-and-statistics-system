@@ -42,10 +42,7 @@ describe("SubscriptionSyncService", () => {
 
     const MockTwitchClient = TwitchOAuthClient as unknown as jest.Mock;
     if (MockTwitchClient.mock.instances.length > 0) {
-      const instance =
-        MockTwitchClient.mock.instances[
-          MockTwitchClient.mock.instances.length - 1
-        ];
+      const instance = MockTwitchClient.mock.instances[MockTwitchClient.mock.instances.length - 1];
       mockGetBroadcasterSubscriptions = instance.getBroadcasterSubscriptions;
     }
   });
@@ -75,9 +72,7 @@ describe("SubscriptionSyncService", () => {
 
     it("should throw if channel not found", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue(null);
-      await expect(syncSubscriptionSnapshot("s1")).rejects.toThrow(
-        "No channel found"
-      );
+      await expect(syncSubscriptionSnapshot("s1")).rejects.toThrow("No channel found");
     });
   });
 

@@ -1,6 +1,9 @@
 ---
 name: nft-standards
-description: Implement NFT standards (ERC-721, ERC-1155) with proper metadata handling, minting strategies, and marketplace integration. Use when creating NFT contracts, building NFT marketplaces, or implementing digital asset systems.
+description:
+  Implement NFT standards (ERC-721, ERC-1155) with proper metadata handling, minting strategies, and
+  marketplace integration. Use when creating NFT contracts, building NFT marketplaces, or
+  implementing digital asset systems.
 ---
 
 # NFT Standards
@@ -150,6 +153,7 @@ contract GameItems is ERC1155, Ownable {
 ## Metadata Standards
 
 ### Off-Chain Metadata (IPFS)
+
 ```json
 {
   "name": "NFT #1",
@@ -175,6 +179,7 @@ contract GameItems is ERC1155, Ownable {
 ```
 
 ### On-Chain Metadata
+
 ```solidity
 contract OnChainNFT is ERC721 {
     struct Traits {

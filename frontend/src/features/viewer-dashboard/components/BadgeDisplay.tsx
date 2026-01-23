@@ -56,7 +56,7 @@ export const BadgeDisplay = ({
     <div
       ref={badgeRef}
       className={cn(
-        "flex flex-col items-center relative cursor-help transition-all duration-200",
+        "flex flex-col items-center relative cursor-help transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200",
         isHovered && "z-[100]" // Elevate z-index when hovered
       )}
       onMouseEnter={handleMouseEnter}
@@ -64,7 +64,7 @@ export const BadgeDisplay = ({
     >
       <div
         className={cn(
-          "rounded-full flex items-center justify-center bg-slate-800 border transition-all duration-300",
+          "rounded-full flex items-center justify-center bg-slate-800 border transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-300",
           isLocked
             ? "border-slate-700 text-slate-500 opacity-50 grayscale"
             : `${config.color} border-current/30`,
@@ -133,7 +133,7 @@ export const BadgeDisplay = ({
             <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
               <div
                 className={cn(
-                  "h-full transition-all duration-500",
+                  "h-full transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-500",
                   !isLocked ? "bg-emerald-500" : "bg-blue-500"
                 )}
                 style={{ width: `${Math.min(100, badge.progress)}%` }}

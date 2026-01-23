@@ -30,7 +30,7 @@ export function DateRangePicker({
             selectedRange === option.value ? `, ${t("current")}` : ""
           }`}
           className={`
-            px-4 py-2 rounded-lg font-medium transition-all text-sm sm:text-base
+            px-4 py-2 rounded-lg font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] text-sm sm:text-base
             ${
               selectedRange === option.value
                 ? "bg-purple-600 text-white shadow-lg shadow-purple-500/50"

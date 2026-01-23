@@ -1,6 +1,8 @@
 ---
 name: code-refactoring
-description: Code refactoring patterns and techniques for improving code quality without changing behavior. Use for cleaning up legacy code, reducing complexity, or improving maintainability.
+description:
+  Code refactoring patterns and techniques for improving code quality without changing behavior. Use
+  for cleaning up legacy code, reducing complexity, or improving maintainability.
 source: wshobson/agents
 license: MIT
 ---
@@ -10,12 +12,14 @@ license: MIT
 ## Refactoring Principles
 
 ### When to Refactor
+
 - Before adding new features (make change easy, then make easy change)
 - After getting tests passing (red-green-refactor)
 - When you see code smells
 - During code review feedback
 
 ### When NOT to Refactor
+
 - Without tests covering the code
 - Under tight deadlines with no safety net
 - Code that will be replaced soon
@@ -24,6 +28,7 @@ license: MIT
 ## Common Code Smells
 
 ### Long Methods
+
 ```typescript
 // BEFORE: Method doing too much
 function processOrder(order: Order) {
@@ -40,6 +45,7 @@ function processOrder(order: Order) {
 ```
 
 ### Deeply Nested Conditionals
+
 ```typescript
 // BEFORE: Arrow code
 function getDiscount(user: User, order: Order) {
@@ -66,19 +72,22 @@ function getDiscount(user: User, order: Order) {
 ```
 
 ### Primitive Obsession
+
 ```typescript
 // BEFORE: Primitives everywhere
 function createUser(name: string, email: string, phone: string) {
-  if (!email.includes('@')) throw new Error('Invalid email');
+  if (!email.includes("@")) throw new Error("Invalid email");
   // more validation...
 }
 
 // AFTER: Value objects
 class Email {
   constructor(private value: string) {
-    if (!value.includes('@')) throw new Error('Invalid email');
+    if (!value.includes("@")) throw new Error("Invalid email");
   }
-  toString() { return this.value; }
+  toString() {
+    return this.value;
+  }
 }
 
 function createUser(name: string, email: Email, phone: Phone) {
@@ -87,6 +96,7 @@ function createUser(name: string, email: Email, phone: Phone) {
 ```
 
 ### Feature Envy
+
 ```typescript
 // BEFORE: Method uses another object's data extensively
 function calculateShipping(order: Order) {
@@ -107,6 +117,7 @@ class Order {
 ## Refactoring Techniques
 
 ### Extract Method
+
 ```typescript
 // Identify a code block that does one thing
 // Move it to a new method with a descriptive name
@@ -114,7 +125,7 @@ class Order {
 
 function printReport(data: ReportData) {
   // Extract this block...
-  const header = `Report: ${data.title}\nDate: ${data.date}\n${'='.repeat(40)}`;
+  const header = `Report: ${data.title}\nDate: ${data.date}\n${"=".repeat(40)}`;
   console.log(header);
 
   // ...into a method
@@ -123,13 +134,17 @@ function printReport(data: ReportData) {
 ```
 
 ### Replace Conditional with Polymorphism
+
 ```typescript
 // BEFORE: Switch on type
 function getArea(shape: Shape) {
   switch (shape.type) {
-    case 'circle': return Math.PI * shape.radius ** 2;
-    case 'rectangle': return shape.width * shape.height;
-    case 'triangle': return shape.base * shape.height / 2;
+    case "circle":
+      return Math.PI * shape.radius ** 2;
+    case "rectangle":
+      return shape.width * shape.height;
+    case "triangle":
+      return (shape.base * shape.height) / 2;
   }
 }
 
@@ -140,16 +155,24 @@ interface Shape {
 
 class Circle implements Shape {
   constructor(private radius: number) {}
-  getArea() { return Math.PI * this.radius ** 2; }
+  getArea() {
+    return Math.PI * this.radius ** 2;
+  }
 }
 
 class Rectangle implements Shape {
-  constructor(private width: number, private height: number) {}
-  getArea() { return this.width * this.height; }
+  constructor(
+    private width: number,
+    private height: number
+  ) {}
+  getArea() {
+    return this.width * this.height;
+  }
 }
 ```
 
 ### Introduce Parameter Object
+
 ```typescript
 // BEFORE: Too many parameters
 function searchProducts(
@@ -175,6 +198,7 @@ function searchProducts(params: SearchParams) { ... }
 ```
 
 ### Replace Magic Numbers with Constants
+
 ```typescript
 // BEFORE
 if (user.age >= 18 && order.total >= 50) {

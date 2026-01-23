@@ -1,6 +1,10 @@
 ---
 name: nextjs-app-router-fundamentals
-description: Guide for working with Next.js App Router (Next.js 13+). Use when migrating from Pages Router to App Router, creating layouts, implementing routing, handling metadata, or building Next.js 13+ applications. Activates for App Router migration, layout creation, routing patterns, or Next.js 13+ development tasks.
+description:
+  Guide for working with Next.js App Router (Next.js 13+). Use when migrating from Pages Router to
+  App Router, creating layouts, implementing routing, handling metadata, or building Next.js 13+
+  applications. Activates for App Router migration, layout creation, routing patterns, or Next.js
+  13+ development tasks.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
@@ -8,19 +12,23 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 
 ## Overview
 
-Provide comprehensive guidance for Next.js App Router (Next.js 13+), covering migration from Pages Router, file-based routing conventions, layouts, metadata handling, and modern Next.js patterns.
+Provide comprehensive guidance for Next.js App Router (Next.js 13+), covering migration from Pages
+Router, file-based routing conventions, layouts, metadata handling, and modern Next.js patterns.
 
 ## TypeScript: NEVER Use `any` Type
 
-**CRITICAL RULE:** This codebase has `@typescript-eslint/no-explicit-any` enabled. Using `any` will cause build failures.
+**CRITICAL RULE:** This codebase has `@typescript-eslint/no-explicit-any` enabled. Using `any` will
+cause build failures.
 
 **❌ WRONG:**
+
 ```typescript
 function handleSubmit(e: any) { ... }
 const data: any[] = [];
 ```
 
 **✅ CORRECT:**
+
 ```typescript
 function handleSubmit(e: React.FormEvent<HTMLFormElement>) { ... }
 const data: string[] = [];
@@ -44,6 +52,7 @@ async function myAction(formData: FormData) { ... }
 ## When to Use This Skill
 
 Use this skill when:
+
 - Migrating from Pages Router (`pages/` directory) to App Router (`app/` directory)
 - Creating Next.js 13+ applications from scratch
 - Working with layouts, templates, and nested routing
@@ -56,6 +65,7 @@ Use this skill when:
 ### App Router vs Pages Router
 
 **Pages Router (Legacy - Next.js 12 and earlier):**
+
 ```
 pages/
 ├── index.tsx              # Route: /
@@ -67,6 +77,7 @@ pages/
 ```
 
 **App Router (Modern - Next.js 13+):**
+
 ```
 app/
 ├── layout.tsx             # Root layout (required)
@@ -85,6 +96,7 @@ app/
 ### File Conventions
 
 **Special Files in App Router:**
+
 - `layout.tsx` - Shared UI for a segment and its children (preserves state, doesn't re-render)
 - `page.tsx` - Unique UI for a route, makes route publicly accessible
 - `loading.tsx` - Loading UI with React Suspense
@@ -94,6 +106,7 @@ app/
 - `route.ts` - API endpoints (Route Handlers)
 
 **Colocation:**
+
 - Components, tests, and other files can be colocated in `app/`
 - Only `page.tsx` and `route.ts` files create public routes
 - Other files (components, utils, tests) are NOT routable
@@ -103,6 +116,7 @@ app/
 ### Step 1: Understand the Current Structure
 
 Examine existing Pages Router setup:
+
 - Read `pages/` directory structure
 - Identify `_app.tsx` - handles global state, layouts, providers
 - Identify `_document.tsx` - customizes HTML structure
@@ -134,6 +148,7 @@ export default function RootLayout({
 ```
 
 **Migration Notes:**
+
 - Move `_document.tsx` HTML structure to `layout.tsx`
 - Move `_app.tsx` global providers/wrappers to `layout.tsx`
 - Convert `<Head>` metadata to `metadata` export
@@ -142,6 +157,7 @@ export default function RootLayout({
 ### Step 3: Migrate Pages to Routes
 
 **Simple Page Migration:**
+
 ```typescript
 // Before: pages/index.tsx
 import Head from 'next/head';
@@ -177,6 +193,7 @@ export const metadata = {
 ```
 
 **Nested Route Migration:**
+
 ```typescript
 // Before: pages/blog/[slug].tsx
 export default function BlogPost() { ... }
@@ -203,6 +220,7 @@ import Link from 'next/link';
 ### Step 5: Clean Up Pages Directory
 
 After migration:
+
 - Remove all page files from `pages/` directory
 - Keep `pages/api/` if you're not migrating API routes yet
 - Remove `_app.tsx` and `_document.tsx` (functionality moved to layout)
@@ -214,16 +232,16 @@ After migration:
 
 ```typescript
 // app/page.tsx or app/layout.tsx
-import type { Metadata } from 'next';
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'My Page',
-  description: 'Page description',
-  keywords: ['nextjs', 'react'],
+  title: "My Page",
+  description: "Page description",
+  keywords: ["nextjs", "react"],
   openGraph: {
-    title: 'My Page',
-    description: 'Page description',
-    images: ['/og-image.jpg'],
+    title: "My Page",
+    description: "Page description",
+    images: ["/og-image.jpg"],
   },
 };
 ```
@@ -233,9 +251,9 @@ export const metadata: Metadata = {
 ```typescript
 // app/blog/[slug]/page.tsx
 export async function generateMetadata({
-  params
+  params,
 }: {
-  params: { slug: string }
+  params: { slug: string };
 }): Promise<Metadata> {
   const post = await getPost(params.slug);
 
@@ -276,6 +294,7 @@ export default function BlogLayout({ children }) {
 ```
 
 **Layout Behavior:**
+
 - Layouts preserve state across navigation
 - Layouts don't re-render on route changes
 - Parent layouts wrap child layouts
@@ -336,13 +355,15 @@ app/
 ### Pitfall 1: Forgetting Root Layout HTML Tags
 
 **Wrong:**
+
 ```typescript
 export default function RootLayout({ children }) {
-  return <div>{children}</div>; // Missing <html> and <body>
+  return <div>{ children } < /div>; / / Missing < html > and<body>;
 }
 ```
 
 **Correct:**
+
 ```typescript
 export default function RootLayout({ children }) {
   return (
@@ -356,6 +377,7 @@ export default function RootLayout({ children }) {
 ### Pitfall 2: Using `next/head` in App Router
 
 **Wrong:**
+
 ```typescript
 import Head from 'next/head';
 
@@ -370,6 +392,7 @@ export default function Page() {
 ```
 
 **Correct:**
+
 ```typescript
 export const metadata = { title: 'Title' };
 
@@ -380,7 +403,8 @@ export default function Page() {
 
 ### Pitfall 3: Not Removing Pages Directory
 
-After migrating routes, remove the old `pages/` directory files to avoid confusion. The build will fail if you have conflicting routes.
+After migrating routes, remove the old `pages/` directory files to avoid confusion. The build will
+fail if you have conflicting routes.
 
 ### Pitfall 4: Missing `page.tsx` Files
 
@@ -396,11 +420,13 @@ app/
 ### Pitfall 5: Incorrect Link Usage
 
 **Wrong:**
+
 ```typescript
 <a href="/about">About</a>  // Works but causes full page reload
 ```
 
 **Correct:**
+
 ```typescript
 import Link from 'next/link';
 <Link href="/about">About</Link>  // Client-side navigation
@@ -423,6 +449,7 @@ export default async function Page() {
 ```
 
 **Benefits:**
+
 - Can use async/await directly
 - Direct database/API access
 - Zero client-side JavaScript
@@ -431,6 +458,7 @@ export default async function Page() {
 ### Client Components
 
 Use `'use client'` directive when you need:
+
 - Interactive elements (onClick, onChange, etc.)
 - React hooks (useState, useEffect, useContext, etc.)
 - Browser APIs (window, localStorage, etc.)
@@ -497,7 +525,8 @@ export default async function Page() {
 
 ### Overview
 
-`generateStaticParams` is the App Router equivalent of `getStaticPaths` from the Pages Router. It generates static pages at build time for dynamic routes.
+`generateStaticParams` is the App Router equivalent of `getStaticPaths` from the Pages Router. It
+generates static pages at build time for dynamic routes.
 
 ### Basic Usage
 
@@ -522,6 +551,7 @@ export default function BlogPost({
 ```
 
 **Key Points:**
+
 - Returns an array of objects with route parameter keys
 - Each object represents one page to pre-render at build time
 - Function must be exported and named `generateStaticParams`
@@ -608,49 +638,47 @@ export default function BlogPost({
 ```
 
 **Options:**
+
 - `dynamicParams = true` (default): Non-pre-rendered paths generated on-demand
 - `dynamicParams = false`: Non-pre-rendered paths return 404
 
 ### Common Patterns
 
 **Pattern 1: Simple ID-based routes**
+
 ```typescript
 export async function generateStaticParams() {
-  return [
-    { id: '1' },
-    { id: '2' },
-    { id: '3' },
-  ];
+  return [{ id: "1" }, { id: "2" }, { id: "3" }];
 }
 ```
 
 **Pattern 2: Fetch from API**
+
 ```typescript
 export async function generateStaticParams() {
-  const items = await fetch('https://api.example.com/items').then(r => r.json());
-  return items.map(item => ({ id: item.id }));
+  const items = await fetch("https://api.example.com/items").then((r) => r.json());
+  return items.map((item) => ({ id: item.id }));
 }
 ```
 
 **Pattern 3: Database query**
+
 ```typescript
 export async function generateStaticParams() {
   const posts = await db.post.findMany();
-  return posts.map(post => ({ slug: post.slug }));
+  return posts.map((post) => ({ slug: post.slug }));
 }
 ```
 
 ### Migration from Pages Router
 
 **Before (Pages Router):**
+
 ```typescript
 // pages/blog/[id].tsx
 export async function getStaticPaths() {
   return {
-    paths: [
-      { params: { id: '1' } },
-      { params: { id: '2' } },
-    ],
+    paths: [{ params: { id: "1" } }, { params: { id: "2" } }],
     fallback: false,
   };
 }
@@ -661,6 +689,7 @@ export async function getStaticProps({ params }) {
 ```
 
 **After (App Router):**
+
 ```typescript
 // app/blog/[id]/page.tsx
 export async function generateStaticParams() {
@@ -680,15 +709,17 @@ export default function BlogPost({ params }: { params: { id: string } }) {
 ### Common Mistakes to Avoid
 
 **❌ Wrong: Using `'use client'`**
+
 ```typescript
-'use client'; // ERROR! generateStaticParams only works in Server Components
+"use client"; // ERROR! generateStaticParams only works in Server Components
 
 export async function generateStaticParams() {
-  return [{ id: '1' }];
+  return [{ id: "1" }];
 }
 ```
 
 **❌ Wrong: Using Pages Router pattern**
+
 ```typescript
 export async function getStaticPaths() { // Wrong API!
   return { paths: [...], fallback: false };
@@ -696,13 +727,16 @@ export async function getStaticPaths() { // Wrong API!
 ```
 
 **❌ Wrong: Missing export keyword**
+
 ```typescript
-async function generateStaticParams() { // Must be exported!
-  return [{ id: '1' }];
+async function generateStaticParams() {
+  // Must be exported!
+  return [{ id: "1" }];
 }
 ```
 
 **✅ Correct: Clean Server Component**
+
 ```typescript
 // app/blog/[id]/page.tsx
 // No 'use client' directive
@@ -719,6 +753,7 @@ export default function Page({ params }: { params: { id: string } }) {
 **CRITICAL IMPLEMENTATION NOTE:**
 
 When asked to "write" or "implement" `generateStaticParams`:
+
 - **DO** use the Edit or Write tool to modify the actual file
 - **DO** add the function to the existing page.tsx file
 - **DO** remove any TODO comments about generateStaticParams
@@ -752,14 +787,14 @@ When migrating or building with App Router, verify:
 
 ### File Structure Mapping
 
-| Pages Router | App Router | Purpose |
-|-------------|-----------|---------|
-| `pages/index.tsx` | `app/page.tsx` | Home route |
-| `pages/about.tsx` | `app/about/page.tsx` | About route |
-| `pages/[id].tsx` | `app/[id]/page.tsx` | Dynamic route |
-| `pages/_app.tsx` | `app/layout.tsx` | Global layout |
-| `pages/_document.tsx` | `app/layout.tsx` | HTML structure |
-| `pages/api/hello.ts` | `app/api/hello/route.ts` | API route |
+| Pages Router          | App Router               | Purpose        |
+| --------------------- | ------------------------ | -------------- |
+| `pages/index.tsx`     | `app/page.tsx`           | Home route     |
+| `pages/about.tsx`     | `app/about/page.tsx`     | About route    |
+| `pages/[id].tsx`      | `app/[id]/page.tsx`      | Dynamic route  |
+| `pages/_app.tsx`      | `app/layout.tsx`         | Global layout  |
+| `pages/_document.tsx` | `app/layout.tsx`         | HTML structure |
+| `pages/api/hello.ts`  | `app/api/hello/route.ts` | API route      |
 
 ### Common Commands
 
@@ -779,6 +814,8 @@ npm start
 
 ## Additional Resources
 
-For more advanced routing patterns (parallel routes, intercepting routes, route handlers), refer to the `nextjs-advanced-routing` skill.
+For more advanced routing patterns (parallel routes, intercepting routes, route handlers), refer to
+the `nextjs-advanced-routing` skill.
 
-For Server vs Client component best practices and anti-patterns, refer to the `nextjs-server-client-components` and `nextjs-anti-patterns` skills.
+For Server vs Client component best practices and anti-patterns, refer to the
+`nextjs-server-client-components` and `nextjs-anti-patterns` skills.

@@ -1,6 +1,8 @@
 ---
 name: tailored-resume-generator
-description: Analyzes job descriptions and generates tailored resumes that highlight relevant experience, skills, and achievements to maximize interview chances
+description:
+  Analyzes job descriptions and generates tailored resumes that highlight relevant experience,
+  skills, and achievements to maximize interview chances
 ---
 
 # Tailored Resume Generator
@@ -16,16 +18,20 @@ description: Analyzes job descriptions and generates tailored resumes that highl
 
 ## What This Skill Does
 
-1. **Analyzes Job Descriptions**: Extracts key requirements, skills, qualifications, and keywords from job postings
-2. **Identifies Priorities**: Determines what employers value most based on the job description language and structure
+1. **Analyzes Job Descriptions**: Extracts key requirements, skills, qualifications, and keywords
+   from job postings
+2. **Identifies Priorities**: Determines what employers value most based on the job description
+   language and structure
 3. **Tailors Content**: Reorganizes and emphasizes relevant experience, skills, and achievements
 4. **Optimizes Keywords**: Incorporates ATS-friendly keywords naturally throughout the resume
-5. **Formats Professionally**: Creates clean, professional resume layouts suitable for various formats
+5. **Formats Professionally**: Creates clean, professional resume layouts suitable for various
+   formats
 6. **Provides Recommendations**: Suggests improvements and highlights gaps to address
 
 ## How to Use
 
 ### Basic Usage
+
 Provide a job description and your background information:
 
 ```
@@ -41,6 +47,7 @@ Here's my background:
 ```
 
 ### With Existing Resume
+
 Upload or paste your current resume along with the job description:
 
 ```
@@ -54,6 +61,7 @@ My Current Resume:
 ```
 
 ### Career Transition
+
 When changing industries or roles:
 
 ```
@@ -72,6 +80,7 @@ My transferable experience:
 ## Example
 
 **User Request:**
+
 ```
 I need a tailored resume for this job:
 
@@ -97,15 +106,18 @@ My background:
 
 ```markdown
 # JOHN DOE
+
 Email: john.doe@email.com | Phone: (555) 123-4567 | LinkedIn: linkedin.com/in/johndoe
 
 ## PROFESSIONAL SUMMARY
+
 Results-driven Data Analyst with 5+ years of experience leveraging SQL, Python, and advanced
-visualization tools to deliver actionable insights. Proven track record in statistical analysis,
-A/B testing, and cross-functional collaboration. Healthcare industry experience with strong
-ability to communicate complex data findings to stakeholders.
+visualization tools to deliver actionable insights. Proven track record in statistical analysis, A/B
+testing, and cross-functional collaboration. Healthcare industry experience with strong ability to
+communicate complex data findings to stakeholders.
 
 ## TECHNICAL SKILLS
+
 - **Data Analysis & Programming**: SQL, Python, Statistical Analysis, A/B Testing
 - **Visualization Tools**: Tableau, Power BI, Advanced Dashboard Development
 - **Data Management**: Data Automation, ETL Processes, Database Optimization
@@ -114,34 +126,37 @@ ability to communicate complex data findings to stakeholders.
 ## PROFESSIONAL EXPERIENCE
 
 **Data Analyst** | RetailCo | 2019 - 2024
-- Designed and implemented 50+ SQL queries and Python automation scripts, reducing manual
-  data processing time by 60%
-- Conducted rigorous A/B testing and statistical analysis for marketing campaigns,
-  improving campaign ROI by 35%
-- Built interactive Tableau and Power BI dashboards for executive team, enabling
-  data-driven decision making
-- Presented analytical findings to cross-functional stakeholders including marketing,
-  operations, and executive leadership
-- Collaborated with marketing team to analyze customer behavior patterns and optimize
-  targeting strategies
+
+- Designed and implemented 50+ SQL queries and Python automation scripts, reducing manual data
+  processing time by 60%
+- Conducted rigorous A/B testing and statistical analysis for marketing campaigns, improving
+  campaign ROI by 35%
+- Built interactive Tableau and Power BI dashboards for executive team, enabling data-driven
+  decision making
+- Presented analytical findings to cross-functional stakeholders including marketing, operations,
+  and executive leadership
+- Collaborated with marketing team to analyze customer behavior patterns and optimize targeting
+  strategies
 
 **Data Analysis Intern** | HealthPlus Clinic | 2018 - 2019
+
 - Supported healthcare analytics initiatives by analyzing patient data and operational metrics
 - Gained exposure to healthcare industry data management and HIPAA compliance requirements
 - Assisted in creating reports for clinical staff to improve patient care workflows
 
 ## EDUCATION
 
-**Bachelor of Science in Business Analytics**
-State University | Graduated 2018
+**Bachelor of Science in Business Analytics** State University | Graduated 2018
 
 ## KEY ACHIEVEMENTS
+
 - Reduced data processing time by 60% through Python automation
 - Improved marketing campaign ROI by 35% through A/B testing and optimization
 - Created data visualization system now used across entire organization
 ```
 
 **Additional Recommendations:**
+
 - Consider adding any specific healthcare projects or certifications
 - Quantify more achievements with metrics when possible
 - If you have experience with R or advanced statistical methods, add them
@@ -156,10 +171,12 @@ When a user requests resume tailoring:
 ### 1. Gather Information
 
 **Job Description Analysis**:
+
 - Request the full job description if not provided
 - Ask for the company name and job title
 
 **Candidate Background**:
+
 - If user provides existing resume, use it as the foundation
 - If not, request:
   - Work history (job titles, companies, dates, responsibilities)
@@ -172,6 +189,7 @@ When a user requests resume tailoring:
 ### 2. Analyze Job Requirements
 
 Extract and prioritize:
+
 - **Must-have qualifications**: Years of experience, required skills, education
 - **Key skills**: Technical tools, methodologies, competencies
 - **Soft skills**: Communication, leadership, teamwork
@@ -180,6 +198,7 @@ Extract and prioritize:
 - **Company values**: Cultural fit indicators from job description
 
 Create a mental map of:
+
 - Priority 1: Critical requirements (deal-breakers)
 - Priority 2: Important qualifications (strongly desired)
 - Priority 3: Nice-to-have skills (bonus points)
@@ -187,6 +206,7 @@ Create a mental map of:
 ### 3. Map Candidate Experience to Requirements
 
 For each job requirement:
+
 - Identify matching experience from candidate's background
 - Find transferable skills if no direct match
 - Note gaps that need to be addressed or de-emphasized
@@ -195,18 +215,21 @@ For each job requirement:
 ### 4. Structure the Tailored Resume
 
 **Professional Summary** (3-4 lines):
+
 - Lead with years of experience in the target role/field
 - Include top 3-4 required skills from job description
 - Mention industry experience if relevant
 - Highlight unique value proposition
 
 **Technical/Core Skills Section**:
+
 - Group skills by category matching job requirements
 - List required tools and technologies first
 - Use exact terminology from job description
 - Only include skills you can substantiate with experience
 
 **Professional Experience**:
+
 - For each role, emphasize responsibilities and achievements aligned with job requirements
 - Use action verbs: Led, Developed, Implemented, Optimized, Managed, Created, Analyzed
 - **Quantify achievements**: Include numbers, percentages, timeframes, scale
@@ -215,11 +238,13 @@ For each job requirement:
 - Format: **[Action Verb] + [What] + [How/Why] + [Result/Impact]**
 
 **Education**:
+
 - List degrees, certifications relevant to position
 - Include relevant coursework if early career
 - Add certifications that match job requirements
 
 **Optional Sections** (if applicable):
+
 - Certifications & Licenses
 - Publications or Speaking Engagements
 - Awards & Recognition
@@ -238,11 +263,13 @@ For each job requirement:
 ### 6. Format and Present
 
 **Format Options**:
+
 - **Markdown**: Clean, readable, easy to copy
 - **Plain Text**: ATS-optimized, safe for all systems
 - **Tips for Word/PDF**: Provide formatting guidance
 
 **Resume Structure Guidelines**:
+
 - Keep to 1 page for <10 years experience, 2 pages for 10+ years
 - Use consistent formatting and spacing
 - Ensure contact information is prominent
@@ -254,25 +281,30 @@ For each job requirement:
 After presenting the tailored resume, offer:
 
 **Strengths Analysis**:
+
 - What makes this candidate competitive
 - Unique qualifications to emphasize in cover letter or interview
 
 **Gap Analysis**:
+
 - Requirements not fully met
 - Suggestions for addressing gaps (courses, projects, reframing experience)
 
 **Interview Preparation Tips**:
+
 - Key talking points aligned with resume
 - Stories to prepare based on job requirements
 - Questions to ask that demonstrate fit
 
 **Cover Letter Hooks**:
+
 - Suggest 2-3 opening lines for cover letter
 - Key achievements to expand upon
 
 ### 8. Iterate and Refine
 
 Ask if user wants to:
+
 - Adjust emphasis or tone
 - Add or remove sections
 - Generate alternative versions for different roles
@@ -282,6 +314,7 @@ Ask if user wants to:
 ### 9. Best Practices to Follow
 
 **Do**:
+
 - Be truthful and accurate - never fabricate experience
 - Use industry-standard terminology
 - Quantify achievements with specific metrics
@@ -290,6 +323,7 @@ Ask if user wants to:
 - Keep language concise and impactful
 
 **Don't**:
+
 - Include personal information (age, marital status, photo unless requested)
 - Use first-person pronouns (I, me, my)
 - Include references ("available upon request" is outdated)
@@ -300,30 +334,35 @@ Ask if user wants to:
 ### 10. Special Considerations
 
 **Career Changers**:
+
 - Use functional or hybrid resume format
 - Emphasize transferable skills
 - Create compelling narrative in summary
 - Focus on relevant projects and coursework
 
 **Recent Graduates**:
+
 - Lead with education
 - Include relevant coursework, projects, internships
 - Emphasize leadership in student organizations
 - Include GPA if 3.5+
 
 **Senior Executives**:
+
 - Lead with executive summary
 - Focus on leadership and strategic impact
 - Include board memberships, speaking engagements
 - Emphasize revenue growth, team building, vision
 
 **Technical Roles**:
+
 - Include technical skills section prominently
 - List programming languages, frameworks, tools
 - Include GitHub, portfolio, or project links
 - Mention methodologies (Agile, Scrum, etc.)
 
 **Creative Roles**:
+
 - Include link to portfolio
 - Highlight creative achievements and campaigns
 - Mention tools and software proficiencies
@@ -334,12 +373,17 @@ Ask if user wants to:
 ## Tips for Best Results
 
 - **Be specific**: Provide complete job descriptions and detailed background information
-- **Share metrics**: Include numbers, percentages, and quantifiable achievements when describing your experience
-- **Indicate format preference**: Let the skill know if you need ATS-optimized, creative, or traditional format
-- **Mention constraints**: Share any specific requirements (page limits, sections to include/exclude)
+- **Share metrics**: Include numbers, percentages, and quantifiable achievements when describing
+  your experience
+- **Indicate format preference**: Let the skill know if you need ATS-optimized, creative, or
+  traditional format
+- **Mention constraints**: Share any specific requirements (page limits, sections to
+  include/exclude)
 - **Iterate**: Don't hesitate to ask for revisions or alternative approaches
 - **Multiple applications**: Generate separate tailored versions for different roles
 
 ## Privacy Note
 
-This skill processes your personal and professional information to generate tailored resumes. Always review the output before submitting to ensure accuracy and appropriateness. Remove or modify any information you prefer not to share with potential employers.
+This skill processes your personal and professional information to generate tailored resumes. Always
+review the output before submitting to ensure accuracy and appropriateness. Remove or modify any
+information you prefer not to share with potential employers.

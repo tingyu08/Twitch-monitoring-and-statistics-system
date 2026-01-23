@@ -51,9 +51,7 @@ httpServer.listen(PORT, async () => {
       // 2. 初始化 Token 管理系統（必須在 Twitch 服務之前）
       setTimeout(async () => {
         try {
-          const { initializeTokenManagement } = await import(
-            "./services/token-management.init"
-          );
+          const { initializeTokenManagement } = await import("./services/token-management.init");
           await initializeTokenManagement();
           logger.info("Server", "Token 管理系統初始化完成");
         } catch (error) {
@@ -92,10 +90,7 @@ httpServer.listen(PORT, async () => {
           }
         }, 10000);
       } else {
-        logger.info(
-          "Server",
-          "EventSub 未啟用 (請設定 EVENTSUB_ENABLED=true 以啟用)"
-        );
+        logger.info("Server", "EventSub 未啟用 (請設定 EVENTSUB_ENABLED=true 以啟用)");
       }
     } catch (error) {
       logger.error("Server", "背景服務初始化失敗", error);

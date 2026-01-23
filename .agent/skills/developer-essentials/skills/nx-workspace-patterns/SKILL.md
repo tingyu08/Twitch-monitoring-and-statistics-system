@@ -1,6 +1,8 @@
 ---
 name: nx-workspace-patterns
-description: Configure and optimize Nx monorepo workspaces. Use when setting up Nx, configuring project boundaries, optimizing build caching, or implementing affected commands.
+description:
+  Configure and optimize Nx monorepo workspaces. Use when setting up Nx, configuring project
+  boundaries, optimizing build caching, or implementing affected commands.
 ---
 
 # Nx Workspace Patterns
@@ -39,13 +41,13 @@ workspace/
 
 ### 2. Library Types
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| **feature** | Smart components, business logic | `feature-auth` |
-| **ui** | Presentational components | `ui-buttons` |
-| **data-access** | API calls, state management | `data-access-users` |
-| **util** | Pure functions, helpers | `util-formatting` |
-| **shell** | App bootstrapping | `shell-web` |
+| Type            | Purpose                          | Example             |
+| --------------- | -------------------------------- | ------------------- |
+| **feature**     | Smart components, business logic | `feature-auth`      |
+| **ui**          | Presentational components        | `ui-buttons`        |
+| **data-access** | API calls, state management      | `data-access-users` |
+| **util**        | Pure functions, helpers          | `util-formatting`   |
+| **shell**       | App bootstrapping                | `shell-web`         |
 
 ## Templates
 
@@ -62,13 +64,7 @@ workspace/
     "default": {
       "runner": "nx/tasks-runners/default",
       "options": {
-        "cacheableOperations": [
-          "build",
-          "lint",
-          "test",
-          "e2e",
-          "build-storybook"
-        ],
+        "cacheableOperations": ["build", "lint", "test", "e2e", "build-storybook"],
         "parallel": 3
       }
     }
@@ -101,10 +97,7 @@ workspace/
       "!{projectRoot}/jest.config.[jt]s",
       "!{projectRoot}/.eslintrc.json"
     ],
-    "sharedGlobals": [
-      "{workspaceRoot}/babel.config.json",
-      "{workspaceRoot}/tsconfig.base.json"
-    ]
+    "sharedGlobals": ["{workspaceRoot}/babel.config.json", "{workspaceRoot}/tsconfig.base.json"]
   },
   "generators": {
     "@nx/react": {
@@ -226,11 +219,7 @@ workspace/
               },
               {
                 "sourceTag": "type:feature",
-                "onlyDependOnLibsWithTags": [
-                  "type:ui",
-                  "type:data-access",
-                  "type:util"
-                ]
+                "onlyDependOnLibsWithTags": ["type:ui", "type:data-access", "type:util"]
               },
               {
                 "sourceTag": "type:ui",
@@ -276,8 +265,8 @@ import {
   joinPathFragments,
   names,
   readProjectConfiguration,
-} from '@nx/devkit';
-import { libraryGenerator } from '@nx/react';
+} from "@nx/devkit";
+import { libraryGenerator } from "@nx/react";
 
 interface FeatureLibraryGeneratorSchema {
   name: string;
@@ -290,36 +279,29 @@ export default async function featureLibraryGenerator(
   options: FeatureLibraryGeneratorSchema
 ) {
   const { name, scope, directory } = options;
-  const projectDirectory = directory
-    ? `${directory}/${name}`
-    : `libs/${scope}/feature-${name}`;
+  const projectDirectory = directory ? `${directory}/${name}` : `libs/${scope}/feature-${name}`;
 
   // Generate base library
   await libraryGenerator(tree, {
     name: `feature-${name}`,
     directory: projectDirectory,
     tags: `type:feature,scope:${scope}`,
-    style: 'css',
+    style: "css",
     skipTsConfig: false,
     skipFormat: true,
-    unitTestRunner: 'jest',
-    linter: 'eslint',
+    unitTestRunner: "jest",
+    linter: "eslint",
   });
 
   // Add custom files
   const projectConfig = readProjectConfiguration(tree, `${scope}-feature-${name}`);
   const projectNames = names(name);
 
-  generateFiles(
-    tree,
-    joinPathFragments(__dirname, 'files'),
-    projectConfig.sourceRoot,
-    {
-      ...projectNames,
-      scope,
-      tmpl: '',
-    }
-  );
+  generateFiles(tree, joinPathFragments(__dirname, "files"), projectConfig.sourceRoot, {
+    ...projectNames,
+    scope,
+    tmpl: "",
+  });
 
   await formatFiles(tree);
 }
@@ -351,7 +333,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -433,6 +415,7 @@ nx migrate --run-migrations
 ## Best Practices
 
 ### Do's
+
 - **Use tags consistently** - Enforce with module boundaries
 - **Enable caching early** - Significant CI savings
 - **Keep libs focused** - Single responsibility
@@ -440,6 +423,7 @@ nx migrate --run-migrations
 - **Document boundaries** - Help new developers
 
 ### Don'ts
+
 - **Don't create circular deps** - Graph should be acyclic
 - **Don't skip affected** - Test only what changed
 - **Don't ignore boundaries** - Tech debt accumulates

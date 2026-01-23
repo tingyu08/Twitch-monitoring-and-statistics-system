@@ -52,9 +52,7 @@ export function startAllJobs(): void {
     console.log("🔐 [Jobs] 開始執行 Token 驗證任務...");
     try {
       const result = await validateTokensJob();
-      console.log(
-        `✅ [Jobs] Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`,
-      );
+      console.log(`✅ [Jobs] Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`);
     } catch (error) {
       console.error("❌ [Jobs] Token 驗證失敗:", error);
     }

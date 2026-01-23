@@ -1,10 +1,13 @@
 # Example: CI/CD Integration
 
-This example demonstrates how to automatically translate i18n files in a CI/CD pipeline whenever the source file changes.
+This example demonstrates how to automatically translate i18n files in a CI/CD pipeline whenever the
+source file changes.
 
 ## Scenario
 
-Team maintains a multilingual web application. When developers update `en.json`, the CI/CD pipeline should automatically:
+Team maintains a multilingual web application. When developers update `en.json`, the CI/CD pipeline
+should automatically:
+
 1. Detect the change
 2. Translate to all target languages
 3. Commit the translations back to the repository
@@ -18,6 +21,7 @@ Team maintains a multilingual web application. When developers update `en.json`,
 ### Step 1: Understand Requirements
 
 Claude recognizes:
+
 - **Platform**: GitHub Actions (CI/CD)
 - **Trigger**: Changes to en.json
 - **Target languages**: Multiple (need to confirm with user)
@@ -26,6 +30,7 @@ Claude recognizes:
 ### Step 2: Confirm Configuration
 
 Claude asks:
+
 ```
 To set up automatic translation, I need to know:
 1. What languages do you want to translate to?
@@ -34,7 +39,9 @@ To set up automatic translation, I need to know:
 ```
 
 User responds:
-> "Translate to Chinese, Japanese, Korean, Spanish, and French. Source is `locales/en.json`. Yes, we have OPENAI_API_KEY in GitHub secrets."
+
+> "Translate to Chinese, Japanese, Korean, Spanish, and French. Source is `locales/en.json`. Yes, we
+> have OPENAI_API_KEY in GitHub secrets."
 
 ### Step 3: Create GitHub Actions Workflow
 
@@ -55,7 +62,7 @@ on:
       - main
       - develop
     paths:
-      - 'locales/en.json'
+      - "locales/en.json"
 
 jobs:
   translate:
@@ -65,7 +72,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for proper git operations
+          fetch-depth: 0 # Full history for proper git operations
 
       - name: Install Jta
         run: |
@@ -165,6 +172,7 @@ exit 0
 ```
 
 Make it executable:
+
 ```bash
 chmod +x .git/hooks/pre-commit
 ```
@@ -242,6 +250,7 @@ vim locales/en.json
 ```
 
 Add:
+
 ```json
 {
   "new": {
@@ -252,6 +261,7 @@ Add:
 ```
 
 Commit and push:
+
 ```bash
 git add locales/en.json
 git commit -m "feat: add new feature translations"
@@ -259,6 +269,7 @@ git push
 ```
 
 **Expected result:**
+
 - GitHub Actions triggers
 - Translates 2 new keys to 5 languages (10 translations total)
 - Commits translations back
@@ -272,6 +283,7 @@ vim locales/en.json
 ```
 
 Change:
+
 ```json
 {
   "app": {
@@ -281,6 +293,7 @@ Change:
 ```
 
 Commit and push:
+
 ```bash
 git add locales/en.json
 git commit -m "fix: improve welcome message"
@@ -288,6 +301,7 @@ git push
 ```
 
 **Expected result:**
+
 - GitHub Actions triggers
 - Updates 1 modified key in 5 languages
 - Preserves all other translations
@@ -306,7 +320,7 @@ on:
       - main
       - develop
     paths:
-      - 'locales/en.json'
+      - "locales/en.json"
 
 jobs:
   translate:
@@ -352,24 +366,24 @@ jobs:
 ### With Slack Notifications
 
 ```yaml
-      - name: Notify Slack
-        if: steps.check_changes.outputs.changes == 'true'
-        uses: slackapi/slack-github-action@v1
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-          payload: |
-            {
-              "text": "✅ Translations updated for commit ${{ github.sha }}",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Translations Updated*\nCommit: <${{ github.event.head_commit.url }}|${{ github.event.head_commit.message }}>"
-                  }
-                }
-              ]
+- name: Notify Slack
+  if: steps.check_changes.outputs.changes == 'true'
+  uses: slackapi/slack-github-action@v1
+  with:
+    webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+    payload: |
+      {
+        "text": "✅ Translations updated for commit ${{ github.sha }}",
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*Translations Updated*\nCommit: <${{ github.event.head_commit.url }}|${{ github.event.head_commit.message }}>"
             }
+          }
+        ]
+      }
 ```
 
 ## Best Practices
@@ -384,11 +398,13 @@ jobs:
 ## Cost Optimization
 
 ### Before (Manual Translation)
+
 - Developer time: ~2 hours per update
 - Inconsistent quality
 - Often delayed or forgotten
 
 ### After (Automated with Jta)
+
 - Developer time: 0 (fully automated)
 - Consistent high quality (Agentic reflection)
 - Instant updates
@@ -397,11 +413,13 @@ jobs:
 ### Annual Savings Example
 
 Assuming:
+
 - 50 updates to en.json per year
 - 5 target languages
 - ~$0.20 per update (incremental)
 
 **Cost:**
+
 - API: $10/year
 - Developer time saved: 100 hours/year
 - ROI: Massive (100+ hours saved vs $10 API cost)
@@ -411,6 +429,7 @@ Assuming:
 ### Workflow Fails: "API key not found"
 
 **Solution:**
+
 ```bash
 # Ensure secret is set correctly in GitHub
 # Settings → Secrets → Actions → OPENAI_API_KEY
@@ -418,29 +437,29 @@ Assuming:
 
 ### Workflow Fails: "Permission denied"
 
-**Solution:**
-Add write permissions to workflow:
+**Solution:** Add write permissions to workflow:
+
 ```yaml
 permissions:
-  contents: write  # Allow pushing commits
+  contents: write # Allow pushing commits
 ```
 
 ### Rate Limiting
 
-**Solution:**
-Add retry logic or reduce concurrency:
+**Solution:** Add retry logic or reduce concurrency:
+
 ```yaml
-      - name: Translate with retry
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          for i in {1..3}; do
-            jta locales/en.json --to zh,ja,ko,es,fr \
-              --incremental \
-              --batch-size 10 \
-              --concurrency 1 \
-              -y && break
-            echo "Retry $i/3 after rate limit..."
-            sleep 60
-          done
+- name: Translate with retry
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  run: |
+    for i in {1..3}; do
+      jta locales/en.json --to zh,ja,ko,es,fr \
+        --incremental \
+        --batch-size 10 \
+        --concurrency 1 \
+        -y && break
+      echo "Retry $i/3 after rate limit..."
+      sleep 60
+    done
 ```

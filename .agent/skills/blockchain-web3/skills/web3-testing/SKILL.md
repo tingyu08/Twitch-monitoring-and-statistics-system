@@ -1,11 +1,15 @@
 ---
 name: web3-testing
-description: Test smart contracts comprehensively using Hardhat and Foundry with unit tests, integration tests, and mainnet forking. Use when testing Solidity contracts, setting up blockchain test suites, or validating DeFi protocols.
+description:
+  Test smart contracts comprehensively using Hardhat and Foundry with unit tests, integration tests,
+  and mainnet forking. Use when testing Solidity contracts, setting up blockchain test suites, or
+  validating DeFi protocols.
 ---
 
 # Web3 Smart Contract Testing
 
-Master comprehensive testing strategies for smart contracts using Hardhat, Foundry, and advanced testing patterns.
+Master comprehensive testing strategies for smart contracts using Hardhat, Foundry, and advanced
+testing patterns.
 
 ## When to Use This Skill
 
@@ -32,30 +36,30 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
-      }
-    }
+        runs: 200,
+      },
+    },
   },
   networks: {
     hardhat: {
       forking: {
         url: process.env.MAINNET_RPC_URL,
-        blockNumber: 15000000
-      }
+        blockNumber: 15000000,
+      },
     },
     goerli: {
       url: process.env.GOERLI_RPC_URL,
-      accounts: [process.env.PRIVATE_KEY]
-    }
+      accounts: [process.env.PRIVATE_KEY],
+    },
   },
   gasReporter: {
     enabled: true,
-    currency: 'USD',
-    coinmarketcap: process.env.COINMARKETCAP_API_KEY
+    currency: "USD",
+    coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY
-  }
+    apiKey: process.env.ETHERSCAN_API_KEY,
+  },
 };
 ```
 
@@ -94,17 +98,20 @@ describe("Token Contract", function () {
     it("Should transfer tokens between accounts", async function () {
       const { token, owner, addr1 } = await loadFixture(deployTokenFixture);
 
-      await expect(token.transfer(addr1.address, 50))
-        .to.changeTokenBalances(token, [owner, addr1], [-50, 50]);
+      await expect(token.transfer(addr1.address, 50)).to.changeTokenBalances(
+        token,
+        [owner, addr1],
+        [-50, 50]
+      );
     });
 
     it("Should fail if sender doesn't have enough tokens", async function () {
       const { token, addr1 } = await loadFixture(deployTokenFixture);
       const initialBalance = await token.balanceOf(addr1.address);
 
-      await expect(
-        token.connect(addr1).transfer(owner.address, 1)
-      ).to.be.revertedWith("Insufficient balance");
+      await expect(token.connect(addr1).transfer(owner.address, 1)).to.be.revertedWith(
+        "Insufficient balance"
+      );
     });
 
     it("Should emit Transfer event", async function () {
@@ -219,6 +226,7 @@ contract TokenTest is Test {
 ## Advanced Testing Patterns
 
 ### Snapshot and Revert
+
 ```javascript
 describe("Complex State Changes", function () {
   let snapshotId;
@@ -242,6 +250,7 @@ describe("Complex State Changes", function () {
 ```
 
 ### Mainnet Forking
+
 ```javascript
 describe("Mainnet Fork Tests", function () {
   let uniswapRouter, dai, usdc;
@@ -249,12 +258,14 @@ describe("Mainnet Fork Tests", function () {
   before(async function () {
     await network.provider.request({
       method: "hardhat_reset",
-      params: [{
-        forking: {
-          jsonRpcUrl: process.env.MAINNET_RPC_URL,
-          blockNumber: 15000000
-        }
-      }]
+      params: [
+        {
+          forking: {
+            jsonRpcUrl: process.env.MAINNET_RPC_URL,
+            blockNumber: 15000000,
+          },
+        },
+      ],
     });
 
     // Connect to existing mainnet contracts
@@ -263,10 +274,7 @@ describe("Mainnet Fork Tests", function () {
       "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
     );
 
-    dai = await ethers.getContractAt(
-      "IERC20",
-      "0x6B175474E89094C44Da98b954EedeAC495271d0F"
-    );
+    dai = await ethers.getContractAt("IERC20", "0x6B175474E89094C44Da98b954EedeAC495271d0F");
   });
 
   it("Should swap on Uniswap", async function () {
@@ -276,13 +284,14 @@ describe("Mainnet Fork Tests", function () {
 ```
 
 ### Impersonating Accounts
+
 ```javascript
 it("Should impersonate whale account", async function () {
   const whaleAddress = "0x...";
 
   await network.provider.request({
     method: "hardhat_impersonateAccount",
-    params: [whaleAddress]
+    params: [whaleAddress],
   });
 
   const whale = await ethers.getSigner(whaleAddress);
@@ -337,7 +346,7 @@ npx hardhat coverage
 // Verify on Etherscan
 await hre.run("verify:verify", {
   address: contractAddress,
-  constructorArguments: [arg1, arg2]
+  constructorArguments: [arg1, arg2],
 });
 ```
 
@@ -362,7 +371,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '16'
+          node-version: "16"
 
       - run: npm install
       - run: npx hardhat compile

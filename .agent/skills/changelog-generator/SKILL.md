@@ -1,11 +1,15 @@
 ---
 name: changelog-generator
-description: Automatically creates user-facing changelogs from git commits by analyzing commit history, categorizing changes, and transforming technical commits into clear, customer-friendly release notes. Turns hours of manual changelog writing into minutes of automated generation.
+description:
+  Automatically creates user-facing changelogs from git commits by analyzing commit history,
+  categorizing changes, and transforming technical commits into clear, customer-friendly release
+  notes. Turns hours of manual changelog writing into minutes of automated generation.
 ---
 
 # Changelog Generator
 
-This skill transforms technical git commits into polished, user-friendly changelogs that your customers and users will actually understand and appreciate.
+This skill transforms technical git commits into polished, user-friendly changelogs that your
+customers and users will actually understand and appreciate.
 
 ## When to Use This Skill
 
@@ -20,7 +24,8 @@ This skill transforms technical git commits into polished, user-friendly changel
 ## What This Skill Does
 
 1. **Scans Git History**: Analyzes commits from a specific time period or between versions
-2. **Categorizes Changes**: Groups commits into logical categories (features, improvements, bug fixes, breaking changes, security)
+2. **Categorizes Changes**: Groups commits into logical categories (features, improvements, bug
+   fixes, breaking changes, security)
 3. **Translates Technical → User-Friendly**: Converts developer commits into customer language
 4. **Formats Professionally**: Creates clean, structured changelog entries
 5. **Filters Noise**: Excludes internal commits (refactoring, tests, etc.)
@@ -53,7 +58,7 @@ Create a changelog for all commits between March 1 and March 15
 ### With Custom Guidelines
 
 ```
-Create a changelog for commits since v2.4.0, using my changelog 
+Create a changelog for commits since v2.4.0, using my changelog
 guidelines from CHANGELOG_STYLE.md
 ```
 
@@ -62,16 +67,17 @@ guidelines from CHANGELOG_STYLE.md
 **User**: "Create a changelog for commits from the past 7 days"
 
 **Output**:
+
 ```markdown
 # Updates - Week of March 10, 2024
 
 ## ✨ New Features
 
-- **Team Workspaces**: Create separate workspaces for different 
-  projects. Invite team members and keep everything organized.
+- **Team Workspaces**: Create separate workspaces for different projects. Invite team members and
+  keep everything organized.
 
-- **Keyboard Shortcuts**: Press ? to see all available shortcuts. 
-  Navigate faster without touching your mouse.
+- **Keyboard Shortcuts**: Press ? to see all available shortcuts. Navigate faster without touching
+  your mouse.
 
 ## 🔧 Improvements
 
@@ -101,4 +107,3 @@ guidelines from CHANGELOG_STYLE.md
 - Writing app store update descriptions
 - Generating email updates for users
 - Creating social media announcement posts
-

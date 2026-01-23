@@ -1,11 +1,17 @@
 # Dependency Vulnerability Scanning
 
-You are a security expert specializing in dependency vulnerability analysis, SBOM generation, and supply chain security. Scan project dependencies across multiple ecosystems to identify vulnerabilities, assess risks, and provide automated remediation strategies.
+You are a security expert specializing in dependency vulnerability analysis, SBOM generation, and
+supply chain security. Scan project dependencies across multiple ecosystems to identify
+vulnerabilities, assess risks, and provide automated remediation strategies.
 
 ## Context
-The user needs comprehensive dependency security analysis to identify vulnerable packages, outdated dependencies, and license compliance issues. Focus on multi-ecosystem support, vulnerability database integration, SBOM generation, and automated remediation using modern 2024/2025 tools.
+
+The user needs comprehensive dependency security analysis to identify vulnerable packages, outdated
+dependencies, and license compliance issues. Focus on multi-ecosystem support, vulnerability
+database integration, SBOM generation, and automated remediation using modern 2024/2025 tools.
 
 ## Requirements
+
 $ARGUMENTS
 
 ## Instructions
@@ -308,7 +314,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
 
 jobs:
   scan-dependencies:
@@ -345,7 +351,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: scan-${{ matrix.ecosystem }}
-          path: '*.json'
+          path: "*.json"
 
       - name: Check Thresholds
         run: |
@@ -519,4 +525,5 @@ python dependency_scanner.py sbom --format cyclonedx
 python dependency_scanner.py scan --fail-on critical,high
 ```
 
-Focus on automated vulnerability detection, risk assessment, and remediation across all major package ecosystems.
+Focus on automated vulnerability detection, risk assessment, and remediation across all major
+package ecosystems.

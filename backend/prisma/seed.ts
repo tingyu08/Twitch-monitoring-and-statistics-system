@@ -10,8 +10,7 @@ import { PrismaLibSql } from "@prisma/adapter-libsql";
 import * as path from "path";
 
 // 建立 libSQL 適配器
-const databaseUrl =
-  process.env.DATABASE_URL || `file:${path.join(__dirname, "./dev.db")}`;
+const databaseUrl = process.env.DATABASE_URL || `file:${path.join(__dirname, "./dev.db")}`;
 const adapter = new PrismaLibSql({ url: databaseUrl });
 
 const prisma = new PrismaClient({ adapter });
@@ -67,8 +66,7 @@ async function main() {
       twitchUserId: "test_twitch_123",
       displayName: "TestStreamer",
       email: "test@example.com",
-      avatarUrl:
-        "https://static-cdn.jtvnw.net/jtv_user_pictures/test-profile_image-300x300.png",
+      avatarUrl: "https://static-cdn.jtvnw.net/jtv_user_pictures/test-profile_image-300x300.png",
     },
     {
       twitchUserId: "56889365",
@@ -226,9 +224,7 @@ async function main() {
       },
     });
     createdChannels[mockChannel.id] = mockChannel.id;
-    console.log(
-      `  ✅ Mock 頻道: ${mockChannel.channelName} (${mockChannel.id})`
-    );
+    console.log(`  ✅ Mock 頻道: ${mockChannel.channelName} (${mockChannel.id})`);
   }
 
   // ========== 建立開台紀錄（90 天）==========
@@ -278,9 +274,7 @@ async function main() {
       const sessionsThisWeek = randomInt(3, 5);
 
       for (let i = 0; i < sessionsThisWeek; i++) {
-        const weekStart = new Date(
-          ninetyDaysAgo.getTime() + week * 7 * 24 * 60 * 60 * 1000
-        );
+        const weekStart = new Date(ninetyDaysAgo.getTime() + week * 7 * 24 * 60 * 60 * 1000);
         const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
         const startedAt = randomDateInRange(weekStart, weekEnd);
@@ -335,13 +329,9 @@ async function main() {
 
     let runningSubsTotal = randomInt(500, 2000);
     for (const [dateStr, daySessions] of sessionsByDate) {
-      const totalSeconds = daySessions.reduce(
-        (sum, s) => sum + s.durationSeconds,
-        0
-      );
+      const totalSeconds = daySessions.reduce((sum, s) => sum + s.durationSeconds, 0);
       const avgViewers = Math.round(
-        daySessions.reduce((sum, s) => sum + s.avgViewers, 0) /
-          daySessions.length
+        daySessions.reduce((sum, s) => sum + s.avgViewers, 0) / daySessions.length
       );
       const peakViewers = Math.max(...daySessions.map((s) => s.peakViewers));
       const subsDelta = randomInt(-5, 20);
@@ -435,18 +425,12 @@ async function main() {
     }> = [];
 
     for (let day = 0; day < 30; day++) {
-      const baseDate = new Date(
-        thirtyDaysAgo.getTime() + day * 24 * 60 * 60 * 1000
-      );
+      const baseDate = new Date(thirtyDaysAgo.getTime() + day * 24 * 60 * 60 * 1000);
       const msgCount = randomInt(5, 30);
 
       for (let i = 0; i < msgCount; i++) {
         const timestamp = new Date(baseDate);
-        timestamp.setHours(
-          randomInt(19, 23),
-          randomInt(0, 59),
-          randomInt(0, 59)
-        );
+        timestamp.setHours(randomInt(19, 23), randomInt(0, 59), randomInt(0, 59));
 
         messages.push({
           viewerId: capooViewer.id,
@@ -487,12 +471,8 @@ async function main() {
     }> = [];
 
     for (const [dateStr, dayMessages] of messagesByDate) {
-      const chatCount = dayMessages.filter(
-        (m) => m.messageType === "CHAT"
-      ).length;
-      const cheerCount = dayMessages.filter(
-        (m) => m.messageType === "CHEER"
-      ).length;
+      const chatCount = dayMessages.filter((m) => m.messageType === "CHAT").length;
+      const cheerCount = dayMessages.filter((m) => m.messageType === "CHEER").length;
 
       messageAggs.push({
         viewerId: capooViewer.id,
@@ -534,18 +514,12 @@ async function main() {
       const sampleMsgs = ["Hello!", "Nice!", "哈囉", "LOL", "GG", "+1"];
 
       for (let day = 0; day < 30; day++) {
-        const baseDate = new Date(
-          thirtyDaysAgo.getTime() + day * 24 * 60 * 60 * 1000
-        );
+        const baseDate = new Date(thirtyDaysAgo.getTime() + day * 24 * 60 * 60 * 1000);
         const msgCount = randomInt(3, 15);
 
         for (let i = 0; i < msgCount; i++) {
           const timestamp = new Date(baseDate);
-          timestamp.setHours(
-            randomInt(19, 23),
-            randomInt(0, 59),
-            randomInt(0, 59)
-          );
+          timestamp.setHours(randomInt(19, 23), randomInt(0, 59), randomInt(0, 59));
 
           mockMessages.push({
             viewerId: yourViewer.id,
@@ -585,12 +559,8 @@ async function main() {
       }> = [];
 
       for (const [dateStr, dayMsgs] of mockMsgsByDate) {
-        const chatCount = dayMsgs.filter(
-          (m) => m.messageType === "CHAT"
-        ).length;
-        const cheerCount = dayMsgs.filter(
-          (m) => m.messageType === "CHEER"
-        ).length;
+        const chatCount = dayMsgs.filter((m) => m.messageType === "CHAT").length;
+        const cheerCount = dayMsgs.filter((m) => m.messageType === "CHEER").length;
 
         mockMsgAggs.push({
           viewerId: yourViewer.id,
@@ -649,9 +619,8 @@ async function main() {
   console.log("📊 計算 Lifetime Stats...");
 
   // 動態導入 Service 避免頂層 await 或環境問題
-  const { lifetimeStatsAggregator } = await import(
-    "../src/services/lifetime-stats-aggregator.service"
-  );
+  const { lifetimeStatsAggregator } =
+    await import("../src/services/lifetime-stats-aggregator.service");
 
   // 為主要測試觀眾 (Viewer) 和 Mock 頻道聚合數據
   if (yourViewer) {

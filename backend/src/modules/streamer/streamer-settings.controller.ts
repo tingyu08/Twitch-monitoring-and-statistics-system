@@ -8,9 +8,7 @@ export class StreamerSettingsController {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
-        return res
-          .status(403)
-          .json({ error: "Not a streamer or not authenticated" });
+        return res.status(403).json({ error: "Not a streamer or not authenticated" });
       }
       const settings = await streamerSettingsService.getChannelInfo(streamerId);
       if (!settings) {
@@ -28,14 +26,9 @@ export class StreamerSettingsController {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
-        return res
-          .status(403)
-          .json({ error: "Not a streamer or not authenticated" });
+        return res.status(403).json({ error: "Not a streamer or not authenticated" });
       }
-      const success = await streamerSettingsService.updateChannelInfo(
-        streamerId,
-        req.body,
-      );
+      const success = await streamerSettingsService.updateChannelInfo(streamerId, req.body);
       if (success) {
         return res.json({ success: true });
       }
@@ -63,9 +56,7 @@ export class StreamerSettingsController {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
-        return res
-          .status(403)
-          .json({ error: "Not a streamer or not authenticated" });
+        return res.status(403).json({ error: "Not a streamer or not authenticated" });
       }
       const templates = await streamerSettingsService.getTemplates(streamerId);
       return res.json(templates);
@@ -80,14 +71,9 @@ export class StreamerSettingsController {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
-        return res
-          .status(403)
-          .json({ error: "Not a streamer or not authenticated" });
+        return res.status(403).json({ error: "Not a streamer or not authenticated" });
       }
-      const template = await streamerSettingsService.createTemplate(
-        streamerId,
-        req.body,
-      );
+      const template = await streamerSettingsService.createTemplate(streamerId, req.body);
       return res.status(201).json(template);
     } catch (error) {
       console.error("Create template error:", error);
@@ -105,9 +91,7 @@ export class StreamerSettingsController {
     try {
       const streamerId = req.user?.streamerId;
       if (!streamerId) {
-        return res
-          .status(403)
-          .json({ error: "Not a streamer or not authenticated" });
+        return res.status(403).json({ error: "Not a streamer or not authenticated" });
       }
       const templateId = req.params.id;
       await streamerSettingsService.deleteTemplate(streamerId, templateId);

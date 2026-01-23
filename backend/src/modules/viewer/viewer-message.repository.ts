@@ -1,9 +1,5 @@
 import { prisma } from "../../db/prisma";
-import {
-  ParsedMessage,
-  RawChatMessage,
-  MessageParser,
-} from "../../utils/message-parser";
+import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/message-parser";
 import { logger } from "../../utils/logger";
 
 // 可以接受 ParsedMessage 或 RawChatMessage
@@ -17,15 +13,9 @@ function isRawChatMessage(msg: MessageInput): msg is RawChatMessage {
 // ========== 快取機制（減少 DB 查詢，優化 RAM）==========
 
 // Viewer 快取：twitchUserId -> viewerId（或 null 表示非註冊用戶）
-const viewerCache = new Map<
-  string,
-  { viewerId: string | null; expiry: number }
->();
+const viewerCache = new Map<string, { viewerId: string | null; expiry: number }>();
 // Channel 快取：channelName -> channelId
-const channelCache = new Map<
-  string,
-  { channelId: string | null; expiry: number }
->();
+const channelCache = new Map<string, { channelId: string | null; expiry: number }>();
 // 快取過期時間：5 分鐘
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -33,9 +23,7 @@ export class ViewerMessageRepository {
   /**
    * 使用快取獲取 Viewer ID（減少 DB 查詢）
    */
-  private async getCachedViewerId(
-    twitchUserId: string
-  ): Promise<string | null> {
+  private async getCachedViewerId(twitchUserId: string): Promise<string | null> {
     const now = Date.now();
     const cached = viewerCache.get(twitchUserId);
 
@@ -64,9 +52,7 @@ export class ViewerMessageRepository {
   /**
    * 使用快取獲取 Channel ID（減少 DB 查詢）
    */
-  private async getCachedChannelId(
-    channelName: string
-  ): Promise<string | null> {
+  private async getCachedChannelId(channelName: string): Promise<string | null> {
     const now = Date.now();
     const normalizedName = channelName.toLowerCase();
     const cached = channelCache.get(normalizedName);
@@ -98,10 +84,7 @@ export class ViewerMessageRepository {
    * @param channelName Twitch 頻道名稱 (小寫)
    * @param message 解析後的訊息（可以是 ParsedMessage 或 RawChatMessage）
    */
-  async saveMessage(
-    channelName: string,
-    messageInput: MessageInput
-  ): Promise<void> {
+  async saveMessage(channelName: string, messageInput: MessageInput): Promise<void> {
     // 統一轉換為 ParsedMessage
     const message: ParsedMessage = isRawChatMessage(messageInput)
       ? MessageParser.fromRawMessage(messageInput)
@@ -162,14 +145,9 @@ export class ViewerMessageRepository {
         },
         update: {
           totalMessages: { increment: 1 },
-          chatMessages:
-            message.messageType === "CHAT" ? { increment: 1 } : undefined,
-          subscriptions:
-            message.messageType === "SUBSCRIPTION"
-              ? { increment: 1 }
-              : undefined,
-          cheers:
-            message.messageType === "CHEER" ? { increment: 1 } : undefined,
+          chatMessages: message.messageType === "CHAT" ? { increment: 1 } : undefined,
+          subscriptions: message.messageType === "SUBSCRIPTION" ? { increment: 1 } : undefined,
+          cheers: message.messageType === "CHEER" ? { increment: 1 } : undefined,
           raids: message.messageType === "RAID" ? { increment: 1 } : undefined,
           totalBits: message.bits > 0 ? { increment: message.bits } : undefined,
         },
@@ -194,26 +172,19 @@ export class ViewerMessageRepository {
         },
         update: {
           messageCount: { increment: 1 },
-          emoteCount: message.emotes
-            ? { increment: message.emotes.length }
-            : undefined,
+          emoteCount: message.emotes ? { increment: message.emotes.length } : undefined,
         },
       });
 
       // 5. 觸發觀看時間重新計算（非同步，不阻塞訊息儲存）
-      import("../../services/watch-time.service").then(
-        ({ updateViewerWatchTime }) => {
-          updateViewerWatchTime(viewerId, channelId, message.timestamp).catch(
-            (err) =>
-              logger.error("ViewerMessage", "Failed to update watch time", err)
-          );
-        }
-      );
+      import("../../services/watch-time.service").then(({ updateViewerWatchTime }) => {
+        updateViewerWatchTime(viewerId, channelId, message.timestamp).catch((err) =>
+          logger.error("ViewerMessage", "Failed to update watch time", err)
+        );
+      });
 
       // 6. 觸發 WebSocket 廣播 (即時更新)
-      const { webSocketGateway } = await import(
-        "../../services/websocket.gateway"
-      );
+      const { webSocketGateway } = await import("../../services/websocket.gateway");
       webSocketGateway.broadcastChannelStats(channelId, {
         channelId,
         messageCount: 1, // 表示這是一條新消息，前端累加

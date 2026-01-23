@@ -18,8 +18,7 @@ import * as path from "path";
 
 // Helper: 從 request 獲取 viewerId
 const getViewerFromRequest = async (req: Request) => {
-  const twitchUserId = (req as { user?: { twitchUserId?: string } }).user
-    ?.twitchUserId;
+  const twitchUserId = (req as { user?: { twitchUserId?: string } }).user?.twitchUserId;
 
   if (!twitchUserId) {
     return null;
@@ -46,9 +45,7 @@ export class ViewerPrivacyController {
         return;
       }
 
-      const settings = await privacyConsentService.getAllConsentStatus(
-        viewer.id
-      );
+      const settings = await privacyConsentService.getAllConsentStatus(viewer.id);
 
       res.json({
         success: true,
@@ -91,9 +88,7 @@ export class ViewerPrivacyController {
         "collectRadarAnalysis",
       ];
 
-      const invalidFields = Object.keys(settings).filter(
-        (key) => !validFields.includes(key)
-      );
+      const invalidFields = Object.keys(settings).filter((key) => !validFields.includes(key));
 
       if (invalidFields.length > 0) {
         res.status(400).json({
@@ -103,10 +98,7 @@ export class ViewerPrivacyController {
       }
 
       // 更新設定
-      const updatedConsent = await privacyConsentService.updateConsent(
-        viewer.id,
-        settings
-      );
+      const updatedConsent = await privacyConsentService.updateConsent(viewer.id, settings);
 
       // 記錄審計日誌
       await prisma.privacyAuditLog.create({
@@ -147,9 +139,7 @@ export class ViewerPrivacyController {
       }
 
       // 建立預設同意記錄
-      const consent = await privacyConsentService.createDefaultConsent(
-        viewer.id
-      );
+      const consent = await privacyConsentService.createDefaultConsent(viewer.id);
 
       // 更新觀眾的同意時間
       await prisma.viewer.update({
@@ -396,9 +386,7 @@ export class ViewerPrivacyController {
         return;
       }
 
-      const deletionRequest = await accountDeletionService.getDeletionStatus(
-        viewer.id
-      );
+      const deletionRequest = await accountDeletionService.getDeletionStatus(viewer.id);
 
       if (!deletionRequest) {
         res.json({

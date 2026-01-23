@@ -128,9 +128,7 @@ healthRoutes.get("/listeners", (_req: Request, res: Response) => {
  * GET /api/health/distributed
  */
 healthRoutes.get("/distributed", async (_req: Request, res: Response) => {
-  const { distributedCoordinator } = await import(
-    "../../services/distributed-coordinator"
-  );
+  const { distributedCoordinator } = await import("../../services/distributed-coordinator");
 
   const instances = await distributedCoordinator.getAllInstances();
   const locks = await distributedCoordinator.getChannelLocks();

@@ -29,10 +29,7 @@ export class LifetimeStatsAggregatorService {
   /**
    * 計算並更新特定觀眾在特定頻道的全時段統計
    */
-  public async aggregateStats(
-    viewerId: string,
-    channelId: string
-  ): Promise<void> {
+  public async aggregateStats(viewerId: string, channelId: string): Promise<void> {
     try {
       const stats = await this.calculateStats(viewerId, channelId);
 
@@ -53,15 +50,9 @@ export class LifetimeStatsAggregatorService {
         },
       });
 
-      logger.info(
-        "LifetimeStats",
-        `Aggregated stats for viewer ${viewerId} channel ${channelId}`
-      );
+      logger.info("LifetimeStats", `Aggregated stats for viewer ${viewerId} channel ${channelId}`);
     } catch (error) {
-      logger.error(
-        "LifetimeStats",
-        `Error aggregating stats for viewer ${viewerId}: ${error}`
-      );
+      logger.error("LifetimeStats", `Error aggregating stats for viewer ${viewerId}: ${error}`);
       throw error;
     }
   }
@@ -69,10 +60,7 @@ export class LifetimeStatsAggregatorService {
   /**
    * 內部計算邏輯
    */
-  private async calculateStats(
-    viewerId: string,
-    channelId: string
-  ): Promise<LifetimeStatsResult> {
+  private async calculateStats(viewerId: string, channelId: string): Promise<LifetimeStatsResult> {
     // 1. 獲取所有日誌統計
     const dailyStats = await prisma.viewerChannelDailyStat.findMany({
       where: { viewerId, channelId },
@@ -87,10 +75,7 @@ export class LifetimeStatsAggregatorService {
 
     // ========== 基礎統計 ==========
 
-    const totalWatchTimeSeconds = dailyStats.reduce(
-      (sum, stat) => sum + stat.watchSeconds,
-      0
-    );
+    const totalWatchTimeSeconds = dailyStats.reduce((sum, stat) => sum + stat.watchSeconds, 0);
     const totalWatchTimeMinutes = Math.floor(totalWatchTimeSeconds / 60);
     // 我們可以用 dailyStats 的數量作為 "totalSessions" 的近似值 (活躍天數)
     // 或者如果有 streamSessions 關聯會更準確，但那是 next level
@@ -99,8 +84,7 @@ export class LifetimeStatsAggregatorService {
       totalSessions > 0 ? Math.floor(totalWatchTimeMinutes / totalSessions) : 0;
 
     const firstWatchedAt = dailyStats.length > 0 ? dailyStats[0].date : null;
-    const lastWatchedAt =
-      dailyStats.length > 0 ? dailyStats[dailyStats.length - 1].date : null;
+    const lastWatchedAt = dailyStats.length > 0 ? dailyStats[dailyStats.length - 1].date : null;
 
     // ========== 訊息統計 ==========
 
@@ -122,18 +106,13 @@ export class LifetimeStatsAggregatorService {
 
     // 合併兩個來源的日期，找出所有活躍日期 (去重並排序)
     const activeDatesSet = new Set<string>();
-    dailyStats.forEach((d) =>
-      activeDatesSet.add(d.date.toISOString().split("T")[0])
-    );
-    messageAggs.forEach((m) =>
-      activeDatesSet.add(m.date.toISOString().split("T")[0])
-    );
+    dailyStats.forEach((d) => activeDatesSet.add(d.date.toISOString().split("T")[0]));
+    messageAggs.forEach((m) => activeDatesSet.add(m.date.toISOString().split("T")[0]));
 
     const activeDates = Array.from(activeDatesSet).sort();
 
     const trackingDays = activeDates.length;
-    const trackingStartedAt =
-      activeDates.length > 0 ? new Date(activeDates[0]) : new Date();
+    const trackingStartedAt = activeDates.length > 0 ? new Date(activeDates[0]) : new Date();
 
     // 計算 Streak
     let longestStreak = 0;
@@ -166,9 +145,7 @@ export class LifetimeStatsAggregatorService {
       // 檢查 Last Active Date 是否是今天或昨天，決定 Current Streak
       const lastActive = new Date(activeDates[activeDates.length - 1]);
       const now = new Date();
-      const diffToNow = Math.floor(
-        (now.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const diffToNow = Math.floor((now.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
 
       if (diffToNow <= 1) {
         currentStreak = tempStreak;
@@ -183,12 +160,8 @@ export class LifetimeStatsAggregatorService {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-    const activeDaysLast30 = activeDates.filter(
-      (d) => new Date(d) >= thirtyDaysAgo
-    ).length;
-    const activeDaysLast90 = activeDates.filter(
-      (d) => new Date(d) >= ninetyDaysAgo
-    ).length;
+    const activeDaysLast30 = activeDates.filter((d) => new Date(d) >= thirtyDaysAgo).length;
+    const activeDaysLast90 = activeDates.filter((d) => new Date(d) >= ninetyDaysAgo).length;
 
     // 最活躍月份
     const monthCounts = new Map<string, number>();
@@ -249,9 +222,7 @@ export class LifetimeStatsAggregatorService {
     const sortedByWatchTime = [...allStats].sort(
       (a, b) => a.totalWatchTimeMinutes - b.totalWatchTimeMinutes
     );
-    const sortedByMessages = [...allStats].sort(
-      (a, b) => a.totalMessages - b.totalMessages
-    );
+    const sortedByMessages = [...allStats].sort((a, b) => a.totalMessages - b.totalMessages);
 
     const updates = [];
 

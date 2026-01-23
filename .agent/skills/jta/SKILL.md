@@ -1,6 +1,9 @@
 ---
 name: jta
-description: Translate JSON i18n files to multiple languages with AI-powered quality optimization. Use when user mentions translating JSON, i18n files, internationalization, locale files, or needs to convert language files to other languages.
+description:
+  Translate JSON i18n files to multiple languages with AI-powered quality optimization. Use when
+  user mentions translating JSON, i18n files, internationalization, locale files, or needs to
+  convert language files to other languages.
 version: 1.0.0
 license: Complete terms in LICENSE.txt
 allowed-tools: Read, Write, Bash, Glob
@@ -20,8 +23,10 @@ AI-powered JSON internationalization file translator with Agentic reflection mec
 
 ## Core Capabilities
 
-1. **Agentic Translation**: AI translates, evaluates, and improves its own work (3x API calls per batch)
-2. **Smart Terminology**: Automatically detects and maintains consistent terms (brand names, technical terms)
+1. **Agentic Translation**: AI translates, evaluates, and improves its own work (3x API calls per
+   batch)
+2. **Smart Terminology**: Automatically detects and maintains consistent terms (brand names,
+   technical terms)
 3. **Format Protection**: Preserves `{variables}`, `{{placeholders}}`, HTML tags, URLs, Markdown
 4. **Incremental Mode**: Only translates new/changed content (saves 80-90% API cost on updates)
 5. **27 Languages**: Including RTL languages (Arabic, Hebrew, Persian, Urdu)
@@ -114,6 +119,7 @@ Ask user to confirm which file to translate if multiple found.
 ### Step 5: Determine translation requirements
 
 Ask user (if not specified in their request):
+
 - Target languages (e.g., "zh,ja,ko")
 - Whether to use incremental mode (recommended for updates)
 - Output location preference
@@ -173,6 +179,7 @@ done
 ### Step 8: Report to user
 
 Show the user:
+
 - Translation statistics (total items, success rate, API calls, duration)
 - Location of output files
 - Any errors or warnings
@@ -191,6 +198,7 @@ Jta automatically creates a `.jta/` directory to store terminology:
 ```
 
 **terminology.json** structure:
+
 ```json
 {
   "version": "1.0",
@@ -207,30 +215,35 @@ Users can manually edit these files for custom terminology.
 **Note:** Always include `$PROVIDER_FLAG` (from Step 3) in your commands.
 
 ### Pattern 1: First-time translation
+
 ```bash
 # User: "Translate my en.json to Chinese and Japanese"
 jta locales/en.json --to zh,ja -y $PROVIDER_FLAG
 ```
 
 ### Pattern 2: Update existing translations
+
 ```bash
 # User: "I added new keys to en.json, update the translations"
 jta locales/en.json --to zh,ja --incremental -y $PROVIDER_FLAG
 ```
 
 ### Pattern 3: Translate specific sections
+
 ```bash
 # User: "Only translate the settings and user sections"
 jta en.json --to zh --keys "settings.**,user.**" $PROVIDER_FLAG
 ```
 
 ### Pattern 4: High-quality translation
+
 ```bash
 # User: "Use the best model for highest quality"
 jta en.json --to zh --provider anthropic --model claude-sonnet-4-5
 ```
 
 ### Pattern 5: RTL languages
+
 ```bash
 # User: "Translate to Arabic and Hebrew"
 jta en.json --to ar,he -y $PROVIDER_FLAG
@@ -240,11 +253,14 @@ jta en.json --to ar,he -y $PROVIDER_FLAG
 ## Error Handling
 
 ### Error: "jta: command not found"
+
 - Run the installation script from Step 2
 - Verify with `jta --version`
 
 ### Error: "API key not set"
+
 Prompt user:
+
 ```
 Jta requires an AI provider API key. Please set one of:
 
@@ -262,19 +278,23 @@ For Google Gemini:
 ```
 
 ### Error: "Rate limit exceeded"
+
 ```bash
 # Reduce batch size and concurrency
 jta en.json --to zh --batch-size 10 --concurrency 1
 ```
 
 ### Error: "Invalid JSON"
+
 ```bash
 # Validate source file
 jq . source.json
 ```
 
 ### Error: Translation quality issues
+
 1. Try a better model:
+
    ```bash
    jta en.json --to zh --provider anthropic --model claude-sonnet-4-5
    ```
@@ -300,13 +320,16 @@ jq . source.json
 27 languages with full support:
 
 **Left-to-Right (LTR):**
+
 - European: en, es, fr, de, it, pt, ru, nl, pl, tr
 - Asian: zh, zh-TW, ja, ko, th, vi, id, ms, hi, bn, si, ne, my
 
 **Right-to-Left (RTL):**
+
 - Middle Eastern: ar, fa, he, ur
 
 View all supported languages:
+
 ```bash
 jta --list-languages
 ```
@@ -314,11 +337,13 @@ jta --list-languages
 ## Output Format
 
 Jta produces:
+
 1. **Translated JSON files**: Same structure as source, with translations
 2. **Statistics**: Printed to console
 3. **Terminology files**: In `.jta/` directory for consistency
 
 Always inform the user of:
+
 - Number of items translated
 - Success/failure count
 - Output file locations

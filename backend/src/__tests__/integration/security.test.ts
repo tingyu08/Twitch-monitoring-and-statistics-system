@@ -58,18 +58,12 @@ describe("Story 3.4: Security & Access Control", () => {
 
   describe("CORS Configuration", () => {
     it("should allow requests from configured origin", async () => {
-      const res = await request(app)
-        .get("/public")
-        .set("Origin", "http://localhost:3000");
-      expect(res.headers["access-control-allow-origin"]).toBe(
-        "http://localhost:3000"
-      );
+      const res = await request(app).get("/public").set("Origin", "http://localhost:3000");
+      expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
     });
 
     it("should allow credentials", async () => {
-      const res = await request(app)
-        .get("/public")
-        .set("Origin", "http://localhost:3000");
+      const res = await request(app).get("/public").set("Origin", "http://localhost:3000");
       expect(res.headers["access-control-allow-credentials"]).toBe("true");
     });
   });
@@ -82,9 +76,7 @@ describe("Story 3.4: Security & Access Control", () => {
     });
 
     it("should return 401 when invalid token provided", async () => {
-      const res = await request(app)
-        .get("/protected")
-        .set("Cookie", "auth_token=invalid_token");
+      const res = await request(app).get("/protected").set("Cookie", "auth_token=invalid_token");
       expect(res.status).toBe(401);
     });
 
@@ -95,9 +87,7 @@ describe("Story 3.4: Security & Access Control", () => {
         role: "streamer",
         streamerId: "1",
       });
-      const res = await request(app)
-        .get("/protected")
-        .set("Cookie", `auth_token=${token}`);
+      const res = await request(app).get("/protected").set("Cookie", `auth_token=${token}`);
       expect(res.status).toBe(200);
       expect(res.body.user.twitchUserId).toBe("test123");
     });
@@ -109,9 +99,7 @@ describe("Story 3.4: Security & Access Control", () => {
         role: "viewer",
         viewerId: "2",
       });
-      const res = await request(app)
-        .get("/protected")
-        .set("Cookie", `auth_token=${token}`);
+      const res = await request(app).get("/protected").set("Cookie", `auth_token=${token}`);
       expect(res.status).toBe(200);
       expect(res.body.user.role).toBe("viewer");
     });
@@ -125,9 +113,7 @@ describe("Story 3.4: Security & Access Control", () => {
         role: "streamer",
         streamerId: "1",
       });
-      const res = await request(app)
-        .get("/streamer-only")
-        .set("Cookie", `auth_token=${token}`);
+      const res = await request(app).get("/streamer-only").set("Cookie", `auth_token=${token}`);
       expect(res.status).toBe(200);
     });
 
@@ -138,9 +124,7 @@ describe("Story 3.4: Security & Access Control", () => {
         role: "viewer",
         viewerId: "1",
       });
-      const res = await request(app)
-        .get("/streamer-only")
-        .set("Cookie", `auth_token=${token}`);
+      const res = await request(app).get("/streamer-only").set("Cookie", `auth_token=${token}`);
       expect(res.status).toBe(403);
     });
 
@@ -151,9 +135,7 @@ describe("Story 3.4: Security & Access Control", () => {
         role: "streamer",
         streamerId: "1",
       });
-      const res = await request(app)
-        .get("/viewer-only")
-        .set("Cookie", `auth_token=${token}`);
+      const res = await request(app).get("/viewer-only").set("Cookie", `auth_token=${token}`);
       expect(res.status).toBe(200);
     });
 
@@ -164,9 +146,7 @@ describe("Story 3.4: Security & Access Control", () => {
         role: "viewer",
         viewerId: "1",
       });
-      const res = await request(app)
-        .get("/viewer-only")
-        .set("Cookie", `auth_token=${token}`);
+      const res = await request(app).get("/viewer-only").set("Cookie", `auth_token=${token}`);
       expect(res.status).toBe(200);
     });
   });

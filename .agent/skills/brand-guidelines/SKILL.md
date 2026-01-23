@@ -1,6 +1,8 @@
 ---
 name: brand-guidelines
-description: Apply brand colors and typography to artifacts. Use when brand colors, style guidelines, visual formatting, or company design standards apply. Ensures consistency across branded content.
+description:
+  Apply brand colors and typography to artifacts. Use when brand colors, style guidelines, visual
+  formatting, or company design standards apply. Ensures consistency across branded content.
 source: anthropics/skills
 license: Apache-2.0
 ---
@@ -9,11 +11,13 @@ license: Apache-2.0
 
 ## Purpose
 
-Apply consistent brand styling to any artifact: documents, presentations, web pages, or marketing materials.
+Apply consistent brand styling to any artifact: documents, presentations, web pages, or marketing
+materials.
 
 ## Core Brand Elements
 
 ### Colors
+
 Define your brand palette with CSS variables:
 
 ```css
@@ -29,15 +33,16 @@ Define your brand palette with CSS variables:
 ```
 
 ### Typography
+
 ```css
 /* Primary font for headings */
---font-display: 'Product Sans', 'Google Sans', system-ui;
+--font-display: "Product Sans", "Google Sans", system-ui;
 
 /* Body font */
---font-body: 'Roboto', 'Inter', -apple-system, sans-serif;
+--font-body: "Roboto", "Inter", -apple-system, sans-serif;
 
 /* Monospace for code */
---font-mono: 'Roboto Mono', 'Fira Code', monospace;
+--font-mono: "Roboto Mono", "Fira Code", monospace;
 
 /* Type scale */
 --text-xs: 0.75rem;
@@ -51,6 +56,7 @@ Define your brand palette with CSS variables:
 ```
 
 ### Spacing
+
 ```css
 --space-1: 0.25rem;
 --space-2: 0.5rem;
@@ -65,6 +71,7 @@ Define your brand palette with CSS variables:
 ## Application Examples
 
 ### Buttons
+
 ```css
 .btn-primary {
   background: var(--brand-primary);
@@ -77,17 +84,19 @@ Define your brand palette with CSS variables:
 ```
 
 ### Cards
+
 ```css
 .card {
   background: white;
   border: 1px solid var(--brand-light);
   border-radius: 8px;
   padding: var(--space-6);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 ```
 
 ### Headers
+
 ```css
 h1 {
   font-family: var(--font-display);
@@ -100,12 +109,14 @@ h1 {
 ## Document Templates
 
 ### Google Docs
+
 - Heading 1: Display font, 24pt, Brand Dark
 - Heading 2: Display font, 18pt, Brand Primary
 - Body: Body font, 11pt, Brand Text
 - Links: Brand Primary, underlined
 
 ### Presentations
+
 - Title slides: White text on Brand Primary background
 - Content slides: Brand Dark text on white
 - Accent elements: Brand Secondary or Accent

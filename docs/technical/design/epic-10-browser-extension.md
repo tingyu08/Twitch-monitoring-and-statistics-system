@@ -2,14 +2,16 @@
 
 ## 1. 目標
 
-開發 Chrome Extension，解決目前透過 IRC 聊天訊息推算觀看時間不準確的問題。Extension 將直接監聽 Twitch 網頁的播放器狀態，實現精確的「分鐘級」觀看紀錄。
+開發 Chrome
+Extension，解決目前透過 IRC 聊天訊息推算觀看時間不準確的問題。Extension 將直接監聽 Twitch 網頁的播放器狀態，實現精確的「分鐘級」觀看紀錄。
 
 ## 2. 架構 (Manifest V3)
 
 ### 2.1 核心元件
 
 - **Popup**: 顯示目前連線狀態、當前觀看的頻道統計、登入狀態。
-- **Content Script**: 注入 `twitch.tv/*`，監聽 DOM 與 `<video>` 標籤，判斷是否播放中、是否靜音、當前頻道 ID。
+- **Content Script**: 注入 `twitch.tv/*`，監聽 DOM 與 `<video>`
+  標籤，判斷是否播放中、是否靜音、當前頻道 ID。
 - **Background Service Worker**: 負責定時匯總數據，並安全地傳送到 Bmad Backend。
 
 ### 2.2 權限需求

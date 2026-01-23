@@ -1,6 +1,8 @@
 ---
 name: jira-issues
-description: Create, update, and manage Jira issues from natural language. Use when the user wants to log bugs, create tickets, update issue status, or manage their Jira backlog.
+description:
+  Create, update, and manage Jira issues from natural language. Use when the user wants to log bugs,
+  create tickets, update issue status, or manage their Jira backlog.
 license: MIT
 ---
 
@@ -11,13 +13,17 @@ Create and manage Jira issues using the Jira REST API or MCP.
 ## Setup
 
 ### Option 1: Jira MCP Server
+
 Install the Jira MCP server for seamless integration:
+
 ```bash
 npx @anthropic/create-mcp-server jira
 ```
 
 ### Option 2: Direct API
+
 Set environment variables:
+
 ```bash
 export JIRA_BASE_URL="https://yourcompany.atlassian.net"
 export JIRA_EMAIL="your-email@company.com"
@@ -29,6 +35,7 @@ Get your API token: https://id.atlassian.com/manage-profile/security/api-tokens
 ## Creating Issues
 
 ### Basic Issue
+
 ```python
 import requests
 from requests.auth import HTTPBasicAuth
@@ -67,6 +74,7 @@ print(f"Created: {issue['key']}")
 ```
 
 ### With Labels and Priority
+
 ```python
 def create_detailed_issue(project_key, summary, description,
                           issue_type="Task", priority="Medium",
@@ -98,17 +106,18 @@ def create_detailed_issue(project_key, summary, description,
 
 ## Common Issue Types
 
-| Type | Use For |
-|------|---------|
-| Bug | Something broken |
-| Task | Work item |
-| Story | User-facing feature |
-| Epic | Large initiative |
+| Type     | Use For             |
+| -------- | ------------------- |
+| Bug      | Something broken    |
+| Task     | Work item           |
+| Story    | User-facing feature |
+| Epic     | Large initiative    |
 | Sub-task | Part of larger task |
 
 ## Updating Issues
 
 ### Change Status
+
 ```python
 def transition_issue(issue_key, transition_name):
     # Get available transitions
@@ -127,6 +136,7 @@ def transition_issue(issue_key, transition_name):
 ```
 
 ### Add Comment
+
 ```python
 def add_comment(issue_key, comment_text):
     url = f"{JIRA_BASE_URL}/rest/api/3/issue/{issue_key}/comment"
@@ -148,6 +158,7 @@ def add_comment(issue_key, comment_text):
 ## Searching Issues
 
 ### JQL Queries
+
 ```python
 def search_issues(jql):
     url = f"{JIRA_BASE_URL}/rest/api/3/search"
@@ -165,13 +176,13 @@ recent = search_issues("project = PROJ AND created >= -7d")
 
 When user says... create this:
 
-| Command | Action |
-|---------|--------|
-| "log bug about X" | Bug issue with description |
-| "create task for X" | Task issue |
+| Command              | Action                                           |
+| -------------------- | ------------------------------------------------ |
+| "log bug about X"    | Bug issue with description                       |
+| "create task for X"  | Task issue                                       |
 | "what's on my plate" | JQL: assignee = currentUser() AND status != Done |
-| "move X to done" | Transition issue to Done |
-| "add comment to X" | Add comment to issue |
+| "move X to done"     | Transition issue to Done                         |
+| "add comment to X"   | Add comment to issue                             |
 
 ## Best Practices
 

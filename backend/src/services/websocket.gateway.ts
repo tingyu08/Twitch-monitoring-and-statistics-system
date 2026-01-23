@@ -9,8 +9,7 @@ interface ViewerChannelStats {
 
 export class WebSocketGateway {
   private io: Server | null = null;
-  private readonly CORS_ORIGIN =
-    process.env.FRONTEND_URL || "http://localhost:3000";
+  private readonly CORS_ORIGIN = process.env.FRONTEND_URL || "http://localhost:3000";
 
   public initialize(httpServer: HttpServer) {
     this.io = new Server(httpServer, {
@@ -45,10 +44,7 @@ export class WebSocketGateway {
   /**
    * 推送單一頻道的即時統計更新
    */
-  public broadcastChannelStats(
-    channelId: string,
-    stats: Partial<ViewerChannelStats>
-  ) {
+  public broadcastChannelStats(channelId: string, stats: Partial<ViewerChannelStats>) {
     if (!this.io) return;
     // 簡單起見，目前廣播給所有人，或者只廣播給關注該頻道的房間
     // this.io.to(`channel:${channelId}`).emit("stats-update", { channelId, ...stats });

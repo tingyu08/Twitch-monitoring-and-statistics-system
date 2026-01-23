@@ -1,6 +1,8 @@
 ---
 name: backend-development
-description: Backend API design, database architecture, microservices patterns, and test-driven development. Use for designing APIs, database schemas, or backend system architecture.
+description:
+  Backend API design, database architecture, microservices patterns, and test-driven development.
+  Use for designing APIs, database schemas, or backend system architecture.
 source: wshobson/agents
 license: MIT
 ---
@@ -10,6 +12,7 @@ license: MIT
 ## API Design
 
 ### RESTful Conventions
+
 ```
 GET    /users          # List users
 POST   /users          # Create user
@@ -23,6 +26,7 @@ POST   /users/:id/posts  # Create post for user
 ```
 
 ### Response Format
+
 ```json
 {
   "data": { ... },
@@ -35,14 +39,13 @@ POST   /users/:id/posts  # Create post for user
 ```
 
 ### Error Format
+
 ```json
 {
   "error": {
     "code": "VALIDATION_ERROR",
     "message": "Invalid input",
-    "details": [
-      { "field": "email", "message": "Invalid format" }
-    ]
+    "details": [{ "field": "email", "message": "Invalid format" }]
   }
 }
 ```
@@ -50,6 +53,7 @@ POST   /users/:id/posts  # Create post for user
 ## Database Patterns
 
 ### Schema Design
+
 ```sql
 -- Use UUIDs for public IDs
 CREATE TABLE users (
@@ -69,6 +73,7 @@ CREATE INDEX idx_users_created ON users(created_at DESC);
 ```
 
 ### Query Patterns
+
 ```sql
 -- Pagination with cursor
 SELECT * FROM posts
@@ -84,12 +89,13 @@ FROM pg_class WHERE relname = 'users';
 ## Authentication
 
 ### JWT Pattern
+
 ```typescript
 interface TokenPayload {
-  sub: string;      // User ID
-  iat: number;      // Issued at
-  exp: number;      // Expiration
-  scope: string[];  // Permissions
+  sub: string; // User ID
+  iat: number; // Issued at
+  exp: number; // Expiration
+  scope: string[]; // Permissions
 }
 
 function verifyToken(token: string): TokenPayload {
@@ -98,18 +104,19 @@ function verifyToken(token: string): TokenPayload {
 ```
 
 ### Middleware
+
 ```typescript
 async function authenticate(req: Request, res: Response, next: Next) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  const token = req.headers.authorization?.replace("Bearer ", "");
   if (!token) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
     req.user = verifyToken(token);
     next();
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: "Invalid token" });
   }
 }
 ```
@@ -138,12 +145,12 @@ async function updateUser(id: string, data: Partial<User>) {
 
 ```typescript
 const limiter = rateLimit({
-  windowMs: 60 * 1000,  // 1 minute
-  max: 100,             // 100 requests per window
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per window
   keyGenerator: (req) => req.ip,
   handler: (req, res) => {
-    res.status(429).json({ error: 'Too many requests' });
-  }
+    res.status(429).json({ error: "Too many requests" });
+  },
 });
 ```
 

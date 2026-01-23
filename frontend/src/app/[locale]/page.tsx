@@ -5,10 +5,9 @@ import { useEffect, Suspense } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { ThemeToggle } from "@/features/theme";
-import { LocaleSwitcher } from "@/components/LocaleSwitcher";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
 function LandingPageContent() {
   const t = useTranslations();
@@ -37,9 +36,7 @@ function LandingPageContent() {
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p className="text-purple-700 dark:text-purple-300">
-          {t("common.loading")}
-        </p>
+        <p className="text-purple-700 dark:text-purple-300">{t("common.loading")}</p>
       </main>
     );
   }
@@ -70,8 +67,8 @@ function LandingPageContent() {
             {authError === "authorization_failed"
               ? t("home.authErrors.authorizationFailed")
               : authError === "callback_exception"
-              ? t("home.authErrors.callbackException")
-              : t("home.authErrors.unknown")}
+                ? t("home.authErrors.callbackException")
+                : t("home.authErrors.unknown")}
           </p>
         </div>
       )}
@@ -99,9 +96,7 @@ export default function LandingPage() {
     <Suspense
       fallback={
         <main className="min-h-screen flex items-center justify-center">
-          <p className="text-purple-700 dark:text-purple-300">
-            {t("common.loading")}
-          </p>
+          <p className="text-purple-700 dark:text-purple-300">{t("common.loading")}</p>
         </main>
       }
     >

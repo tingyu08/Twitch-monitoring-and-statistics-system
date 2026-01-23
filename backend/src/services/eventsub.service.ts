@@ -24,8 +24,7 @@ export const EVENTSUB_TYPES = {
   CHANNEL_RAID: "channel.raid",
 
   // Channel Points
-  CHANNEL_POINTS_REWARD_REDEMPTION:
-    "channel.channel_points_custom_reward_redemption.add",
+  CHANNEL_POINTS_REWARD_REDEMPTION: "channel.channel_points_custom_reward_redemption.add",
 } as const;
 
 export type EventSubType = (typeof EVENTSUB_TYPES)[keyof typeof EVENTSUB_TYPES];
@@ -193,9 +192,7 @@ export class EventSubService {
 
       // 結束 StreamSession
       const endedAt = new Date();
-      const durationSeconds = Math.floor(
-        (endedAt.getTime() - session.startedAt.getTime()) / 1000
-      );
+      const durationSeconds = Math.floor((endedAt.getTime() - session.startedAt.getTime()) / 1000);
 
       await prisma.streamSession.update({
         where: { id: session.id },
@@ -206,9 +203,7 @@ export class EventSubService {
       });
 
       console.log(
-        `✅ StreamSession 已結束: ${channel.channelName} (${Math.floor(
-          durationSeconds / 60
-        )} 分鐘)`
+        `✅ StreamSession 已結束: ${channel.channelName} (${Math.floor(durationSeconds / 60)} 分鐘)`
       );
     } catch (error) {
       console.error("❌ 處理下播事件失敗:", error);
@@ -272,9 +267,7 @@ export class EventSubService {
    */
   async handleCheer(event: ChannelCheerEvent): Promise<void> {
     const username = event.is_anonymous ? "匿名" : event.user_name;
-    console.log(
-      `💰 Cheer 事件: ${username} → ${event.broadcaster_user_name} (${event.bits} bits)`
-    );
+    console.log(`💰 Cheer 事件: ${username} → ${event.broadcaster_user_name} (${event.bits} bits)`);
 
     // TODO: 記錄 Cheer 事件到統計表
   }

@@ -1,12 +1,15 @@
 ---
 name: qa-regression
-description: Automate QA regression testing with reusable test skills. Create login flows, dashboard checks, user creation, and other common test scenarios that run consistently.
+description:
+  Automate QA regression testing with reusable test skills. Create login flows, dashboard checks,
+  user creation, and other common test scenarios that run consistently.
 license: MIT
 ---
 
 # QA Regression Testing
 
-Build and run automated regression tests using Playwright. Each test is a reusable skill that can be composed into full test suites.
+Build and run automated regression tests using Playwright. Each test is a reusable skill that can be
+composed into full test suites.
 
 ## Setup
 
@@ -39,11 +42,11 @@ tests/
 
 ```typescript
 // tests/auth/login.spec.ts
-import { test, expect } from '@playwright/test';
+import { test, expect } from "@playwright/test";
 
-test.describe('Login Flow', () => {
-  test('should login with valid credentials', async ({ page }) => {
-    await page.goto('/login');
+test.describe("Login Flow", () => {
+  test("should login with valid credentials", async ({ page }) => {
+    await page.goto("/login");
 
     await page.fill('[data-testid="email"]', process.env.TEST_EMAIL!);
     await page.fill('[data-testid="password"]', process.env.TEST_PASSWORD!);
@@ -54,11 +57,11 @@ test.describe('Login Flow', () => {
     await expect(page.locator('[data-testid="user-menu"]')).toBeVisible();
   });
 
-  test('should show error for invalid credentials', async ({ page }) => {
-    await page.goto('/login');
+  test("should show error for invalid credentials", async ({ page }) => {
+    await page.goto("/login");
 
-    await page.fill('[data-testid="email"]', 'wrong@example.com');
-    await page.fill('[data-testid="password"]', 'wrongpassword');
+    await page.fill('[data-testid="email"]', "wrong@example.com");
+    await page.fill('[data-testid="password"]', "wrongpassword");
     await page.click('[data-testid="submit"]');
 
     await expect(page.locator('[data-testid="error-message"]')).toBeVisible();
@@ -70,33 +73,33 @@ test.describe('Login Flow', () => {
 
 ```typescript
 // tests/dashboard/load.spec.ts
-import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth';
+import { test, expect } from "@playwright/test";
+import { login } from "../helpers/auth";
 
-test.describe('Dashboard', () => {
+test.describe("Dashboard", () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
 
-  test('should load dashboard within 3 seconds', async ({ page }) => {
+  test("should load dashboard within 3 seconds", async ({ page }) => {
     const start = Date.now();
-    await page.goto('/dashboard');
+    await page.goto("/dashboard");
     await page.waitForSelector('[data-testid="dashboard-content"]');
     const loadTime = Date.now() - start;
 
     expect(loadTime).toBeLessThan(3000);
   });
 
-  test('should display all widgets', async ({ page }) => {
-    await page.goto('/dashboard');
+  test("should display all widgets", async ({ page }) => {
+    await page.goto("/dashboard");
 
     await expect(page.locator('[data-testid="stats-widget"]')).toBeVisible();
     await expect(page.locator('[data-testid="chart-widget"]')).toBeVisible();
     await expect(page.locator('[data-testid="activity-widget"]')).toBeVisible();
   });
 
-  test('should refresh data on button click', async ({ page }) => {
-    await page.goto('/dashboard');
+  test("should refresh data on button click", async ({ page }) => {
+    await page.goto("/dashboard");
 
     const initialValue = await page.locator('[data-testid="last-updated"]').textContent();
     await page.click('[data-testid="refresh-button"]');
@@ -112,11 +115,11 @@ test.describe('Dashboard', () => {
 
 ```typescript
 // tests/users/create.spec.ts
-import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth';
-import { generateTestUser, deleteTestUser } from '../helpers/users';
+import { test, expect } from "@playwright/test";
+import { login } from "../helpers/auth";
+import { generateTestUser, deleteTestUser } from "../helpers/users";
 
-test.describe('User Creation', () => {
+test.describe("User Creation", () => {
   let testUser: { email: string; name: string };
 
   test.beforeEach(async ({ page }) => {
@@ -129,12 +132,12 @@ test.describe('User Creation', () => {
     await deleteTestUser(testUser.email);
   });
 
-  test('should create new user successfully', async ({ page }) => {
-    await page.goto('/users/new');
+  test("should create new user successfully", async ({ page }) => {
+    await page.goto("/users/new");
 
     await page.fill('[data-testid="user-name"]', testUser.name);
     await page.fill('[data-testid="user-email"]', testUser.email);
-    await page.selectOption('[data-testid="user-role"]', 'member');
+    await page.selectOption('[data-testid="user-role"]', "member");
     await page.click('[data-testid="create-user-btn"]');
 
     // Verify success
@@ -145,8 +148,8 @@ test.describe('User Creation', () => {
     await expect(page.locator(`text=${testUser.email}`)).toBeVisible();
   });
 
-  test('should validate required fields', async ({ page }) => {
-    await page.goto('/users/new');
+  test("should validate required fields", async ({ page }) => {
+    await page.goto("/users/new");
     await page.click('[data-testid="create-user-btn"]');
 
     await expect(page.locator('[data-testid="name-error"]')).toBeVisible();
@@ -159,10 +162,10 @@ test.describe('User Creation', () => {
 
 ```typescript
 // tests/helpers/auth.ts
-import { Page } from '@playwright/test';
+import { Page } from "@playwright/test";
 
 export async function login(page: Page) {
-  await page.goto('/login');
+  await page.goto("/login");
   await page.fill('[data-testid="email"]', process.env.TEST_EMAIL!);
   await page.fill('[data-testid="password"]', process.env.TEST_PASSWORD!);
   await page.click('[data-testid="submit"]');
@@ -189,10 +192,10 @@ export function generateTestUser() {
 export async function deleteTestUser(email: string) {
   // API call to cleanup test user
   await fetch(`${process.env.API_URL}/admin/users`, {
-    method: 'DELETE',
+    method: "DELETE",
     headers: {
-      'Authorization': `Bearer ${process.env.ADMIN_TOKEN}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.ADMIN_TOKEN}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ email }),
   });
@@ -203,16 +206,16 @@ export async function deleteTestUser(email: string) {
 
 ```typescript
 // tests/regression.spec.ts
-import { test } from '@playwright/test';
+import { test } from "@playwright/test";
 
 // Import all test suites
-import './auth/login.spec';
-import './auth/logout.spec';
-import './dashboard/load.spec';
-import './users/create.spec';
-import './users/delete.spec';
+import "./auth/login.spec";
+import "./auth/logout.spec";
+import "./dashboard/load.spec";
+import "./users/create.spec";
+import "./users/delete.spec";
 
-test.describe('Full Regression Suite', () => {
+test.describe("Full Regression Suite", () => {
   // Tests run in order defined above
 });
 ```
@@ -221,35 +224,32 @@ test.describe('Full Regression Suite', () => {
 
 ```typescript
 // playwright.config.ts
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: "./tests",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: [
-    ['html'],
-    ['json', { outputFile: 'test-results.json' }],
-  ],
+  reporter: [["html"], ["json", { outputFile: "test-results.json" }]],
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    baseURL: process.env.BASE_URL || "http://localhost:3000",
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
   },
   projects: [
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
     },
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"] },
     },
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      name: "webkit",
+      use: { ...devices["Desktop Safari"] },
     },
   ],
 });
@@ -286,7 +286,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 6 * * *'  # Daily at 6 AM
+    - cron: "0 6 * * *" # Daily at 6 AM
 
 jobs:
   test:
@@ -328,10 +328,10 @@ jobs:
 
 ## Quick Commands
 
-| Task | Command |
-|------|---------|
-| Run all | `npx playwright test` |
-| Run one file | `npx playwright test login.spec.ts` |
-| Debug mode | `npx playwright test --debug` |
-| UI mode | `npx playwright test --ui` |
+| Task             | Command                                  |
+| ---------------- | ---------------------------------------- |
+| Run all          | `npx playwright test`                    |
+| Run one file     | `npx playwright test login.spec.ts`      |
+| Debug mode       | `npx playwright test --debug`            |
+| UI mode          | `npx playwright test --ui`               |
 | Update snapshots | `npx playwright test --update-snapshots` |

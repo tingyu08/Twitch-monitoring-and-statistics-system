@@ -40,9 +40,7 @@ describe("Proxy Routes", () => {
         headers: { "content-type": "image/png" },
       });
 
-      const url = encodeURIComponent(
-        "https://static-cdn.jtvnw.net/avatar-123.png"
-      );
+      const url = encodeURIComponent("https://static-cdn.jtvnw.net/avatar-123.png");
       const response = await request(app).get(`/api/proxy/avatar?url=${url}`);
 
       expect(response.status).toBe(200);
@@ -64,9 +62,7 @@ describe("Proxy Routes", () => {
         headers: { "content-type": "image/png" },
       });
 
-      const url = encodeURIComponent(
-        "https://ui-avatars.com/api/?name=Test&size=128"
-      );
+      const url = encodeURIComponent("https://ui-avatars.com/api/?name=Test&size=128");
       const response = await request(app).get(`/api/proxy/avatar?url=${url}`);
 
       expect(response.status).toBe(200);
@@ -75,9 +71,7 @@ describe("Proxy Routes", () => {
     it("should redirect to fallback on error", async () => {
       mockedAxios.get.mockRejectedValueOnce(new Error("Network error"));
 
-      const url = encodeURIComponent(
-        "https://static-cdn.jtvnw.net/avatar-123.png"
-      );
+      const url = encodeURIComponent("https://static-cdn.jtvnw.net/avatar-123.png");
       const response = await request(app).get(`/api/proxy/avatar?url=${url}`);
 
       expect(response.status).toBe(302);

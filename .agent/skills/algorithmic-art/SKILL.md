@@ -1,6 +1,9 @@
 ---
 name: algorithmic-art
-description: Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems.
+description:
+  Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration.
+  Use when users request creating art using code, generative art, algorithmic art, flow fields, or
+  particle systems.
 source: anthropics/skills
 license: Apache-2.0
 ---
@@ -12,6 +15,7 @@ Create generative art with code using p5.js, featuring seeded randomness for rep
 ## Core Concepts
 
 ### Seeded Randomness
+
 ```javascript
 // Use seed for reproducible results
 function setup() {
@@ -21,6 +25,7 @@ function setup() {
 ```
 
 ### Noise Functions
+
 ```javascript
 // Perlin noise for organic patterns
 let x = noise(frameCount * 0.01) * width;
@@ -30,8 +35,11 @@ let y = noise(frameCount * 0.01 + 1000) * height;
 ## Common Patterns
 
 ### Flow Fields
+
 ```javascript
-let cols, rows, scale = 20;
+let cols,
+  rows,
+  scale = 20;
 let particles = [];
 let flowfield;
 
@@ -59,7 +67,7 @@ function draw() {
     yoff += 0.1;
   }
 
-  particles.forEach(p => {
+  particles.forEach((p) => {
     p.follow(flowfield);
     p.update();
     p.show();
@@ -68,6 +76,7 @@ function draw() {
 ```
 
 ### Recursive Trees
+
 ```javascript
 function branch(len) {
   line(0, 0, 0, -len);
@@ -88,6 +97,7 @@ function branch(len) {
 ```
 
 ### Particle Systems
+
 ```javascript
 class Particle {
   constructor() {
@@ -122,7 +132,7 @@ class Particle {
 
 ```javascript
 // Define palette
-const palette = ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51'];
+const palette = ["#264653", "#2a9d8f", "#e9c46a", "#f4a261", "#e76f51"];
 
 // Random from palette
 fill(random(palette));

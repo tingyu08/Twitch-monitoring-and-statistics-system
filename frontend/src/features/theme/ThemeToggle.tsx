@@ -40,7 +40,7 @@ export function ThemeToggle({
           onClick={() => setTheme(value)}
           className={`
             ${sizeClasses[size]}
-            rounded-md transition-all duration-200
+            rounded-md transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-200
             ${
               theme === value
                 ? "bg-white dark:bg-dark-hover shadow-sm text-primary-600 dark:text-primary-400"

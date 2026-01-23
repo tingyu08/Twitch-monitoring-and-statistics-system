@@ -82,10 +82,7 @@ export class ViewerLifetimeStatsService {
 
   private calculateRadarScores(stats: ViewerChannelLifetimeStats) {
     // 1. 觀看時長（滿分 500 小時）
-    const watchTimeScore = Math.min(
-      100,
-      (stats.totalWatchTimeMinutes / 60 / 500) * 100
-    );
+    const watchTimeScore = Math.min(100, (stats.totalWatchTimeMinutes / 60 / 500) * 100);
 
     // 2. 互動頻率（滿分 2000 則留言）
     const interactionScore = Math.min(100, (stats.totalMessages / 2000) * 100);

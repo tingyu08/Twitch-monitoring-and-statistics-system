@@ -17,10 +17,7 @@ export class DashboardLayoutController {
 
       if (!viewerId) return res.status(401).json({ error: "Unauthorized" });
 
-      const layout = await dashboardLayoutService.getLayout(
-        viewerId,
-        channelId
-      );
+      const layout = await dashboardLayoutService.getLayout(viewerId, channelId);
 
       res.json({ layout }); // Returns null or layout object
     } catch (error) {

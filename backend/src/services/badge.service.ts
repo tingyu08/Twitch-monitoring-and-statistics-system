@@ -150,10 +150,7 @@ export class BadgeService {
       if (targetValue === 0) {
         progress = currentValue > 0 ? 100 : 0;
       } else {
-        progress = Math.min(
-          100,
-          Math.floor((currentValue / targetValue) * 100)
-        );
+        progress = Math.min(100, Math.floor((currentValue / targetValue) * 100));
       }
 
       if (currentValue >= targetValue) {
