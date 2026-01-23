@@ -127,12 +127,8 @@ class App {
       tokenManagementRoutes
     );
 
-    // ?亙熒瑼Ｘ頝舐嚗??歇隤??冽嚗?
-    this.express.use(
-      "/api/health",
-      (req, res, next) => requireAuth(req, res, next, ["streamer", "viewer"]),
-      healthRoutes
-    );
+    // 系統健康檢查路由 (公開，供 UptimeRobot 等監控服務使用)
+    this.express.use("/api/health", healthRoutes);
 
     // ?汗?冽????API
     this.express.use("/api/extension", extensionRoutes);
