@@ -75,6 +75,11 @@ const nextConfig = {
         hostname: "ui-avatars.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "vod-secure.twitch.tv",
+        pathname: "/**",
+      },
     ],
   },
 };

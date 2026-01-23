@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authLogger } from "@/lib/logger";
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { locale: string } }
+) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
   const error = searchParams.get("error");
@@ -40,13 +43,14 @@ export async function GET(request: NextRequest) {
     );
 
     if (res.ok) {
-      return NextResponse.redirect(new URL("/dashboard/streamer", request.url));
+      // 確保重導向時保留語言設置
+      return NextResponse.redirect(new URL(`/${params.locale}/dashboard/streamer`, request.url));
     } else {
       return NextResponse.redirect(
-        new URL("/?error=login_failed", request.url)
+        new URL(`/${params.locale}?error=login_failed`, request.url)
       );
     }
   } catch (err) {
-    return NextResponse.redirect(new URL("/?error=server_error", request.url));
+    return NextResponse.redirect(new URL(`/${params.locale}?error=server_error`, request.url));
   }
 }

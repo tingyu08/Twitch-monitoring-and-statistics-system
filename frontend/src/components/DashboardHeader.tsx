@@ -19,6 +19,10 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
   const { user, logout } = useAuthSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // 獲取當前語言
+  // (簡單從 pathname 解析，因為 next-navigation 的 useRouter 不支援自動補全 locale)
+  const currentLocale = pathname?.split("/")[1] || "zh-TW";
+
   const isViewer = variant === "viewer" || pathname?.includes("/viewer");
   const isStreamer = variant === "streamer" || pathname?.includes("/streamer");
 
@@ -47,25 +51,23 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
             <div className="flex bg-purple-100/50 dark:bg-dark-hover rounded-lg p-1 border border-purple-300 dark:border-dark-border">
               <button
                 type="button"
-                onClick={() => !isViewer && router.push("/dashboard/viewer")}
-                onMouseEnter={() => router.prefetch("/dashboard/viewer")}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
-                  isViewer
+                onClick={() => !isViewer && router.push(`/${currentLocale}/dashboard/viewer`)}
+                onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/viewer`)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isViewer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
                     : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
-                }`}
+                  }`}
               >
                 {t("viewer.roleViewer")}
               </button>
               <button
                 type="button"
-                onClick={() => !isStreamer && router.push("/dashboard/streamer")}
-                onMouseEnter={() => router.prefetch("/dashboard/streamer")}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
-                  isStreamer
+                onClick={() => !isStreamer && router.push(`/${currentLocale}/dashboard/streamer`)}
+                onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/streamer`)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isStreamer
                     ? "bg-purple-600 text-white shadow-sm cursor-default"
                     : "text-purple-800 dark:text-purple-300 hover:text-purple-900 hover:bg-white/20 dark:hover:text-white dark:hover:bg-white/10"
-                }`}
+                  }`}
               >
                 {t("viewer.roleStreamer")}
               </button>
@@ -101,15 +103,14 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    router.push("/dashboard/viewer");
+                    router.push(`/${currentLocale}/dashboard/viewer`);
                     setMobileMenuOpen(false);
                   }}
-                  onMouseEnter={() => router.prefetch("/dashboard/viewer")}
-                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
-                    isViewer
+                  onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/viewer`)}
+                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isViewer
                       ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
                       : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
-                  }`}
+                    }`}
                 >
                   <User size={18} />
                   <span>{t("nav.viewerDashboard")}</span>
@@ -122,15 +123,14 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    router.push("/dashboard/streamer");
+                    router.push(`/${currentLocale}/dashboard/streamer`);
                     setMobileMenuOpen(false);
                   }}
-                  onMouseEnter={() => router.prefetch("/dashboard/streamer")}
-                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${
-                    isStreamer
+                  onMouseEnter={() => router.prefetch(`/${currentLocale}/dashboard/streamer`)}
+                  className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-[color,background-color,border-color,box-shadow,transform,opacity] ${isStreamer
                       ? "bg-purple-600/20 dark:bg-purple-600/30 text-purple-900 dark:text-purple-300 border border-purple-500/50"
                       : "bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10"
-                  }`}
+                    }`}
                 >
                   <LayoutDashboard size={18} />
                   <span>{t("nav.streamerDashboard")}</span>
@@ -159,7 +159,7 @@ export function DashboardHeader({ variant = "viewer" }: DashboardHeaderProps) {
                   <button
                     type="button"
                     onClick={() => {
-                      router.push("/dashboard/viewer/settings");
+                      router.push(`/${currentLocale}/dashboard/viewer/settings`);
                       setMobileMenuOpen(false);
                     }}
                     className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left bg-purple-100/30 dark:bg-white/5 text-purple-800 dark:text-purple-300/70 hover:bg-purple-100/50 dark:hover:bg-white/10 transition-[color,background-color,border-color,box-shadow,transform,opacity]"

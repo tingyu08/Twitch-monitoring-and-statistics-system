@@ -44,9 +44,12 @@ export async function GET(request: NextRequest) {
 
       // 從後端取得 JWT Token 並設置為 Cookie
       const token = data.token;
+      // 嘗試獲取語言偏好，預設為 zh-TW
+      const locale = request.cookies.get("NEXT_LOCALE")?.value || "zh-TW";
+
       if (token) {
         const response = NextResponse.redirect(
-          new URL("/dashboard/streamer", request.url),
+          new URL(`/${locale}/dashboard/streamer`, request.url),
         );
 
         // 設置 HttpOnly Cookie
@@ -62,7 +65,8 @@ export async function GET(request: NextRequest) {
       }
 
       // 如果沒有 token，仍然重導向到 dashboard
-      return NextResponse.redirect(new URL("/dashboard/streamer", request.url));
+      const response = NextResponse.redirect(new URL(`/${locale}/dashboard/streamer`, request.url));
+      return response;
     } else {
       const errorText = await res.text();
       console.error("[Auth Callback] Backend error:", res.status, errorText);
