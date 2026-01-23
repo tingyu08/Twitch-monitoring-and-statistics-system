@@ -79,3 +79,10 @@ playwright-report/
 test-results/
 frontend/playwright-report/
 frontend/test-results/
+
+# PWA (frontend/public)
+frontend/public/sw.js
+frontend/public/sw.js.map
+frontend/public/workbox-*.js
+frontend/public/workbox-*.js.map
+frontend/public/swe-worker-*.js

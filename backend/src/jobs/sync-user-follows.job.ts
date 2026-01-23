@@ -135,10 +135,10 @@ export class SyncUserFollowsJob {
       logger.info(
         "Jobs",
         `✅ Sync User Follows Job 完成: ${result.usersProcessed} 使用者, ` +
-          `${result.channelsCreated} 新頻道, ${result.followsCreated} 新追蹤, ` +
-          `${result.followsRemoved} 移除追蹤, ${result.channelsDeactivated} 停用頻道, ` +
-          `${result.usersFailed} 失敗, ${result.totalMonitoredChannels} 監控中, ` +
-          `耗時 ${result.executionTimeMs}ms`
+        `${result.channelsCreated} 新頻道, ${result.followsCreated} 新追蹤, ` +
+        `${result.followsRemoved} 移除追蹤, ${result.channelsDeactivated} 停用頻道, ` +
+        `${result.usersFailed} 失敗, ${result.totalMonitoredChannels} 監控中, ` +
+        `耗時 ${result.executionTimeMs}ms`
       );
 
       return result;
@@ -401,11 +401,25 @@ export class SyncUserFollowsJob {
       }
     }
 
-    if (followsToCreate.length > 0) {
-      await prisma.userFollow.createMany({
-        data: followsToCreate,
-      });
-      result.followsCreated = followsToCreate.length;
+    // 使用 upsert 逐筆處理，避免 SQLite 的 UNIQUE 約束錯誤
+    // (SQLite 不支援 Prisma 的 skipDuplicates 選項)
+    for (const followData of followsToCreate) {
+      try {
+        await prisma.userFollow.upsert({
+          where: {
+            userId_channelId: {
+              userId: followData.userId,
+              channelId: followData.channelId,
+            },
+          },
+          create: followData,
+          update: { followedAt: followData.followedAt },
+        });
+        result.followsCreated++;
+      } catch (err) {
+        // 如果還是發生錯誤（極少情況），記錄但不中斷流程
+        logger.warn("Jobs", `Failed to upsert follow for channel ${followData.channelId}`, err);
+      }
     }
 
     // 7. 批量刪除不再追蹤的記錄
