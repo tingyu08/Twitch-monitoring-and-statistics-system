@@ -36,7 +36,9 @@ const nextConfig = {
   },
   // E2E Test Configuration - rewrites to mock server on port 4001
   async rewrites() {
-    const apiUrl = process.env.E2E_API_URL || "http://localhost:4000";
+    // 生產環境：使用 BACKEND_URL 指向 Render 後端
+    // 開發/測試：使用 E2E_API_URL 或預設 localhost:4000
+    const apiUrl = process.env.BACKEND_URL || process.env.E2E_API_URL || "http://localhost:4000";
     return {
       beforeFiles: [
         {
