@@ -4,8 +4,7 @@ import { io, Socket } from "socket.io-client";
 // 使用環境變數或默認後端地址
 // 注意：Socket.IO 路徑默認為 /socket.io，會自動附加到 URL 後面
 const SOCKET_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 interface SocketContextType {
   socket: Socket | null;
