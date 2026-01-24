@@ -32,7 +32,7 @@ export class TwurpleChatService {
   // 熱度冷卻：channelName -> lastAlertTime
   private lastHeatAlert: Map<string, number> = new Map();
 
-  constructor() {}
+  constructor() { }
 
   // ... (省略 initialize 等方法，保持不變)
 
@@ -298,7 +298,7 @@ export class TwurpleChatService {
       // 檢查是否在冷卻時間內
       if (now - lastAlert > HEAT_COOLDOWN_MS) {
         // 觸發熱度警報！
-        logger.info(
+        logger.debug(
           "Chat Heat",
           `🔥 Channel ${channelName} is heating up! (${timestamps.length} msgs/5s)`
         );
