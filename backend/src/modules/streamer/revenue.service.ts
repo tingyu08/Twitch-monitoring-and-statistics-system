@@ -1,5 +1,5 @@
 import { prisma } from "../../db/prisma";
-import { env } from "../../config/env";
+
 
 /**
  * 訂閱層級收益預估 (USD)
@@ -47,6 +47,9 @@ export class RevenueService {
   /**
    * 同步訂閱快照到資料庫
    */
+  /**
+   * 同步訂閱快照到資料庫
+   */
   async syncSubscriptionSnapshot(streamerId: string): Promise<void> {
     const streamer = await prisma.streamer.findUnique({
       where: { id: streamerId },
@@ -63,11 +66,11 @@ export class RevenueService {
       throw new Error("Streamer not found or no valid token");
     }
 
-    const accessToken = streamer.twitchTokens[0].accessToken;
+    const tokenData = streamer.twitchTokens[0];
     const broadcasterId = streamer.twitchUserId;
 
-    // 呼叫 Twitch API 獲取訂閱資料
-    const subscriptions = await this.fetchSubscriptionsFromTwitch(broadcasterId, accessToken);
+    // 呼叫 Twitch API 獲取訂閱資料 (使用 Twurple 自動刷新)
+    const subscriptions = await this.fetchSubscriptionsWithTwurple(broadcasterId, tokenData);
 
     // 計算預估收益
     const estimatedRevenue =
@@ -106,57 +109,79 @@ export class RevenueService {
   }
 
   /**
-   * 從 Twitch API 獲取訂閱資料
+   * 使用 Twurple 獲取訂閱資料 (支援自動刷新)
    */
-  private async fetchSubscriptionsFromTwitch(
+  private async fetchSubscriptionsWithTwurple(
     broadcasterId: string,
-    accessToken: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tokenData: any
   ): Promise<{ total: number; tier1: number; tier2: number; tier3: number }> {
+    const { ApiClient } = await import("@twurple/api");
+    const { RefreshingAuthProvider } = await import("@twurple/auth");
+    const { twurpleAuthService } = await import("../../services/twurple-auth.service");
+    const { decryptToken, encryptToken } = await import("../../utils/crypto.utils");
+
+    const clientId = twurpleAuthService.getClientId();
+    const clientSecret = twurpleAuthService.getClientSecret();
+
+    // 解密 Token
+    const accessToken = decryptToken(tokenData.accessToken);
+    const refreshToken = tokenData.refreshToken ? decryptToken(tokenData.refreshToken) : null;
+
+    if (!refreshToken) {
+      throw new Error("No refresh token available for revenue sync");
+    }
+
+    const authProvider = new RefreshingAuthProvider({
+      clientId,
+      clientSecret,
+    });
+
+    // 設定刷新回調
+    authProvider.onRefresh(async (_userId, newTokenData) => {
+      console.log(`[RevenueService] Token refreshed for streamer ${broadcasterId}`);
+      await prisma.twitchToken.update({
+        where: { id: tokenData.id },
+        data: {
+          accessToken: encryptToken(newTokenData.accessToken),
+          refreshToken: newTokenData.refreshToken
+            ? encryptToken(newTokenData.refreshToken)
+            : undefined,
+          expiresAt: newTokenData.expiresIn
+            ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+            : null,
+          lastValidatedAt: new Date(),
+        },
+      });
+    });
+
+    await authProvider.addUserForToken({
+      accessToken,
+      refreshToken,
+      expiresIn: null,
+      obtainmentTimestamp: 0,
+    }, ["channel:read:subscriptions"]);
+
+    const apiClient = new ApiClient({ authProvider });
+
+    // 使用 Paginator 獲取所有訂閱者
     const result = { total: 0, tier1: 0, tier2: 0, tier3: 0 };
-    let cursor: string | undefined;
 
     try {
-      do {
-        const url = new URL("https://api.twitch.tv/helix/subscriptions");
-        url.searchParams.append("broadcaster_id", broadcasterId);
-        url.searchParams.append("first", "100");
-        if (cursor) url.searchParams.append("after", cursor);
+      const paginator = apiClient.subscriptions.getSubscriptionsPaginated(broadcasterId);
 
-        const response = await fetch(url.toString(), {
-          headers: {
-            "Client-Id": env.twitchClientId,
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("[RevenueService] Twitch API error:", errorText);
-          throw new Error(`Twitch API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const subs = data.data || [];
-
-        for (const sub of subs) {
-          result.total++;
-          switch (sub.tier) {
-            case "1000":
-              result.tier1++;
-              break;
-            case "2000":
-              result.tier2++;
-              break;
-            case "3000":
-              result.tier3++;
-              break;
-          }
-        }
-
-        cursor = data.pagination?.cursor;
-      } while (cursor);
-    } catch (error) {
-      console.error("[RevenueService] fetchSubscriptionsFromTwitch error:", error);
+      for await (const sub of paginator) {
+        result.total++;
+        if (sub.tier === "1000") result.tier1++;
+        else if (sub.tier === "2000") result.tier2++;
+        else if (sub.tier === "3000") result.tier3++;
+      }
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      // 處理權限不足或 Token 無效的情況
+      if (error.statusCode === 401 || error.statusCode === 403) {
+        console.error(`[RevenueService] Permission error for ${broadcasterId}:`, error.message);
+        // 標記 Token 為失效? 暫時不這麼做，以免誤判
+      }
       throw error;
     }
 
