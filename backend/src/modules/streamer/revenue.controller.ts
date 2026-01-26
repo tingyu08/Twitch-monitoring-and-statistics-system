@@ -88,10 +88,44 @@ export class RevenueController {
         return res.status(403).json({ error: "Not a streamer" });
       }
 
-      await revenueService.syncSubscriptionSnapshot(streamerId);
+      // 使用 Promise.race 設定 25 秒超時（Render 免費版有 30 秒限制）
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("SYNC_TIMEOUT")), 25000);
+      });
+
+      await Promise.race([
+        revenueService.syncSubscriptionSnapshot(streamerId),
+        timeoutPromise,
+      ]);
+
       return res.json({ success: true, message: "Subscription data synced" });
     } catch (error) {
       console.error("Sync subscriptions error:", error);
+      
+      const err = error as Error;
+      
+      // 更友善的錯誤訊息
+      if (err.message === "SYNC_TIMEOUT") {
+        return res.status(504).json({ 
+          error: "Sync timeout - try again later",
+          details: "The sync operation took too long. This may happen for channels with many subscribers."
+        });
+      }
+      
+      if (err.message?.includes("no valid token") || err.message?.includes("No refresh token")) {
+        return res.status(401).json({ 
+          error: "Token expired - please re-login",
+          details: "Your Twitch authorization has expired. Please log out and log in again."
+        });
+      }
+      
+      if (err.message?.includes("Permission") || err.message?.includes("403")) {
+        return res.status(403).json({ 
+          error: "Permission denied",
+          details: "This feature requires Twitch Affiliate or Partner status to access subscription data."
+        });
+      }
+      
       return res.status(500).json({ error: "Failed to sync subscriptions" });
     }
   }

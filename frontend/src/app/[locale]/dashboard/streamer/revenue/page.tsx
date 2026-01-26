@@ -38,7 +38,22 @@ export default function RevenuePage() {
         method: "POST",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Sync failed");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        // 根據不同錯誤顯示不同訊息
+        if (res.status === 504 || errorData.error?.includes("timeout")) {
+          toast.error(t("syncTimeout") || "Sync timeout - please try again");
+        } else if (res.status === 401) {
+          toast.error(t("syncAuthError") || "Please re-login to sync");
+        } else if (res.status === 403) {
+          toast.error(t("syncPermissionError") || "Requires Affiliate/Partner status");
+        } else {
+          toast.error(t("syncError"));
+        }
+        return;
+      }
+      
       toast.success(t("syncSuccess"));
       // 重新載入頁面來更新數據
       window.location.reload();

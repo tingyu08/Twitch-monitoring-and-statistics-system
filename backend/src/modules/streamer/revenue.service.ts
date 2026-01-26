@@ -170,10 +170,27 @@ export class RevenueService {
     // 使用 Paginator 獲取所有訂閱者
     const result = { total: 0, tier1: 0, tier2: 0, tier3: 0 };
 
-    // 記憶體與超時保護：限制最大訂閱者數量
-    const MAX_SUBSCRIPTIONS = 10000;
+    // 記憶體與超時保護：限制最大訂閱者數量和時間
+    const MAX_SUBSCRIPTIONS = 5000; // 降低上限以加快速度
+    const startTime = Date.now();
+    const MAX_TIME_MS = 20000; // 20 秒時間限制
 
     try {
+      // 先嘗試快速方式：獲取第一頁來取得總數
+      const firstPage = await apiClient.subscriptions.getSubscriptions(broadcasterId, { limit: 100 });
+      
+      // 如果訂閱者很少，直接計算第一頁
+      if (firstPage.data.length < 100) {
+        for (const sub of firstPage.data) {
+          result.total++;
+          if (sub.tier === "1000") result.tier1++;
+          else if (sub.tier === "2000") result.tier2++;
+          else if (sub.tier === "3000") result.tier3++;
+        }
+        return result;
+      }
+
+      // 訂閱者較多時，使用分頁遍歷
       const paginator = apiClient.subscriptions.getSubscriptionsPaginated(broadcasterId);
 
       for await (const sub of paginator) {
@@ -182,9 +199,14 @@ export class RevenueService {
         else if (sub.tier === "2000") result.tier2++;
         else if (sub.tier === "3000") result.tier3++;
 
-        // 超過上限則停止（極少數大型頻道可能超過）
+        // 超過上限或時間過長則停止
         if (result.total >= MAX_SUBSCRIPTIONS) {
           console.warn(`[RevenueService] 訂閱者數量超過 ${MAX_SUBSCRIPTIONS}，已截斷`);
+          break;
+        }
+        
+        if (Date.now() - startTime > MAX_TIME_MS) {
+          console.warn(`[RevenueService] 同步超時 (${MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`);
           break;
         }
       }
@@ -193,7 +215,7 @@ export class RevenueService {
       const apiError = error as import("../../types/twitch.types").TwitchApiError;
       if (apiError.statusCode === 401 || apiError.statusCode === 403) {
         console.error(`[RevenueService] Permission error for ${broadcasterId}:`, apiError.message);
-        // 標記 Token 為失效? 暫時不這麼做，以免誤判
+        throw new Error("Permission denied - requires Affiliate/Partner status");
       }
       throw error;
     }
