@@ -73,12 +73,6 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templateActionLoading, setTemplateActionLoading] = useState(false);
 
-  const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    (process.env.NODE_ENV === "production"
-      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
-      : "http://localhost:4000");
-
   // Fetch current settings
   useEffect(() => {
     if (!isOpen) return;
@@ -87,7 +81,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${apiBaseUrl}/api/streamer/settings`, {
+        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+        const res = await fetch("/api/streamer/settings", {
           credentials: "include",
         });
         if (!res.ok) {
@@ -114,7 +109,7 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
     };
 
     fetchSettings();
-  }, [isOpen, apiBaseUrl, t]);
+  }, [isOpen, t]);
 
   // Search games
   const searchGames = useCallback(
@@ -126,8 +121,9 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
 
       setSearchingGames(true);
       try {
+        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
         const res = await fetch(
-          `${apiBaseUrl}/api/streamer/games/search?q=${encodeURIComponent(query)}`,
+          `/api/streamer/games/search?q=${encodeURIComponent(query)}`,
           {
             credentials: "include",
           }
@@ -142,7 +138,7 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
         setSearchingGames(false);
       }
     },
-    [apiBaseUrl]
+    []
   );
 
   // Debounce game search
@@ -177,7 +173,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/streamer/templates`, {
+      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+      const res = await fetch("/api/streamer/templates", {
         credentials: "include",
       });
       if (res.ok) {
@@ -189,7 +186,7 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
     } finally {
       setLoadingTemplates(false);
     }
-  }, [apiBaseUrl]);
+  }, []);
 
   // Fetch templates when dialog opens
   useEffect(() => {
@@ -203,7 +200,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
 
     setTemplateActionLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/streamer/templates`, {
+      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+      const res = await fetch("/api/streamer/templates", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -233,7 +231,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
 
     setTemplateActionLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/streamer/templates/${id}`, {
+      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+      const res = await fetch(`/api/streamer/templates/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -269,7 +268,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/streamer/settings`, {
+      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+      const res = await fetch("/api/streamer/settings", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

@@ -30,16 +30,11 @@ export default function RevenuePage() {
   const [exporting, setExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    (process.env.NODE_ENV === "production"
-      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
-      : "http://localhost:4000");
-
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/streamer/revenue/sync`, {
+      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+      const res = await fetch("/api/streamer/revenue/sync", {
         method: "POST",
         credentials: "include",
       });
@@ -58,8 +53,9 @@ export default function RevenuePage() {
     setExporting(true);
     setShowExportMenu(false);
     try {
+      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
       const res = await fetch(
-        `${apiBaseUrl}/api/streamer/revenue/export?format=${format}&days=${days}`,
+        `/api/streamer/revenue/export?format=${format}&days=${days}`,
         { credentials: "include" },
       );
       if (!res.ok) throw new Error("Export failed");

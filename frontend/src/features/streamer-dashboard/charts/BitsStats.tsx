@@ -30,21 +30,16 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    (process.env.NODE_ENV === "production"
-      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
-      : "http://localhost:4000");
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
         const [bitsRes, supportersRes] = await Promise.all([
-          fetch(`${apiBaseUrl}/api/streamer/revenue/bits?days=${days}`, {
+          fetch(`/api/streamer/revenue/bits?days=${days}`, {
             credentials: "include",
           }),
-          fetch(`${apiBaseUrl}/api/streamer/revenue/top-supporters?limit=5`, {
+          fetch(`/api/streamer/revenue/top-supporters?limit=5`, {
             credentials: "include",
           }),
         ]);
@@ -66,7 +61,7 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
     };
 
     fetchData();
-  }, [apiBaseUrl, days]);
+  }, [days]);
 
   // 計算總計
   const totalBits = data.reduce((sum, d) => sum + d.totalBits, 0);

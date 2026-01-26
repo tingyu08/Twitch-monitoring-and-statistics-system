@@ -25,17 +25,12 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBaseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    (process.env.NODE_ENV === "production"
-      ? "https://twitch-monitoring-and-statistics-system.onrender.com"
-      : "http://localhost:4000");
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${apiBaseUrl}/api/streamer/revenue/subscriptions?days=${days}`, {
+        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+        const res = await fetch(`/api/streamer/revenue/subscriptions?days=${days}`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to fetch");
@@ -49,7 +44,7 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
     };
 
     fetchData();
-  }, [apiBaseUrl, days]);
+  }, [days]);
 
   // 計算摘要統計
   const latestData = data[data.length - 1];
