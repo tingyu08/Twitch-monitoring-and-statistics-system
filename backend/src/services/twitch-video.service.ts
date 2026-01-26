@@ -2,13 +2,15 @@ import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export class TwurpleVideoService {
-  private apiClient: any | null = null;
+  // ApiClient 透過動態導入，使用 unknown 類型
+  private apiClient: unknown = null;
 
-  private async getClient() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async getClient(): Promise<any> {
     if (!this.apiClient) {
-      const { ApiClient } = await new Function('return import("@twurple/api")')();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { ApiClient } = await new Function('return import("@twurple/api")')() as { ApiClient: any };
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({ authProvider });
     }
@@ -109,8 +111,25 @@ export class TwurpleVideoService {
       ]);
 
       // 將原始 API 回應轉換為與 Twurple 相同的格式
+      interface RawClipData {
+        id: string;
+        url: string;
+        embed_url: string;
+        broadcaster_id: string;
+        broadcaster_name: string;
+        creator_id: string;
+        creator_name: string;
+        video_id: string;
+        game_id: string;
+        language: string;
+        title: string;
+        view_count: number;
+        created_at: string;
+        thumbnail_url: string;
+        duration: number;
+      }
       const recentClips = {
-        data: (recentClipsResponse.data || []).map((clip: any) => ({
+        data: (recentClipsResponse.data || []).map((clip: RawClipData) => ({
           id: clip.id,
           url: clip.url,
           embedUrl: clip.embed_url,

@@ -41,13 +41,6 @@ export function useExtensionSync(userId: string | null) {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // 當用戶登入且 Extension 已安裝時，同步 userId
-  useEffect(() => {
-    if (userId && status.isInstalled) {
-      syncToExtension(userId);
-    }
-  }, [userId, status.isInstalled]);
-
   // 同步函數
   const syncToExtension = useCallback((id: string) => {
     window.postMessage(
@@ -59,6 +52,13 @@ export function useExtensionSync(userId: string | null) {
     );
     console.log("[Bmad] Sent userId to Extension:", id);
   }, []);
+
+  // 當用戶登入且 Extension 已安裝時，同步 userId
+  useEffect(() => {
+    if (userId && status.isInstalled) {
+      syncToExtension(userId);
+    }
+  }, [userId, status.isInstalled, syncToExtension]);
 
   return {
     ...status,

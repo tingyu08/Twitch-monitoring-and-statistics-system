@@ -1,4 +1,5 @@
 import { twurpleAuthService } from "../twurple-auth.service";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AppTokenAuthProvider, RefreshingAuthProvider } from "@twurple/auth";
 
 jest.mock("@twurple/auth", () => ({

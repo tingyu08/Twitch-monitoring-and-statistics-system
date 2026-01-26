@@ -114,14 +114,15 @@ export class RevenueService {
    */
   private async fetchSubscriptionsWithTwurple(
     broadcasterId: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tokenData: any
+    tokenData: import("../../types/twitch.types").TwitchTokenData
   ): Promise<{ total: number; tier1: number; tier2: number; tier3: number }> {
     // 使用 dynamicImport 來載入 ES Module，避免被 TypeScript 轉換為 require()
-    const { ApiClient } = await dynamicImport("@twurple/api");
-    const { RefreshingAuthProvider } = await dynamicImport("@twurple/auth");
-    const { twurpleAuthService } = await dynamicImport("../../services/twurple-auth.service");
-    const { decryptToken, encryptToken } = await dynamicImport("../../utils/crypto.utils");
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const { ApiClient } = (await dynamicImport("@twurple/api")) as { ApiClient: any };
+    const { RefreshingAuthProvider } = (await dynamicImport("@twurple/auth")) as { RefreshingAuthProvider: any };
+    const { twurpleAuthService } = (await dynamicImport("../../services/twurple-auth.service")) as { twurpleAuthService: any };
+    const { decryptToken, encryptToken } = (await dynamicImport("../../utils/crypto.utils")) as { decryptToken: any; encryptToken: any };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     const clientId = twurpleAuthService.getClientId();
     const clientSecret = twurpleAuthService.getClientSecret();
@@ -140,8 +141,7 @@ export class RevenueService {
     });
 
     // 設定刷新回調
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    authProvider.onRefresh(async (_userId: any, newTokenData: any) => {
+    authProvider.onRefresh(async (_userId: string, newTokenData: import("../../types/twitch.types").TwurpleRefreshCallbackData) => {
       console.log(`[RevenueService] Token refreshed for streamer ${broadcasterId}`);
       await prisma.twitchToken.update({
         where: { id: tokenData.id },
@@ -188,10 +188,11 @@ export class RevenueService {
           break;
         }
       }
-    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    } catch (error: unknown) {
       // 處理權限不足或 Token 無效的情況
-      if (error.statusCode === 401 || error.statusCode === 403) {
-        console.error(`[RevenueService] Permission error for ${broadcasterId}:`, error.message);
+      const apiError = error as import("../../types/twitch.types").TwitchApiError;
+      if (apiError.statusCode === 401 || apiError.statusCode === 403) {
+        console.error(`[RevenueService] Permission error for ${broadcasterId}:`, apiError.message);
         // 標記 Token 為失效? 暫時不這麼做，以免誤判
       }
       throw error;

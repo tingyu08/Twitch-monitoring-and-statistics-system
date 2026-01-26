@@ -21,9 +21,25 @@ const HEAT_WINDOW_MS = 5000; // 5秒視窗
 const HEAT_THRESHOLD_MSG = 50; // 5秒內超過50則訊息視為有熱度
 const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
 
+// ChatClient 相關類型定義
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface ChatClientLike {
+  connect(): Promise<void>;
+  join(channel: string): Promise<void>;
+  part(channel: string): Promise<void>;
+  quit(): Promise<void>;
+  onMessage(callback: (channel: string, user: string, text: string, msg: any) => void): void;
+  onSub(callback: (channel: any, user: any, subInfo: any, msg: any) => void): void;
+  onResub(callback: (channel: any, user: any, subInfo: any, msg: any) => void): void;
+  onSubGift(callback: (channel: any, user: any, subInfo: any, msg: any) => void): void;
+  onRaid(callback: (channel: any, user: any, raidInfo: any, msg: any) => void): void;
+  onDisconnect(callback: (manually: boolean, reason: Error | undefined) => void): void;
+  onConnect(callback: () => void): void;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export class TwurpleChatService {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  private chatClient: any | null = null;
+  private chatClient: ChatClientLike | null = null;
   private channels: Set<string> = new Set();
   private isConnected = false;
 
@@ -90,7 +106,7 @@ export class TwurpleChatService {
       });
 
       // 設定 Token 刷新回調（刷新後更新資料庫）
-      authProvider.onRefresh(async (userId: any, newTokenData: any) => {
+      authProvider.onRefresh(async (userId: string, newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData) => {
         logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
 
         // 更新資料庫中的 Token
@@ -159,6 +175,7 @@ export class TwurpleChatService {
   private setupEventHandlers(): void {
     if (!this.chatClient) return;
 
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     // 監聽一般訊息
     this.chatClient.onMessage((channel: string, user: string, text: string, msg: any) => {
       this.handleMessage(channel, user, text, msg);
@@ -197,6 +214,7 @@ export class TwurpleChatService {
       this.isConnected = true;
       logger.info("Twurple Chat", "已連接/重連");
     });
+    /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 
   /**
@@ -243,6 +261,7 @@ export class TwurpleChatService {
   /**
    * 處理一般訊息
    */
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   private handleMessage(channel: string, user: string, text: string, msg: any): void {
     const channelName = channel.replace(/^#/, "");
 
@@ -328,9 +347,9 @@ export class TwurpleChatService {
         messageText: subInfo.message || "",
         messageType: "SUBSCRIPTION",
         timestamp: new Date(),
-        badges: null as any,
+        badges: null as Record<string, string> | null,
         bitsAmount: null as number | null,
-        emotesUsed: null as any,
+        emotesUsed: null as string[] | null,
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
@@ -358,9 +377,9 @@ export class TwurpleChatService {
         messageText: `Gifted sub to ${subInfo.displayName}`,
         messageType: "GIFT_SUBSCRIPTION",
         timestamp: new Date(),
-        badges: null as any,
+        badges: null as Record<string, string> | null,
         bitsAmount: null as number | null,
-        emotesUsed: null as any,
+        emotesUsed: null as string[] | null,
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
@@ -386,9 +405,9 @@ export class TwurpleChatService {
         messageText: `Raid with ${viewerCount} viewers`,
         messageType: "RAID",
         timestamp: new Date(),
-        badges: null as any,
+        badges: null as Record<string, string> | null,
         bitsAmount: null as number | null,
-        emotesUsed: null as any,
+        emotesUsed: null as string[] | null,
       };
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
@@ -444,6 +463,7 @@ export class TwurpleChatService {
       return null;
     }
   }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   /**
    * 獲取服務狀態

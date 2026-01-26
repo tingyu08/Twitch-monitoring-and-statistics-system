@@ -36,17 +36,41 @@ if (!fs.existsSync(backendEnvPath) && fs.existsSync(rootEnvPath)) {
   dotenv.config({ path: rootEnvPath });
 }
 
+// 輔助函數：獲取必要的環境變數（生產環境強制，開發環境可選）
+function getRequiredEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+
+  // 測試環境：使用預設值
+  if (isTest && defaultValue !== undefined) {
+    return value || defaultValue;
+  }
+
+  // 生產環境：必須提供
+  if (isProduction && !value) {
+    throw new Error(
+      `[backend/env] Missing required environment variable: ${key} (production mode)`
+    );
+  }
+
+  // 開發環境：使用預設值但發出警告
+  if (!value && defaultValue !== undefined) {
+    return defaultValue;
+  }
+
+  return value || "";
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 4000),
-  twitchClientId: process.env.TWITCH_CLIENT_ID ?? "",
-  twitchClientSecret: process.env.TWITCH_CLIENT_SECRET ?? "",
+  twitchClientId: getRequiredEnv("TWITCH_CLIENT_ID"),
+  twitchClientSecret: getRequiredEnv("TWITCH_CLIENT_SECRET"),
   twitchRedirectUri: process.env.TWITCH_REDIRECT_URI ?? "http://localhost:3000/auth/callback",
   twitchViewerRedirectUri:
     process.env.TWITCH_VIEWER_REDIRECT_URI ?? "http://localhost:4000/auth/viewer/callback",
-  jwtSecret: process.env.APP_JWT_SECRET ?? "",
+  jwtSecret: getRequiredEnv("APP_JWT_SECRET"),
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:3000",
-  viewerTokenEncryptionKey: process.env.VIEWER_TOKEN_ENCRYPTION_KEY ?? "",
+  viewerTokenEncryptionKey: getRequiredEnv("VIEWER_TOKEN_ENCRYPTION_KEY"),
 };
 
 // #region agent log
@@ -70,29 +94,8 @@ const logEntry2 =
 writeDebugLog(logEntry2);
 // #endregion
 
-// 生產環境嚴格驗證必要的環境變數
-if (isProduction) {
-  const missingVars: string[] = [];
-
-  if (!process.env.APP_JWT_SECRET) {
-    missingVars.push("APP_JWT_SECRET");
-  }
-  if (!process.env.VIEWER_TOKEN_ENCRYPTION_KEY) {
-    missingVars.push("VIEWER_TOKEN_ENCRYPTION_KEY");
-  }
-  if (!process.env.TWITCH_CLIENT_ID) {
-    missingVars.push("TWITCH_CLIENT_ID");
-  }
-  if (!process.env.TWITCH_CLIENT_SECRET) {
-    missingVars.push("TWITCH_CLIENT_SECRET");
-  }
-
-  if (missingVars.length > 0) {
-    throw new Error(
-      `[backend/env] 生產環境缺少必要的環境變數: ${missingVars.join(", ")}。請確保這些變數已正確設定。`
-    );
-  }
-}
+// 生產環境嚴格驗證已由 getRequiredEnv() 處理
+// 如果到達這裡，表示所有必要的環境變數都已設定
 
 // 開發/測試環境的警告
 if (!isProduction && !isTest) {

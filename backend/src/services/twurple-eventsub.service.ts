@@ -44,11 +44,34 @@ interface EventSubConfig {
   pathPrefix?: string;
 }
 
+// EventSub 訂閱物件介面
+interface EventSubSubscription {
+  id: string;
+  type: string;
+  status: string;
+  condition: Record<string, unknown>;
+  created_at: string;
+  cost: number;
+  transport: {
+    method: string;
+    callback: string;
+  };
+}
+
+// ApiClient 類型（用於類型斷言）
+type ApiClientWithEventSub = {
+  eventSub: {
+    getSubscriptions(): Promise<{ data: EventSubSubscription[] }>;
+    deleteSubscription(id: string): Promise<void>;
+    deleteAllSubscriptions(): Promise<void>;
+  };
+};
+
 class TwurpleEventSubService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private middleware: any | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private apiClient: any | null = null;
+  // EventSubMiddleware 透過動態導入，使用 unknown 類型
+  private middleware: unknown = null;
+  // ApiClient 透過動態導入，使用 unknown 類型
+  private apiClient: unknown = null;
   private isInitialized = false;
   private subscribedChannels: Set<string> = new Set();
 
@@ -101,14 +124,13 @@ class TwurpleEventSubService {
       });
 
       // 5. 將 middleware 應用到 Express (必須在其他 body-parser 之前)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this.middleware.apply(app as any);
+      await (this.middleware as { apply: (app: Application) => Promise<void> }).apply(app);
 
       this.isInitialized = true;
       logger.info("TwurpleEventSub", "EventSub Middleware 已應用至 Express");
 
       // 6. 標記為就緒 (開始接收事件)
-      await this.middleware.markAsReady();
+      await (this.middleware as { markAsReady: () => Promise<void> }).markAsReady();
       logger.info("TwurpleEventSub", "EventSub 服務已就緒，開始監聽事件");
 
       // 7. 訂閱所有被監控的頻道
@@ -165,9 +187,55 @@ class TwurpleEventSubService {
     const displayName = channelName || twitchChannelId;
 
     try {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
+      // EventSub 事件類型定義
+      interface StreamOnlineEvent {
+        broadcasterDisplayName: string;
+        broadcasterId: string;
+        startDate: Date;
+      }
+      interface StreamOfflineEvent {
+        broadcasterDisplayName: string;
+        broadcasterId: string;
+      }
+      interface ChannelUpdateEvent {
+        broadcasterDisplayName: string;
+        broadcasterId: string;
+        streamTitle: string;
+        categoryName: string;
+      }
+      interface ChannelCheerEvent {
+        broadcasterId: string;
+        broadcasterDisplayName: string;
+        userId?: string;
+        userDisplayName?: string;
+        bits: number;
+        message?: string;
+        isAnonymous: boolean;
+      }
+
+      type Middleware = {
+        onStreamOnline: (
+          channelId: string,
+          callback: (event: StreamOnlineEvent) => Promise<void>
+        ) => Promise<void>;
+        onStreamOffline: (
+          channelId: string,
+          callback: (event: StreamOfflineEvent) => Promise<void>
+        ) => Promise<void>;
+        onChannelUpdate: (
+          channelId: string,
+          callback: (event: ChannelUpdateEvent) => Promise<void>
+        ) => Promise<void>;
+        onChannelCheer: (
+          channelId: string,
+          callback: (event: ChannelCheerEvent) => Promise<void>
+        ) => Promise<void>;
+      };
+
+      const middleware = this.middleware as Middleware;
+
       // 訂閱 stream.online 事件
-      await this.middleware.onStreamOnline(twitchChannelId, async (event: any) => {
+      await middleware.onStreamOnline(twitchChannelId, async (event: StreamOnlineEvent) => {
         logger.info("TwurpleEventSub", `🟢 STREAM ONLINE: ${event.broadcasterDisplayName}`);
         await this.handleStreamOnline(event.broadcasterId, {
           displayName: event.broadcasterDisplayName,
@@ -176,13 +244,13 @@ class TwurpleEventSubService {
       });
 
       // 訂閱 stream.offline 事件
-      await this.middleware.onStreamOffline(twitchChannelId, async (event: any) => {
+      await middleware.onStreamOffline(twitchChannelId, async (event: StreamOfflineEvent) => {
         logger.info("TwurpleEventSub", `🔴 STREAM OFFLINE: ${event.broadcasterDisplayName}`);
         await this.handleStreamOffline(event.broadcasterId);
       });
 
       // 訂閱 channel.update 事件
-      await this.middleware.onChannelUpdate(twitchChannelId, async (event: any) => {
+      await middleware.onChannelUpdate(twitchChannelId, async (event: ChannelUpdateEvent) => {
         logger.info(
           "TwurpleEventSub",
           `📝 CHANNEL UPDATE: ${event.broadcasterDisplayName} - "${event.streamTitle}" [${event.categoryName}]`
@@ -196,7 +264,7 @@ class TwurpleEventSubService {
       // 訂閱 channel.cheer 事件 (Bits 贊助)
       // 注意：需要 bits:read 權限，僅對有授權的實況主頻道有效
       try {
-        await this.middleware.onChannelCheer(twitchChannelId, async (event: any) => {
+        await middleware.onChannelCheer(twitchChannelId, async (event: ChannelCheerEvent) => {
           logger.info(
             "TwurpleEventSub",
             `💎 CHEER: ${event.userDisplayName || "Anonymous"} cheered ${
@@ -212,7 +280,6 @@ class TwurpleEventSubService {
           `Skipped cheer subscription for ${displayName} (likely no bits:read permission)`
         );
       }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
 
       this.subscribedChannels.add(twitchChannelId);
       // logger.info("TwurpleEventSub", `✅ Subscribed to: ${displayName}`);
@@ -449,12 +516,13 @@ class TwurpleEventSubService {
     }
 
     try {
-      const subscriptions = await this.apiClient.eventSub.getSubscriptions();
+      const apiClient = this.apiClient as ApiClientWithEventSub;
+      const subscriptions = await apiClient.eventSub.getSubscriptions();
 
       for (const sub of subscriptions.data) {
         const condition = sub.condition as { broadcaster_user_id?: string };
         if (condition.broadcaster_user_id === twitchChannelId) {
-          await this.apiClient.eventSub.deleteSubscription(sub.id);
+          await apiClient.eventSub.deleteSubscription(sub.id);
           logger.info("TwurpleEventSub", `Unsubscribed: ${sub.type} for ${twitchChannelId}`);
         }
       }
@@ -475,11 +543,12 @@ class TwurpleEventSubService {
     }
 
     try {
-      const subscriptions = await this.apiClient.eventSub.getSubscriptions();
+      const apiClient = this.apiClient as ApiClientWithEventSub;
+      const subscriptions = await apiClient.eventSub.getSubscriptions();
 
       logger.info("EventSub", `Currently active subscriptions: ${subscriptions.data.length}`);
 
-      const result = subscriptions.data.map((sub: any) => ({
+      const result = subscriptions.data.map((sub: EventSubSubscription) => ({
         id: sub.id,
         type: sub.type,
         status: sub.status,
@@ -503,13 +572,14 @@ class TwurpleEventSubService {
     }
 
     try {
-      const subscriptions = await this.apiClient.eventSub.getSubscriptions();
+      const apiClient = this.apiClient as ApiClientWithEventSub;
+      const subscriptions = await apiClient.eventSub.getSubscriptions();
       const count = subscriptions.data.length;
 
       logger.info("TwurpleEventSub", `Clearing ${count} subscriptions...`);
 
       for (const sub of subscriptions.data) {
-        await this.apiClient.eventSub.deleteSubscription(sub.id);
+        await apiClient.eventSub.deleteSubscription(sub.id);
       }
 
       this.subscribedChannels.clear();

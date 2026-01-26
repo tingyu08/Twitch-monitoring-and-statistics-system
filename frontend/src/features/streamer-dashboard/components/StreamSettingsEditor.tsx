@@ -45,10 +45,7 @@ interface StreamSettingsEditorProps {
   onClose: () => void;
 }
 
-export function StreamSettingsEditor({
-  isOpen,
-  onClose,
-}: StreamSettingsEditorProps) {
+export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorProps) {
   const t = useTranslations("streamer.settingsEditor");
   const tCommon = useTranslations("common");
 
@@ -71,8 +68,7 @@ export function StreamSettingsEditor({
   // Templates state
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
-  const [showManageTemplatesDialog, setShowManageTemplatesDialog] =
-    useState(false);
+  const [showManageTemplatesDialog, setShowManageTemplatesDialog] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templateActionLoading, setTemplateActionLoading] = useState(false);
@@ -97,9 +93,7 @@ export function StreamSettingsEditor({
         if (!res.ok) {
           try {
             const errJson = await res.json();
-            throw new Error(
-              errJson.error || `Error ${res.status}: ${res.statusText}`,
-            );
+            throw new Error(errJson.error || `Error ${res.status}: ${res.statusText}`);
           } catch {
             throw new Error(`Error ${res.status}: ${res.statusText}`);
           }
@@ -108,14 +102,12 @@ export function StreamSettingsEditor({
         setSettings(data);
         setTitle(data.title || "");
         setSelectedGame(
-          data.gameId
-            ? { id: data.gameId, name: data.gameName, boxArtUrl: "" }
-            : null,
+          data.gameId ? { id: data.gameId, name: data.gameName, boxArtUrl: "" } : null
         );
         setTags(data.tags || []);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Failed to load settings:", err);
-        setError(`${t("loadError")} (${err.message || "Unknown error"})`);
+        setError(`${t("loadError")} (${(err as Error).message || "Unknown error"})`);
       } finally {
         setLoading(false);
       }
@@ -135,12 +127,10 @@ export function StreamSettingsEditor({
       setSearchingGames(true);
       try {
         const res = await fetch(
-          `${apiBaseUrl}/api/streamer/games/search?q=${encodeURIComponent(
-            query,
-          )}`,
+          `${apiBaseUrl}/api/streamer/games/search?q=${encodeURIComponent(query)}`,
           {
             credentials: "include",
-          },
+          }
         );
         if (res.ok) {
           const data = await res.json();
@@ -152,7 +142,7 @@ export function StreamSettingsEditor({
         setSearchingGames(false);
       }
     },
-    [apiBaseUrl],
+    [apiBaseUrl]
   );
 
   // Debounce game search
@@ -184,15 +174,7 @@ export function StreamSettingsEditor({
     setTags(tags.filter((tag) => tag !== tagToRemove));
   };
 
-  // Fetch templates when dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchTemplates();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  const fetchTemplates = async () => {
+  const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
       const res = await fetch(`${apiBaseUrl}/api/streamer/templates`, {
@@ -207,7 +189,14 @@ export function StreamSettingsEditor({
     } finally {
       setLoadingTemplates(false);
     }
-  };
+  }, [apiBaseUrl]);
+
+  // Fetch templates when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchTemplates();
+    }
+  }, [isOpen, fetchTemplates]);
 
   const handleCreateTemplate = async () => {
     if (!newTemplateName.trim()) return;
@@ -321,10 +310,7 @@ export function StreamSettingsEditor({
               </button>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
-          >
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-800 transition-colors">
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
@@ -349,9 +335,7 @@ export function StreamSettingsEditor({
                   <select
                     className="bg-transparent text-sm text-purple-200 focus:outline-none w-full cursor-pointer"
                     onChange={(e) => {
-                      const template = templates.find(
-                        (t) => t.id === e.target.value,
-                      );
+                      const template = templates.find((t) => t.id === e.target.value);
                       if (template) loadTemplate(template);
                       e.target.value = ""; // Reset selection
                     }}
@@ -361,11 +345,7 @@ export function StreamSettingsEditor({
                       {t("loadTemplate")}
                     </option>
                     {templates.map((tpl) => (
-                      <option
-                        key={tpl.id}
-                        value={tpl.id}
-                        className="bg-gray-800"
-                      >
+                      <option key={tpl.id} value={tpl.id} className="bg-gray-800">
                         {tpl.templateName}
                       </option>
                     ))}
@@ -384,8 +364,8 @@ export function StreamSettingsEditor({
                   onChange={(e) => setTitle(e.target.value)}
                   maxLength={140}
                   placeholder={t("streamTitlePlaceholder")}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg 
-                             text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1 
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg
+                             text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1
                              focus:ring-purple-500 transition-colors"
                 />
                 <p className="mt-1 text-xs text-gray-500">
@@ -408,8 +388,8 @@ export function StreamSettingsEditor({
                       if (selectedGame) setSelectedGame(null);
                     }}
                     placeholder={t("gameCategoryPlaceholder")}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg 
-                               text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1 
+                    className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg
+                               text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1
                                focus:ring-purple-500 transition-colors"
                   />
                   {searchingGames && (
@@ -432,11 +412,7 @@ export function StreamSettingsEditor({
                       >
                         {game.boxArtUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={game.boxArtUrl}
-                            alt={game.name}
-                            className="w-8 h-10 rounded"
-                          />
+                          <img src={game.boxArtUrl} alt={game.name} className="w-8 h-10 rounded" />
                         )}
                         <span className="text-white">{game.name}</span>
                       </button>
@@ -447,14 +423,12 @@ export function StreamSettingsEditor({
 
               {/* Tags */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {t("tags")}
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">{t("tags")}</label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-purple-500/20 
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-purple-500/20
                                  text-purple-300 rounded-full text-sm border border-purple-500/30"
                     >
                       <Tag className="w-3 h-3" />
@@ -475,8 +449,8 @@ export function StreamSettingsEditor({
                   onKeyDown={handleTagKeyDown}
                   placeholder={t("tagsPlaceholder")}
                   disabled={tags.length >= 10}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg 
-                             text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1 
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg
+                             text-white placeholder-gray-500 focus:border-purple-500 focus:ring-1
                              focus:ring-purple-500 transition-colors disabled:opacity-50"
                 />
                 <p className="mt-1 text-xs text-gray-500">
@@ -507,8 +481,8 @@ export function StreamSettingsEditor({
             <button
               onClick={handleSave}
               disabled={saving || loading}
-              className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-500 
-                       text-white rounded-lg font-medium transition-colors disabled:opacity-50 
+              className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-500
+                       text-white rounded-lg font-medium transition-colors disabled:opacity-50
                        disabled:cursor-not-allowed"
             >
               {saving ? (
@@ -531,15 +505,13 @@ export function StreamSettingsEditor({
       {showSaveTemplateDialog && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-900 rounded-xl w-full max-w-sm p-6 shadow-2xl border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              {t("saveAsTemplate")}
-            </h3>
+            <h3 className="text-lg font-semibold text-white mb-4">{t("saveAsTemplate")}</h3>
             <input
               type="text"
               value={newTemplateName}
               onChange={(e) => setNewTemplateName(e.target.value)}
               placeholder={t("templateNamePlaceholder")}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg 
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg
                        text-white placeholder-gray-500 mb-4 focus:ring-1 focus:ring-purple-500"
               autoFocus
             />
@@ -567,9 +539,7 @@ export function StreamSettingsEditor({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-900 rounded-xl w-full max-w-md p-6 shadow-2xl border border-gray-700 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">
-                {t("manageTemplates")}
-              </h3>
+              <h3 className="text-lg font-semibold text-white">{t("manageTemplates")}</h3>
               <button
                 onClick={() => setShowManageTemplatesDialog(false)}
                 className="text-gray-400 hover:text-white"
@@ -584,9 +554,7 @@ export function StreamSettingsEditor({
                   <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
                 </div>
               ) : templates.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">
-                  {t("noTemplates")}
-                </p>
+                <p className="text-center text-gray-500 py-8">{t("noTemplates")}</p>
               ) : (
                 templates.map((tpl) => (
                   <div
@@ -594,12 +562,8 @@ export function StreamSettingsEditor({
                     className="flex items-center justify-between p-3 bg-gray-800 rounded-lg group"
                   >
                     <div className="overflow-hidden">
-                      <p className="font-medium text-white truncate">
-                        {tpl.templateName}
-                      </p>
-                      <p className="text-xs text-gray-400 truncate">
-                        {tpl.title}
-                      </p>
+                      <p className="font-medium text-white truncate">{tpl.templateName}</p>
+                      <p className="text-xs text-gray-400 truncate">{tpl.title}</p>
                     </div>
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button

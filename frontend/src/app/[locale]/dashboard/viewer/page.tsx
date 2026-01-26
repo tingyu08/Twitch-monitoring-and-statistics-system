@@ -35,9 +35,7 @@ export default function ViewerDashboardPage() {
   const { user, loading: authLoading, logout } = useAuthSession();
   const [channels, setChannels] = useState<FollowedChannel[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredChannels, setFilteredChannels] = useState<FollowedChannel[]>(
-    [],
-  );
+  const [filteredChannels, setFilteredChannels] = useState<FollowedChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +44,18 @@ export default function ViewerDashboardPage() {
   const lastNotifiedChannelsRef = useRef<string>("");
 
   const { socket, connected: socketConnected } = useSocket();
+
+  const loadChannels = useCallback(async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const data = await viewerApi.getFollowedChannels();
+      setChannels(data);
+    } catch (err) {
+      if (!silent) setError(err instanceof Error ? err.message : "載入頻道失敗");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -61,10 +71,7 @@ export default function ViewerDashboardPage() {
     // WebSocket 即時更新邏輯
     if (socket && socketConnected) {
       // 處理訊息統計更新
-      const handleStatsUpdate = (data: {
-        channelId: string;
-        messageCount: number;
-      }) => {
+      const handleStatsUpdate = (data: { channelId: string; messageCount: number }) => {
         setChannels((prev) =>
           prev.map((ch) => {
             if (ch.id === data.channelId) {
@@ -74,7 +81,7 @@ export default function ViewerDashboardPage() {
               };
             }
             return ch;
-          }),
+          })
         );
       };
 
@@ -90,37 +97,27 @@ export default function ViewerDashboardPage() {
         console.log("[WebSocket] Stream online:", data);
         setChannels((prev) =>
           prev.map((ch) => {
-            if (
-              ch.id === data.channelId ||
-              ch.channelName === data.channelName
-            ) {
+            if (ch.id === data.channelId || ch.channelName === data.channelName) {
               return {
                 ...ch,
                 isLive: true,
                 currentTitle: data.title || ch.currentTitle,
                 currentGameName: data.gameName || ch.currentGameName,
                 currentViewerCount: data.viewerCount || 0,
-                currentStreamStartedAt:
-                  data.startedAt || new Date().toISOString(),
+                currentStreamStartedAt: data.startedAt || new Date().toISOString(),
               };
             }
             return ch;
-          }),
+          })
         );
       };
 
       // 處理關台事件
-      const handleStreamOffline = (data: {
-        channelId: string;
-        channelName: string;
-      }) => {
+      const handleStreamOffline = (data: { channelId: string; channelName: string }) => {
         console.log("[WebSocket] Stream offline:", data);
         setChannels((prev) =>
           prev.map((ch) => {
-            if (
-              ch.id === data.channelId ||
-              ch.channelName === data.channelName
-            ) {
+            if (ch.id === data.channelId || ch.channelName === data.channelName) {
               return {
                 ...ch,
                 isLive: false,
@@ -129,7 +126,7 @@ export default function ViewerDashboardPage() {
               };
             }
             return ch;
-          }),
+          })
         );
       };
 
@@ -144,10 +141,7 @@ export default function ViewerDashboardPage() {
       }) => {
         setChannels((prev) =>
           prev.map((ch) => {
-            if (
-              ch.id === data.channelId ||
-              ch.channelName === data.channelName
-            ) {
+            if (ch.id === data.channelId || ch.channelName === data.channelName) {
               return {
                 ...ch,
                 isLive: data.isLive ?? ch.isLive,
@@ -157,7 +151,7 @@ export default function ViewerDashboardPage() {
               };
             }
             return ch;
-          }),
+          })
         );
       };
 
@@ -173,20 +167,7 @@ export default function ViewerDashboardPage() {
         socket.off("channel.update", handleChannelUpdate);
       };
     }
-  }, [authLoading, user, router, socket, socketConnected]);
-
-  const loadChannels = useCallback(async (silent = false) => {
-    try {
-      if (!silent) setLoading(true);
-      const data = await viewerApi.getFollowedChannels();
-      setChannels(data);
-    } catch (err) {
-      if (!silent)
-        setError(err instanceof Error ? err.message : "載入頻道失敗");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+  }, [authLoading, user, router, socket, socketConnected, loadChannels]);
 
   // 自動輪詢: 每 60 秒更新一次頻道列表 (包含開台狀態)
   useEffect(() => {
@@ -224,8 +205,8 @@ export default function ViewerDashboardPage() {
         channels.filter(
           (ch) =>
             ch.channelName.toLowerCase().includes(lowerQuery) ||
-            ch.displayName.toLowerCase().includes(lowerQuery),
-        ),
+            ch.displayName.toLowerCase().includes(lowerQuery)
+        )
       );
       // 搜尋時重置到第一頁
       setCurrentPage(1);
@@ -241,28 +222,25 @@ export default function ViewerDashboardPage() {
   const currentPageChannels = filteredChannels.slice(startIndex, endIndex);
 
   // 通知後端監聽當前頁面的開台頻道
-  const notifyListenChannels = useCallback(
-    async (channelsToListen: FollowedChannel[]) => {
-      const liveChannels = channelsToListen
-        .filter((ch) => ch.isLive)
-        .map((ch) => ({ channelName: ch.channelName, isLive: true }));
+  const notifyListenChannels = useCallback(async (channelsToListen: FollowedChannel[]) => {
+    const liveChannels = channelsToListen
+      .filter((ch) => ch.isLive)
+      .map((ch) => ({ channelName: ch.channelName, isLive: true }));
 
-      // 建立唯一識別碼避免重複通知
-      const channelKey = liveChannels
-        .map((ch) => ch.channelName)
-        .sort()
-        .join(",");
-      if (channelKey === lastNotifiedChannelsRef.current) {
-        return; // 相同的頻道列表，不重複通知
-      }
-      lastNotifiedChannelsRef.current = channelKey;
+    // 建立唯一識別碼避免重複通知
+    const channelKey = liveChannels
+      .map((ch) => ch.channelName)
+      .sort()
+      .join(",");
+    if (channelKey === lastNotifiedChannelsRef.current) {
+      return; // 相同的頻道列表，不重複通知
+    }
+    lastNotifiedChannelsRef.current = channelKey;
 
-      if (liveChannels.length > 0) {
-        await viewerApi.setListenChannels(liveChannels);
-      }
-    },
-    [],
-  );
+    if (liveChannels.length > 0) {
+      await viewerApi.setListenChannels(liveChannels);
+    }
+  }, []);
 
   // 當頁面變更時通知後端
   useEffect(() => {
@@ -335,12 +313,7 @@ export default function ViewerDashboardPage() {
                 onClick={() => router.push("/dashboard/viewer/settings")}
                 className="px-4 py-2 rounded-lg bg-white/50 hover:bg-white/80 dark:bg-white/10 dark:hover:bg-white/20 text-sm theme-text-secondary transition-colors border border-purple-200 dark:border-white/10 flex items-center gap-2"
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -420,9 +393,7 @@ export default function ViewerDashboardPage() {
         {filteredChannels.length === 0 ? (
           <div className="text-center py-20 bg-white/40 dark:bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 border-dashed">
             <p className="text-purple-800/80 dark:text-purple-300/70 mb-4 text-lg">
-              {searchQuery
-                ? t("viewer.noChannels")
-                : t("viewer.noFollowedChannels")}
+              {searchQuery ? t("viewer.noChannels") : t("viewer.noFollowedChannels")}
             </p>
             {!searchQuery && (
               <button
@@ -525,9 +496,7 @@ export default function ViewerDashboardPage() {
                   {channel.isLive && channel.streamStartedAt && (
                     <div className="mb-3 px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-red-300/70">
-                          {t("viewer.streamDuration")}
-                        </span>
+                        <span className="text-red-300/70">{t("viewer.streamDuration")}</span>
                         <span className="text-red-400 font-mono">
                           {formatStreamDuration(channel.streamStartedAt)}
                         </span>
@@ -542,9 +511,7 @@ export default function ViewerDashboardPage() {
                       </p>
                       <p className="font-semibold text-blue-900 dark:text-blue-400 text-lg">
                         {(channel.totalWatchMinutes / 60).toFixed(1)}{" "}
-                        <span className="text-xs text-blue-700/60 dark:text-blue-400/60">
-                          h
-                        </span>
+                        <span className="text-xs text-blue-700/60 dark:text-blue-400/60">h</span>
                       </p>
                     </div>
                     <div className="bg-green-600/5 dark:bg-green-500/10 rounded-xl p-3 border border-green-200 dark:border-green-500/20">
@@ -561,9 +528,7 @@ export default function ViewerDashboardPage() {
                     <div className="flex justify-between items-center">
                       <span>{t("viewer.lastWatched")}</span>
                       <span className="text-purple-900 dark:text-purple-300 font-medium">
-                        {channel.lastWatched
-                          ? channel.lastWatched.split("T")[0]
-                          : "N/A"}
+                        {channel.lastWatched ? channel.lastWatched.split("T")[0] : "N/A"}
                       </span>
                     </div>
                     {channel.followedAt && (

@@ -27,9 +27,7 @@ const notoSansTC = Noto_Sans_TC({
 import dynamic from "next/dynamic";
 const ConsentBannerWrapper = dynamic(
   () =>
-    import("@/features/privacy/components/ConsentBanner").then(
-      (mod) => mod.ConsentBannerWrapper
-    ),
+    import("@/features/privacy/components/ConsentBanner").then((mod) => mod.ConsentBannerWrapper),
   { ssr: false }
 );
 
@@ -50,22 +48,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <head>
         {/* 防止 FOUC (Flash of Unstyled Content) */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var theme = localStorage.getItem('twitch-analytics-theme');
-                  if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                    document.documentElement.classList.add('dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
+
         <meta name="theme-color" content="#0e0e10" />
       </head>
       <body className={`theme-transition font-sans`}>
@@ -78,9 +61,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </Suspense>
           </AuthProvider>
         </ThemeProvider>
-        {process.env.NEXT_PUBLIC_GA_ID && (
-          <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
-        )}
+        {process.env.NEXT_PUBLIC_GA_ID && <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />}
       </body>
     </html>
   );

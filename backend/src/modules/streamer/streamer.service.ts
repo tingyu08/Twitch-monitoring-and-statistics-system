@@ -319,15 +319,35 @@ export async function getStreamerHeatmap(
   // 5. 彙整資料到 Heatmap
   sessions.forEach((session) => {
     const startDate = new Date(session.startedAt);
-    const dayOfWeek = startDate.getDay(); // 0=週日, 1=週一, ..., 6=週六
-    const startHour = startDate.getHours();
-    const durationHours = (session.durationSeconds || 0) / 3600;
 
-    // 將時數分配到對應的時段
-    // 簡化版：將整個開台時段的時數加到起始小時
-    const key = `${dayOfWeek}-${startHour}`;
-    const currentValue = heatmapMatrix.get(key) || 0;
-    heatmapMatrix.set(key, currentValue + durationHours);
+    // 簡單將時數分配到開始的小時，但若跨時段應更精確
+    // 這裡改進為：如果 duration > 1，則迴圈分配
+    // 注意：這裡做一個簡化的改進，將每一小時視為獨立的計數貢獻
+    // 若要非常精確需計算每小時的實際分鐘數，但為保持效能，我們先將總時數平均分給跨越的小時數?
+    // 或者，最標準的做法是：每經過一小時，就在該小時的格子+1 (或+該小時的實際佔比)
+
+    // 實作精確分配：
+    let remainingSeconds = session.durationSeconds || 0;
+    let currentTempDate = new Date(startDate);
+
+    while (remainingSeconds > 0) {
+      const dWeek = currentTempDate.getDay();
+      const hr = currentTempDate.getHours();
+      const key = `${dWeek}-${hr}`;
+
+      // 計算這一小時內剩餘的秒數（或是直到下一小時的秒數）
+      const secondsToNextHour =
+        3600 - currentTempDate.getMinutes() * 60 - currentTempDate.getSeconds();
+      const secondsInThisHour = Math.min(remainingSeconds, secondsToNextHour);
+
+      const contribution = secondsInThisHour / 3600;
+
+      const val = heatmapMatrix.get(key) || 0;
+      heatmapMatrix.set(key, val + contribution);
+
+      remainingSeconds -= secondsInThisHour;
+      currentTempDate = new Date(currentTempDate.getTime() + secondsInThisHour * 1000 + 100); // +100ms 避免邊界問題
+    }
   });
 
   // 6. 轉換為陣列格式並計算最大/最小值

@@ -309,8 +309,8 @@ class TwurpleHelixService {
     tokenInfo?: UserTokenInfo
   ): Promise<FollowedChannel[]> {
     // 記憶體優化：使用臨時變數追蹤需要釋放的資源
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let tempAuthProvider: any = null;
+    // RefreshingAuthProvider 透過動態導入，使用 unknown 類型
+    let _tempAuthProvider: unknown = null;
     let tempApiClient: ApiClient | null = null;
 
     try {
@@ -323,14 +323,14 @@ class TwurpleHelixService {
         const clientId = twurpleAuthService.getClientId();
         const clientSecret = twurpleAuthService.getClientSecret();
 
-        tempAuthProvider = new RefreshingAuthProvider({
+        const authProvider = new RefreshingAuthProvider({
           clientId,
           clientSecret,
         });
+        _tempAuthProvider = authProvider;
 
         // 設定 Token 刷新回調（刷新後更新資料庫）
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tempAuthProvider.onRefresh(async (_userId: string, newTokenData: any) => {
+        authProvider.onRefresh(async (_userId: string, newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData) => {
           logger.info(
             "Twurple Helix",
             `Token 已自動刷新 (User: ${userId}, TokenID: ${tokenInfo.tokenId})`
@@ -362,7 +362,7 @@ class TwurpleHelixService {
         });
 
         // 添加使用者的 Token
-        await tempAuthProvider.addUserForToken(
+        await authProvider.addUserForToken(
           {
             accessToken: tokenInfo.accessToken,
             refreshToken: tokenInfo.refreshToken,
@@ -375,7 +375,7 @@ class TwurpleHelixService {
         );
 
         tempApiClient = new ApiClient({
-          authProvider: tempAuthProvider,
+          authProvider: authProvider,
           logger: { minLevel: "error" },
         });
         api = tempApiClient;
@@ -384,9 +384,10 @@ class TwurpleHelixService {
         const { ApiClient } = await importTwurpleApi();
         const { StaticAuthProvider } = await importTwurpleAuth();
         const clientId = twurpleAuthService.getClientId();
-        tempAuthProvider = new StaticAuthProvider(clientId, userAccessToken);
+        const authProvider = new StaticAuthProvider(clientId, userAccessToken);
+        _tempAuthProvider = authProvider;
         tempApiClient = new ApiClient({
-          authProvider: tempAuthProvider,
+          authProvider: authProvider,
           logger: { minLevel: "error" },
         });
         api = tempApiClient;
@@ -430,7 +431,7 @@ class TwurpleHelixService {
     } finally {
       // 記憶體優化：確保臨時資源被釋放
       // 將引用設為 null，讓 GC 可以回收
-      tempAuthProvider = null;
+      _tempAuthProvider = null;
       tempApiClient = null;
     }
   }
