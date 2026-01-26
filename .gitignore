@@ -43,6 +43,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+logs/
+backend/logs/
 
 # IDE / 編輯器
 .vscode/

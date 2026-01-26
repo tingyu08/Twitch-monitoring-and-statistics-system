@@ -1,4 +1,5 @@
 import { prisma } from "../../db/prisma";
+import { dynamicImport } from "../../utils/dynamic-import";
 
 
 /**
@@ -116,10 +117,11 @@ export class RevenueService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tokenData: any
   ): Promise<{ total: number; tier1: number; tier2: number; tier3: number }> {
-    const { ApiClient } = await import("@twurple/api");
-    const { RefreshingAuthProvider } = await import("@twurple/auth");
-    const { twurpleAuthService } = await import("../../services/twurple-auth.service");
-    const { decryptToken, encryptToken } = await import("../../utils/crypto.utils");
+    // 使用 dynamicImport 來載入 ES Module，避免被 TypeScript 轉換為 require()
+    const { ApiClient } = await dynamicImport("@twurple/api");
+    const { RefreshingAuthProvider } = await dynamicImport("@twurple/auth");
+    const { twurpleAuthService } = await dynamicImport("../../services/twurple-auth.service");
+    const { decryptToken, encryptToken } = await dynamicImport("../../utils/crypto.utils");
 
     const clientId = twurpleAuthService.getClientId();
     const clientSecret = twurpleAuthService.getClientSecret();
@@ -138,7 +140,8 @@ export class RevenueService {
     });
 
     // 設定刷新回調
-    authProvider.onRefresh(async (_userId, newTokenData) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    authProvider.onRefresh(async (_userId: any, newTokenData: any) => {
       console.log(`[RevenueService] Token refreshed for streamer ${broadcasterId}`);
       await prisma.twitchToken.update({
         where: { id: tokenData.id },
@@ -167,6 +170,9 @@ export class RevenueService {
     // 使用 Paginator 獲取所有訂閱者
     const result = { total: 0, tier1: 0, tier2: 0, tier3: 0 };
 
+    // 記憶體與超時保護：限制最大訂閱者數量
+    const MAX_SUBSCRIPTIONS = 10000;
+
     try {
       const paginator = apiClient.subscriptions.getSubscriptionsPaginated(broadcasterId);
 
@@ -175,6 +181,12 @@ export class RevenueService {
         if (sub.tier === "1000") result.tier1++;
         else if (sub.tier === "2000") result.tier2++;
         else if (sub.tier === "3000") result.tier3++;
+
+        // 超過上限則停止（極少數大型頻道可能超過）
+        if (result.total >= MAX_SUBSCRIPTIONS) {
+          console.warn(`[RevenueService] 訂閱者數量超過 ${MAX_SUBSCRIPTIONS}，已截斷`);
+          break;
+        }
       }
     } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       // 處理權限不足或 Token 無效的情況

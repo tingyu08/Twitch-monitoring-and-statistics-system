@@ -6,7 +6,10 @@ services:
     plan: free
     buildCommand: npm install && npm run build
     startCommand: npm run start
-    healthCheckPath: /api/health
+    # 使用輕量級 ping endpoint，加快冷啟動後的健康檢查
+    healthCheckPath: /api/health/ping
+    # 自動重啟設定
+    autoDeploy: true
     envVars:
       # 基本設定
       - key: NODE_ENV

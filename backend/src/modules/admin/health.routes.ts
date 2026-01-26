@@ -11,25 +11,69 @@ import { prisma } from "../../db/prisma";
 
 const healthRoutes = Router();
 
+// 快取最後一次成功的資料庫檢查時間
+let lastDbCheckTime = 0;
+let lastDbCheckSuccess = false;
+const DB_CHECK_CACHE_MS = 30 * 1000; // 30 秒快取
+
 /**
- * 基本健康檢查
+ * 超輕量級 Ping 端點（給 UptimeRobot 使用）
+ * GET /api/health/ping
+ *
+ * 這個端點不做任何資料庫查詢，只回傳基本狀態
+ * 用於 Render Free Tier 的冷啟動監控
+ */
+healthRoutes.get("/ping", (_req: Request, res: Response) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+  });
+});
+
+/**
+ * 基本健康檢查（含快取優化）
  * GET /api/health
  */
 healthRoutes.get("/", async (_req: Request, res: Response) => {
   try {
-    // 檢查資料庫連線
-    await prisma.$queryRaw`SELECT 1`;
+    const now = Date.now();
+
+    // 如果快取還有效，使用快取結果
+    if (now - lastDbCheckTime < DB_CHECK_CACHE_MS && lastDbCheckSuccess) {
+      return res.json({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        cached: true,
+      });
+    }
+
+    // 檢查資料庫連線（設定超時）
+    const dbCheckPromise = prisma.$queryRaw`SELECT 1`;
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("DB check timeout")), 5000)
+    );
+
+    await Promise.race([dbCheckPromise, timeoutPromise]);
+
+    // 更新快取
+    lastDbCheckTime = now;
+    lastDbCheckSuccess = true;
 
     res.json({
       status: "healthy",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
+      cached: false,
     });
-  } catch {
+  } catch (error) {
+    lastDbCheckSuccess = false;
+
     res.status(503).json({
       status: "unhealthy",
       timestamp: new Date().toISOString(),
-      error: "Database connection failed",
+      error: error instanceof Error ? error.message : "Database connection failed",
     });
   }
 });

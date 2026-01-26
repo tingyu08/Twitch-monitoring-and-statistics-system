@@ -3,6 +3,9 @@ import { prisma } from "../db/prisma";
 import { revenueService } from "../modules/streamer/revenue.service";
 import { logger } from "../utils/logger";
 
+// 每個實況主的超時時間（毫秒）- 60 秒
+const PER_STREAMER_TIMEOUT_MS = 60 * 1000;
+
 /**
  * Sync Subscriptions Job
  * 每日同步訂閱快照
@@ -33,7 +36,16 @@ export const syncSubscriptionsJob = cron.schedule("0 0 * * *", async () => {
 
     for (const streamer of streamers) {
       try {
-        await revenueService.syncSubscriptionSnapshot(streamer.id);
+        // 使用 Promise.race 實現單個實況主的超時保護
+        await Promise.race([
+          revenueService.syncSubscriptionSnapshot(streamer.id),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Timeout after ${PER_STREAMER_TIMEOUT_MS / 1000}s`)),
+              PER_STREAMER_TIMEOUT_MS
+            )
+          ),
+        ]);
         successCount++;
         logger.debug("Jobs", `Synced subscription snapshot for ${streamer.displayName}`);
       } catch (error) {

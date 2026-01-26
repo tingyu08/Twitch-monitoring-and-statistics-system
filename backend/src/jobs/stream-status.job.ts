@@ -220,6 +220,11 @@ export class StreamStatusJob {
         logger.error("JOB", `批次查詢失敗 (${i}-${i + batch.length}):`, error);
         // 繼續處理下一批
       }
+
+      // 記憶體/CPU 優化：批次之間休息一下，避免超時和記憶體爆炸
+      if (i + MAX_CHANNELS_PER_BATCH < twitchChannelIds.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
     }
 
     return allStreams;
