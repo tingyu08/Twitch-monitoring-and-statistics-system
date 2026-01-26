@@ -2,12 +2,19 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, Download, RefreshCw, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  RefreshCw,
+  Loader2,
+  ChevronDown,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { SubscriptionStats } from "@/features/streamer-dashboard/charts/SubscriptionStats";
 import { BitsStats } from "@/features/streamer-dashboard/charts/BitsStats";
+import { RevenueOverview } from "@/features/streamer-dashboard/charts/RevenueOverview";
 
 export default function RevenuePage() {
   const t = useTranslations("streamer.revenue");
@@ -15,12 +22,13 @@ export default function RevenuePage() {
   const params = useParams();
   const locale = (params?.locale as string) || "zh-TW";
 
-  const [activeTab, setActiveTab] = useState<"subscriptions" | "bits">(
-    "subscriptions",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "subscriptions" | "bits"
+  >("overview");
   const [days, setDays] = useState(30);
   const [syncing, setSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -46,11 +54,12 @@ export default function RevenuePage() {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format: "csv" | "pdf" = "csv") => {
     setExporting(true);
+    setShowExportMenu(false);
     try {
       const res = await fetch(
-        `${apiBaseUrl}/api/streamer/revenue/export?format=csv&days=${days}`,
+        `${apiBaseUrl}/api/streamer/revenue/export?format=${format}&days=${days}`,
         { credentials: "include" },
       );
       if (!res.ok) throw new Error("Export failed");
@@ -59,7 +68,7 @@ export default function RevenuePage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `revenue-report-${days}days.csv`;
+      a.download = `revenue-report-${days}days.${format}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -107,7 +116,7 @@ export default function RevenuePage() {
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500
                          text-white rounded-lg text-sm font-medium transition-colors
                          disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -119,26 +128,55 @@ export default function RevenuePage() {
               {t("sync")}
             </button>
 
-            {/* 匯出按鈕 */}
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 
-                         text-white rounded-lg text-sm font-medium transition-colors
-                         disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {exporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
+            {/* 匯出按鈕下拉選單 */}
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                disabled={exporting}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500
+                           text-white rounded-lg text-sm font-medium transition-colors
+                           disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {exporting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                {t("export")}
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 mt-2 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10">
+                  <button
+                    onClick={() => handleExport("csv")}
+                    className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 rounded-t-lg"
+                  >
+                    📊 CSV {t("exportFormat")}
+                  </button>
+                  <button
+                    onClick={() => handleExport("pdf")}
+                    className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 rounded-b-lg"
+                  >
+                    📄 PDF {t("exportFormat")}
+                  </button>
+                </div>
               )}
-              {t("export")}
-            </button>
+            </div>
           </div>
         </div>
 
         {/* Tab 切換 */}
         <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "overview"
+                ? "bg-green-600 text-white"
+                : "bg-gray-800 text-gray-400 hover:text-white"
+            }`}
+          >
+            {t("overview")}
+          </button>
           <button
             onClick={() => setActiveTab("subscriptions")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -163,7 +201,9 @@ export default function RevenuePage() {
 
         {/* 內容區域 */}
         <div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/50">
-          {activeTab === "subscriptions" ? (
+          {activeTab === "overview" ? (
+            <RevenueOverview />
+          ) : activeTab === "subscriptions" ? (
             <SubscriptionStats days={days} />
           ) : (
             <BitsStats days={days} />

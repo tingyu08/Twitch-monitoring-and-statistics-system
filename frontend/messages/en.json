@@ -400,6 +400,7 @@
     "revenue": {
       "title": "Revenue Analytics",
       "subtitle": "Track your subscriptions and Bits earnings",
+      "overview": "Revenue Overview",
       "subscriptions": "Subscriptions",
       "bits": "Bits",
       "totalSubs": "Total Subs",
@@ -421,8 +422,13 @@
       "syncSuccess": "Data synced successfully",
       "syncError": "Sync failed, please retry",
       "export": "Export Report",
+      "exportFormat": "Format",
       "exportSuccess": "Report exported",
       "exportError": "Export failed, please retry",
+      "totalEstRevenue": "Total Estimated Revenue",
+      "revenueBreakdown": "Revenue Breakdown",
+      "conversionRate": "Conversion Rate",
+      "noData": "No revenue data yet",
       "revenueDisclaimer": "Revenue is estimated based on standard 50% split. Actual earnings may vary by region and contract."
     },
     "overviewTitle": "Stream Stats Overview",

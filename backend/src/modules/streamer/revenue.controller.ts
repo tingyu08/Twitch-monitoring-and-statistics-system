@@ -109,17 +109,18 @@ export class RevenueController {
       const days = parseInt(req.query.days as string) || 30;
       const format = (req.query.format as string) || "csv";
 
-      if (format !== "csv") {
-        return res.status(400).json({ error: "Only CSV format is supported" });
+      if (format !== "csv" && format !== "pdf") {
+        return res.status(400).json({ error: "Only CSV and PDF formats are supported" });
       }
 
       // 獲取數據
-      const [subscriptionStats, bitsStats] = await Promise.all([
+      const [subscriptionStats, bitsStats, overview] = await Promise.all([
         revenueService.getSubscriptionStats(streamerId, days),
         revenueService.getBitsStats(streamerId, days),
+        revenueService.getRevenueOverview(streamerId),
       ]);
 
-      // 構建 CSV
+      // 構建報表數據
       const headers = [
         "Date",
         "Tier1 Subscribers",
@@ -155,15 +156,159 @@ export class RevenueController {
         ]);
       }
 
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      if (format === "csv") {
+        const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.csv"`);
-      return res.send(csv);
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.csv"`);
+        return res.send(csv);
+      } else {
+        // PDF 格式 - 生成可讀的文本格式 PDF
+        const pdfContent = this.generatePdfContent(overview, subscriptionStats, bitsStats, days);
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.pdf"`);
+        return res.send(pdfContent);
+      }
     } catch (error) {
       console.error("Export report error:", error);
       return res.status(500).json({ error: "Failed to export report" });
     }
+  }
+
+  /**
+   * 生成 PDF 內容（使用基本格式）
+   */
+  private generatePdfContent(
+    overview: Awaited<ReturnType<typeof revenueService.getRevenueOverview>>,
+    subscriptionStats: Awaited<ReturnType<typeof revenueService.getSubscriptionStats>>,
+    bitsStats: Awaited<ReturnType<typeof revenueService.getBitsStats>>,
+    days: number
+  ): Buffer {
+    const lines: string[] = [];
+    const divider = "=".repeat(60);
+    const subDivider = "-".repeat(60);
+
+    // 標題
+    lines.push("");
+    lines.push(divider);
+    lines.push("           TWITCH REVENUE REPORT");
+    lines.push(`           Period: Last ${days} Days`);
+    lines.push(`           Generated: ${new Date().toISOString().split("T")[0]}`);
+    lines.push(divider);
+    lines.push("");
+
+    // 總覽摘要
+    lines.push("REVENUE OVERVIEW");
+    lines.push(subDivider);
+    lines.push(`Total Estimated Revenue:    $${overview.totalEstimatedRevenue.toFixed(2)}`);
+    lines.push("");
+    lines.push("Subscriptions:");
+    lines.push(`  - Total Subscribers:      ${overview.subscriptions.current}`);
+    lines.push(`  - Tier 1:                 ${overview.subscriptions.tier1}`);
+    lines.push(`  - Tier 2:                 ${overview.subscriptions.tier2}`);
+    lines.push(`  - Tier 3:                 ${overview.subscriptions.tier3}`);
+    lines.push(`  - Monthly Revenue:        $${overview.subscriptions.estimatedMonthlyRevenue.toFixed(2)}`);
+    lines.push("");
+    lines.push("Bits:");
+    lines.push(`  - Total Bits:             ${overview.bits.totalBits.toLocaleString()}`);
+    lines.push(`  - Cheer Events:           ${overview.bits.eventCount}`);
+    lines.push(`  - Estimated Revenue:      $${overview.bits.estimatedRevenue.toFixed(2)}`);
+    lines.push("");
+
+    // 訂閱趨勢
+    if (subscriptionStats.length > 0) {
+      lines.push(divider);
+      lines.push("SUBSCRIPTION HISTORY");
+      lines.push(subDivider);
+      lines.push("Date        | T1   | T2   | T3   | Total | Revenue");
+      lines.push(subDivider);
+      for (const stat of subscriptionStats.slice(-10)) {
+        const date = stat.date.padEnd(11);
+        const t1 = String(stat.tier1Count).padStart(4);
+        const t2 = String(stat.tier2Count).padStart(4);
+        const t3 = String(stat.tier3Count).padStart(4);
+        const total = String(stat.totalSubscribers).padStart(5);
+        const rev = `$${stat.estimatedRevenue.toFixed(2)}`.padStart(8);
+        lines.push(`${date} | ${t1} | ${t2} | ${t3} | ${total} | ${rev}`);
+      }
+      lines.push("");
+    }
+
+    // Bits 趨勢
+    if (bitsStats.length > 0) {
+      lines.push(divider);
+      lines.push("BITS HISTORY");
+      lines.push(subDivider);
+      lines.push("Date        | Total Bits | Events | Revenue");
+      lines.push(subDivider);
+      for (const stat of bitsStats.slice(-10)) {
+        const date = stat.date.padEnd(11);
+        const bits = String(stat.totalBits).padStart(10);
+        const events = String(stat.eventCount).padStart(6);
+        const rev = `$${stat.estimatedRevenue.toFixed(2)}`.padStart(8);
+        lines.push(`${date} | ${bits} | ${events} | ${rev}`);
+      }
+      lines.push("");
+    }
+
+    // 頁尾
+    lines.push(divider);
+    lines.push("Note: Revenue estimates are based on standard 50% revenue share.");
+    lines.push("Actual earnings may vary based on your contract with Twitch.");
+    lines.push(divider);
+
+    // 簡單的 PDF 格式（純文本 wrapper）
+    // 使用 %PDF-1.4 標準格式生成最小化 PDF
+    const textContent = lines.join("\n");
+    return this.createSimplePdf(textContent);
+  }
+
+  /**
+   * 創建簡單的 PDF 文件
+   */
+  private createSimplePdf(textContent: string): Buffer {
+    // 創建最簡化的 PDF 結構
+    const stream = textContent.replace(/\n/g, "\\n");
+
+    const pdf = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length ${stream.length + 50} >>
+stream
+BT
+/F1 10 Tf
+50 750 Td
+(${stream}) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000266 00000 n
+0000000${String(366 + stream.length).padStart(3, "0")} 00000 n
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+${420 + stream.length}
+%%EOF`;
+
+    return Buffer.from(pdf, "utf-8");
   }
 }
 

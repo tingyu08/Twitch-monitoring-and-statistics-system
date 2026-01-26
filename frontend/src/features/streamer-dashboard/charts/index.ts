@@ -9,3 +9,6 @@ export {
   ChartEstimatedBadge
 } from './ChartStates';
 export { GameStatsChart } from './GameStatsChart';
+export { SubscriptionStats } from './SubscriptionStats';
+export { BitsStats } from './BitsStats';
+export { RevenueOverview } from './RevenueOverview';

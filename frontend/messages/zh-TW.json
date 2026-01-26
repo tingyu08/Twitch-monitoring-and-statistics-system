@@ -394,6 +394,7 @@
     "revenue": {
       "title": "收益分析",
       "subtitle": "追蹤您的訂閱與 Bits 收益",
+      "overview": "收益總覽",
       "subscriptions": "訂閱收益",
       "bits": "Bits 贊助",
       "totalSubs": "訂閱總數",
@@ -415,8 +416,13 @@
       "syncSuccess": "數據同步成功",
       "syncError": "同步失敗，請重試",
       "export": "匯出報表",
+      "exportFormat": "格式",
       "exportSuccess": "報表已匯出",
       "exportError": "匯出失敗，請重試",
+      "totalEstRevenue": "總預估收益",
+      "revenueBreakdown": "收益來源佔比",
+      "conversionRate": "轉換比例",
+      "noData": "尚無收益數據",
       "revenueDisclaimer": "收益為預估值，基於標準 50% 分潤比例計算，實際收益可能因地區與合約而異。"
     },
     "overviewTitle": "開台統計總覽",
