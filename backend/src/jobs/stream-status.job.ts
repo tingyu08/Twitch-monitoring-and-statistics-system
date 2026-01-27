@@ -108,7 +108,7 @@ export class StreamStatusJob {
   }
 
   /**
-   * 實際執行邏輯（優化版：批次查詢避免 N+1）
+   * 實際執行邏輯（優化版：並行處理 + 減少 DB 查詢）
    */
   private async doExecute(result: StreamStatusResult): Promise<void> {
     // 1. 獲取所有需要監控的頻道
@@ -125,13 +125,9 @@ export class StreamStatusJob {
     const liveStreams = await this.fetchStreamStatuses(twitchChannelIds);
     const liveStreamMap = new Map(liveStreams.map((s) => [s.userId, s]));
 
-    // 診斷日誌：顯示監控頻道數和直播中頻道
     logger.debug("JOB", `正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`);
-    if (liveStreams.length > 0) {
-      logger.debug("JOB", `直播中: ${liveStreams.map((s) => s.userName).join(", ")}`);
-    }
 
-    // 3. 【優化】一次查詢所有 active sessions，避免 N+1
+    // 3. 一次查詢所有 active sessions
     const channelIds = channels.map((c) => c.id);
     const activeSessions = await prisma.streamSession.findMany({
       where: {
@@ -141,52 +137,87 @@ export class StreamStatusJob {
     });
     const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
-    // 4. 處理每個頻道的狀態變化
-    for (const channel of channels) {
+    // 4. 處理每個頻道的狀態變化（並行處理，限制並發數）
+    const CONCURRENCY_LIMIT = 5; // 限制同時 5 個 DB 操作以保護連線池
+
+    // 將任務分組進行並行處理
+    const tasks = channels.map(async (channel) => {
       const stream = liveStreamMap.get(channel.twitchChannelId);
       const isLive = !!stream;
       const activeSession = activeSessionMap.get(channel.id);
 
-      if (isLive && stream && !activeSession) {
-        // 新開播：建立 session
-        await this.createStreamSession(channel, stream);
-        result.newSessions++;
-        result.online++;
-      } else if (isLive && stream && activeSession) {
-        // 持續開播：更新 session 資訊
-        await this.updateStreamSession(activeSession.id, stream);
-        result.online++;
-      } else if (!isLive && activeSession) {
-        // 已下播：結束 session
-        await this.endStreamSession(activeSession.id);
-        result.endedSessions++;
-        result.offline++;
-      } else {
-        // 未開播且無進行中 session
-        result.offline++;
+      try {
+        if (isLive && stream && !activeSession) {
+          // 新開播：建立 session
+          await this.createStreamSession(channel, stream);
+          result.newSessions++;
+          result.online++;
+        } else if (isLive && stream && activeSession) {
+          // 持續開播：更新 session 資訊 (直接使用 activeSession 物件，不需再查詢)
+          await this.updateStreamSession(activeSession, stream);
+          result.online++;
+        } else if (!isLive && activeSession) {
+          // 已下播：結束 session (直接使用 activeSession 物件)
+          await this.endStreamSession(activeSession);
+          result.endedSessions++;
+          result.offline++;
+        } else {
+          // 未開播且無進行中 session
+          result.offline++;
+        }
+      } catch (err) {
+        logger.error("JOB", `處理頻道 ${channel.channelName} 狀態失敗:`, err);
+      }
+    });
+
+    // 執行並發控制
+    await this.runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+  }
+
+  /**
+   * 簡單的並發控制器
+   */
+  private async runWithConcurrency<T>(tasks: Promise<T>[], limit: number): Promise<void> {
+    const results: Promise<T>[] = [];
+    const executing = new Set<Promise<void>>();
+
+    for (const task of tasks) {
+      const p = Promise.resolve().then(() => task);
+      results.push(p);
+
+      if (limit <= tasks.length) {
+        const wrapper = p.then(() => {
+          executing.delete(wrapper);
+        });
+        executing.add(wrapper);
+
+        if (executing.size >= limit) {
+          await Promise.race(executing);
+        }
       }
     }
+    await Promise.all(results);
   }
 
   /**
    * 獲取所有需要監控的頻道
-   * Story 3.6: 現在包含 platform 與 external 頻道，只要 isMonitored=true
    */
   private async getActiveChannels() {
-    // 診斷：檢查總頻道數與監控頻道數
     const totalChannels = await prisma.channel.count();
     const monitoredChannels = await prisma.channel.count({
       where: { isMonitored: true },
     });
-    logger.debug(
-      "JOB",
-      `頻道統計: 總共 ${totalChannels} 個頻道, 其中 ${monitoredChannels} 個正在監控`
-    );
+
+    // 只在 debug 模式顯示詳細統計
+    if (process.env.NODE_ENV !== "production") {
+      logger.debug(
+        "JOB",
+        `頻道統計: 總共 ${totalChannels} 個頻道, 其中 ${monitoredChannels} 個正在監控`
+      );
+    }
 
     return prisma.channel.findMany({
-      where: {
-        isMonitored: true,
-      },
+      where: { isMonitored: true },
       select: {
         id: true,
         twitchChannelId: true,
@@ -218,10 +249,9 @@ export class StreamStatusJob {
         allStreams.push(...streams);
       } catch (error) {
         logger.error("JOB", `批次查詢失敗 (${i}-${i + batch.length}):`, error);
-        // 繼續處理下一批
       }
 
-      // 記憶體/CPU 優化：批次之間休息一下，避免超時和記憶體爆炸
+      // 記憶體/CPU 優化：批次之間休息一下
       if (i + MAX_CHANNELS_PER_BATCH < twitchChannelIds.length) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
@@ -231,7 +261,7 @@ export class StreamStatusJob {
   }
 
   /**
-   * 建立新的 StreamSession（使用 upsert 防止重複）
+   * 建立新的 StreamSession（優化版：減少 DB 查詢）
    */
   private async createStreamSession(
     channel: { id: string; channelName: string },
@@ -243,11 +273,9 @@ export class StreamStatusJob {
       startedAt: Date;
     }
   ): Promise<void> {
-    // 使用 upsert 防止 UNIQUE constraint 錯誤
-    await prisma.streamSession.upsert({
-      where: {
-        twitchStreamId: stream.id,
-      },
+    // Upsert 並直接返回結果
+    const session = await prisma.streamSession.upsert({
+      where: { twitchStreamId: stream.id },
       create: {
         channelId: channel.id,
         twitchStreamId: stream.id,
@@ -258,61 +286,43 @@ export class StreamStatusJob {
         peakViewers: stream.viewerCount,
       },
       update: {
-        // 如果已存在，更新資訊
         title: stream.title,
         category: stream.gameName,
-        peakViewers: {
-          // 只更新峰值如果當前更高
-          set: stream.viewerCount,
-        },
+        peakViewers: { set: stream.viewerCount },
       },
     });
 
-    // 新開播：同時記錄第一筆 StreamMetric (Realtime Viewer Data)
-    // 我們需要先獲取這個 Session 的 ID (如果是新建的)
-    const session = await prisma.streamSession.findUnique({
-      where: { twitchStreamId: stream.id },
+    // 直接使用 session.id 建立 metric
+    await prisma.streamMetric.create({
+      data: {
+        streamSessionId: session.id,
+        viewerCount: stream.viewerCount,
+        timestamp: new Date(),
+      },
     });
 
-    if (session) {
-      await prisma.streamMetric.create({
-        data: {
-          streamSessionId: session.id,
-          viewerCount: stream.viewerCount,
-          timestamp: new Date(),
-        },
-      });
-    }
-
-    logger.info("JOB", `新開播: ${channel.channelName} - ${stream.title} (Metric recorded)`);
+    logger.info("JOB", `新開播: ${channel.channelName} - ${stream.title}`);
   }
 
   /**
-   * 更新進行中的 StreamSession
+   * 更新進行中的 StreamSession（優化版：使用已有的 session 物件）
    */
   private async updateStreamSession(
-    sessionId: string,
+    activeSession: { id: string; peakViewers: number | null; avgViewers: number | null },
     stream: {
       title: string;
       gameName: string;
       viewerCount: number;
     }
   ): Promise<void> {
-    const session = await prisma.streamSession.findUnique({
-      where: { id: sessionId },
-    });
-
-    if (!session) return;
-
-    // 更新 peak viewers
-    const newPeak = Math.max(session.peakViewers || 0, stream.viewerCount);
-
-    // 計算平均觀看人數 (簡化版：移動平均)
-    const currentAvg = session.avgViewers || stream.viewerCount;
+    // 計算數值
+    const newPeak = Math.max(activeSession.peakViewers || 0, stream.viewerCount);
+    const currentAvg = activeSession.avgViewers || stream.viewerCount;
     const newAvg = Math.round((currentAvg + stream.viewerCount) / 2);
 
+    // 直接更新
     await prisma.streamSession.update({
-      where: { id: sessionId },
+      where: { id: activeSession.id },
       data: {
         title: stream.title,
         category: stream.gameName,
@@ -321,10 +331,10 @@ export class StreamStatusJob {
       },
     });
 
-    // 記錄真實每小時數據點 (StreamMetric)
+    // 記錄 Metric
     await prisma.streamMetric.create({
       data: {
-        streamSessionId: sessionId,
+        streamSessionId: activeSession.id,
         viewerCount: stream.viewerCount,
         timestamp: new Date(),
       },
@@ -332,27 +342,26 @@ export class StreamStatusJob {
   }
 
   /**
-   * 結束 StreamSession
+   * 結束 StreamSession（優化版：直接更新）
    */
-  private async endStreamSession(sessionId: string): Promise<void> {
-    const session = await prisma.streamSession.findUnique({
-      where: { id: sessionId },
-    });
-
-    if (!session) return;
-
+  private async endStreamSession(activeSession: { id: string; startedAt: Date }): Promise<void> {
     const endedAt = new Date();
-    const durationSeconds = Math.floor((endedAt.getTime() - session.startedAt.getTime()) / 1000);
+    const durationSeconds = Math.floor(
+      (endedAt.getTime() - activeSession.startedAt.getTime()) / 1000
+    );
 
     await prisma.streamSession.update({
-      where: { id: sessionId },
+      where: { id: activeSession.id },
       data: {
         endedAt,
         durationSeconds,
       },
     });
 
-    logger.info("JOB", `下播: Session ${sessionId} (${Math.floor(durationSeconds / 60)} 分鐘)`);
+    logger.info(
+      "JOB",
+      `下播: Session ${activeSession.id} (${Math.floor(durationSeconds / 60)} 分鐘)`
+    );
   }
 }
 

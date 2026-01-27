@@ -11,13 +11,13 @@ import type { AppTokenAuthProvider, RefreshingAuthProvider, AccessToken } from "
 
 // Logger fallback for dynamic import scenarios
 const logger = {
-  info: (cat: string, msg: string, ...args: any[]) =>
+  info: (cat: string, msg: string, ...args: unknown[]) =>
     console.log(`[INFO] [${cat}] ${msg}`, ...args),
-  error: (cat: string, msg: string, ...args: any[]) =>
+  error: (cat: string, msg: string, ...args: unknown[]) =>
     console.error(`[ERROR] [${cat}] ${msg}`, ...args),
-  warn: (cat: string, msg: string, ...args: any[]) =>
+  warn: (cat: string, msg: string, ...args: unknown[]) =>
     console.warn(`[WARN] [${cat}] ${msg}`, ...args),
-  debug: (cat: string, msg: string, ...args: any[]) =>
+  debug: (cat: string, msg: string, ...args: unknown[]) =>
     console.debug(`[DEBUG] [${cat}] ${msg}`, ...args),
 };
 
