@@ -34,11 +34,23 @@ if (isTurso && authToken) {
   adapter = new PrismaLibSql({ url: databaseUrl });
 }
 
+// Prisma 連線池優化配置
+const connectionPoolConfig = {
+  // Render Free Tier 優化：限制連線數以節省記憶體
+  connection_limit: process.env.NODE_ENV === "production" ? 5 : 10,
+  // 連線逾時設定（毫秒）
+  pool_timeout: 10,
+};
+
 export const prisma =
   global.prisma ||
   new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    // 查詢優化
+    datasourceUrl: isTurso && authToken
+      ? `${databaseUrl}?connection_limit=${connectionPoolConfig.connection_limit}&pool_timeout=${connectionPoolConfig.pool_timeout}`
+      : databaseUrl,
   });
 
 if (process.env.NODE_ENV !== "production") {

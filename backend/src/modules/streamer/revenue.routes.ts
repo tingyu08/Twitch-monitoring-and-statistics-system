@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { revenueController } from "./revenue.controller";
 import { requireAuth } from "../auth/auth.middleware";
+import { requireStreamer } from "./streamer.middleware";
 
 const router = Router();
 
-// 所有路由都需要認證
+// 所有路由都需要認證，且必須是 Streamer
 router.use((req, res, next) => requireAuth(req, res, next));
+router.use(requireStreamer);
 
 // GET /api/streamer/revenue/overview - 收益總覽
 router.get("/overview", (req, res) => revenueController.getOverview(req, res));

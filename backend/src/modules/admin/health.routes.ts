@@ -8,6 +8,7 @@ import { Router, Request, Response } from "express";
 import { chatListenerManager } from "../../services/chat-listener-manager";
 import { twurpleChatService } from "../../services/twitch-chat.service";
 import { prisma } from "../../db/prisma";
+import { cacheManager } from "../../utils/cache-manager";
 
 const healthRoutes = Router();
 
@@ -110,6 +111,13 @@ healthRoutes.get("/detailed", async (_req: Request, res: Response) => {
       overallStatus = "degraded";
     }
 
+    // 5. 快取統計
+    const cacheStats = cacheManager.getStats();
+
+    // 記憶體警告檢查（Render Free Tier: 512MB）
+    const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+    const memoryWarning = heapUsedMB > 400 ? "high" : heapUsedMB > 300 ? "medium" : "normal";
+
     res.json({
       status: overallStatus,
       timestamp: new Date().toISOString(),
@@ -126,6 +134,10 @@ healthRoutes.get("/detailed", async (_req: Request, res: Response) => {
           status: listenerHealth.status,
           ...listenerStats,
         },
+        cache: {
+          status: "healthy",
+          ...cacheStats,
+        },
       },
       system: {
         uptime: process.uptime(),
@@ -133,8 +145,11 @@ healthRoutes.get("/detailed", async (_req: Request, res: Response) => {
           heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + " MB",
           heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + " MB",
           rss: Math.round(memUsage.rss / 1024 / 1024) + " MB",
+          warning: memoryWarning,
         },
         nodeVersion: process.version,
+        platform: process.platform,
+        env: process.env.NODE_ENV || "development",
       },
     });
   } catch (err) {

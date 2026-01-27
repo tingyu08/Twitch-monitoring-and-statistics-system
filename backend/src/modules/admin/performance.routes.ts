@@ -9,22 +9,41 @@
 
 import { Router, Request, Response } from "express";
 import { performanceMonitor, performanceLogger } from "../../utils/performance-monitor";
+import { cacheManager } from "../../utils/cache-manager";
 
 const router = Router();
 
 /**
  * GET /api/admin/performance/stats
- * 取得 API 效能統計
+ * 取得 API 效能統計（含快取統計）
  */
 router.get("/stats", (req: Request, res: Response) => {
   try {
     const stats = performanceMonitor.getStats();
+    const cacheStats = cacheManager.getStats();
+    const memUsage = process.memoryUsage();
+
     performanceLogger.info(`Performance stats requested: ${stats.totalRequests} total requests`);
     res.json({
       success: true,
       data: {
-        ...stats,
-        slowThreshold: 200, // ms
+        api: {
+          ...stats,
+          slowThreshold: 1000, // ms (調整為 1 秒)
+        },
+        cache: cacheStats,
+        memory: {
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+          rss: Math.round(memUsage.rss / 1024 / 1024),
+          external: Math.round(memUsage.external / 1024 / 1024),
+          unit: "MB",
+        },
+        system: {
+          uptime: Math.floor(process.uptime()),
+          nodeVersion: process.version,
+          platform: process.platform,
+        },
         collectedAt: new Date().toISOString(),
       },
     });

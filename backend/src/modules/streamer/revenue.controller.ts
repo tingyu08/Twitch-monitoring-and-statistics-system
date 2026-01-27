@@ -1,6 +1,9 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
 import { revenueService } from "./revenue.service";
+import PDFDocument from "pdfkit";
+import { cacheManager, CacheKeys } from "../../utils/cache-manager";
+import { SYNC_TIMEOUT_MS, PDF_EXPORT, QUERY_LIMITS } from "../../config/revenue.config";
 
 export class RevenueController {
   /**
@@ -8,10 +11,8 @@ export class RevenueController {
    */
   async getOverview(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user?.streamerId;
-      if (!streamerId) {
-        return res.status(403).json({ error: "Not a streamer" });
-      }
+      // streamerId 已在 requireStreamer middleware 中驗證
+      const streamerId = req.user!.streamerId!;
 
       const overview = await revenueService.getRevenueOverview(streamerId);
       return res.json(overview);
@@ -26,12 +27,12 @@ export class RevenueController {
    */
   async getSubscriptionStats(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user?.streamerId;
-      if (!streamerId) {
-        return res.status(403).json({ error: "Not a streamer" });
-      }
+      const streamerId = req.user!.streamerId!;
 
-      const days = parseInt(req.query.days as string) || 30;
+      const days = Math.min(
+        Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
+        QUERY_LIMITS.MAX_DAYS
+      );
       const stats = await revenueService.getSubscriptionStats(streamerId, days);
       return res.json(stats);
     } catch (error) {
@@ -45,12 +46,12 @@ export class RevenueController {
    */
   async getBitsStats(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user?.streamerId;
-      if (!streamerId) {
-        return res.status(403).json({ error: "Not a streamer" });
-      }
+      const streamerId = req.user!.streamerId!;
 
-      const days = parseInt(req.query.days as string) || 30;
+      const days = Math.min(
+        Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
+        QUERY_LIMITS.MAX_DAYS
+      );
       const stats = await revenueService.getBitsStats(streamerId, days);
       return res.json(stats);
     } catch (error) {
@@ -64,12 +65,12 @@ export class RevenueController {
    */
   async getTopSupporters(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user?.streamerId;
-      if (!streamerId) {
-        return res.status(403).json({ error: "Not a streamer" });
-      }
+      const streamerId = req.user!.streamerId!;
 
-      const limit = parseInt(req.query.limit as string) || 10;
+      const limit = Math.min(
+        Math.max(parseInt(req.query.limit as string) || QUERY_LIMITS.DEFAULT_LIMIT, QUERY_LIMITS.MIN_LIMIT),
+        QUERY_LIMITS.MAX_LIMIT
+      );
       const supporters = await revenueService.getTopSupporters(streamerId, limit);
       return res.json(supporters);
     } catch (error) {
@@ -83,14 +84,11 @@ export class RevenueController {
    */
   async syncSubscriptions(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user?.streamerId;
-      if (!streamerId) {
-        return res.status(403).json({ error: "Not a streamer" });
-      }
+      const streamerId = req.user!.streamerId!;
 
-      // 使用 Promise.race 設定 25 秒超時（Render 免費版有 30 秒限制）
+      // 使用 Promise.race 設定超時（Render 免費版有 30 秒限制）
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("SYNC_TIMEOUT")), 25000);
+        setTimeout(() => reject(new Error("SYNC_TIMEOUT")), SYNC_TIMEOUT_MS);
       });
 
       await Promise.race([
@@ -98,34 +96,48 @@ export class RevenueController {
         timeoutPromise,
       ]);
 
+      // 同步成功後清除相關快取
+      cacheManager.delete(CacheKeys.revenueOverview(streamerId));
+      // 清除各時間範圍的訂閱統計快取
+      [7, 30, 90].forEach(days => {
+        cacheManager.delete(CacheKeys.revenueSubscriptions(streamerId, days));
+      });
+
       return res.json({ success: true, message: "Subscription data synced" });
     } catch (error) {
       console.error("Sync subscriptions error:", error);
-      
+
       const err = error as Error;
-      
+
       // 更友善的錯誤訊息
       if (err.message === "SYNC_TIMEOUT") {
-        return res.status(504).json({ 
+        return res.status(504).json({
           error: "Sync timeout - try again later",
           details: "The sync operation took too long. This may happen for channels with many subscribers."
         });
       }
-      
+
       if (err.message?.includes("no valid token") || err.message?.includes("No refresh token")) {
-        return res.status(401).json({ 
+        return res.status(401).json({
           error: "Token expired - please re-login",
           details: "Your Twitch authorization has expired. Please log out and log in again."
         });
       }
-      
+
       if (err.message?.includes("Permission") || err.message?.includes("403")) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           error: "Permission denied",
           details: "This feature requires Twitch Affiliate or Partner status to access subscription data."
         });
       }
-      
+
+      if (err.message?.includes("SUBSCRIPTION_LIMIT_EXCEEDED")) {
+        return res.status(507).json({
+          error: "Subscription limit exceeded",
+          details: err.message.replace("SUBSCRIPTION_LIMIT_EXCEEDED: ", "")
+        });
+      }
+
       return res.status(500).json({ error: "Failed to sync subscriptions" });
     }
   }
@@ -135,16 +147,25 @@ export class RevenueController {
    */
   async exportReport(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user?.streamerId;
-      if (!streamerId) {
-        return res.status(403).json({ error: "Not a streamer" });
-      }
+      const streamerId = req.user!.streamerId!;
 
-      const days = parseInt(req.query.days as string) || 30;
+      const days = Math.min(
+        Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
+        QUERY_LIMITS.MAX_DAYS
+      );
       const format = (req.query.format as string) || "csv";
 
       if (format !== "csv" && format !== "pdf") {
         return res.status(400).json({ error: "Only CSV and PDF formats are supported" });
+      }
+
+      // 在 Render free tier 上，PDF 生成較消耗記憶體
+      // 如果資料量過大，建議使用 CSV 格式
+      if (format === "pdf" && days > PDF_EXPORT.MAX_DAYS) {
+        return res.status(400).json({
+          error: `PDF export is limited to ${PDF_EXPORT.MAX_DAYS} days maximum`,
+          suggestion: "Please use CSV format for longer periods or reduce the date range"
+        });
       }
 
       // 獲取數據
@@ -191,18 +212,43 @@ export class RevenueController {
       }
 
       if (format === "csv") {
-        const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+        // CSV 轉義函數：處理逗號、引號等特殊字元
+        const escapeCsv = (value: string): string => {
+          // 將值轉為字串並處理引號（雙引號轉義為兩個雙引號）
+          const escaped = String(value).replace(/"/g, '""');
+          // 如果包含逗號、引號或換行，需要用引號包圍
+          if (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) {
+            return `"${escaped}"`;
+          }
+          return escaped;
+        };
 
-        res.setHeader("Content-Type", "text/csv");
+        const csv = [
+          headers.map(escapeCsv).join(","),
+          ...rows.map((r) => r.map(escapeCsv).join(","))
+        ].join("\n");
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
         res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.csv"`);
-        return res.send(csv);
+        // 添加 BOM 以確保 Excel 正確識別 UTF-8
+        return res.send('\ufeff' + csv);
       } else {
-        // PDF 格式 - 生成可讀的文本格式 PDF
-        const pdfContent = this.generatePdfContent(overview, subscriptionStats, bitsStats, days);
+        // PDF 格式 - 使用 pdfkit 生成專業 PDF
+        try {
+          const pdfBuffer = await this.generatePdfContent(overview, subscriptionStats, bitsStats, days);
 
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.pdf"`);
-        return res.send(pdfContent);
+          res.setHeader("Content-Type", "application/pdf");
+          res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.pdf"`);
+          return res.send(pdfBuffer);
+        } catch (pdfError) {
+          console.error("PDF generation failed:", pdfError);
+          // 降級策略：如果 PDF 生成失敗，建議使用 CSV
+          return res.status(500).json({
+            error: "PDF generation failed",
+            suggestion: "Please try CSV format instead or reduce the date range",
+            details: process.env.NODE_ENV === "development" ? (pdfError as Error).message : undefined
+          });
+        }
       }
     } catch (error) {
       console.error("Export report error:", error);
@@ -211,138 +257,157 @@ export class RevenueController {
   }
 
   /**
-   * 生成 PDF 內容（使用基本格式）
+   * 生成 PDF 內容（使用 pdfkit）
+   * 優化記憶體使用以適應 Render free tier (512MB RAM)
    */
-  private generatePdfContent(
+  private async generatePdfContent(
     overview: Awaited<ReturnType<typeof revenueService.getRevenueOverview>>,
     subscriptionStats: Awaited<ReturnType<typeof revenueService.getSubscriptionStats>>,
     bitsStats: Awaited<ReturnType<typeof revenueService.getBitsStats>>,
     days: number
-  ): Buffer {
-    const lines: string[] = [];
-    const divider = "=".repeat(60);
-    const subDivider = "-".repeat(60);
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      // 添加超時保護（30秒）
+      const timeout = setTimeout(() => {
+        doc.end();
+        reject(new Error("PDF generation timeout"));
+      }, 30000);
 
-    // 標題
-    lines.push("");
-    lines.push(divider);
-    lines.push("           TWITCH REVENUE REPORT");
-    lines.push(`           Period: Last ${days} Days`);
-    lines.push(`           Generated: ${new Date().toISOString().split("T")[0]}`);
-    lines.push(divider);
-    lines.push("");
+      const doc = new PDFDocument({
+        margin: 50,
+        bufferPages: true, // 啟用頁面緩衝以減少記憶體使用
+        autoFirstPage: true,
+        size: 'A4'
+      });
+      const chunks: Buffer[] = [];
 
-    // 總覽摘要
-    lines.push("REVENUE OVERVIEW");
-    lines.push(subDivider);
-    lines.push(`Total Estimated Revenue:    $${overview.totalEstimatedRevenue.toFixed(2)}`);
-    lines.push("");
-    lines.push("Subscriptions:");
-    lines.push(`  - Total Subscribers:      ${overview.subscriptions.current}`);
-    lines.push(`  - Tier 1:                 ${overview.subscriptions.tier1}`);
-    lines.push(`  - Tier 2:                 ${overview.subscriptions.tier2}`);
-    lines.push(`  - Tier 3:                 ${overview.subscriptions.tier3}`);
-    lines.push(`  - Monthly Revenue:        $${overview.subscriptions.estimatedMonthlyRevenue.toFixed(2)}`);
-    lines.push("");
-    lines.push("Bits:");
-    lines.push(`  - Total Bits:             ${overview.bits.totalBits.toLocaleString()}`);
-    lines.push(`  - Cheer Events:           ${overview.bits.eventCount}`);
-    lines.push(`  - Estimated Revenue:      $${overview.bits.estimatedRevenue.toFixed(2)}`);
-    lines.push("");
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => {
+        clearTimeout(timeout);
+        resolve(Buffer.concat(chunks));
+      });
+      doc.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
 
-    // 訂閱趨勢
-    if (subscriptionStats.length > 0) {
-      lines.push(divider);
-      lines.push("SUBSCRIPTION HISTORY");
-      lines.push(subDivider);
-      lines.push("Date        | T1   | T2   | T3   | Total | Revenue");
-      lines.push(subDivider);
-      for (const stat of subscriptionStats.slice(-10)) {
-        const date = stat.date.padEnd(11);
-        const t1 = String(stat.tier1Count).padStart(4);
-        const t2 = String(stat.tier2Count).padStart(4);
-        const t3 = String(stat.tier3Count).padStart(4);
-        const total = String(stat.totalSubscribers).padStart(5);
-        const rev = `$${stat.estimatedRevenue.toFixed(2)}`.padStart(8);
-        lines.push(`${date} | ${t1} | ${t2} | ${t3} | ${total} | ${rev}`);
+      // 標題
+      doc.fontSize(20).font("Helvetica-Bold").text("TWITCH REVENUE REPORT", { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(12).font("Helvetica").text(`Period: Last ${days} Days`, { align: "center" });
+      doc.text(`Generated: ${new Date().toISOString().split("T")[0]}`, { align: "center" });
+      doc.moveDown(1);
+
+      // 分隔線
+      doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+      doc.moveDown(1);
+
+      // 總覽摘要
+      doc.fontSize(14).font("Helvetica-Bold").text("REVENUE OVERVIEW");
+      doc.moveDown(0.5);
+      doc.fontSize(11).font("Helvetica");
+      doc.text(`Total Estimated Revenue: $${overview.totalEstimatedRevenue.toFixed(2)}`);
+      doc.moveDown(0.5);
+
+      // 訂閱統計
+      doc.fontSize(12).font("Helvetica-Bold").text("Subscriptions:");
+      doc.fontSize(10).font("Helvetica");
+      doc.text(`  Total Subscribers: ${overview.subscriptions.current}`);
+      doc.text(`  Tier 1: ${overview.subscriptions.tier1}`);
+      doc.text(`  Tier 2: ${overview.subscriptions.tier2}`);
+      doc.text(`  Tier 3: ${overview.subscriptions.tier3}`);
+      doc.text(`  Monthly Revenue: $${overview.subscriptions.estimatedMonthlyRevenue.toFixed(2)}`);
+      doc.moveDown(0.5);
+
+      // Bits 統計
+      doc.fontSize(12).font("Helvetica-Bold").text("Bits:");
+      doc.fontSize(10).font("Helvetica");
+      doc.text(`  Total Bits: ${overview.bits.totalBits.toLocaleString()}`);
+      doc.text(`  Cheer Events: ${overview.bits.eventCount}`);
+      doc.text(`  Estimated Revenue: $${overview.bits.estimatedRevenue.toFixed(2)}`);
+      doc.moveDown(1);
+
+      // 訂閱歷史（只顯示最近 10 筆以節省記憶體）
+      if (subscriptionStats.length > 0) {
+        doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+        doc.moveDown(0.5);
+        doc.fontSize(14).font("Helvetica-Bold").text("SUBSCRIPTION HISTORY");
+        doc.fontSize(9).font("Helvetica-Oblique")
+          .text(`(Showing last 10 records out of ${subscriptionStats.length} total)`, { align: "left" });
+        doc.moveDown(0.5);
+
+        // 表格標題
+        doc.fontSize(9).font("Helvetica-Bold");
+        const colWidths = { date: 80, t1: 40, t2: 40, t3: 40, total: 50, revenue: 70 };
+        let x = 50;
+        doc.text("Date", x, doc.y); x += colWidths.date;
+        doc.text("T1", x, doc.y); x += colWidths.t1;
+        doc.text("T2", x, doc.y); x += colWidths.t2;
+        doc.text("T3", x, doc.y); x += colWidths.t3;
+        doc.text("Total", x, doc.y); x += colWidths.total;
+        doc.text("Revenue", x, doc.y);
+        doc.moveDown(0.3);
+
+        // 表格數據（最近 10 筆）- 限制數量以節省記憶體
+        doc.fontSize(9).font("Helvetica");
+        const recentSubscriptions = subscriptionStats.slice(-10);
+        for (const stat of recentSubscriptions) {
+          x = 50;
+          const y = doc.y;
+          doc.text(stat.date, x, y); x += colWidths.date;
+          doc.text(String(stat.tier1Count), x, y); x += colWidths.t1;
+          doc.text(String(stat.tier2Count), x, y); x += colWidths.t2;
+          doc.text(String(stat.tier3Count), x, y); x += colWidths.t3;
+          doc.text(String(stat.totalSubscribers), x, y); x += colWidths.total;
+          doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
+          doc.moveDown(0.5);
+        }
+        doc.moveDown(0.5);
       }
-      lines.push("");
-    }
 
-    // Bits 趨勢
-    if (bitsStats.length > 0) {
-      lines.push(divider);
-      lines.push("BITS HISTORY");
-      lines.push(subDivider);
-      lines.push("Date        | Total Bits | Events | Revenue");
-      lines.push(subDivider);
-      for (const stat of bitsStats.slice(-10)) {
-        const date = stat.date.padEnd(11);
-        const bits = String(stat.totalBits).padStart(10);
-        const events = String(stat.eventCount).padStart(6);
-        const rev = `$${stat.estimatedRevenue.toFixed(2)}`.padStart(8);
-        lines.push(`${date} | ${bits} | ${events} | ${rev}`);
+      // Bits 歷史（只顯示最近 10 筆以節省記憶體）
+      if (bitsStats.length > 0) {
+        doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+        doc.moveDown(0.5);
+        doc.fontSize(14).font("Helvetica-Bold").text("BITS HISTORY");
+        doc.fontSize(9).font("Helvetica-Oblique")
+          .text(`(Showing last 10 records out of ${bitsStats.length} total)`, { align: "left" });
+        doc.moveDown(0.5);
+
+        // 表格標題
+        doc.fontSize(9).font("Helvetica-Bold");
+        const colWidths = { date: 80, bits: 80, events: 60, revenue: 70 };
+        let x = 50;
+        doc.text("Date", x, doc.y); x += colWidths.date;
+        doc.text("Total Bits", x, doc.y); x += colWidths.bits;
+        doc.text("Events", x, doc.y); x += colWidths.events;
+        doc.text("Revenue", x, doc.y);
+        doc.moveDown(0.3);
+
+        // 表格數據（最近 10 筆）- 限制數量以節省記憶體
+        doc.fontSize(9).font("Helvetica");
+        const recentBits = bitsStats.slice(-10);
+        for (const stat of recentBits) {
+          x = 50;
+          const y = doc.y;
+          doc.text(stat.date, x, y); x += colWidths.date;
+          doc.text(String(stat.totalBits), x, y); x += colWidths.bits;
+          doc.text(String(stat.eventCount), x, y); x += colWidths.events;
+          doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
+          doc.moveDown(0.5);
+        }
+        doc.moveDown(0.5);
       }
-      lines.push("");
-    }
 
-    // 頁尾
-    lines.push(divider);
-    lines.push("Note: Revenue estimates are based on standard 50% revenue share.");
-    lines.push("Actual earnings may vary based on your contract with Twitch.");
-    lines.push(divider);
+      // 頁尾說明
+      doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(9).font("Helvetica-Oblique");
+      doc.text("Note: Revenue estimates are based on standard 50% revenue share.");
+      doc.text("Actual earnings may vary based on your contract with Twitch.");
 
-    // 簡單的 PDF 格式（純文本 wrapper）
-    // 使用 %PDF-1.4 標準格式生成最小化 PDF
-    const textContent = lines.join("\n");
-    return this.createSimplePdf(textContent);
-  }
-
-  /**
-   * 創建簡單的 PDF 文件
-   */
-  private createSimplePdf(textContent: string): Buffer {
-    // 創建最簡化的 PDF 結構
-    const stream = textContent.replace(/\n/g, "\\n");
-
-    const pdf = `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
-endobj
-4 0 obj
-<< /Length ${stream.length + 50} >>
-stream
-BT
-/F1 10 Tf
-50 750 Td
-(${stream}) Tj
-ET
-endstream
-endobj
-5 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
-endobj
-xref
-0 6
-0000000000 65535 f
-0000000009 00000 n
-0000000058 00000 n
-0000000115 00000 n
-0000000266 00000 n
-0000000${String(366 + stream.length).padStart(3, "0")} 00000 n
-trailer
-<< /Size 6 /Root 1 0 R >>
-startxref
-${420 + stream.length}
-%%EOF`;
-
-    return Buffer.from(pdf, "utf-8");
+      doc.end();
+    });
   }
 }
 

@@ -29,6 +29,7 @@ export default function RevenuePage() {
   const [syncing, setSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // 用於觸發資料重新獲取
 
   const handleSync = async () => {
     setSyncing(true);
@@ -38,12 +39,18 @@ export default function RevenuePage() {
         method: "POST",
         credentials: "include",
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         // 根據不同錯誤顯示不同訊息
         if (res.status === 504 || errorData.error?.includes("timeout")) {
           toast.error(t("syncTimeout") || "Sync timeout - please try again");
+        } else if (res.status === 507) {
+          // 訂閱數量超限錯誤
+          toast.error(
+            t("subscriptionLimitExceeded") ||
+            "Channel has too many subscribers. Please contact support for enterprise solutions."
+          );
         } else if (res.status === 401) {
           toast.error(t("syncAuthError") || "Please re-login to sync");
         } else if (res.status === 403) {
@@ -53,11 +60,12 @@ export default function RevenuePage() {
         }
         return;
       }
-      
+
       toast.success(t("syncSuccess"));
-      // 重新載入頁面來更新數據
-      window.location.reload();
-    } catch {
+      // 使用狀態更新觸發資料重新獲取，避免整頁重新載入
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Sync error:', error);
       toast.error(t("syncError"));
     } finally {
       setSyncing(false);
@@ -86,8 +94,10 @@ export default function RevenuePage() {
       window.URL.revokeObjectURL(url);
 
       toast.success(t("exportSuccess"));
-    } catch {
-      toast.error(t("exportError"));
+    } catch (error) {
+      console.error('Export error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`${t("exportError")}: ${errorMessage}`);
     } finally {
       setExporting(false);
     }
@@ -213,11 +223,11 @@ export default function RevenuePage() {
         {/* 內容區域 */}
         <div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/50">
           {activeTab === "overview" ? (
-            <RevenueOverview />
+            <RevenueOverview key={`overview-${refreshKey}`} />
           ) : activeTab === "subscriptions" ? (
-            <SubscriptionStats days={days} />
+            <SubscriptionStats key={`subs-${refreshKey}`} days={days} />
           ) : (
-            <BitsStats days={days} />
+            <BitsStats key={`bits-${refreshKey}`} days={days} />
           )}
         </div>
       </div>
