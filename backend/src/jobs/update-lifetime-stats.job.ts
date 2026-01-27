@@ -11,7 +11,7 @@ export const updateLifetimeStatsJob = () => {
 };
 
 export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
-  logger.info("CronJob", `Starting Lifetime Stats Update (Full: ${fullUpdate})...`);
+  logger.info("CronJob", `開始執行 Lifetime Stats 更新 (完整更新: ${fullUpdate})...`);
   const startTime = Date.now();
 
   try {
@@ -50,7 +50,7 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
       activeMsgs.forEach((s) => targets.add(`${s.viewerId}|${s.channelId}`));
     }
 
-    logger.info("CronJob", `Found ${targets.size} viewer-channel pairs to update.`);
+    logger.info("CronJob", `找到 ${targets.size} 組觀眾-頻道配對需要更新`);
 
     const affectedChannels = new Set<string>();
 
@@ -63,19 +63,19 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
 
       processed++;
       if (processed % 100 === 0) {
-        logger.info("CronJob", `Processed ${processed}/${targets.size} pairs...`);
+        logger.info("CronJob", `已處理 ${processed}/${targets.size} 組配對...`);
       }
     }
 
     // 更新受影響頻道的 Ranking
-    logger.info("CronJob", `Updating rankings for ${affectedChannels.size} channels...`);
+    logger.info("CronJob", `正在更新 ${affectedChannels.size} 個頻道的排名...`);
     for (const channelId of affectedChannels) {
       await lifetimeStatsAggregator.updatePercentileRankings(channelId);
     }
 
     const duration = Date.now() - startTime;
-    logger.info("CronJob", `Lifetime Stats Update completed in ${duration}ms`);
+    logger.info("CronJob", `Lifetime Stats 更新完成，耗時 ${duration}ms`);
   } catch (error) {
-    logger.error("CronJob", "Failed to update lifetime stats:", error);
+    logger.error("CronJob", "Lifetime Stats 更新失敗:", error);
   }
 };

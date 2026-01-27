@@ -8,11 +8,22 @@ import type { AuthRequest } from "../auth/auth.middleware";
 
 const router = Router();
 
+/**
+ * 自訂 keyGenerator，優先使用 streamerId，fallback 到 "unknown"
+ * 注意：由於所有路由都經過 requireAuth 和 requireStreamer，
+ * 正常情況下 streamerId 一定存在，不會 fallback 到 IP
+ */
+const getStreamerKey = (req: Parameters<typeof rateLimit>[0] extends { keyGenerator?: (req: infer R) => string } ? R : never) => {
+  const authReq = req as AuthRequest;
+  // 認證後的請求一定有 streamerId，不需要 fallback 到 IP
+  return authReq.user?.streamerId || "unknown";
+};
+
 // 速率限制器：sync 端點
 const syncLimiter = rateLimit({
   windowMs: RATE_LIMITS.SYNC.windowMs,
   max: RATE_LIMITS.SYNC.max,
-  keyGenerator: (req) => (req as AuthRequest).user?.streamerId || req.ip || "unknown",
+  keyGenerator: getStreamerKey,
   message: { error: "Too many sync requests, please wait 5 minutes" },
   standardHeaders: true,
   legacyHeaders: false,
@@ -22,7 +33,7 @@ const syncLimiter = rateLimit({
 const exportLimiter = rateLimit({
   windowMs: RATE_LIMITS.EXPORT.windowMs,
   max: RATE_LIMITS.EXPORT.max,
-  keyGenerator: (req) => (req as AuthRequest).user?.streamerId || req.ip || "unknown",
+  keyGenerator: getStreamerKey,
   message: { error: "Too many export requests, please wait 15 minutes" },
   standardHeaders: true,
   legacyHeaders: false,

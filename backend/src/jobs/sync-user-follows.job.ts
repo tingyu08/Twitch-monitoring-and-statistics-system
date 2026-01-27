@@ -516,7 +516,7 @@ export async function triggerFollowSyncForUser(
     });
 
     if (!viewer) {
-      logger.warn("Jobs", `Viewer not found: ${viewerId}`);
+      logger.warn("Jobs", `找不到 Viewer: ${viewerId}`);
       return;
     }
 
@@ -542,21 +542,32 @@ export async function triggerFollowSyncForUser(
 
     const existingFollowMap = new Map(existingFollows.map((f) => [f.channel.twitchChannelId, f]));
 
+    // P1 Fix: 批次查詢所有頻道，避免 N+1 查詢問題
+    const allBroadcasterIds = followedChannels.map((f) => f.broadcasterId);
+    const existingChannels = await prisma.channel.findMany({
+      where: { twitchChannelId: { in: allBroadcasterIds } },
+      select: { id: true, twitchChannelId: true, isMonitored: true, streamerId: true },
+    });
+    const existingChannelMap = new Map(existingChannels.map((c) => [c.twitchChannelId, c]));
+
+    // P1 Fix: 批次查詢所有 Streamer，避免 N+1 查詢問題
+    const existingStreamers = await prisma.streamer.findMany({
+      where: { twitchUserId: { in: allBroadcasterIds } },
+      select: { id: true, twitchUserId: true },
+    });
+    const existingStreamerMap = new Map(existingStreamers.map((s) => [s.twitchUserId, s]));
+
     let created = 0;
     let removed = 0;
     let processed = 0;
 
     // 處理每個追蹤的頻道（批次處理）
-    // 處理每個追蹤的頻道（批次處理）
     for (const follow of followedChannels) {
       try {
         const existingFollow = existingFollowMap.get(follow.broadcasterId);
 
-        // 優化：先檢查頻道是否存在以及監控狀態，減少不必要的寫入
-        const existingChannel = await prisma.channel.findUnique({
-          where: { twitchChannelId: follow.broadcasterId },
-          select: { id: true, isMonitored: true, streamerId: true },
-        });
+        // P1 Fix: 使用預先載入的 Map，避免 N+1 查詢
+        const existingChannel = existingChannelMap.get(follow.broadcasterId);
 
         let channelId = existingChannel?.id;
         let streamerId = existingChannel?.streamerId;
@@ -565,16 +576,24 @@ export async function triggerFollowSyncForUser(
         if (!existingChannel || !existingChannel.isMonitored) {
           // 確保 Streamer 存在
           if (!existingChannel) {
-            const displayName = follow.broadcasterLogin;
-            const streamer = await prisma.streamer.upsert({
-              where: { twitchUserId: follow.broadcasterId },
-              create: {
-                twitchUserId: follow.broadcasterId,
-                displayName,
-                avatarUrl: "",
-              },
-              update: {},
-            });
+            // P1 Fix: 先檢查 Map，避免查詢
+            let streamer = existingStreamerMap.get(follow.broadcasterId);
+
+            if (!streamer) {
+              const displayName = follow.broadcasterLogin;
+              const newStreamer = await prisma.streamer.upsert({
+                where: { twitchUserId: follow.broadcasterId },
+                create: {
+                  twitchUserId: follow.broadcasterId,
+                  displayName,
+                  avatarUrl: "",
+                },
+                update: {},
+              });
+              streamer = { id: newStreamer.id, twitchUserId: newStreamer.twitchUserId };
+              // 加入 Map 以便後續使用
+              existingStreamerMap.set(follow.broadcasterId, streamer);
+            }
             streamerId = streamer.id;
           }
 
@@ -601,6 +620,13 @@ export async function triggerFollowSyncForUser(
             },
           });
           channelId = channel.id;
+          // 加入 Map 以便後續使用
+          existingChannelMap.set(follow.broadcasterId, {
+            id: channel.id,
+            twitchChannelId: channel.twitchChannelId,
+            isMonitored: true,
+            streamerId: channel.streamerId,
+          });
         }
 
         if (!channelId) {
@@ -632,7 +658,7 @@ export async function triggerFollowSyncForUser(
           created++;
         }
       } catch (err) {
-        logger.warn("Jobs", `Failed to sync channel ${follow.broadcasterLogin}`, err);
+        logger.warn("Jobs", `同步頻道 ${follow.broadcasterLogin} 失敗`, err);
         // Continue to verify next channel even if one fails
       }
 

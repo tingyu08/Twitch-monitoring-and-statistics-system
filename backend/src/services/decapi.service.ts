@@ -27,6 +27,9 @@ export interface AccountAgeResult {
 
 // ========== 服務實作 ==========
 
+// P1 Fix: 快取大小上限，避免記憶體無限增長
+const MAX_CACHE_SIZE = 1000;
+
 class DecApiService {
   private readonly api: AxiosInstance;
   private readonly cache: Map<string, { data: unknown; expiresAt: number }> = new Map();
@@ -53,10 +56,39 @@ class DecApiService {
   }
 
   private setCache(key: string, data: unknown, ttlSeconds: number): void {
+    // P1 Fix: 如果快取已滿，清除過期項目或最舊的項目
+    if (this.cache.size >= MAX_CACHE_SIZE) {
+      this.pruneCache();
+    }
+
     this.cache.set(key, {
       data,
       expiresAt: Date.now() + ttlSeconds * 1000,
     });
+  }
+
+  // P1 Fix: 清理過期或最舊的快取項目
+  private pruneCache(): void {
+    const now = Date.now();
+
+    // 先嘗試清除過期項目
+    for (const [key, value] of this.cache) {
+      if (now >= value.expiresAt) {
+        this.cache.delete(key);
+      }
+    }
+
+    // 如果還是超過上限，刪除最舊的 20% 項目（FIFO）
+    if (this.cache.size >= MAX_CACHE_SIZE) {
+      const deleteCount = Math.floor(MAX_CACHE_SIZE * 0.2);
+      let deleted = 0;
+      for (const key of this.cache.keys()) {
+        if (deleted >= deleteCount) break;
+        this.cache.delete(key);
+        deleted++;
+      }
+      logger.debug("DecAPI", `Pruned ${deleted} cache entries`);
+    }
   }
 
   // ========== 追蹤相關（DecAPI 獨特功能）==========

@@ -31,6 +31,9 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // P1 Fix: 使用 AbortController 來處理清理和避免競態條件
+    const abortController = new AbortController();
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -38,9 +41,11 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
         const [bitsRes, supportersRes] = await Promise.all([
           fetch(`/api/streamer/revenue/bits?days=${days}`, {
             credentials: "include",
+            signal: abortController.signal,
           }),
           fetch(`/api/streamer/revenue/top-supporters?limit=5`, {
             credentials: "include",
+            signal: abortController.signal,
           }),
         ]);
 
@@ -51,16 +56,32 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
           supportersRes.json(),
         ]);
 
-        setData(bitsJson);
-        setTopSupporters(supportersJson);
-      } catch {
-        setError("Failed to load bits data");
+        // P1 Fix: 只在未被取消時更新狀態
+        if (!abortController.signal.aborted) {
+          setData(bitsJson);
+          setTopSupporters(supportersJson);
+        }
+      } catch (err) {
+        // P1 Fix: 忽略取消的請求錯誤
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        if (!abortController.signal.aborted) {
+          setError("Failed to load bits data");
+        }
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+
+    // P1 Fix: cleanup function
+    return () => {
+      abortController.abort();
+    };
   }, [days]);
 
   // 計算總計

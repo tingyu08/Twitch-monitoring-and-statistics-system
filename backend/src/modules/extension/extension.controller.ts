@@ -38,10 +38,10 @@ export async function getExtensionTokenHandler(req: Request, res: Response): Pro
       return;
     }
 
-    // Verify viewer exists
+    // Verify viewer exists and get tokenVersion
     const viewer = await prisma.viewer.findUnique({
       where: { id: payload.viewerId },
-      select: { id: true },
+      select: { id: true, tokenVersion: true },
     });
 
     if (!viewer) {
@@ -49,8 +49,8 @@ export async function getExtensionTokenHandler(req: Request, res: Response): Pro
       return;
     }
 
-    // Generate dedicated extension JWT (1 hour expiry)
-    const extensionToken = signExtensionToken(payload.viewerId);
+    // P1 Fix: Generate dedicated extension JWT with tokenVersion (1 hour expiry)
+    const extensionToken = signExtensionToken(payload.viewerId, viewer.tokenVersion);
 
     logger.info("EXTENSION", `Generated extension token for viewer: ${payload.viewerId}`);
 

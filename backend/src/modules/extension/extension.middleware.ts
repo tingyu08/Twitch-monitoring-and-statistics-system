@@ -44,14 +44,20 @@ export async function extensionAuthMiddleware(
       return;
     }
 
-    // Validate that viewer exists in database
+    // P1 Fix: Validate that viewer exists and tokenVersion matches
     const viewer = await prisma.viewer.findUnique({
       where: { id: payload.viewerId },
-      select: { id: true },
+      select: { id: true, tokenVersion: true },
     });
 
     if (!viewer) {
       res.status(401).json({ error: "Viewer not found" });
+      return;
+    }
+
+    // P1 Fix: 驗證 tokenVersion，確保登出後舊 token 失效
+    if (payload.tokenVersion !== viewer.tokenVersion) {
+      res.status(401).json({ error: "Token has been invalidated" });
       return;
     }
 

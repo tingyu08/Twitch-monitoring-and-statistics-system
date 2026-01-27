@@ -18,7 +18,7 @@ export class AutoJoinLiveChannelsJob {
     logger.info("Jobs", `📋 Auto Join Live Channels Job 已排程: ${CHECK_LIVE_CRON}`);
 
     // 啟動時立即執行一次
-    this.execute().catch((err) => logger.error("Jobs", "Initial auto-join execution failed", err));
+    this.execute().catch((err) => logger.error("Jobs", "初始 Auto Join 執行失敗", err));
 
     cron.schedule(CHECK_LIVE_CRON, async () => {
       await this.execute();

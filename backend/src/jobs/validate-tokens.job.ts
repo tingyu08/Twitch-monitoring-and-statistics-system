@@ -34,7 +34,7 @@ let lastRunResult: JobResult | null = null;
  */
 export async function validateTokensJob(): Promise<JobResult> {
   const startTime = new Date();
-  logger.info(JOB_NAME, "Starting token validation job");
+  logger.info(JOB_NAME, "開始執行 Token 驗證任務");
 
   try {
     // 驗證所有活躍的 Token
@@ -60,7 +60,7 @@ export async function validateTokensJob(): Promise<JobResult> {
 
     logger.info(
       JOB_NAME,
-      `Job completed in ${durationMs}ms. Valid: ${result.valid}, Invalid: ${result.invalid}`,
+      `任務完成，耗時 ${durationMs}ms。有效: ${result.valid}, 無效: ${result.invalid}`,
       { stats: jobResult.stats }
     );
 
@@ -70,7 +70,7 @@ export async function validateTokensJob(): Promise<JobResult> {
       if (invalidRate > 10) {
         logger.warn(
           JOB_NAME,
-          `High token failure rate: ${invalidRate.toFixed(1)}% (${result.invalid}/${result.total})`
+          `Token 失效率過高: ${invalidRate.toFixed(1)}% (${result.invalid}/${result.total})`
         );
       }
     }
@@ -91,7 +91,7 @@ export async function validateTokensJob(): Promise<JobResult> {
 
     lastRunResult = jobResult;
 
-    logger.error(JOB_NAME, "Job failed", error);
+    logger.error(JOB_NAME, "任務執行失敗", error);
     return jobResult;
   }
 }

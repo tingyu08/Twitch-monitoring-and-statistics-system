@@ -21,6 +21,7 @@ export interface JWTPayload {
 // P0 Security: Dedicated Extension JWT payload (minimal data exposure)
 export interface ExtensionJWTPayload {
   viewerId: string;
+  tokenVersion: number; // P1 Fix: 加入 tokenVersion 用於 Token 失效機制
   tokenType: "extension";
   iat?: number;
   exp?: number;
@@ -61,9 +62,11 @@ export function verifyRefreshToken(token: string): JWTPayload | null {
 }
 
 // P0 Security: Extension-specific JWT functions
-export function signExtensionToken(viewerId: string): string {
+// P1 Fix: 加入 tokenVersion 參數
+export function signExtensionToken(viewerId: string, tokenVersion: number): string {
   const payload: Omit<ExtensionJWTPayload, "iat" | "exp"> = {
     viewerId,
+    tokenVersion,
     tokenType: "extension",
   };
   return jwt.sign(payload, env.jwtSecret, {

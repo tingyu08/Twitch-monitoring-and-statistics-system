@@ -40,23 +40,36 @@ async function updateMissingAvatars() {
       // 批量獲取用戶資訊
       const users = await twurpleHelixService.getUsersByIds(twitchIds);
 
+      // 收集需要更新的資料
+      const updates: { id: string; avatarUrl: string; displayName: string; oldName: string }[] = [];
       for (const streamer of batch) {
         const user = users.find((u) => u.id === streamer.twitchUserId);
         if (user?.profileImageUrl) {
-          await prisma.streamer.update({
-            where: { id: streamer.id },
-            data: {
-              avatarUrl: user.profileImageUrl,
-              displayName: user.displayName || streamer.displayName,
-            },
+          updates.push({
+            id: streamer.id,
+            avatarUrl: user.profileImageUrl,
+            displayName: user.displayName || streamer.displayName,
+            oldName: streamer.displayName,
           });
-          console.log(
-            `✅ 更新: ${streamer.displayName} -> ${user.profileImageUrl.substring(0, 50)}...`
-          );
-          updated++;
         } else {
           console.log(`⚠️ 跳過: ${streamer.displayName} (無法獲取資訊)`);
           failed++;
+        }
+      }
+
+      // 使用 transaction 批量更新
+      if (updates.length > 0) {
+        await prisma.$transaction(
+          updates.map((u) =>
+            prisma.streamer.update({
+              where: { id: u.id },
+              data: { avatarUrl: u.avatarUrl, displayName: u.displayName },
+            })
+          )
+        );
+        for (const u of updates) {
+          console.log(`✅ 更新: ${u.oldName} -> ${u.avatarUrl.substring(0, 50)}...`);
+          updated++;
         }
       }
 

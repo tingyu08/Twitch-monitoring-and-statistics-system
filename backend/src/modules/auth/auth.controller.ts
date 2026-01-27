@@ -143,8 +143,11 @@ export class AuthController {
 
       res.redirect(`${env.frontendUrl}/dashboard/viewer`);
     } catch (error) {
-      console.error("[AuthCallbackError] Detailed error:", error);
-      authLogger.error("Twitch Callback Error:", error);
+      // P0 Security Fix: 避免日誌洩漏敏感資訊（如 tokens、密碼）
+      // 只記錄錯誤訊息和類型，不記錄完整 error 物件
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorName = error instanceof Error ? error.name : "UnknownError";
+      authLogger.error("Twitch Callback Error", { errorName, errorMessage });
       res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
     }
   };

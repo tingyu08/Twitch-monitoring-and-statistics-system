@@ -38,6 +38,9 @@ export function RevenueOverview() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // P1 Fix: 使用 AbortController 來處理清理和避免競態條件
+    const abortController = new AbortController();
+
     const fetchData = async () => {
       setLoading(true);
       setError(null);
@@ -45,18 +48,36 @@ export function RevenueOverview() {
         // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
         const res = await fetch("/api/streamer/revenue/overview", {
           credentials: "include",
+          signal: abortController.signal,
         });
         if (!res.ok) throw new Error("Failed to fetch");
         const json = await res.json();
-        setData(json);
-      } catch {
-        setError("Failed to load revenue overview");
+
+        // P1 Fix: 只在未被取消時更新狀態
+        if (!abortController.signal.aborted) {
+          setData(json);
+        }
+      } catch (err) {
+        // P1 Fix: 忽略取消的請求錯誤
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        if (!abortController.signal.aborted) {
+          setError("Failed to load revenue overview");
+        }
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+
+    // P1 Fix: cleanup function
+    return () => {
+      abortController.abort();
+    };
   }, []);
 
   if (loading) {

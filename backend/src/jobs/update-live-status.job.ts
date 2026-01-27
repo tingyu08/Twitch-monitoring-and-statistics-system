@@ -14,7 +14,7 @@ export const updateLiveStatusJob = cron.schedule("* * * * *", async () => {
 });
 
 export async function updateLiveStatusFn() {
-  logger.debug("Jobs", "🔄 Starting Update Live Status Job...");
+  logger.debug("Jobs", "🔄 開始執行 Update Live Status Job...");
 
   try {
     // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)，包含當前狀態
@@ -37,12 +37,12 @@ export async function updateLiveStatusFn() {
     if (channels.length === 0) {
       logger.warn(
         "Jobs",
-        "⚠️ No monitored channels found (isMonitored=true). Check if channels are correctly synced."
+        "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步"
       );
       return;
     }
 
-    logger.debug("Jobs", `📊 Found ${channels.length} monitored channels to check`);
+    logger.debug("Jobs", `📊 找到 ${channels.length} 個受監控的頻道需要檢查`);
 
     // 2. 初始化 API Client (使用單例模式或確保釋放)
     // 這裡我們直接使用 twurpleHelixService 封裝好的方法，它已經處理了 ApiClient 的生命週期
@@ -111,7 +111,7 @@ export async function updateLiveStatusFn() {
           }
         }
       } catch (err) {
-        logger.error("Jobs", `Failed to fetch streams for batch ${i}`, err);
+        logger.error("Jobs", `第 ${i} 批次獲取直播狀態失敗`, err);
       }
 
       // 記憶體/CPU 優化：批次之間休息一下
@@ -196,15 +196,15 @@ export async function updateLiveStatusFn() {
     if (onlineChanges > 0 || offlineChanges > 0) {
       logger.info(
         "Jobs",
-        `Update Live Status: ${onlineChanges} went online, ${offlineChanges} went offline (${liveCount} live, ${offlineCount} offline)`
+        `直播狀態更新: ${onlineChanges} 個上線, ${offlineChanges} 個下線 (${liveCount} 直播中, ${offlineCount} 離線)`
       );
     } else {
       logger.debug(
         "Jobs",
-        `✅ Update Live Status: ${updates.length} channels checked, ${liveCount} LIVE, ${offlineCount} offline`
+        `✅ 直播狀態更新完成: 已檢查 ${updates.length} 個頻道, ${liveCount} 個直播中, ${offlineCount} 個離線`
       );
     }
   } catch (error) {
-    logger.error("Jobs", "Update Live Status Job failed", error);
+    logger.error("Jobs", "Update Live Status Job 執行失敗", error);
   }
 }

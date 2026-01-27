@@ -25,7 +25,7 @@ revenueSyncQueue.process(async (data: RevenueSyncJobData) => {
     ),
   ]);
 
-  logger.debug("Jobs", `Synced subscription snapshot for ${streamerName || streamerId}`);
+  logger.debug("Jobs", `已同步 ${streamerName || streamerId} 的訂閱快照`);
 });
 
 /**
@@ -39,7 +39,7 @@ revenueSyncQueue.process(async (data: RevenueSyncJobData) => {
  * - 優先級排序
  */
 export const syncSubscriptionsJob = cron.schedule("0 0 * * *", async () => {
-  logger.info("Jobs", "Starting Sync Subscriptions Job...");
+  logger.info("Jobs", "開始執行 Sync Subscriptions Job...");
 
   try {
     // 獲取所有有效 Token 的實況主
@@ -72,17 +72,17 @@ export const syncSubscriptionsJob = cron.schedule("0 0 * * *", async () => {
         addedCount++;
       } else {
         rejectedCount++;
-        logger.warn("Jobs", `Failed to add sync job for ${streamer.displayName} - queue full`);
+        logger.warn("Jobs", `無法加入 ${streamer.displayName} 的同步任務 - 佇列已滿`);
       }
     }
 
     const status = revenueSyncQueue.getStatus();
     logger.info(
       "Jobs",
-      `Sync Subscriptions Job: Added ${addedCount} jobs to queue, ${rejectedCount} rejected. ` +
-        `Queue status: ${status.queued} queued, ${status.processing} processing`
+      `Sync Subscriptions Job: 已加入 ${addedCount} 個任務到佇列, ${rejectedCount} 個被拒絕。` +
+        `佇列狀態: ${status.queued} 排隊中, ${status.processing} 處理中`
     );
   } catch (error) {
-    logger.error("Jobs", "Sync Subscriptions Job failed", error);
+    logger.error("Jobs", "Sync Subscriptions Job 執行失敗", error);
   }
 });

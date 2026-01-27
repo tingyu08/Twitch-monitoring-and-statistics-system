@@ -25,8 +25,11 @@ export function encryptToken(token: string): string {
     const authTag = cipher.getAuthTag();
     return Buffer.concat([iv, authTag, encrypted]).toString("base64");
   } catch (error) {
-    console.error("[AUTH] encryptToken failed", error);
-    throw error;
+    // P0 Security Fix: 避免日誌洩漏敏感資訊（如密鑰、token 內容）
+    // 只記錄錯誤類型，不記錄完整 error 物件或 token
+    const errorName = error instanceof Error ? error.name : "UnknownError";
+    console.error(`[AUTH] encryptToken failed: ${errorName}`);
+    throw new Error("Token encryption failed");
   }
 }
 
@@ -42,7 +45,10 @@ export function decryptToken(encrypted: string): string {
     const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return decrypted.toString("utf8");
   } catch (error) {
-    console.error("[AUTH] decryptToken failed", error);
-    throw error;
+    // P0 Security Fix: 避免日誌洩漏敏感資訊（如密鑰、加密內容）
+    // 只記錄錯誤類型，不記錄完整 error 物件或加密資料
+    const errorName = error instanceof Error ? error.name : "UnknownError";
+    console.error(`[AUTH] decryptToken failed: ${errorName}`);
+    throw new Error("Token decryption failed");
   }
 }

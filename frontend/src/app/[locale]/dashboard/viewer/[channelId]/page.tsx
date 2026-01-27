@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 import { useRouter, useParams } from "next/navigation";
 
@@ -76,6 +76,9 @@ export default function ViewerChannelStatsPage() {
 
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null);
 
+  // Request ID to prevent race conditions - only apply results from the latest request
+  const requestIdRef = useRef(0);
+
   const loadStats = useCallback(
     async (days: number) => {
       if (!channelId || !user || !isViewer(user) || !user.viewerId) {
@@ -85,6 +88,9 @@ export default function ViewerChannelStatsPage() {
       }
 
       const viewerId = user.viewerId;
+
+      // Increment request ID to track this specific request
+      const currentRequestId = ++requestIdRef.current;
 
       try {
         setLoading(true);
@@ -117,6 +123,12 @@ export default function ViewerChannelStatsPage() {
           viewerApi.getChannelViewerTrends(channelId, rangeKey),
         ]);
 
+        // Check if this request is still the latest one (race condition guard)
+        if (currentRequestId !== requestIdRef.current) {
+          // A newer request has been made, discard these results
+          return;
+        }
+
         if (!channelData) {
           setError("查無資料");
 
@@ -131,9 +143,15 @@ export default function ViewerChannelStatsPage() {
 
         setViewerTrends(trendsData);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "載入統計時發生錯誤");
+        // Only set error if this is still the latest request
+        if (currentRequestId === requestIdRef.current) {
+          setError(err instanceof Error ? err.message : "載入統計時發生錯誤");
+        }
       } finally {
-        setLoading(false);
+        // Only clear loading if this is still the latest request
+        if (currentRequestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
 

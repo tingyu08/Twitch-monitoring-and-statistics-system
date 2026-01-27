@@ -3,6 +3,15 @@ import { AuthController } from "./auth.controller";
 import { requireAuth, type AuthRequest } from "./auth.middleware";
 import type { Response } from "express";
 import { prisma } from "../../db/prisma";
+import { env } from "../../config/env";
+
+// P1 Fix: 統一 Cookie 設定，避免 sameSite 不一致導致清除失敗
+const getCookieOptions = () => ({
+  httpOnly: true,
+  secure: env.nodeEnv === "production",
+  sameSite: (env.nodeEnv === "production" ? "none" : "lax") as "none" | "lax",
+  path: "/",
+});
 
 // 建立 AuthController 實例
 const authController = new AuthController();
@@ -50,18 +59,11 @@ export async function getMeHandler(req: AuthRequest, res: Response): Promise<voi
 }
 
 export async function logoutHandler(req: AuthRequest, res: Response): Promise<void> {
-  res.clearCookie("auth_token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
-  res.clearCookie("refresh_token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
+  // P1 Fix: 使用統一的 cookie 設定，確保與設定時的選項一致
+  const cookieOptions = getCookieOptions();
+
+  res.clearCookie("auth_token", cookieOptions);
+  res.clearCookie("refresh_token", cookieOptions);
 
   if (req.user?.role === "viewer" && req.user.viewerId) {
     await prisma.twitchToken.deleteMany({

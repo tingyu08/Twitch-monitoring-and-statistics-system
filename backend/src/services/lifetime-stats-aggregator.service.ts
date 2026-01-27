@@ -59,55 +59,68 @@ export class LifetimeStatsAggregatorService {
 
   /**
    * 內部計算邏輯
+   * P1 Fix: 使用資料庫聚合函數減少資料傳輸量
    */
   private async calculateStats(viewerId: string, channelId: string): Promise<LifetimeStatsResult> {
-    // 1. 獲取所有日誌統計
-    const dailyStats = await prisma.viewerChannelDailyStat.findMany({
-      where: { viewerId, channelId },
-      orderBy: { date: "asc" },
-    });
-
-    // 2. 獲取所有訊息聚合
-    const messageAggs = await prisma.viewerChannelMessageDailyAgg.findMany({
-      where: { viewerId, channelId },
-      orderBy: { date: "asc" },
-    });
+    // P1 Fix: 使用資料庫聚合函數計算總和，避免載入所有記錄到記憶體
+    const [dailyStatsAgg, messageAggsAgg, dailyStatsDates, messageAggsDates] = await Promise.all([
+      // 聚合觀看時間統計
+      prisma.viewerChannelDailyStat.aggregate({
+        where: { viewerId, channelId },
+        _sum: { watchSeconds: true },
+        _count: true,
+        _min: { date: true },
+        _max: { date: true },
+      }),
+      // 聚合訊息統計
+      prisma.viewerChannelMessageDailyAgg.aggregate({
+        where: { viewerId, channelId },
+        _sum: {
+          totalMessages: true,
+          chatMessages: true,
+          subscriptions: true,
+          cheers: true,
+          totalBits: true,
+        },
+      }),
+      // 只查詢日期列表用於 streak 計算（使用 select 只取日期欄位）
+      prisma.viewerChannelDailyStat.findMany({
+        where: { viewerId, channelId },
+        select: { date: true },
+        orderBy: { date: "asc" },
+      }),
+      prisma.viewerChannelMessageDailyAgg.findMany({
+        where: { viewerId, channelId },
+        select: { date: true },
+        orderBy: { date: "asc" },
+      }),
+    ]);
 
     // ========== 基礎統計 ==========
 
-    const totalWatchTimeSeconds = dailyStats.reduce((sum, stat) => sum + stat.watchSeconds, 0);
+    const totalWatchTimeSeconds = dailyStatsAgg._sum.watchSeconds || 0;
     const totalWatchTimeMinutes = Math.floor(totalWatchTimeSeconds / 60);
-    // 我們可以用 dailyStats 的數量作為 "totalSessions" 的近似值 (活躍天數)
-    // 或者如果有 streamSessions 關聯會更準確，但那是 next level
-    const totalSessions = dailyStats.length;
+    const totalSessions = dailyStatsAgg._count || 0;
     const avgSessionMinutes =
       totalSessions > 0 ? Math.floor(totalWatchTimeMinutes / totalSessions) : 0;
 
-    const firstWatchedAt = dailyStats.length > 0 ? dailyStats[0].date : null;
-    const lastWatchedAt = dailyStats.length > 0 ? dailyStats[dailyStats.length - 1].date : null;
+    const firstWatchedAt = dailyStatsAgg._min.date || null;
+    const lastWatchedAt = dailyStatsAgg._max.date || null;
 
     // ========== 訊息統計 ==========
 
-    let totalMessages = 0;
-    let totalChatMessages = 0;
-    let totalSubscriptions = 0;
-    let totalCheers = 0;
-    let totalBits = 0;
-
-    for (const agg of messageAggs) {
-      totalMessages += agg.totalMessages;
-      totalChatMessages += agg.chatMessages;
-      totalSubscriptions += agg.subscriptions;
-      totalCheers += agg.cheers;
-      totalBits += agg.totalBits || 0;
-    }
+    const totalMessages = messageAggsAgg._sum.totalMessages || 0;
+    const totalChatMessages = messageAggsAgg._sum.chatMessages || 0;
+    const totalSubscriptions = messageAggsAgg._sum.subscriptions || 0;
+    const totalCheers = messageAggsAgg._sum.cheers || 0;
+    const totalBits = messageAggsAgg._sum.totalBits || 0;
 
     // ========== 忠誠度與連續簽到 ==========
 
     // 合併兩個來源的日期，找出所有活躍日期 (去重並排序)
     const activeDatesSet = new Set<string>();
-    dailyStats.forEach((d) => activeDatesSet.add(d.date.toISOString().split("T")[0]));
-    messageAggs.forEach((m) => activeDatesSet.add(m.date.toISOString().split("T")[0]));
+    dailyStatsDates.forEach((d) => activeDatesSet.add(d.date.toISOString().split("T")[0]));
+    messageAggsDates.forEach((m) => activeDatesSet.add(m.date.toISOString().split("T")[0]));
 
     const activeDates = Array.from(activeDatesSet).sort();
 
