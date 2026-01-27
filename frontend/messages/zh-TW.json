@@ -418,6 +418,7 @@
       "syncTimeout": "同步超時，請稍後再試",
       "syncAuthError": "授權已過期，請重新登入",
       "syncPermissionError": "需要實況主夥伴資格才能讀取訂閱數據",
+      "subscriptionLimitExceeded": "訂閱數量超過上限，請聯絡客服尋求企業級解決方案",
       "export": "匯出報表",
       "exportFormat": "格式",
       "exportSuccess": "報表已匯出",

@@ -202,6 +202,25 @@ export class AuthController {
       return res.status(401).json({ error: "Invalid refresh token" });
     }
 
+    // P0 Security Fix: Validate tokenVersion to prevent use of invalidated tokens
+    // After logout, tokenVersion is incremented, making old tokens invalid
+    if (payload.viewerId) {
+      const viewer = await prisma.viewer.findUnique({
+        where: { id: payload.viewerId },
+        select: { tokenVersion: true },
+      });
+
+      if (!viewer) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // If tokenVersion in JWT doesn't match DB, token has been invalidated (user logged out)
+      if (payload.tokenVersion !== viewer.tokenVersion) {
+        clearAuthCookies(res);
+        return res.status(401).json({ error: "Token has been invalidated" });
+      }
+    }
+
     const { tokenType: _tokenType, ...rest } = payload;
     const newAccess = signAccessToken(rest);
     const newRefresh = signRefreshToken(rest);

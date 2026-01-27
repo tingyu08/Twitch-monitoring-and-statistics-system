@@ -205,6 +205,10 @@ export class LifetimeStatsAggregatorService {
   /**
    * 更新頻道的排名 (Percentile Ranking)
    * 這是批次操作，計算所有觀眾的相對排名
+   *
+   * Optimized: Uses Map for O(1) rank lookup instead of O(n) findIndex
+   * Total complexity: O(n log n) for sorting + O(n) for Map building + O(n) for updates = O(n log n)
+   * Previously: O(n log n) + O(n²) = O(n²)
    */
   public async updatePercentileRankings(channelId: string): Promise<void> {
     const allStats = await prisma.viewerChannelLifetimeStats.findMany({
@@ -218,20 +222,34 @@ export class LifetimeStatsAggregatorService {
 
     if (allStats.length === 0) return;
 
-    // 排序
+    // Sort arrays - O(n log n)
     const sortedByWatchTime = [...allStats].sort(
       (a, b) => a.totalWatchTimeMinutes - b.totalWatchTimeMinutes
     );
     const sortedByMessages = [...allStats].sort((a, b) => a.totalMessages - b.totalMessages);
 
+    // Build rank Maps for O(1) lookup - O(n)
+    const watchRankMap = new Map<string, number>();
+    const msgRankMap = new Map<string, number>();
+
+    for (let i = 0; i < sortedByWatchTime.length; i++) {
+      watchRankMap.set(sortedByWatchTime[i].id, i);
+    }
+
+    for (let i = 0; i < sortedByMessages.length; i++) {
+      msgRankMap.set(sortedByMessages[i].id, i);
+    }
+
     const updates = [];
+    const statsCount = allStats.length;
 
+    // Build updates using Map lookup - O(n)
     for (const stat of allStats) {
-      const watchRank = sortedByWatchTime.findIndex((s) => s.id === stat.id);
-      const msgRank = sortedByMessages.findIndex((s) => s.id === stat.id);
+      const watchRank = watchRankMap.get(stat.id)!;
+      const msgRank = msgRankMap.get(stat.id)!;
 
-      const watchTimePercentile = (watchRank / allStats.length) * 100;
-      const messagePercentile = (msgRank / allStats.length) * 100;
+      const watchTimePercentile = (watchRank / statsCount) * 100;
+      const messagePercentile = (msgRank / statsCount) * 100;
 
       updates.push(
         prisma.viewerChannelLifetimeStats.update({

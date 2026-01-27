@@ -1,10 +1,8 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import { createContext, useContext } from "react";
+import type { Socket } from "socket.io-client";
 
 // 使用環境變數或默認後端地址
-// 注意：Socket.IO 路徑默認為 /socket.io，會自動附加到 URL 後面
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+export const SOCKET_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
 
 interface SocketContextType {
   socket: Socket | null;
@@ -18,18 +16,38 @@ export const SocketContext = createContext<SocketContextType>({
 
 export const useSocket = () => useContext(SocketContext);
 
-export const socketService = {
-  connect: () => {
-    // 確保只在客戶端執行
-    if (typeof window === "undefined") return null;
+/**
+ * Helper functions for room management
+ * Used with the new Socket.IO room-based architecture
+ */
+export const socketRooms = {
+  /**
+   * Join a channel room to receive channel-specific events
+   */
+  joinChannel: (socket: Socket | null, channelId: string) => {
+    if (socket?.connected) {
+      socket.emit("join-channel", { channelId });
+      console.log(`[Socket] Joined channel room: ${channelId}`);
+    }
+  },
 
-    // 如果已經有連線，則復用（這裡只做簡單示範，實際應該用 Context 管理單例）
-    return io(SOCKET_URL, {
-      withCredentials: true,
-      transports: ["websocket", "polling"], // 優先使用 WebSocket
-      path: "/socket.io",
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+  /**
+   * Leave a channel room
+   */
+  leaveChannel: (socket: Socket | null, channelId: string) => {
+    if (socket?.connected) {
+      socket.emit("leave-channel", { channelId });
+      console.log(`[Socket] Left channel room: ${channelId}`);
+    }
+  },
+
+  /**
+   * Join a viewer room to receive viewer-specific events
+   */
+  joinViewer: (socket: Socket | null, viewerId: string) => {
+    if (socket?.connected) {
+      socket.emit("join-viewer", { viewerId });
+      console.log(`[Socket] Joined viewer room: ${viewerId}`);
+    }
   },
 };

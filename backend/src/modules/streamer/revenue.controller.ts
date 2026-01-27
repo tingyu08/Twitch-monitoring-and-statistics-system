@@ -2,8 +2,9 @@ import type { Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
 import { revenueService } from "./revenue.service";
 import PDFDocument from "pdfkit";
-import { cacheManager, CacheKeys } from "../../utils/cache-manager";
-import { SYNC_TIMEOUT_MS, PDF_EXPORT, QUERY_LIMITS } from "../../config/revenue.config";
+import { cacheManager } from "../../utils/cache-manager";
+import { prisma } from "../../db/prisma";
+import { SYNC_TIMEOUT_MS, PDF_EXPORT, QUERY_LIMITS, BITS_TO_USD_RATE } from "../../config/revenue.config";
 
 export class RevenueController {
   /**
@@ -96,12 +97,8 @@ export class RevenueController {
         timeoutPromise,
       ]);
 
-      // 同步成功後清除相關快取
-      cacheManager.delete(CacheKeys.revenueOverview(streamerId));
-      // 清除各時間範圍的訂閱統計快取
-      [7, 30, 90].forEach(days => {
-        cacheManager.delete(CacheKeys.revenueSubscriptions(streamerId, days));
-      });
+      // 同步成功後清除所有相關快取（包含 overview、subscriptions、bits）
+      cacheManager.deleteRevenueCache(streamerId);
 
       return res.json({ success: true, message: "Subscription data synced" });
     } catch (error) {
@@ -168,78 +165,21 @@ export class RevenueController {
         });
       }
 
-      // 獲取數據
-      const [subscriptionStats, bitsStats, overview] = await Promise.all([
-        revenueService.getSubscriptionStats(streamerId, days),
-        revenueService.getBitsStats(streamerId, days),
-        revenueService.getRevenueOverview(streamerId),
-      ]);
-
-      // 構建報表數據
-      const headers = [
-        "Date",
-        "Tier1 Subscribers",
-        "Tier2 Subscribers",
-        "Tier3 Subscribers",
-        "Total Subscribers",
-        "Subscription Revenue (USD)",
-        "Bits Received",
-        "Bits Revenue (USD)",
-      ];
-
-      const rows: string[][] = [];
-
-      // 合併訂閱和 Bits 數據
-      const allDates = new Set([
-        ...subscriptionStats.map((s) => s.date),
-        ...bitsStats.map((b) => b.date),
-      ]);
-
-      for (const date of Array.from(allDates).sort()) {
-        const sub = subscriptionStats.find((s) => s.date === date);
-        const bits = bitsStats.find((b) => b.date === date);
-
-        rows.push([
-          date,
-          String(sub?.tier1Count || 0),
-          String(sub?.tier2Count || 0),
-          String(sub?.tier3Count || 0),
-          String(sub?.totalSubscribers || 0),
-          String((sub?.estimatedRevenue || 0).toFixed(2)),
-          String(bits?.totalBits || 0),
-          String((bits?.estimatedRevenue || 0).toFixed(2)),
-        ]);
-      }
-
       if (format === "csv") {
-        // CSV 轉義函數：處理逗號、引號等特殊字元
-        const escapeCsv = (value: string): string => {
-          // 將值轉為字串並處理引號（雙引號轉義為兩個雙引號）
-          const escaped = String(value).replace(/"/g, '""');
-          // 如果包含逗號、引號或換行，需要用引號包圍
-          if (escaped.includes(',') || escaped.includes('"') || escaped.includes('\n')) {
-            return `"${escaped}"`;
-          }
-          return escaped;
-        };
-
-        const csv = [
-          headers.map(escapeCsv).join(","),
-          ...rows.map((r) => r.map(escapeCsv).join(","))
-        ].join("\n");
-
-        res.setHeader("Content-Type", "text/csv; charset=utf-8");
-        res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.csv"`);
-        // 添加 BOM 以確保 Excel 正確識別 UTF-8
-        return res.send('\ufeff' + csv);
+        // 使用 streaming CSV export 避免記憶體累積
+        return this.streamCsvExport(res, streamerId, days);
       } else {
-        // PDF 格式 - 使用 pdfkit 生成專業 PDF
+        // PDF 格式 - 使用 streaming 直接 pipe 到 response
         try {
-          const pdfBuffer = await this.generatePdfContent(overview, subscriptionStats, bitsStats, days);
+          // 先獲取數據
+          const [subscriptionStats, bitsStats, overview] = await Promise.all([
+            revenueService.getSubscriptionStats(streamerId, days),
+            revenueService.getBitsStats(streamerId, days),
+            revenueService.getRevenueOverview(streamerId),
+          ]);
 
-          res.setHeader("Content-Type", "application/pdf");
-          res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.pdf"`);
-          return res.send(pdfBuffer);
+          // 使用 streaming PDF export
+          return this.streamPdfExport(res, overview, subscriptionStats, bitsStats, days);
         } catch (pdfError) {
           console.error("PDF generation failed:", pdfError);
           // 降級策略：如果 PDF 生成失敗，建議使用 CSV
@@ -257,157 +197,240 @@ export class RevenueController {
   }
 
   /**
-   * 生成 PDF 內容（使用 pdfkit）
-   * 優化記憶體使用以適應 Render free tier (512MB RAM)
+   * Streaming CSV Export - 分批讀取資料庫並串流寫入
+   * 優化記憶體使用，避免一次載入所有資料
    */
-  private async generatePdfContent(
+  private async streamCsvExport(res: Response, streamerId: string, days: number): Promise<void> {
+    const BATCH_SIZE = 50;
+
+    // 設定 response headers
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="revenue-${days}days.csv"`);
+
+    // 寫入 BOM 確保 Excel 正確識別 UTF-8
+    res.write("\ufeff");
+
+    // 寫入 CSV headers
+    res.write("Date,Tier1,Tier2,Tier3,Total,SubRevenue,Bits,BitsRevenue\n");
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    // 建立日期到 Bits 的映射（Bits 資料量通常較少，先全部載入）
+    const bitsMap = new Map<string, { totalBits: number; eventCount: number }>();
+    const bitsResults = await prisma.$queryRaw<
+      Array<{ date: string; totalBits: bigint; eventCount: bigint }>
+    >`
+      SELECT
+        DATE(cheeredAt) as date,
+        SUM(bits) as totalBits,
+        COUNT(*) as eventCount
+      FROM cheer_events
+      WHERE streamerId = ${streamerId}
+        AND cheeredAt >= ${startDate.toISOString()}
+      GROUP BY DATE(cheeredAt)
+      ORDER BY date ASC
+    `;
+
+    for (const row of bitsResults) {
+      bitsMap.set(row.date, {
+        totalBits: Number(row.totalBits),
+        eventCount: Number(row.eventCount),
+      });
+    }
+
+    // 分批讀取訂閱快照並串流寫入
+    let offset = 0;
+    let hasMore = true;
+    const processedDates = new Set<string>();
+
+    while (hasMore) {
+      const subs = await prisma.subscriptionSnapshot.findMany({
+        where: {
+          streamerId,
+          snapshotDate: { gte: startDate },
+        },
+        orderBy: { snapshotDate: "asc" },
+        skip: offset,
+        take: BATCH_SIZE,
+      });
+
+      for (const sub of subs) {
+        const dateStr = sub.snapshotDate.toISOString().split("T")[0];
+        processedDates.add(dateStr);
+
+        const bits = bitsMap.get(dateStr);
+        const bitsRevenue = bits ? bits.totalBits * BITS_TO_USD_RATE : 0;
+
+        res.write(
+          `${dateStr},${sub.tier1Count},${sub.tier2Count},${sub.tier3Count},` +
+          `${sub.totalSubscribers},${(sub.estimatedRevenue || 0).toFixed(2)},` +
+          `${bits?.totalBits || 0},${bitsRevenue.toFixed(2)}\n`
+        );
+      }
+
+      hasMore = subs.length === BATCH_SIZE;
+      offset += BATCH_SIZE;
+    }
+
+    // 寫入只有 Bits 資料的日期（沒有訂閱快照的日期）
+    for (const [dateStr, bits] of bitsMap.entries()) {
+      if (!processedDates.has(dateStr)) {
+        const bitsRevenue = bits.totalBits * BITS_TO_USD_RATE;
+        res.write(
+          `${dateStr},0,0,0,0,0.00,${bits.totalBits},${bitsRevenue.toFixed(2)}\n`
+        );
+      }
+    }
+
+    res.end();
+  }
+
+  /**
+   * Streaming PDF Export - 直接 pipe 到 Response
+   * 優化記憶體使用：禁用緩衝、啟用壓縮
+   */
+  private streamPdfExport(
+    res: Response,
     overview: Awaited<ReturnType<typeof revenueService.getRevenueOverview>>,
     subscriptionStats: Awaited<ReturnType<typeof revenueService.getSubscriptionStats>>,
     bitsStats: Awaited<ReturnType<typeof revenueService.getBitsStats>>,
     days: number
-  ): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      // 添加超時保護（30秒）
-      const timeout = setTimeout(() => {
-        doc.end();
-        reject(new Error("PDF generation timeout"));
-      }, 30000);
+  ): void {
+    // 設定 response headers
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="revenue-report-${days}days.pdf"`);
 
-      const doc = new PDFDocument({
-        margin: 50,
-        bufferPages: true, // 啟用頁面緩衝以減少記憶體使用
-        autoFirstPage: true,
-        size: 'A4'
-      });
-      const chunks: Buffer[] = [];
-
-      doc.on("data", (chunk) => chunks.push(chunk));
-      doc.on("end", () => {
-        clearTimeout(timeout);
-        resolve(Buffer.concat(chunks));
-      });
-      doc.on("error", (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-
-      // 標題
-      doc.fontSize(20).font("Helvetica-Bold").text("TWITCH REVENUE REPORT", { align: "center" });
-      doc.moveDown(0.5);
-      doc.fontSize(12).font("Helvetica").text(`Period: Last ${days} Days`, { align: "center" });
-      doc.text(`Generated: ${new Date().toISOString().split("T")[0]}`, { align: "center" });
-      doc.moveDown(1);
-
-      // 分隔線
-      doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
-      doc.moveDown(1);
-
-      // 總覽摘要
-      doc.fontSize(14).font("Helvetica-Bold").text("REVENUE OVERVIEW");
-      doc.moveDown(0.5);
-      doc.fontSize(11).font("Helvetica");
-      doc.text(`Total Estimated Revenue: $${overview.totalEstimatedRevenue.toFixed(2)}`);
-      doc.moveDown(0.5);
-
-      // 訂閱統計
-      doc.fontSize(12).font("Helvetica-Bold").text("Subscriptions:");
-      doc.fontSize(10).font("Helvetica");
-      doc.text(`  Total Subscribers: ${overview.subscriptions.current}`);
-      doc.text(`  Tier 1: ${overview.subscriptions.tier1}`);
-      doc.text(`  Tier 2: ${overview.subscriptions.tier2}`);
-      doc.text(`  Tier 3: ${overview.subscriptions.tier3}`);
-      doc.text(`  Monthly Revenue: $${overview.subscriptions.estimatedMonthlyRevenue.toFixed(2)}`);
-      doc.moveDown(0.5);
-
-      // Bits 統計
-      doc.fontSize(12).font("Helvetica-Bold").text("Bits:");
-      doc.fontSize(10).font("Helvetica");
-      doc.text(`  Total Bits: ${overview.bits.totalBits.toLocaleString()}`);
-      doc.text(`  Cheer Events: ${overview.bits.eventCount}`);
-      doc.text(`  Estimated Revenue: $${overview.bits.estimatedRevenue.toFixed(2)}`);
-      doc.moveDown(1);
-
-      // 訂閱歷史（只顯示最近 10 筆以節省記憶體）
-      if (subscriptionStats.length > 0) {
-        doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
-        doc.moveDown(0.5);
-        doc.fontSize(14).font("Helvetica-Bold").text("SUBSCRIPTION HISTORY");
-        doc.fontSize(9).font("Helvetica-Oblique")
-          .text(`(Showing last 10 records out of ${subscriptionStats.length} total)`, { align: "left" });
-        doc.moveDown(0.5);
-
-        // 表格標題
-        doc.fontSize(9).font("Helvetica-Bold");
-        const colWidths = { date: 80, t1: 40, t2: 40, t3: 40, total: 50, revenue: 70 };
-        let x = 50;
-        doc.text("Date", x, doc.y); x += colWidths.date;
-        doc.text("T1", x, doc.y); x += colWidths.t1;
-        doc.text("T2", x, doc.y); x += colWidths.t2;
-        doc.text("T3", x, doc.y); x += colWidths.t3;
-        doc.text("Total", x, doc.y); x += colWidths.total;
-        doc.text("Revenue", x, doc.y);
-        doc.moveDown(0.3);
-
-        // 表格數據（最近 10 筆）- 限制數量以節省記憶體
-        doc.fontSize(9).font("Helvetica");
-        const recentSubscriptions = subscriptionStats.slice(-10);
-        for (const stat of recentSubscriptions) {
-          x = 50;
-          const y = doc.y;
-          doc.text(stat.date, x, y); x += colWidths.date;
-          doc.text(String(stat.tier1Count), x, y); x += colWidths.t1;
-          doc.text(String(stat.tier2Count), x, y); x += colWidths.t2;
-          doc.text(String(stat.tier3Count), x, y); x += colWidths.t3;
-          doc.text(String(stat.totalSubscribers), x, y); x += colWidths.total;
-          doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
-          doc.moveDown(0.5);
-        }
-        doc.moveDown(0.5);
-      }
-
-      // Bits 歷史（只顯示最近 10 筆以節省記憶體）
-      if (bitsStats.length > 0) {
-        doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
-        doc.moveDown(0.5);
-        doc.fontSize(14).font("Helvetica-Bold").text("BITS HISTORY");
-        doc.fontSize(9).font("Helvetica-Oblique")
-          .text(`(Showing last 10 records out of ${bitsStats.length} total)`, { align: "left" });
-        doc.moveDown(0.5);
-
-        // 表格標題
-        doc.fontSize(9).font("Helvetica-Bold");
-        const colWidths = { date: 80, bits: 80, events: 60, revenue: 70 };
-        let x = 50;
-        doc.text("Date", x, doc.y); x += colWidths.date;
-        doc.text("Total Bits", x, doc.y); x += colWidths.bits;
-        doc.text("Events", x, doc.y); x += colWidths.events;
-        doc.text("Revenue", x, doc.y);
-        doc.moveDown(0.3);
-
-        // 表格數據（最近 10 筆）- 限制數量以節省記憶體
-        doc.fontSize(9).font("Helvetica");
-        const recentBits = bitsStats.slice(-10);
-        for (const stat of recentBits) {
-          x = 50;
-          const y = doc.y;
-          doc.text(stat.date, x, y); x += colWidths.date;
-          doc.text(String(stat.totalBits), x, y); x += colWidths.bits;
-          doc.text(String(stat.eventCount), x, y); x += colWidths.events;
-          doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
-          doc.moveDown(0.5);
-        }
-        doc.moveDown(0.5);
-      }
-
-      // 頁尾說明
-      doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
-      doc.moveDown(0.5);
-      doc.fontSize(9).font("Helvetica-Oblique");
-      doc.text("Note: Revenue estimates are based on standard 50% revenue share.");
-      doc.text("Actual earnings may vary based on your contract with Twitch.");
-
-      doc.end();
+    // 建立 PDF document，禁用緩衝、啟用壓縮
+    const doc = new PDFDocument({
+      margin: 50,
+      bufferPages: false, // 禁用頁面緩衝
+      compress: true,     // 啟用壓縮
+      autoFirstPage: true,
+      size: "A4",
     });
+
+    // 直接 pipe 到 response
+    doc.pipe(res);
+
+    // 標題
+    doc.fontSize(20).font("Helvetica-Bold").text("TWITCH REVENUE REPORT", { align: "center" });
+    doc.moveDown(0.5);
+    doc.fontSize(12).font("Helvetica").text(`Period: Last ${days} Days`, { align: "center" });
+    doc.text(`Generated: ${new Date().toISOString().split("T")[0]}`, { align: "center" });
+    doc.moveDown(1);
+
+    // 分隔線
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(1);
+
+    // 總覽摘要
+    doc.fontSize(14).font("Helvetica-Bold").text("REVENUE OVERVIEW");
+    doc.moveDown(0.5);
+    doc.fontSize(11).font("Helvetica");
+    doc.text(`Total Estimated Revenue: $${overview.totalEstimatedRevenue.toFixed(2)}`);
+    doc.moveDown(0.5);
+
+    // 訂閱統計
+    doc.fontSize(12).font("Helvetica-Bold").text("Subscriptions:");
+    doc.fontSize(10).font("Helvetica");
+    doc.text(`  Total Subscribers: ${overview.subscriptions.current}`);
+    doc.text(`  Tier 1: ${overview.subscriptions.tier1}`);
+    doc.text(`  Tier 2: ${overview.subscriptions.tier2}`);
+    doc.text(`  Tier 3: ${overview.subscriptions.tier3}`);
+    doc.text(`  Monthly Revenue: $${overview.subscriptions.estimatedMonthlyRevenue.toFixed(2)}`);
+    doc.moveDown(0.5);
+
+    // Bits 統計
+    doc.fontSize(12).font("Helvetica-Bold").text("Bits:");
+    doc.fontSize(10).font("Helvetica");
+    doc.text(`  Total Bits: ${overview.bits.totalBits.toLocaleString()}`);
+    doc.text(`  Cheer Events: ${overview.bits.eventCount}`);
+    doc.text(`  Estimated Revenue: $${overview.bits.estimatedRevenue.toFixed(2)}`);
+    doc.moveDown(1);
+
+    // 訂閱歷史（只顯示最近 10 筆以節省記憶體）
+    if (subscriptionStats.length > 0) {
+      doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(14).font("Helvetica-Bold").text("SUBSCRIPTION HISTORY");
+      doc.fontSize(9).font("Helvetica-Oblique")
+        .text(`(Showing last 10 records out of ${subscriptionStats.length} total)`, { align: "left" });
+      doc.moveDown(0.5);
+
+      // 表格標題
+      doc.fontSize(9).font("Helvetica-Bold");
+      const colWidths = { date: 80, t1: 40, t2: 40, t3: 40, total: 50, revenue: 70 };
+      let x = 50;
+      doc.text("Date", x, doc.y); x += colWidths.date;
+      doc.text("T1", x, doc.y); x += colWidths.t1;
+      doc.text("T2", x, doc.y); x += colWidths.t2;
+      doc.text("T3", x, doc.y); x += colWidths.t3;
+      doc.text("Total", x, doc.y); x += colWidths.total;
+      doc.text("Revenue", x, doc.y);
+      doc.moveDown(0.3);
+
+      // 表格數據（最近 10 筆）
+      doc.fontSize(9).font("Helvetica");
+      const recentSubscriptions = subscriptionStats.slice(-PDF_EXPORT.MAX_RECORDS_PER_TABLE);
+      for (const stat of recentSubscriptions) {
+        x = 50;
+        const y = doc.y;
+        doc.text(stat.date, x, y); x += colWidths.date;
+        doc.text(String(stat.tier1Count), x, y); x += colWidths.t1;
+        doc.text(String(stat.tier2Count), x, y); x += colWidths.t2;
+        doc.text(String(stat.tier3Count), x, y); x += colWidths.t3;
+        doc.text(String(stat.totalSubscribers), x, y); x += colWidths.total;
+        doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
+        doc.moveDown(0.5);
+      }
+      doc.moveDown(0.5);
+    }
+
+    // Bits 歷史（只顯示最近 10 筆以節省記憶體）
+    if (bitsStats.length > 0) {
+      doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+      doc.moveDown(0.5);
+      doc.fontSize(14).font("Helvetica-Bold").text("BITS HISTORY");
+      doc.fontSize(9).font("Helvetica-Oblique")
+        .text(`(Showing last 10 records out of ${bitsStats.length} total)`, { align: "left" });
+      doc.moveDown(0.5);
+
+      // 表格標題
+      doc.fontSize(9).font("Helvetica-Bold");
+      const colWidths = { date: 80, bits: 80, events: 60, revenue: 70 };
+      let x = 50;
+      doc.text("Date", x, doc.y); x += colWidths.date;
+      doc.text("Total Bits", x, doc.y); x += colWidths.bits;
+      doc.text("Events", x, doc.y); x += colWidths.events;
+      doc.text("Revenue", x, doc.y);
+      doc.moveDown(0.3);
+
+      // 表格數據（最近 10 筆）
+      doc.fontSize(9).font("Helvetica");
+      const recentBits = bitsStats.slice(-PDF_EXPORT.MAX_RECORDS_PER_TABLE);
+      for (const stat of recentBits) {
+        x = 50;
+        const y = doc.y;
+        doc.text(stat.date, x, y); x += colWidths.date;
+        doc.text(String(stat.totalBits), x, y); x += colWidths.bits;
+        doc.text(String(stat.eventCount), x, y); x += colWidths.events;
+        doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
+        doc.moveDown(0.5);
+      }
+      doc.moveDown(0.5);
+    }
+
+    // 頁尾說明
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(9).font("Helvetica-Oblique");
+    doc.text("Note: Revenue estimates are based on standard 50% revenue share.");
+    doc.text("Actual earnings may vary based on your contract with Twitch.");
+
+    // 結束文件
+    doc.end();
   }
 }
 

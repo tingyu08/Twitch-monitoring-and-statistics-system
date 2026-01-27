@@ -56,3 +56,18 @@ export const QUERY_LIMITS = {
   DEFAULT_DAYS: 30,
   DEFAULT_LIMIT: 10,
 } as const;
+
+/**
+ * API 速率限制配置
+ * 針對 Render Free Tier 的資源限制設計
+ */
+export const RATE_LIMITS = {
+  SYNC: {
+    windowMs: 5 * 60 * 1000,  // 5 分鐘
+    max: 3,                    // 每 5 分鐘最多 3 次
+  },
+  EXPORT: {
+    windowMs: 15 * 60 * 1000, // 15 分鐘
+    max: 10,                   // 每 15 分鐘最多 10 次
+  },
+} as const;

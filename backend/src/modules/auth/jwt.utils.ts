@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import { env } from "../../config/env";
 
 export type UserRole = "streamer" | "viewer";
-export type TokenType = "access" | "refresh";
+export type TokenType = "access" | "refresh" | "extension";
 
 export interface JWTPayload {
   streamerId?: string;
@@ -18,8 +18,17 @@ export interface JWTPayload {
   tokenType: TokenType;
 }
 
+// P0 Security: Dedicated Extension JWT payload (minimal data exposure)
+export interface ExtensionJWTPayload {
+  viewerId: string;
+  tokenType: "extension";
+  iat?: number;
+  exp?: number;
+}
+
 const ACCESS_EXPIRES_IN = "1h"; // Story 2.1 要求
 const REFRESH_EXPIRES_IN = "7d";
+const EXTENSION_EXPIRES_IN = "1h"; // P0 Security: Extension tokens expire in 1 hour
 
 export function signAccessToken(payload: Omit<JWTPayload, "tokenType">): string {
   return jwt.sign({ ...payload, tokenType: "access" as const }, env.jwtSecret, {
@@ -49,4 +58,25 @@ export function verifyAccessToken(token: string): JWTPayload | null {
 
 export function verifyRefreshToken(token: string): JWTPayload | null {
   return verifyToken(token, "refresh");
+}
+
+// P0 Security: Extension-specific JWT functions
+export function signExtensionToken(viewerId: string): string {
+  const payload: Omit<ExtensionJWTPayload, "iat" | "exp"> = {
+    viewerId,
+    tokenType: "extension",
+  };
+  return jwt.sign(payload, env.jwtSecret, {
+    expiresIn: EXTENSION_EXPIRES_IN,
+  });
+}
+
+export function verifyExtensionToken(token: string): ExtensionJWTPayload | null {
+  try {
+    const decoded = jwt.verify(token, env.jwtSecret) as ExtensionJWTPayload;
+    if (decoded.tokenType !== "extension") return null;
+    return decoded;
+  } catch {
+    return null;
+  }
 }

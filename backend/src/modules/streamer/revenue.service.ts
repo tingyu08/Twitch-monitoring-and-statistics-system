@@ -376,6 +376,7 @@ export class RevenueService {
 
   /**
    * 獲取收益總覽（帶快取）
+   * 優化：使用 $transaction 合併多次查詢
    */
   async getRevenueOverview(streamerId: string): Promise<RevenueOverview> {
     // 參數驗證
@@ -387,25 +388,26 @@ export class RevenueService {
     return cacheManager.getOrSet(
       CacheKeys.revenueOverview(streamerId),
       async () => {
-        // 獲取最新訂閱快照
-        const latestSnapshot = await prisma.subscriptionSnapshot.findFirst({
-          where: { streamerId },
-          orderBy: { snapshotDate: "desc" },
-        });
-
-        // 獲取本月 Bits 統計
+        // 獲取本月 Bits 統計的起始時間
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
 
-        const bitsAgg = await prisma.cheerEvent.aggregate({
-          where: {
-            streamerId,
-            cheeredAt: { gte: startOfMonth },
-          },
-          _sum: { bits: true },
-          _count: true,
-        });
+        // 使用 $transaction 合併查詢，減少資料庫往返
+        const [latestSnapshot, bitsAgg] = await prisma.$transaction([
+          prisma.subscriptionSnapshot.findFirst({
+            where: { streamerId },
+            orderBy: { snapshotDate: "desc" },
+          }),
+          prisma.cheerEvent.aggregate({
+            where: {
+              streamerId,
+              cheeredAt: { gte: startOfMonth },
+            },
+            _sum: { bits: true },
+            _count: true,
+          }),
+        ]);
 
         const totalBits = bitsAgg._sum.bits || 0;
         const bitsRevenue = totalBits * BITS_TO_USD_RATE;

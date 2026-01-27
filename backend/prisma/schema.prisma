@@ -532,5 +532,6 @@ model CheerEvent {
   streamer     Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([streamerId, cheeredAt])
+  @@index([streamerId, userName, isAnonymous])
   @@map("cheer_events")
 }

@@ -124,6 +124,33 @@ export class CacheManager {
   }
 
   /**
+   * 依據前綴模式刪除多個快取項目
+   * @param pattern 前綴模式（例如 "revenue:streamerId:"）
+   * @returns 刪除的項目數量
+   */
+  deletePattern(pattern: string): number {
+    let count = 0;
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(pattern)) {
+        this.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * 刪除特定實況主的所有收益相關快取
+   * @param streamerId 實況主 ID
+   */
+  deleteRevenueCache(streamerId: string): void {
+    const deleted = this.deletePattern(`revenue:${streamerId}:`);
+    if (deleted > 0) {
+      console.log(`[Cache] Deleted ${deleted} revenue cache entries for streamer ${streamerId}`);
+    }
+  }
+
+  /**
    * 取得或設定（如果不存在則執行 factory 函數）
    */
   async getOrSet<T>(

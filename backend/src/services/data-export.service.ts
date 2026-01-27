@@ -33,12 +33,32 @@ type ExportMessageAgg = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExportLifetimeStat = Record<string, any>;
 
+/**
+ * Helper: Check if a path exists (async)
+ */
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class DataExportService {
-  constructor() {
-    // 確保匯出目錄存在
-    if (!fs.existsSync(EXPORT_DIR)) {
-      fs.mkdirSync(EXPORT_DIR, { recursive: true });
+  private initialized = false;
+
+  /**
+   * Initialize export directory (called lazily)
+   */
+  private async ensureExportDir(): Promise<void> {
+    if (this.initialized) return;
+
+    const exists = await pathExists(EXPORT_DIR);
+    if (!exists) {
+      await fs.promises.mkdir(EXPORT_DIR, { recursive: true });
     }
+    this.initialized = true;
   }
 
   /**
@@ -46,6 +66,9 @@ export class DataExportService {
    * 使用同步處理（簡化方案）
    */
   async createExportJob(viewerId: string): Promise<ExportJobResult> {
+    // Ensure export directory exists
+    await this.ensureExportDir();
+
     // 檢查觀眾是否存在
     const viewer = await prisma.viewer.findUnique({
       where: { id: viewerId },
@@ -129,9 +152,9 @@ export class DataExportService {
     const zipPath = path.join(EXPORT_DIR, `${exportName}.zip`);
 
     // 建立暫存目錄
-    fs.mkdirSync(exportDir, { recursive: true });
-    fs.mkdirSync(path.join(exportDir, "json"), { recursive: true });
-    fs.mkdirSync(path.join(exportDir, "csv"), { recursive: true });
+    await fs.promises.mkdir(exportDir, { recursive: true });
+    await fs.promises.mkdir(path.join(exportDir, "json"), { recursive: true });
+    await fs.promises.mkdir(path.join(exportDir, "csv"), { recursive: true });
 
     try {
       // 獲取所有資料
@@ -184,13 +207,14 @@ export class DataExportService {
       await this.createZipArchive(exportDir, zipPath);
 
       // 清理暫存目錄
-      fs.rmSync(exportDir, { recursive: true, force: true });
+      await fs.promises.rm(exportDir, { recursive: true, force: true });
 
       return zipPath;
     } catch (error) {
       // 清理暫存目錄
-      if (fs.existsSync(exportDir)) {
-        fs.rmSync(exportDir, { recursive: true, force: true });
+      const exists = await pathExists(exportDir);
+      if (exists) {
+        await fs.promises.rm(exportDir, { recursive: true, force: true });
       }
       throw error;
     }
@@ -218,7 +242,10 @@ export class DataExportService {
       createdAt: data.viewer.createdAt,
       updatedAt: data.viewer.updatedAt,
     };
-    fs.writeFileSync(path.join(jsonDir, "profile.json"), JSON.stringify(profile, null, 2));
+    await fs.promises.writeFile(
+      path.join(jsonDir, "profile.json"),
+      JSON.stringify(profile, null, 2)
+    );
 
     // watch-time-stats.json - 觀看時數記錄
     const watchTimeStats = data.dailyStats.map((stat) => ({
@@ -228,7 +255,7 @@ export class DataExportService {
       messageCount: stat.messageCount,
       emoteCount: stat.emoteCount,
     }));
-    fs.writeFileSync(
+    await fs.promises.writeFile(
       path.join(jsonDir, "watch-time-stats.json"),
       JSON.stringify(watchTimeStats, null, 2)
     );
@@ -245,7 +272,7 @@ export class DataExportService {
       raids: agg.raids,
       totalBits: agg.totalBits,
     }));
-    fs.writeFileSync(
+    await fs.promises.writeFile(
       path.join(jsonDir, "message-stats.json"),
       JSON.stringify(messageStats, null, 2)
     );
@@ -265,7 +292,7 @@ export class DataExportService {
       firstWatchedAt: stat.firstWatchedAt,
       lastWatchedAt: stat.lastWatchedAt,
     }));
-    fs.writeFileSync(
+    await fs.promises.writeFile(
       path.join(jsonDir, "lifetime-stats.json"),
       JSON.stringify(lifetimeStats, null, 2)
     );
@@ -287,7 +314,7 @@ export class DataExportService {
         collectRadarAnalysis: data.viewer.privacyConsent.collectRadarAnalysis,
         updatedAt: data.viewer.privacyConsent.updatedAt,
       };
-      fs.writeFileSync(
+      await fs.promises.writeFile(
         path.join(jsonDir, "privacy-settings.json"),
         JSON.stringify(privacySettings, null, 2)
       );
@@ -318,7 +345,10 @@ export class DataExportService {
           },${stat.emoteCount}`
       ),
     ].join("\n");
-    fs.writeFileSync(path.join(csvDir, "watch-time-daily.csv"), "\ufeff" + watchTimeCsv); // BOM for Excel
+    await fs.promises.writeFile(
+      path.join(csvDir, "watch-time-daily.csv"),
+      "\ufeff" + watchTimeCsv
+    ); // BOM for Excel
 
     // messages-daily.csv
     const messagesCsv = [
@@ -332,7 +362,7 @@ export class DataExportService {
           },${agg.giftSubs},${agg.raids},${agg.totalBits || 0}`
       ),
     ].join("\n");
-    fs.writeFileSync(path.join(csvDir, "messages-daily.csv"), "\ufeff" + messagesCsv);
+    await fs.promises.writeFile(path.join(csvDir, "messages-daily.csv"), "\ufeff" + messagesCsv);
   }
 
   /**
@@ -367,7 +397,7 @@ export class DataExportService {
 
 匯出時間: ${new Date().toISOString()}
 `;
-    fs.writeFileSync(path.join(exportDir, "README.txt"), readme);
+    await fs.promises.writeFile(path.join(exportDir, "README.txt"), readme);
   }
 
   /**
@@ -425,12 +455,15 @@ export class DataExportService {
     let cleaned = 0;
 
     for (const job of expiredJobs) {
-      if (job.downloadPath && fs.existsSync(job.downloadPath)) {
-        try {
-          fs.unlinkSync(job.downloadPath);
-          cleaned++;
-        } catch (error) {
-          console.error(`清理匯出檔案失敗: ${job.downloadPath}`, error);
+      if (job.downloadPath) {
+        const exists = await pathExists(job.downloadPath);
+        if (exists) {
+          try {
+            await fs.promises.unlink(job.downloadPath);
+            cleaned++;
+          } catch (error) {
+            console.error(`清理匯出檔案失敗: ${job.downloadPath}`, error);
+          }
         }
       }
 

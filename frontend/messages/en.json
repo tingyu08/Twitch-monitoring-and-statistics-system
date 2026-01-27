@@ -424,6 +424,7 @@
       "syncTimeout": "Sync timeout, please try again later",
       "syncAuthError": "Authorization expired, please re-login",
       "syncPermissionError": "Requires Affiliate/Partner status to read subscriptions",
+      "subscriptionLimitExceeded": "Channel has too many subscribers. Please contact support for enterprise solutions.",
       "export": "Export Report",
       "exportFormat": "Format",
       "exportSuccess": "Report exported",

@@ -20,6 +20,8 @@ import { webSocketGateway } from "./websocket.gateway";
 const HEAT_WINDOW_MS = 5000; // 5秒視窗
 const HEAT_THRESHOLD_MSG = 50; // 5秒內超過50則訊息視為有熱度
 const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
+const HEAT_CLEANUP_INTERVAL_MS = 60000; // P1 Memory: 每 60 秒清理一次過期數據
+const HEAT_STALE_THRESHOLD_MS = 60000; // P1 Memory: 超過 60 秒沒活動的頻道視為過期
 
 // ChatClient 相關類型定義
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -47,8 +49,62 @@ export class TwurpleChatService {
   private messageTimestamps: Map<string, number[]> = new Map();
   // 熱度冷卻：channelName -> lastAlertTime
   private lastHeatAlert: Map<string, number> = new Map();
+  // P1 Memory: Cleanup interval reference
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
-  constructor() { }
+  constructor() {
+    // P1 Memory: Start periodic cleanup to prevent unbounded Map growth
+    this.startCleanupInterval();
+  }
+
+  /**
+   * P1 Memory: Periodic cleanup of stale heat tracking data
+   * Prevents messageTimestamps and lastHeatAlert Maps from growing unbounded
+   */
+  private startCleanupInterval(): void {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupStaleHeatData();
+    }, HEAT_CLEANUP_INTERVAL_MS);
+
+    // Don't prevent Node.js from exiting
+    if (this.cleanupInterval.unref) {
+      this.cleanupInterval.unref();
+    }
+  }
+
+  /**
+   * P1 Memory: Clean up heat tracking data for inactive channels
+   */
+  private cleanupStaleHeatData(): void {
+    const now = Date.now();
+    const staleThreshold = now - HEAT_STALE_THRESHOLD_MS;
+    let cleanedChannels = 0;
+
+    // Clean messageTimestamps - remove channels with no recent activity
+    for (const [channelName, timestamps] of this.messageTimestamps.entries()) {
+      // If no timestamps or all timestamps are old, remove the entry
+      if (timestamps.length === 0 || timestamps[timestamps.length - 1] < staleThreshold) {
+        this.messageTimestamps.delete(channelName);
+        this.lastHeatAlert.delete(channelName); // Also clean alert tracking
+        cleanedChannels++;
+      }
+    }
+
+    // Clean orphaned lastHeatAlert entries (channels not in messageTimestamps)
+    for (const channelName of this.lastHeatAlert.keys()) {
+      if (!this.messageTimestamps.has(channelName)) {
+        this.lastHeatAlert.delete(channelName);
+      }
+    }
+
+    if (cleanedChannels > 0) {
+      logger.debug(
+        "Twurple Chat",
+        `Cleaned up heat data for ${cleanedChannels} inactive channels. ` +
+        `Active: ${this.messageTimestamps.size} channels`
+      );
+    }
+  }
 
   // ... (省略 initialize 等方法，保持不變)
 
@@ -480,10 +536,19 @@ export class TwurpleChatService {
    * 斷開連接
    */
   public async disconnect(): Promise<void> {
+    // P1 Memory: Clear cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+
     if (this.chatClient) {
       this.chatClient.quit();
       this.isConnected = false;
       this.channels.clear();
+      // P1 Memory: Clear heat tracking Maps on disconnect
+      this.messageTimestamps.clear();
+      this.lastHeatAlert.clear();
       logger.info("Twurple Chat", "手動斷線");
     }
   }

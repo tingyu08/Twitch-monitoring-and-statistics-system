@@ -5,6 +5,8 @@
  * 1. 接收網頁傳來的 Token (透過 postMessage)
  * 2. 偵測 Twitch 頻道與播放狀態
  * 3. 定時發送 Heartbeat 給 Background
+ *
+ * P0 Security: Fixed postMessage origin validation
  */
 
 // ============ 常數定義 ============
@@ -18,7 +20,7 @@ const HEARTBEAT_INTERVAL_MS = 30 * 1000; // 30 秒
 
 // ============ Token Sync ============
 window.addEventListener("message", (event) => {
-  // 驗證來源
+  // P0 Security: Validate origin strictly
   if (!ALLOWED_ORIGINS.includes(event.origin)) return;
 
   const data = event.data;
@@ -32,8 +34,8 @@ window.addEventListener("message", (event) => {
         token: data.token,
       },
       () => {
-        // 通知網頁同步成功
-        window.postMessage({ type: "BMAD_SYNC_SUCCESS" }, "*");
+        // P0 Security: Use specific origin instead of "*"
+        window.postMessage({ type: "BMAD_SYNC_SUCCESS" }, event.origin);
       }
     );
   }
@@ -103,7 +105,9 @@ if (window.location.hostname.includes("twitch.tv")) {
 }
 
 // 通知網頁 Extension 已安裝
+// P0 Security: Only send to allowed origins
 if (ALLOWED_ORIGINS.some((origin) => window.location.origin === origin)) {
   console.log("[Bmad] Content Script loaded on Bmad site");
-  window.postMessage({ type: "BMAD_EXTENSION_READY" }, "*");
+  // P0 Security: Use specific origin instead of "*"
+  window.postMessage({ type: "BMAD_EXTENSION_READY" }, window.location.origin);
 }

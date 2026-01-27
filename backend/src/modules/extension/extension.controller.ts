@@ -1,11 +1,15 @@
 /**
  * Extension Heartbeat Controller
  * 接收瀏覽器擴充功能發送的觀看心跳
+ *
+ * P0 Security: Now uses dedicated JWT authentication instead of raw viewerId
  */
 
 import { Request, Response } from "express";
 import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
+import { signExtensionToken, verifyAccessToken } from "../auth/jwt.utils";
+import type { ExtensionAuthRequest } from "./extension.middleware";
 
 interface HeartbeatBody {
   channelName: string;
@@ -14,32 +18,62 @@ interface HeartbeatBody {
 }
 
 /**
- * POST /api/extension/heartbeat
- * 接收並處理觀看心跳
+ * POST /api/extension/token
+ * Generate a dedicated extension JWT token for authenticated users
+ * Requires: auth_token cookie (normal authentication)
  */
-export async function postHeartbeatHandler(req: Request, res: Response): Promise<void> {
+export async function getExtensionTokenHandler(req: Request, res: Response): Promise<void> {
   try {
-    // 從 Authorization header 取得 viewerId
-    // 格式: "Bearer {viewerId}"
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      res.status(401).json({ error: "Missing authorization header" });
+    // Get auth token from cookie
+    const authToken = req.cookies?.auth_token;
+    if (!authToken) {
+      res.status(401).json({ error: "Not authenticated" });
       return;
     }
 
-    const viewerId = authHeader.substring(7); // 移除 "Bearer " 前綴
-    if (!viewerId) {
-      res.status(401).json({ error: "Invalid token" });
+    // Verify the access token
+    const payload = verifyAccessToken(authToken);
+    if (!payload || !payload.viewerId) {
+      res.status(401).json({ error: "Invalid session" });
       return;
     }
 
-    // 驗證 viewerId 是否存在於資料庫
+    // Verify viewer exists
     const viewer = await prisma.viewer.findUnique({
-      where: { id: viewerId },
+      where: { id: payload.viewerId },
+      select: { id: true },
     });
 
     if (!viewer) {
-      res.status(401).json({ error: "Invalid viewer" });
+      res.status(401).json({ error: "Viewer not found" });
+      return;
+    }
+
+    // Generate dedicated extension JWT (1 hour expiry)
+    const extensionToken = signExtensionToken(payload.viewerId);
+
+    logger.info("EXTENSION", `Generated extension token for viewer: ${payload.viewerId}`);
+
+    res.json({
+      token: extensionToken,
+      expiresIn: 3600, // 1 hour in seconds
+    });
+  } catch (error) {
+    logger.error("EXTENSION", "Token generation error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+}
+
+/**
+ * POST /api/extension/heartbeat
+ * P0 Security: Now uses ExtensionAuthRequest with JWT-verified viewerId
+ */
+export async function postHeartbeatHandler(req: ExtensionAuthRequest, res: Response): Promise<void> {
+  try {
+    // P0 Security: viewerId is now extracted from JWT by middleware
+    const viewerId = req.extensionUser?.viewerId;
+    if (!viewerId) {
+      res.status(401).json({ error: "Not authenticated" });
       return;
     }
 

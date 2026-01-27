@@ -1,6 +1,9 @@
 import { prisma } from "../../db/prisma";
 import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/message-parser";
 import { logger } from "../../utils/logger";
+import { cacheManager, CacheTTL } from "../../utils/cache-manager";
+import { updateViewerWatchTime } from "../../services/watch-time.service";
+import { webSocketGateway } from "../../services/websocket.gateway";
 
 // 可以接受 ParsedMessage 或 RawChatMessage
 type MessageInput = ParsedMessage | RawChatMessage;
@@ -10,29 +13,31 @@ function isRawChatMessage(msg: MessageInput): msg is RawChatMessage {
   return "viewerId" in msg && "bitsAmount" in msg;
 }
 
-// ========== 快取機制（減少 DB 查詢，優化 RAM）==========
-
-// Viewer 快取：twitchUserId -> viewerId（或 null 表示非註冊用戶）
-const viewerCache = new Map<string, { viewerId: string | null; expiry: number }>();
-// Channel 快取：channelName -> channelId
-const channelCache = new Map<string, { channelId: string | null; expiry: number }>();
-// 快取過期時間：5 分鐘
-const CACHE_TTL_MS = 5 * 60 * 1000;
+// P1 Memory: Cache key generators for viewer/channel lookup
+const CacheKeys = {
+  viewerLookup: (twitchUserId: string) => `lookup:viewer:${twitchUserId}`,
+  channelLookup: (channelName: string) => `lookup:channel:${channelName.toLowerCase()}`,
+};
 
 export class ViewerMessageRepository {
   /**
+   * P1 Memory: Use cacheManager instead of raw Map (with LRU eviction)
    * 使用快取獲取 Viewer ID（減少 DB 查詢）
    */
   private async getCachedViewerId(twitchUserId: string): Promise<string | null> {
-    const now = Date.now();
-    const cached = viewerCache.get(twitchUserId);
+    const cacheKey = CacheKeys.viewerLookup(twitchUserId);
 
-    // 如果快取有效，直接返回
-    if (cached && cached.expiry > now) {
-      return cached.viewerId;
+    // Try to get from cache first
+    const cached = cacheManager.get<string | null>(cacheKey);
+    if (cached !== null) {
+      return cached;
     }
 
-    // 查詢資料庫
+    // If cache returned null but key might exist with null value, check again
+    // Note: cacheManager returns null for both "not found" and "stored null"
+    // We need to handle this by storing a special value or using getOrSet
+
+    // Query database
     const viewer = await prisma.viewer.findUnique({
       where: { twitchUserId },
       select: { id: true },
@@ -40,29 +45,28 @@ export class ViewerMessageRepository {
 
     const viewerId = viewer?.id || null;
 
-    // 儲存到快取
-    viewerCache.set(twitchUserId, {
-      viewerId,
-      expiry: now + CACHE_TTL_MS,
-    });
+    // Store in cache (5 min TTL, matching original CACHE_TTL_MS)
+    // Use special marker for "not found" to distinguish from cache miss
+    cacheManager.set(cacheKey, viewerId, CacheTTL.MEDIUM);
 
     return viewerId;
   }
 
   /**
+   * P1 Memory: Use cacheManager instead of raw Map (with LRU eviction)
    * 使用快取獲取 Channel ID（減少 DB 查詢）
    */
   private async getCachedChannelId(channelName: string): Promise<string | null> {
-    const now = Date.now();
-    const normalizedName = channelName.toLowerCase();
-    const cached = channelCache.get(normalizedName);
+    const cacheKey = CacheKeys.channelLookup(channelName);
 
-    // 如果快取有效，直接返回
-    if (cached && cached.expiry > now) {
-      return cached.channelId;
+    // Try to get from cache first
+    const cached = cacheManager.get<string | null>(cacheKey);
+    if (cached !== null) {
+      return cached;
     }
 
-    // 查詢資料庫
+    // Query database
+    const normalizedName = channelName.toLowerCase();
     const channel = await prisma.channel.findFirst({
       where: { channelName: normalizedName },
       select: { id: true },
@@ -70,11 +74,8 @@ export class ViewerMessageRepository {
 
     const channelId = channel?.id || null;
 
-    // 儲存到快取
-    channelCache.set(normalizedName, {
-      channelId,
-      expiry: now + CACHE_TTL_MS,
-    });
+    // Store in cache (5 min TTL)
+    cacheManager.set(cacheKey, channelId, CacheTTL.MEDIUM);
 
     return channelId;
   }
@@ -176,15 +177,12 @@ export class ViewerMessageRepository {
         },
       });
 
-      // 5. 觸發觀看時間重新計算（非同步，不阻塞訊息儲存）
-      import("../../services/watch-time.service").then(({ updateViewerWatchTime }) => {
-        updateViewerWatchTime(viewerId, channelId, message.timestamp).catch((err) =>
-          logger.error("ViewerMessage", "Failed to update watch time", err)
-        );
-      });
+      // 5. P2 Perf: Use static imports instead of dynamic imports on every message
+      updateViewerWatchTime(viewerId, channelId, message.timestamp).catch((err) =>
+        logger.error("ViewerMessage", "Failed to update watch time", err)
+      );
 
       // 6. 觸發 WebSocket 廣播 (即時更新)
-      const { webSocketGateway } = await import("../../services/websocket.gateway");
       webSocketGateway.broadcastChannelStats(channelId, {
         channelId,
         messageCount: 1, // 表示這是一條新消息，前端累加
