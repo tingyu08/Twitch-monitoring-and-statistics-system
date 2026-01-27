@@ -48,7 +48,9 @@ function isAllowedModule(modulePath: string): boolean {
   // 檢查是否為允許的內部模組
   return (
     ALLOWED_INTERNAL_PREFIXES.some((prefix) => modulePath.startsWith(prefix)) ||
-    (!!process.env.TS_NODE_DEV && modulePath.includes("Coding1/Bmad/backend/src"))
+    (!!process.env.TS_NODE_DEV && modulePath.includes("Coding1/Bmad/backend/src")) ||
+    // Production: Allow absolute paths pointing to dist folder
+    (!process.env.TS_NODE_DEV && modulePath.startsWith("file://") && modulePath.includes("/dist/"))
   );
 }
 
