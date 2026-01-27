@@ -118,22 +118,38 @@ export class RevenueService {
     const { RefreshingAuthProvider } = (await dynamicImport(
       "@twurple/auth"
     )) as typeof import("@twurple/auth");
-    const { twurpleAuthService } = (await dynamicImport(
-      process.env.TS_NODE_DEV
-        ? "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/services/twurple-auth.service.ts"
-        : "file://" +
-            path.resolve(__dirname, "../../services/twurple-auth.service.js").replace(/\\/g, "/")
-    )) as {
+    // Debug logging for dynamic import diagnosis
+    const isDev = !!process.env.TS_NODE_DEV;
+    const cwd = process.cwd();
+    console.log(`[RevenueService] Dynamic loading. Dev: ${isDev}, CWD: ${cwd}, Dir: ${__dirname}`);
+
+    let authServicePath: string;
+    let cryptoUtilsPath: string;
+
+    if (isDev) {
+      authServicePath =
+        "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/services/twurple-auth.service.ts";
+      cryptoUtilsPath = "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/utils/crypto.utils.ts";
+    } else {
+      // Production: Use absolute path based on CWD to ensure we target 'dist' correctly
+      authServicePath =
+        "file://" + path.resolve(cwd, "dist/services/twurple-auth.service.js").replace(/\\/g, "/");
+      cryptoUtilsPath =
+        "file://" + path.resolve(cwd, "dist/utils/crypto.utils.js").replace(/\\/g, "/");
+    }
+
+    console.log(`[RevenueService] Resolving Auth Path: ${authServicePath}`);
+    console.log(`[RevenueService] Resolving Crypto Path: ${cryptoUtilsPath}`);
+
+    // 使用 dynamicImport 來載入 ES Module
+    const { twurpleAuthService } = (await dynamicImport(authServicePath)) as {
       twurpleAuthService: {
         getClientId: () => string;
         getClientSecret: () => string;
       };
     };
-    const { decryptToken, encryptToken } = (await dynamicImport(
-      process.env.TS_NODE_DEV
-        ? "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/utils/crypto.utils.ts"
-        : "file://" + path.resolve(__dirname, "../../utils/crypto.utils.js").replace(/\\/g, "/")
-    )) as {
+
+    const { decryptToken, encryptToken } = (await dynamicImport(cryptoUtilsPath)) as {
       decryptToken: (encrypted: string) => string;
       encryptToken: (token: string) => string;
     };
