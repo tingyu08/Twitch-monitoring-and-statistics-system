@@ -1,3 +1,4 @@
+import * as path from "path";
 import { prisma } from "../../db/prisma";
 import { dynamicImport } from "../../utils/dynamic-import";
 import { cacheManager, CacheKeys, CacheTTL } from "../../utils/cache-manager";
@@ -120,7 +121,8 @@ export class RevenueService {
     const { twurpleAuthService } = (await dynamicImport(
       process.env.TS_NODE_DEV
         ? "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/services/twurple-auth.service.ts"
-        : "../../services/twurple-auth.service"
+        : "file://" +
+            path.resolve(__dirname, "../../services/twurple-auth.service.js").replace(/\\/g, "/")
     )) as {
       twurpleAuthService: {
         getClientId: () => string;
@@ -130,7 +132,7 @@ export class RevenueService {
     const { decryptToken, encryptToken } = (await dynamicImport(
       process.env.TS_NODE_DEV
         ? "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/utils/crypto.utils.ts"
-        : "../../utils/crypto.utils"
+        : "file://" + path.resolve(__dirname, "../../utils/crypto.utils.js").replace(/\\/g, "/")
     )) as {
       decryptToken: (encrypted: string) => string;
       encryptToken: (token: string) => string;
