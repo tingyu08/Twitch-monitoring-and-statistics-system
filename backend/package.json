@@ -2,6 +2,9 @@
   "name": "twitch-analytics-backend",
   "version": "0.1.0",
   "main": "dist/app.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "npx prisma generate && tsc -p tsconfig.json",
