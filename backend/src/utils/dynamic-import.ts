@@ -46,7 +46,10 @@ function isAllowedModule(modulePath: string): boolean {
   }
 
   // 檢查是否為允許的內部模組
-  return ALLOWED_INTERNAL_PREFIXES.some((prefix) => modulePath.startsWith(prefix));
+  return (
+    ALLOWED_INTERNAL_PREFIXES.some((prefix) => modulePath.startsWith(prefix)) ||
+    (!!process.env.TS_NODE_DEV && modulePath.includes("Coding1/Bmad/backend/src"))
+  );
 }
 
 /**
@@ -60,6 +63,11 @@ export function dynamicImport(modulePath: string): Promise<unknown> {
       `Security: Module "${modulePath}" is not in the allowed list. ` +
         `Allowed modules: ${ALLOWED_MODULES.join(", ")}`
     );
+  }
+
+  // Development environment specific handling for absolute paths
+  if (process.env.TS_NODE_DEV && modulePath.includes("Coding1/Bmad/backend/src")) {
+    return new Function("modulePath", "return import(modulePath)")(modulePath);
   }
 
   // 使用 Function constructor 而不是 eval（相對安全）

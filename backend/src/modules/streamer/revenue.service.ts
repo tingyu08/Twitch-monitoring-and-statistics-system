@@ -114,14 +114,24 @@ export class RevenueService {
   ): Promise<{ total: number; tier1: number; tier2: number; tier3: number }> {
     // 使用 dynamicImport 來載入 ES Module，避免被 TypeScript 轉換為 require()
     const { ApiClient } = (await dynamicImport("@twurple/api")) as typeof import("@twurple/api");
-    const { RefreshingAuthProvider } = (await dynamicImport("@twurple/auth")) as typeof import("@twurple/auth");
-    const { twurpleAuthService } = (await dynamicImport("../../services/twurple-auth.service")) as {
+    const { RefreshingAuthProvider } = (await dynamicImport(
+      "@twurple/auth"
+    )) as typeof import("@twurple/auth");
+    const { twurpleAuthService } = (await dynamicImport(
+      process.env.TS_NODE_DEV
+        ? "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/services/twurple-auth.service.ts"
+        : "../../services/twurple-auth.service"
+    )) as {
       twurpleAuthService: {
         getClientId: () => string;
         getClientSecret: () => string;
       };
     };
-    const { decryptToken, encryptToken } = (await dynamicImport("../../utils/crypto.utils")) as {
+    const { decryptToken, encryptToken } = (await dynamicImport(
+      process.env.TS_NODE_DEV
+        ? "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/utils/crypto.utils.ts"
+        : "../../utils/crypto.utils"
+    )) as {
       decryptToken: (encrypted: string) => string;
       encryptToken: (token: string) => string;
     };
@@ -143,44 +153,52 @@ export class RevenueService {
     });
 
     // 設定刷新回調（含錯誤處理）
-    authProvider.onRefresh(async (_userId: string, newTokenData: import("../../types/twitch.types").TwurpleRefreshCallbackData) => {
-      try {
-        console.log(`[RevenueService] Token refreshed for streamer ${broadcasterId}`);
-        await prisma.twitchToken.update({
-          where: { id: tokenData.id },
-          data: {
-            accessToken: encryptToken(newTokenData.accessToken),
-            refreshToken: newTokenData.refreshToken
-              ? encryptToken(newTokenData.refreshToken)
-              : undefined,
-            expiresAt: newTokenData.expiresIn
-              ? new Date(Date.now() + newTokenData.expiresIn * 1000)
-              : null,
-            lastValidatedAt: new Date(),
-          },
-        });
-        console.log(`[RevenueService] Token successfully saved to database`);
-      } catch (error) {
-        // Token 刷新成功但儲存失敗 - 記錄錯誤但不中斷流程
-        // 因為 Twurple 已經更新了記憶體中的 token，這次請求仍可正常進行
-        console.error(`[RevenueService] Failed to save refreshed token to database:`, error);
-        // 可選：發送到監控系統（Sentry）
-        if (process.env.SENTRY_DSN) {
-          const Sentry = await import("@sentry/node");
-          Sentry.captureException(error, {
-            tags: { component: 'token-refresh' },
-            extra: { streamerId: broadcasterId, tokenId: tokenData.id },
+    authProvider.onRefresh(
+      async (
+        _userId: string,
+        newTokenData: import("../../types/twitch.types").TwurpleRefreshCallbackData
+      ) => {
+        try {
+          console.log(`[RevenueService] Token refreshed for streamer ${broadcasterId}`);
+          await prisma.twitchToken.update({
+            where: { id: tokenData.id },
+            data: {
+              accessToken: encryptToken(newTokenData.accessToken),
+              refreshToken: newTokenData.refreshToken
+                ? encryptToken(newTokenData.refreshToken)
+                : undefined,
+              expiresAt: newTokenData.expiresIn
+                ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+                : null,
+              lastValidatedAt: new Date(),
+            },
           });
+          console.log(`[RevenueService] Token successfully saved to database`);
+        } catch (error) {
+          // Token 刷新成功但儲存失敗 - 記錄錯誤但不中斷流程
+          // 因為 Twurple 已經更新了記憶體中的 token，這次請求仍可正常進行
+          console.error(`[RevenueService] Failed to save refreshed token to database:`, error);
+          // 可選：發送到監控系統（Sentry）
+          if (process.env.SENTRY_DSN) {
+            const Sentry = await import("@sentry/node");
+            Sentry.captureException(error, {
+              tags: { component: "token-refresh" },
+              extra: { streamerId: broadcasterId, tokenId: tokenData.id },
+            });
+          }
         }
       }
-    });
+    );
 
-    await authProvider.addUserForToken({
-      accessToken,
-      refreshToken,
-      expiresIn: null,
-      obtainmentTimestamp: 0,
-    }, ["channel:read:subscriptions"]);
+    await authProvider.addUserForToken(
+      {
+        accessToken,
+        refreshToken,
+        expiresIn: null,
+        obtainmentTimestamp: 0,
+      },
+      ["channel:read:subscriptions"]
+    );
 
     const apiClient = new ApiClient({ authProvider });
 
@@ -192,7 +210,9 @@ export class RevenueService {
 
     try {
       // 先嘗試快速方式：獲取第一頁來取得總數
-      const firstPage = await apiClient.subscriptions.getSubscriptions(broadcasterId, { limit: 100 });
+      const firstPage = await apiClient.subscriptions.getSubscriptions(broadcasterId, {
+        limit: 100,
+      });
 
       // 如果訂閱者很少，直接計算第一頁
       if (firstPage.data.length < 100) {
@@ -217,12 +237,18 @@ export class RevenueService {
         // 超過上限或時間過長則停止
         if (result.total >= SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS) {
           console.error(`[RevenueService] 訂閱者數量超過 ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS}`);
-          throw new Error(`SUBSCRIPTION_LIMIT_EXCEEDED: Channel has more than ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS} subscribers. Please contact support for enterprise solutions.`);
+          throw new Error(
+            `SUBSCRIPTION_LIMIT_EXCEEDED: Channel has more than ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS} subscribers. Please contact support for enterprise solutions.`
+          );
         }
 
         if (Date.now() - startTime > SUBSCRIPTION_SYNC.MAX_TIME_MS) {
-          console.error(`[RevenueService] 同步超時 (${SUBSCRIPTION_SYNC.MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`);
-          throw new Error(`SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`);
+          console.error(
+            `[RevenueService] 同步超時 (${SUBSCRIPTION_SYNC.MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`
+          );
+          throw new Error(
+            `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
+          );
         }
       }
     } catch (error: unknown) {
@@ -301,16 +327,18 @@ export class RevenueService {
 
         // 優化：使用資料庫 GROUP BY 而非記憶體聚合
         // 注意：SQLite 不直接支援按日期分組，需要使用 DATE() 函數
-        const results = await prisma.$queryRaw<Array<{
-          date: string;
-          totalBits: bigint;
-          eventCount: bigint;
-        }>>`
+        const results = await prisma.$queryRaw<
+          Array<{
+            date: string;
+            totalBits: bigint;
+            eventCount: bigint;
+          }>
+        >`
           SELECT
             DATE(cheeredAt) as date,
             SUM(bits) as totalBits,
             COUNT(*) as eventCount
-          FROM CheerEvent
+          FROM cheer_events
           WHERE streamerId = ${streamerId}
             AND cheeredAt >= ${startDate.toISOString()}
           GROUP BY DATE(cheeredAt)
@@ -398,7 +426,9 @@ export class RevenueService {
       throw new Error("Invalid streamerId");
     }
     if (limit < QUERY_LIMITS.MIN_LIMIT || limit > QUERY_LIMITS.MAX_LIMIT) {
-      throw new Error(`Limit must be between ${QUERY_LIMITS.MIN_LIMIT} and ${QUERY_LIMITS.MAX_LIMIT}`);
+      throw new Error(
+        `Limit must be between ${QUERY_LIMITS.MIN_LIMIT} and ${QUERY_LIMITS.MAX_LIMIT}`
+      );
     }
 
     const supporters = await prisma.cheerEvent.groupBy({

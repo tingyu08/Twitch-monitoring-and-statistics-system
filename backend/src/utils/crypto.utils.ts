@@ -1,12 +1,11 @@
 import crypto from "crypto";
-import { env } from "../config/env";
-import { authLogger } from "./logger";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // GCM 建議 12 bytes
 
 function getKey(): Buffer {
-  const keyBase64 = env.viewerTokenEncryptionKey;
+  // Use process.env directly to avoid importing config module in dynamic import scenarios
+  const keyBase64 = process.env.VIEWER_TOKEN_ENCRYPTION_KEY;
   if (!keyBase64) {
     throw new Error("VIEWER_TOKEN_ENCRYPTION_KEY is not set");
   }
@@ -26,7 +25,7 @@ export function encryptToken(token: string): string {
     const authTag = cipher.getAuthTag();
     return Buffer.concat([iv, authTag, encrypted]).toString("base64");
   } catch (error) {
-    authLogger.error("encryptToken failed", error);
+    console.error("[AUTH] encryptToken failed", error);
     throw error;
   }
 }
@@ -43,7 +42,7 @@ export function decryptToken(encrypted: string): string {
     const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return decrypted.toString("utf8");
   } catch (error) {
-    authLogger.error("decryptToken failed", error);
+    console.error("[AUTH] decryptToken failed", error);
     throw error;
   }
 }

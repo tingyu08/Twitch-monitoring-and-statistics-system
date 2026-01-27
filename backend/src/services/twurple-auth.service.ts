@@ -8,7 +8,18 @@
  */
 
 import type { AppTokenAuthProvider, RefreshingAuthProvider, AccessToken } from "@twurple/auth";
-import { logger } from "../utils/logger";
+
+// Logger fallback for dynamic import scenarios
+const logger = {
+  info: (cat: string, msg: string, ...args: any[]) =>
+    console.log(`[INFO] [${cat}] ${msg}`, ...args),
+  error: (cat: string, msg: string, ...args: any[]) =>
+    console.error(`[ERROR] [${cat}] ${msg}`, ...args),
+  warn: (cat: string, msg: string, ...args: any[]) =>
+    console.warn(`[WARN] [${cat}] ${msg}`, ...args),
+  debug: (cat: string, msg: string, ...args: any[]) =>
+    console.debug(`[DEBUG] [${cat}] ${msg}`, ...args),
+};
 
 // ========== 類型定義 ==========
 
