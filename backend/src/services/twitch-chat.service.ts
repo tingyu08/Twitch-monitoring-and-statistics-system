@@ -11,6 +11,13 @@ import { logger } from "../utils/logger";
 import { viewerMessageRepository } from "../modules/viewer/viewer-message.repository";
 import { prisma } from "../db/prisma";
 import { decryptToken, encryptToken } from "../utils/crypto.utils";
+import type {
+  ChatClientInterface,
+  TwitchChatMessage,
+  TwitchSubInfo,
+  TwitchGiftSubInfo,
+  TwitchRaidInfo,
+} from "../types/twurple-chat.types";
 
 // ========== 服務實作 ==========
 
@@ -23,25 +30,8 @@ const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
 const HEAT_CLEANUP_INTERVAL_MS = 60000; // P1 Memory: 每 60 秒清理一次過期數據
 const HEAT_STALE_THRESHOLD_MS = 60000; // P1 Memory: 超過 60 秒沒活動的頻道視為過期
 
-// ChatClient 相關類型定義
-/* eslint-disable @typescript-eslint/no-explicit-any */
-interface ChatClientLike {
-  connect(): Promise<void>;
-  join(channel: string): Promise<void>;
-  part(channel: string): Promise<void>;
-  quit(): Promise<void>;
-  onMessage(callback: (channel: string, user: string, text: string, msg: any) => void): void;
-  onSub(callback: (channel: any, user: any, subInfo: any, msg: any) => void): void;
-  onResub(callback: (channel: any, user: any, subInfo: any, msg: any) => void): void;
-  onSubGift(callback: (channel: any, user: any, subInfo: any, msg: any) => void): void;
-  onRaid(callback: (channel: any, user: any, raidInfo: any, msg: any) => void): void;
-  onDisconnect(callback: (manually: boolean, reason: Error | undefined) => void): void;
-  onConnect(callback: () => void): void;
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
 export class TwurpleChatService {
-  private chatClient: ChatClientLike | null = null;
+  private chatClient: ChatClientInterface | null = null;
   private channels: Set<string> = new Set();
   private isConnected = false;
 
@@ -231,31 +221,60 @@ export class TwurpleChatService {
   private setupEventHandlers(): void {
     if (!this.chatClient) return;
 
-    /* eslint-disable @typescript-eslint/no-explicit-any */
     // 監聽一般訊息
-    this.chatClient.onMessage((channel: string, user: string, text: string, msg: any) => {
-      this.handleMessage(channel, user, text, msg);
-    });
+    this.chatClient.onMessage(
+      (channel: string, user: string, text: string, msg: TwitchChatMessage) => {
+        this.handleMessage(channel, user, text, msg);
+      }
+    );
 
     // 監聯訂閱事件
-    this.chatClient.onSub((channel: any, user: any, subInfo: any, msg: any) => {
-      this.handleSubscription(channel, user, subInfo, msg);
-    });
+    this.chatClient.onSub(
+      (
+        channel: string,
+        user: string,
+        subInfo: TwitchSubInfo,
+        msg: TwitchChatMessage | null
+      ) => {
+        this.handleSubscription(channel, user, subInfo, msg);
+      }
+    );
 
     // 監聽續訂事件
-    this.chatClient.onResub((channel: any, user: any, subInfo: any, msg: any) => {
-      this.handleSubscription(channel, user, subInfo, msg);
-    });
+    this.chatClient.onResub(
+      (
+        channel: string,
+        user: string,
+        subInfo: TwitchSubInfo,
+        msg: TwitchChatMessage | null
+      ) => {
+        this.handleSubscription(channel, user, subInfo, msg);
+      }
+    );
 
     // 監聽贈送訂閱
-    this.chatClient.onSubGift((channel: any, user: any, subInfo: any, msg: any) => {
-      this.handleGiftSub(channel, user, subInfo, msg);
-    });
+    this.chatClient.onSubGift(
+      (
+        channel: string,
+        user: string,
+        subInfo: TwitchGiftSubInfo,
+        msg: TwitchChatMessage | null
+      ) => {
+        this.handleGiftSub(channel, user, subInfo, msg);
+      }
+    );
 
     // 監聽揪團 (Raid)
-    this.chatClient.onRaid((channel: any, user: any, raidInfo: any, msg: any) => {
-      this.handleRaid(channel, user, raidInfo, msg);
-    });
+    this.chatClient.onRaid(
+      (
+        channel: string,
+        user: string,
+        raidInfo: TwitchRaidInfo,
+        msg: TwitchChatMessage | null
+      ) => {
+        this.handleRaid(channel, user, raidInfo, msg);
+      }
+    );
 
     // 監聽斷線事件
     this.chatClient.onDisconnect((manually: boolean, reason: Error | undefined) => {
@@ -270,7 +289,6 @@ export class TwurpleChatService {
       this.isConnected = true;
       logger.info("Twurple Chat", "已連接/重連");
     });
-    /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 
   /**
@@ -317,8 +335,12 @@ export class TwurpleChatService {
   /**
    * 處理一般訊息
    */
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  private handleMessage(channel: string, user: string, text: string, msg: any): void {
+  private handleMessage(
+    channel: string,
+    user: string,
+    text: string,
+    msg: TwitchChatMessage
+  ): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -392,7 +414,12 @@ export class TwurpleChatService {
   /**
    * 處理訂閱事件
    */
-  private handleSubscription(channel: string, user: string, subInfo: any, msg: any): void {
+  private handleSubscription(
+    channel: string,
+    user: string,
+    subInfo: TwitchSubInfo,
+    msg: TwitchChatMessage | null
+  ): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -422,7 +449,12 @@ export class TwurpleChatService {
   /**
    * 處理贈送訂閱
    */
-  private handleGiftSub(channel: string, user: string, subInfo: any, msg: any): void {
+  private handleGiftSub(
+    channel: string,
+    user: string,
+    subInfo: TwitchGiftSubInfo,
+    msg: TwitchChatMessage | null
+  ): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -449,7 +481,12 @@ export class TwurpleChatService {
   /**
    * 處理揪團 (Raid)
    */
-  private handleRaid(channel: string, user: string, raidInfo: any, msg: any): void {
+  private handleRaid(
+    channel: string,
+    user: string,
+    raidInfo: TwitchRaidInfo,
+    msg: TwitchChatMessage | null
+  ): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -484,13 +521,13 @@ export class TwurpleChatService {
   /**
    * 提取徽章資訊
    */
-  private extractBadges(msg: any): Record<string, string> | null {
+  private extractBadges(msg: TwitchChatMessage): Record<string, string> | null {
     try {
       const badges: Record<string, string> = {};
       const badgeInfo = msg.userInfo.badges;
 
       if (badgeInfo) {
-        badgeInfo.forEach((version: any, badge: any) => {
+        badgeInfo.forEach((version: string, badge: string) => {
           badges[badge] = version;
         });
       }
@@ -504,13 +541,13 @@ export class TwurpleChatService {
   /**
    * 提取表情符號資訊
    */
-  private extractEmotes(msg: any): string[] | null {
+  private extractEmotes(msg: TwitchChatMessage): string[] | null {
     try {
       const emotes = msg.emoteOffsets;
       if (!emotes || emotes.size === 0) return null;
 
       const emoteIds: string[] = [];
-      emotes.forEach((_: any, emoteId: any) => {
+      emotes.forEach((_offsets: unknown, emoteId: string) => {
         emoteIds.push(emoteId);
       });
 
@@ -519,7 +556,6 @@ export class TwurpleChatService {
       return null;
     }
   }
-  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   /**
    * 獲取服務狀態

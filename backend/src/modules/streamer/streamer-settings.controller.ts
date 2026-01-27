@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import { streamerSettingsService } from "./streamer-settings.service";
 import type { AuthRequest } from "../auth/auth.middleware";
+import { logger } from "../../utils/logger";
 
 export class StreamerSettingsController {
   // 獲取設定
@@ -16,7 +17,7 @@ export class StreamerSettingsController {
       }
       return res.json(settings);
     } catch (error) {
-      console.error("Get settings error:", error);
+      logger.error("StreamerSettings", "Get settings error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   }
@@ -34,7 +35,7 @@ export class StreamerSettingsController {
       }
       return res.status(400).json({ error: "Failed to update settings" });
     } catch (error) {
-      console.error("Update settings error:", error);
+      logger.error("StreamerSettings", "Update settings error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   }
@@ -46,7 +47,7 @@ export class StreamerSettingsController {
       const games = await streamerSettingsService.searchGames(query);
       return res.json(games);
     } catch (error) {
-      console.error("Search games error:", error);
+      logger.error("StreamerSettings", "Search games error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   }
@@ -61,7 +62,7 @@ export class StreamerSettingsController {
       const templates = await streamerSettingsService.getTemplates(streamerId);
       return res.json(templates);
     } catch (error) {
-      console.error("List templates error:", error);
+      logger.error("StreamerSettings", "List templates error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   }
@@ -76,7 +77,7 @@ export class StreamerSettingsController {
       const template = await streamerSettingsService.createTemplate(streamerId, req.body);
       return res.status(201).json(template);
     } catch (error) {
-      console.error("Create template error:", error);
+      logger.error("StreamerSettings", "Create template error:", error);
       return res.status(500).json({ error: "Failed to create template" });
     }
   }
@@ -97,7 +98,7 @@ export class StreamerSettingsController {
       await streamerSettingsService.deleteTemplate(streamerId, templateId);
       return res.json({ success: true });
     } catch (error) {
-      console.error("Delete template error:", error);
+      logger.error("StreamerSettings", "Delete template error:", error);
       return res.status(500).json({ error: "Failed to delete template" });
     }
   }

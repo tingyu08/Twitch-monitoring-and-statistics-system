@@ -8,6 +8,7 @@ import { ViewerMessageStatsController } from "./viewer-message-stats.controller"
 import { ViewerPrivacyController } from "./viewer-privacy.controller";
 import { chatListenerManager } from "../../services/chat-listener-manager";
 import type { AuthRequest } from "../auth/auth.middleware";
+import { logger } from "../../utils/logger";
 
 const controller = new ViewerController();
 const messageStatsController = new ViewerMessageStatsController();
@@ -198,7 +199,7 @@ viewerApiRoutes.post(
         listening: liveChannels.filter((_, i) => results[i]).map((ch) => ch.channelName),
       });
     } catch (error) {
-      console.error("Error setting listen channels:", error);
+      logger.error("ViewerAPI", "Error setting listen channels:", error);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   }

@@ -13,6 +13,7 @@ import {
 } from "../../services/privacy-consent.service";
 import { accountDeletionService } from "../../services/account-deletion.service";
 import { dataExportService } from "../../services/data-export.service";
+import { logger } from "../../utils/logger";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -54,7 +55,7 @@ export class ViewerPrivacyController {
         consentGivenAt: viewer.consentedAt,
       });
     } catch (error) {
-      console.error("獲取隱私同意設定失敗:", error);
+      logger.error("ViewerPrivacy", "獲取隱私同意設定失敗:", error);
       res.status(500).json({ error: "獲取隱私同意設定失敗" });
     }
   }
@@ -120,7 +121,7 @@ export class ViewerPrivacyController {
         settings: updatedConsent,
       });
     } catch (error) {
-      console.error("更新隱私同意設定失敗:", error);
+      logger.error("ViewerPrivacy", "更新隱私同意設定失敗:", error);
       res.status(500).json({ error: "更新隱私同意設定失敗" });
     }
   }
@@ -170,7 +171,7 @@ export class ViewerPrivacyController {
         consent,
       });
     } catch (error) {
-      console.error("接受隱私同意失敗:", error);
+      logger.error("ViewerPrivacy", "接受隱私同意失敗:", error);
       res.status(500).json({ error: "接受隱私同意失敗" });
     }
   }
@@ -205,7 +206,7 @@ export class ViewerPrivacyController {
         expiresAt: result.job?.expiresAt,
       });
     } catch (error) {
-      console.error("請求資料匯出失敗:", error);
+      logger.error("ViewerPrivacy", "請求資料匯出失敗:", error);
       res.status(500).json({ error: "請求資料匯出失敗" });
     }
   }
@@ -249,7 +250,7 @@ export class ViewerPrivacyController {
         },
       });
     } catch (error) {
-      console.error("獲取匯出狀態失敗:", error);
+      logger.error("ViewerPrivacy", "獲取匯出狀態失敗:", error);
       res.status(500).json({ error: "獲取匯出狀態失敗" });
     }
   }
@@ -301,7 +302,7 @@ export class ViewerPrivacyController {
       const fileName = path.basename(job.downloadPath);
       res.download(job.downloadPath, fileName);
     } catch (error) {
-      console.error("下載匯出檔案失敗:", error);
+      logger.error("ViewerPrivacy", "下載匯出檔案失敗:", error);
       res.status(500).json({ error: "下載匯出檔案失敗" });
     }
   }
@@ -338,7 +339,7 @@ export class ViewerPrivacyController {
         coolingPeriodDays: 7,
       });
     } catch (error) {
-      console.error("請求刪除帳號失敗:", error);
+      logger.error("ViewerPrivacy", "請求刪除帳號失敗:", error);
       res.status(500).json({ error: "請求刪除帳號失敗" });
     }
   }
@@ -368,7 +369,7 @@ export class ViewerPrivacyController {
         message: result.message,
       });
     } catch (error) {
-      console.error("撤銷刪除請求失敗:", error);
+      logger.error("ViewerPrivacy", "撤銷刪除請求失敗:", error);
       res.status(500).json({ error: "撤銷刪除請求失敗" });
     }
   }
@@ -410,7 +411,7 @@ export class ViewerPrivacyController {
         canCancel: deletionRequest.status === "pending",
       });
     } catch (error) {
-      console.error("獲取刪除狀態失敗:", error);
+      logger.error("ViewerPrivacy", "獲取刪除狀態失敗:", error);
       res.status(500).json({ error: "獲取刪除狀態失敗" });
     }
   }
@@ -450,7 +451,7 @@ export class ViewerPrivacyController {
         pauseCollection,
       });
     } catch (error) {
-      console.error("更新隱私設定失敗:", error);
+      logger.error("ViewerPrivacy", "更新隱私設定失敗:", error);
       res.status(500).json({ error: "更新隱私設定失敗" });
     }
   }
@@ -473,7 +474,7 @@ export class ViewerPrivacyController {
         consentGivenAt: viewer.consentedAt,
       });
     } catch (error) {
-      console.error("獲取隱私設定失敗:", error);
+      logger.error("ViewerPrivacy", "獲取隱私設定失敗:", error);
       res.status(500).json({ error: "獲取隱私設定失敗" });
     }
   }
@@ -499,8 +500,9 @@ export class ViewerPrivacyController {
         where: { viewerId: viewer.id },
       });
 
-      console.log(
-        `🗑️ 已清除觀眾 ${viewer.id} 的資料: ${deletedMessages.count} 則訊息, ${deletedAggs.count} 筆聚合記錄`
+      logger.info(
+        "ViewerPrivacy",
+        `已清除觀眾 ${viewer.id} 的資料: ${deletedMessages.count} 則訊息, ${deletedAggs.count} 筆聚合記錄`
       );
 
       res.json({
@@ -512,7 +514,7 @@ export class ViewerPrivacyController {
         },
       });
     } catch (error) {
-      console.error("清除訊息資料失敗:", error);
+      logger.error("ViewerPrivacy", "清除訊息資料失敗:", error);
       res.status(500).json({ error: "清除訊息資料失敗" });
     }
   }
@@ -550,8 +552,9 @@ export class ViewerPrivacyController {
         },
       });
 
-      console.log(
-        `🗑️ 已清除觀眾 ${viewer.id} 在頻道 ${channelId} 的資料: ${deletedMessages.count} 則訊息, ${deletedAggs.count} 筆聚合記錄`
+      logger.info(
+        "ViewerPrivacy",
+        `已清除觀眾 ${viewer.id} 在頻道 ${channelId} 的資料: ${deletedMessages.count} 則訊息, ${deletedAggs.count} 筆聚合記錄`
       );
 
       res.json({
@@ -563,7 +566,7 @@ export class ViewerPrivacyController {
         },
       });
     } catch (error) {
-      console.error("清除頻道訊息資料失敗:", error);
+      logger.error("ViewerPrivacy", "清除頻道訊息資料失敗:", error);
       res.status(500).json({ error: "清除頻道訊息資料失敗" });
     }
   }
@@ -616,7 +619,7 @@ export class ViewerPrivacyController {
         },
       });
     } catch (error) {
-      console.error("獲取資料統計失敗:", error);
+      logger.error("ViewerPrivacy", "獲取資料統計失敗:", error);
       res.status(500).json({ error: "獲取資料統計失敗" });
     }
   }

@@ -1,4 +1,22 @@
-export const calculateRadarScores = (stats: any) => {
+export interface ViewerStats {
+  totalWatchTimeMinutes?: number;
+  totalMessages?: number;
+  trackingDays?: number;
+  activeDaysLast30?: number;
+  totalBits?: number;
+  totalSubscriptions?: number;
+}
+
+export interface RadarScores {
+  watchTime: number;
+  interaction: number;
+  loyalty: number;
+  activity: number;
+  contribution: number;
+  community: number;
+}
+
+export const calculateRadarScores = (stats: ViewerStats): RadarScores => {
   // 1. 觀看時長（滿分 500 小時）
   // 避免 totalWatchTimeMinutes 為 undefined
   const watchTimeMinutes = stats.totalWatchTimeMinutes || 0;

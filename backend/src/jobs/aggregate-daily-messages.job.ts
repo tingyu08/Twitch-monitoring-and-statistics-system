@@ -10,6 +10,7 @@
 
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
 interface AggregationResult {
   viewerId: string;
@@ -29,16 +30,16 @@ interface AggregationResult {
  */
 export async function aggregateDailyMessages(): Promise<void> {
   const startTime = Date.now();
-  console.log("📊 [Cron] 開始執行每日訊息聚合任務...");
+  logger.info("Cron", "開始執行每日訊息聚合任務...");
 
   try {
     // 計算聚合時間範圍（過去 24 小時）
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // 查詢需要聚合的資料
-    const rawData = await prisma.viewerChannelMessage.groupBy({
-      by: ["viewerId", "channelId"],
+    // 一次查詢所有資料，包含 messageType（修復 N+1 問題）
+    const allMessages = await prisma.viewerChannelMessage.groupBy({
+      by: ["viewerId", "channelId", "messageType"],
       where: {
         timestamp: {
           gte: yesterday,
@@ -48,104 +49,103 @@ export async function aggregateDailyMessages(): Promise<void> {
       _count: {
         id: true,
       },
+      _sum: {
+        bitsAmount: true,
+      },
     });
 
-    if (rawData.length === 0) {
-      console.log("📊 [Cron] 沒有需要聚合的資料");
+    if (allMessages.length === 0) {
+      logger.info("Cron", "沒有需要聚合的資料");
       return;
     }
 
-    // 對每個 viewer-channel 組合進行詳細聚合
-    let upsertCount = 0;
+    // 在記憶體中聚合資料
+    const aggregatedMap = new Map<string, AggregationResult>();
+    const todayDate = new Date(now.toISOString().split("T")[0]);
 
-    for (const group of rawData) {
-      const { viewerId, channelId } = group;
+    for (const msg of allMessages) {
+      const key = `${msg.viewerId}|${msg.channelId}`;
+      let stats = aggregatedMap.get(key);
 
-      // 獲取該組合的詳細統計
-      const detailedStats = await prisma.viewerChannelMessage.groupBy({
-        by: ["messageType"],
-        where: {
-          viewerId,
-          channelId,
-          timestamp: {
-            gte: yesterday,
-            lt: now,
-          },
-        },
-        _count: {
-          id: true,
-        },
-        _sum: {
-          bitsAmount: true,
-        },
-      });
-
-      // 計算各類型數量
-      const stats: AggregationResult = {
-        viewerId,
-        channelId,
-        date: new Date(now.toISOString().split("T")[0]), // 今天的日期
-        totalMessages: 0,
-        chatMessages: 0,
-        subscriptions: 0,
-        cheers: 0,
-        giftSubs: 0,
-        raids: 0,
-        totalBits: 0,
-      };
-
-      for (const stat of detailedStats) {
-        const count = stat._count.id;
-        stats.totalMessages += count;
-
-        switch (stat.messageType) {
-          case "CHAT":
-            stats.chatMessages = count;
-            break;
-          case "SUBSCRIPTION":
-            stats.subscriptions = count;
-            break;
-          case "CHEER":
-            stats.cheers = count;
-            stats.totalBits = stat._sum.bitsAmount || 0;
-            break;
-          case "GIFT_SUBSCRIPTION":
-            stats.giftSubs = count;
-            break;
-          case "RAID":
-            stats.raids = count;
-            break;
-        }
+      if (!stats) {
+        stats = {
+          viewerId: msg.viewerId,
+          channelId: msg.channelId,
+          date: todayDate,
+          totalMessages: 0,
+          chatMessages: 0,
+          subscriptions: 0,
+          cheers: 0,
+          giftSubs: 0,
+          raids: 0,
+          totalBits: 0,
+        };
+        aggregatedMap.set(key, stats);
       }
 
-      // Upsert 到聚合表
-      await prisma.viewerChannelMessageDailyAgg.upsert({
-        where: {
-          viewerId_channelId_date: {
-            viewerId: stats.viewerId,
-            channelId: stats.channelId,
-            date: stats.date,
-          },
-        },
-        update: {
-          totalMessages: stats.totalMessages,
-          chatMessages: stats.chatMessages,
-          subscriptions: stats.subscriptions,
-          cheers: stats.cheers,
-          giftSubs: stats.giftSubs,
-          raids: stats.raids,
-          totalBits: stats.totalBits,
-        },
-        create: stats,
-      });
+      const count = msg._count.id;
+      stats.totalMessages += count;
 
-      upsertCount++;
+      switch (msg.messageType) {
+        case "CHAT":
+          stats.chatMessages += count;
+          break;
+        case "SUBSCRIPTION":
+          stats.subscriptions += count;
+          break;
+        case "CHEER":
+          stats.cheers += count;
+          stats.totalBits += msg._sum.bitsAmount || 0;
+          break;
+        case "GIFT_SUBSCRIPTION":
+          stats.giftSubs += count;
+          break;
+        case "RAID":
+          stats.raids += count;
+          break;
+      }
+    }
+
+    // 批次 Upsert 到聚合表
+    let upsertCount = 0;
+    const statsArray = Array.from(aggregatedMap.values());
+
+    // 使用 transaction 批次處理，每批 50 筆
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < statsArray.length; i += BATCH_SIZE) {
+      const batch = statsArray.slice(i, i + BATCH_SIZE);
+
+      await prisma.$transaction(
+        batch.map((stats) =>
+          prisma.viewerChannelMessageDailyAgg.upsert({
+            where: {
+              viewerId_channelId_date: {
+                viewerId: stats.viewerId,
+                channelId: stats.channelId,
+                date: stats.date,
+              },
+            },
+            update: {
+              totalMessages: stats.totalMessages,
+              chatMessages: stats.chatMessages,
+              subscriptions: stats.subscriptions,
+              cheers: stats.cheers,
+              giftSubs: stats.giftSubs,
+              raids: stats.raids,
+              totalBits: stats.totalBits,
+            },
+            create: stats,
+          })
+        )
+      );
+
+      upsertCount += batch.length;
     }
 
     const duration = Date.now() - startTime;
-    console.log(`✅ [Cron] 訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`);
+    logger.info("Cron", `訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`);
   } catch (error) {
-    console.error("❌ [Cron] 訊息聚合失敗:", error);
+    logger.error("Cron", "訊息聚合失敗:", error);
     throw error;
   }
 }
@@ -159,11 +159,11 @@ export function startMessageAggregationJob(): void {
     try {
       await aggregateDailyMessages();
     } catch (error) {
-      console.error("❌ [Cron] 訊息聚合任務執行失敗:", error);
+      logger.error("Cron", "訊息聚合任務執行失敗:", error);
     }
   });
 
-  console.log("🕐 [Cron] 訊息聚合任務已啟動 (每小時執行)");
+  logger.info("Cron", "訊息聚合任務已啟動 (每小時執行)");
 }
 
 /**

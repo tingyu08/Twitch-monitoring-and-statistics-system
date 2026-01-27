@@ -7,6 +7,8 @@
  * - TTL 支援
  */
 
+import { logger } from "./logger";
+
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
@@ -51,7 +53,7 @@ export class CacheManager {
 
     // 如果單個項目超過最大記憶體限制的 50%，拒絕快取
     if (size > this.maxMemoryBytes * 0.5) {
-      console.warn(`[Cache] Item too large to cache: ${key} (${(size / 1024 / 1024).toFixed(2)}MB)`);
+      logger.warn("Cache", `Item too large to cache: ${key} (${(size / 1024 / 1024).toFixed(2)}MB)`);
       return;
     }
 
@@ -146,7 +148,7 @@ export class CacheManager {
   deleteRevenueCache(streamerId: string): void {
     const deleted = this.deletePattern(`revenue:${streamerId}:`);
     if (deleted > 0) {
-      console.log(`[Cache] Deleted ${deleted} revenue cache entries for streamer ${streamerId}`);
+      logger.debug("Cache", `Deleted ${deleted} revenue cache entries for streamer ${streamerId}`);
     }
   }
 
@@ -200,7 +202,7 @@ export class CacheManager {
     }
 
     if (cleaned > 0) {
-      console.log(`[Cache] Cleaned up ${cleaned} expired items`);
+      logger.debug("Cache", `Cleaned up ${cleaned} expired items`);
     }
   }
 

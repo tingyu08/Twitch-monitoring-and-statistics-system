@@ -10,6 +10,7 @@ import type { ExportJob } from "@prisma/client";
 import * as fs from "fs";
 import * as path from "path";
 import archiver from "archiver";
+import { logger } from "../utils/logger";
 
 // 匯出檔案存放目錄
 const EXPORT_DIR = process.env.EXPORT_STORAGE_PATH || "./exports";
@@ -462,7 +463,7 @@ export class DataExportService {
             await fs.promises.unlink(job.downloadPath);
             cleaned++;
           } catch (error) {
-            console.error(`清理匯出檔案失敗: ${job.downloadPath}`, error);
+            logger.error("DataExport", `清理匯出檔案失敗: ${job.downloadPath}`, error);
           }
         }
       }
@@ -478,7 +479,7 @@ export class DataExportService {
     }
 
     if (cleaned > 0) {
-      console.log(`🧹 已清理 ${cleaned} 個過期的匯出檔案`);
+      logger.info("DataExport", `已清理 ${cleaned} 個過期的匯出檔案`);
     }
 
     return cleaned;

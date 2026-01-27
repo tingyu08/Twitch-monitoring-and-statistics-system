@@ -258,8 +258,8 @@ export class LifetimeStatsAggregatorService {
 
     // Build updates using Map lookup - O(n)
     for (const stat of allStats) {
-      const watchRank = watchRankMap.get(stat.id)!;
-      const msgRank = msgRankMap.get(stat.id)!;
+      const watchRank = watchRankMap.get(stat.id) ?? statsCount;
+      const msgRank = msgRankMap.get(stat.id) ?? statsCount;
 
       const watchTimePercentile = (watchRank / statsCount) * 100;
       const messagePercentile = (msgRank / statsCount) * 100;

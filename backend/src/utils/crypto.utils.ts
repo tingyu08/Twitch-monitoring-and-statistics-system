@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { logger } from "./logger";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // GCM 建議 12 bytes
@@ -28,7 +29,7 @@ export function encryptToken(token: string): string {
     // P0 Security Fix: 避免日誌洩漏敏感資訊（如密鑰、token 內容）
     // 只記錄錯誤類型，不記錄完整 error 物件或 token
     const errorName = error instanceof Error ? error.name : "UnknownError";
-    console.error(`[AUTH] encryptToken failed: ${errorName}`);
+    logger.error("AUTH", `encryptToken failed: ${errorName}`);
     throw new Error("Token encryption failed");
   }
 }
@@ -48,7 +49,7 @@ export function decryptToken(encrypted: string): string {
     // P0 Security Fix: 避免日誌洩漏敏感資訊（如密鑰、加密內容）
     // 只記錄錯誤類型，不記錄完整 error 物件或加密資料
     const errorName = error instanceof Error ? error.name : "UnknownError";
-    console.error(`[AUTH] decryptToken failed: ${errorName}`);
+    logger.error("AUTH", `decryptToken failed: ${errorName}`);
     throw new Error("Token decryption failed");
   }
 }

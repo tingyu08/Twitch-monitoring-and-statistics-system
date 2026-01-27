@@ -5,6 +5,19 @@ import PDFDocument from "pdfkit";
 import { cacheManager } from "../../utils/cache-manager";
 import { prisma } from "../../db/prisma";
 import { SYNC_TIMEOUT_MS, PDF_EXPORT, QUERY_LIMITS, BITS_TO_USD_RATE } from "../../config/revenue.config";
+import { logger } from "../../utils/logger";
+
+/**
+ * 從已驗證的請求中提取 streamerId
+ * 在 requireStreamer middleware 之後使用，確保 streamerId 存在
+ */
+function getStreamerId(req: AuthRequest): string {
+  const streamerId = req.user?.streamerId;
+  if (!streamerId) {
+    throw new Error("Streamer ID not found in authenticated request");
+  }
+  return streamerId;
+}
 
 export class RevenueController {
   /**
@@ -12,13 +25,12 @@ export class RevenueController {
    */
   async getOverview(req: AuthRequest, res: Response) {
     try {
-      // streamerId 已在 requireStreamer middleware 中驗證
-      const streamerId = req.user!.streamerId!;
+      const streamerId = getStreamerId(req);
 
       const overview = await revenueService.getRevenueOverview(streamerId);
       return res.json(overview);
     } catch (error) {
-      console.error("Get revenue overview error:", error);
+      logger.error("RevenueController", "Get revenue overview error:", error);
       return res.status(500).json({ error: "Failed to get revenue overview" });
     }
   }
@@ -28,7 +40,7 @@ export class RevenueController {
    */
   async getSubscriptionStats(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user!.streamerId!;
+      const streamerId = getStreamerId(req);
 
       const days = Math.min(
         Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
@@ -37,7 +49,7 @@ export class RevenueController {
       const stats = await revenueService.getSubscriptionStats(streamerId, days);
       return res.json(stats);
     } catch (error) {
-      console.error("Get subscription stats error:", error);
+      logger.error("RevenueController", "Get subscription stats error:", error);
       return res.status(500).json({ error: "Failed to get subscription stats" });
     }
   }
@@ -47,7 +59,7 @@ export class RevenueController {
    */
   async getBitsStats(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user!.streamerId!;
+      const streamerId = getStreamerId(req);
 
       const days = Math.min(
         Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
@@ -56,7 +68,7 @@ export class RevenueController {
       const stats = await revenueService.getBitsStats(streamerId, days);
       return res.json(stats);
     } catch (error) {
-      console.error("Get bits stats error:", error);
+      logger.error("RevenueController", "Get bits stats error:", error);
       return res.status(500).json({ error: "Failed to get bits stats" });
     }
   }
@@ -66,7 +78,7 @@ export class RevenueController {
    */
   async getTopSupporters(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user!.streamerId!;
+      const streamerId = getStreamerId(req);
 
       const limit = Math.min(
         Math.max(parseInt(req.query.limit as string) || QUERY_LIMITS.DEFAULT_LIMIT, QUERY_LIMITS.MIN_LIMIT),
@@ -75,7 +87,7 @@ export class RevenueController {
       const supporters = await revenueService.getTopSupporters(streamerId, limit);
       return res.json(supporters);
     } catch (error) {
-      console.error("Get top supporters error:", error);
+      logger.error("RevenueController", "Get top supporters error:", error);
       return res.status(500).json({ error: "Failed to get top supporters" });
     }
   }
@@ -85,7 +97,7 @@ export class RevenueController {
    */
   async syncSubscriptions(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user!.streamerId!;
+      const streamerId = getStreamerId(req);
 
       // 使用 Promise.race 設定超時（Render 免費版有 30 秒限制）
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -102,7 +114,7 @@ export class RevenueController {
 
       return res.json({ success: true, message: "Subscription data synced" });
     } catch (error) {
-      console.error("Sync subscriptions error:", error);
+      logger.error("RevenueController", "Sync subscriptions error:", error);
 
       const err = error as Error;
 
@@ -144,7 +156,7 @@ export class RevenueController {
    */
   async exportReport(req: AuthRequest, res: Response) {
     try {
-      const streamerId = req.user!.streamerId!;
+      const streamerId = getStreamerId(req);
 
       const days = Math.min(
         Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
@@ -181,7 +193,7 @@ export class RevenueController {
           // 使用 streaming PDF export
           return this.streamPdfExport(res, overview, subscriptionStats, bitsStats, days);
         } catch (pdfError) {
-          console.error("PDF generation failed:", pdfError);
+          logger.error("RevenueController", "PDF generation failed:", pdfError);
           // 降級策略：如果 PDF 生成失敗，建議使用 CSV
           return res.status(500).json({
             error: "PDF generation failed",
@@ -191,7 +203,7 @@ export class RevenueController {
         }
       }
     } catch (error) {
-      console.error("Export report error:", error);
+      logger.error("RevenueController", "Export report error:", error);
       return res.status(500).json({ error: "Failed to export report" });
     }
   }

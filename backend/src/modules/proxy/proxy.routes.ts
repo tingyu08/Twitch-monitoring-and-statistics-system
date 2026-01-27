@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import { env } from "../../config/env";
+import { logger } from "../../utils/logger";
 
 const router = express.Router();
 
@@ -65,7 +66,7 @@ router.get("/avatar", async (req, res) => {
 
     return res.send(Buffer.from(response.data));
   } catch (error) {
-    console.error("[Avatar Proxy] Error:", error);
+    logger.error("AvatarProxy", "Error:", error);
 
     // 返回預設頭像
     return res.redirect(`https://ui-avatars.com/api/?name=User&background=random&size=128`);

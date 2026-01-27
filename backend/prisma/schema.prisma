@@ -103,6 +103,7 @@ model StreamSession {
   metrics         StreamMetric[]
 
   @@index([channelId, startedAt])
+  @@index([channelId, endedAt])
   @@map("stream_sessions")
 }
 
@@ -172,6 +173,8 @@ model ViewerChannelMessage {
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([viewerId, channelId, timestamp])
+  @@index([timestamp])
+  @@index([channelId, timestamp])
   @@map("viewer_channel_messages")
 }
 
@@ -217,6 +220,8 @@ model TwitchToken {
 
   @@index([ownerType])
   @@index([status])
+  @@index([streamerId])
+  @@index([viewerId])
   @@map("twitch_tokens")
 }
 

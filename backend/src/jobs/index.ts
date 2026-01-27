@@ -13,12 +13,13 @@ import { validateTokensJob } from "./validate-tokens.job";
 import { syncVideosJob } from "./sync-videos.job";
 import { syncSubscriptionsJob } from "./sync-subscriptions.job";
 import { updateLiveStatusJob } from "./update-live-status.job";
+import { logger } from "../utils/logger";
 
 /**
  * 啟動所有定時任務
  */
 export function startAllJobs(): void {
-  console.log("🚀 [Jobs] 正在啟動所有定時任務...");
+  logger.info("Jobs", "正在啟動所有定時任務...");
 
   // 訊息聚合任務
   startMessageAggregationJob();
@@ -49,23 +50,23 @@ export function startAllJobs(): void {
 
   // Token 驗證任務 - 每天凌晨 4 點執行（低流量時段）
   cron.schedule("0 4 * * *", async () => {
-    console.log("🔐 [Jobs] 開始執行 Token 驗證任務...");
+    logger.info("Jobs", "開始執行 Token 驗證任務...");
     try {
       const result = await validateTokensJob();
-      console.log(`✅ [Jobs] Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`);
+      logger.info("Jobs", `Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`);
     } catch (error) {
-      console.error("❌ [Jobs] Token 驗證失敗:", error);
+      logger.error("Jobs", "Token 驗證失敗:", error);
     }
   });
 
-  console.log("✅ [Jobs] 所有定時任務已啟動");
+  logger.info("Jobs", "所有定時任務已啟動");
 }
 
 /**
  * 停止所有定時任務（用於優雅關閉）
  */
 export function stopAllJobs(): void {
-  console.log("🛑 [Jobs] 正在停止所有定時任務...");
+  logger.info("Jobs", "正在停止所有定時任務...");
   // node-cron 任務會在程序結束時自動停止
   // 如果需要手動控制，可以保存 cron.schedule 返回的 task 並調用 task.stop()
 }

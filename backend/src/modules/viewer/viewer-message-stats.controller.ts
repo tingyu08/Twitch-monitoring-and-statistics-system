@@ -2,6 +2,7 @@ import type { Response } from "express";
 import { prisma } from "../../db/prisma";
 import type { AuthRequest } from "../auth/auth.middleware";
 import type { ViewerChannelMessageDailyAgg } from "@prisma/client";
+import { logger } from "../../utils/logger";
 
 export class ViewerMessageStatsController {
   public getMessageStats = async (req: AuthRequest, res: Response) => {
@@ -49,7 +50,7 @@ export class ViewerMessageStatsController {
       const stats = await this.getStats(req.user.viewerId, channelId, startDate, endDate);
       return res.json(stats);
     } catch (error) {
-      console.error("Error fetching message stats:", error);
+      logger.error("ViewerMessageStats", "Error fetching message stats:", error);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   };

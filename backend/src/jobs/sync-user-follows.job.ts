@@ -462,19 +462,21 @@ export class SyncUserFollowsJob {
         isMonitored: true,
         userFollows: { none: {} },
       },
+      select: { id: true },
     });
 
-    // 將其 isMonitored 設為 false
-    for (const channel of orphanedChannels) {
-      await prisma.channel.update({
-        where: { id: channel.id },
-        data: { isMonitored: false },
-      });
+    if (orphanedChannels.length === 0) {
+      return 0;
     }
 
-    if (orphanedChannels.length > 0) {
-      logger.info("Jobs", `🧹 停用 ${orphanedChannels.length} 個無人追蹤的外部頻道`);
-    }
+    // 使用 updateMany 批次更新（修復 N+1 問題）
+    const orphanedIds = orphanedChannels.map((c) => c.id);
+    await prisma.channel.updateMany({
+      where: { id: { in: orphanedIds } },
+      data: { isMonitored: false },
+    });
+
+    logger.info("Jobs", `🧹 停用 ${orphanedChannels.length} 個無人追蹤的外部頻道`);
 
     return orphanedChannels.length;
   }
@@ -670,12 +672,13 @@ export async function triggerFollowSyncForUser(
       }
     }
 
-    // 刪除不再追蹤的記錄
-    for (const [, oldFollow] of existingFollowMap) {
-      await prisma.userFollow.delete({
-        where: { id: oldFollow.id },
+    // 批次刪除不再追蹤的記錄（修復 N+1 問題）
+    const oldFollowIds = Array.from(existingFollowMap.values()).map((f) => f.id);
+    if (oldFollowIds.length > 0) {
+      await prisma.userFollow.deleteMany({
+        where: { id: { in: oldFollowIds } },
       });
-      removed++;
+      removed = oldFollowIds.length;
     }
 
     logger.info("Jobs", `✅ 追蹤同步完成: 新增 ${created}, 移除 ${removed}`);

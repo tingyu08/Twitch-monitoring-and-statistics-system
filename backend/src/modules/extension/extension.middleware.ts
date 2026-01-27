@@ -67,7 +67,7 @@ export async function extensionAuthMiddleware(
     };
 
     next();
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Authentication error" });
   }
 }

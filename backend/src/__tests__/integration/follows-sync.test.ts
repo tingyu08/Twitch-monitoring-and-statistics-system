@@ -26,12 +26,14 @@ jest.mock("../../db/prisma", () => ({
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
     },
     userFollow: {
       findMany: jest.fn(),
       create: jest.fn(),
       createMany: jest.fn(),
+      upsert: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -129,8 +131,8 @@ describe("Story 3.6: Sync User Follows Job", () => {
         id: `ch_${args.data.twitchChannelId}`,
       }));
 
-      // Mock: UserFollow creation (createMany)
-      (prisma.userFollow.createMany as jest.Mock).mockResolvedValue({ count: 2 });
+      // Mock: UserFollow creation (upsert for each follow)
+      (prisma.userFollow.upsert as jest.Mock).mockResolvedValue({ id: "uf1" });
 
       const result = await job.execute();
 
@@ -181,6 +183,9 @@ describe("Story 3.6: Sync User Follows Job", () => {
         id: "s_ext1",
         twitchUserId: "ext1"
       }]);
+
+      // Mock: UserFollow upsert
+      (prisma.userFollow.upsert as jest.Mock).mockResolvedValue({ id: "uf1" });
 
       const result = await job.execute();
 
@@ -242,13 +247,13 @@ describe("Story 3.6: Sync User Follows Job", () => {
         },
       ]);
 
-      (prisma.channel.update as jest.Mock).mockResolvedValue({});
+      (prisma.channel.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
 
       const result = await job.execute();
 
       expect(result.channelsDeactivated).toBe(1);
-      expect(prisma.channel.update).toHaveBeenCalledWith({
-        where: { id: "orphan-ch1" },
+      expect(prisma.channel.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ["orphan-ch1"] } },
         data: { isMonitored: false },
       });
     });
@@ -289,7 +294,7 @@ describe("Story 3.6: Sync User Follows Job", () => {
       }]);
 
       (mockPrismaTransaction.channel.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
-      (prisma.userFollow.createMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.userFollow.upsert as jest.Mock).mockResolvedValue({ id: "uf1" });
 
       const result = await job.execute();
 
@@ -368,7 +373,8 @@ describe("Story 3.6: Sync User Follows Job", () => {
         twitchUserId: "shared-ch"
       }]);
 
-      (prisma.userFollow.createMany as jest.Mock).mockResolvedValue({ count: 1 });
+      // Mock: UserFollow upsert for each user
+      (prisma.userFollow.upsert as jest.Mock).mockResolvedValue({ id: "uf1" });
 
       const result = await job.execute();
 

@@ -10,6 +10,7 @@
 import { prisma } from "../db/prisma";
 import axios from "axios";
 import { logger } from "../utils/logger";
+import { decryptToken } from "../utils/crypto.utils";
 
 // Token 狀態常量
 export const TokenStatus = {
@@ -121,7 +122,9 @@ class TokenValidationService {
       };
     }
 
-    const result = await this.validateToken(token.accessToken);
+    // 解密 Token 後再驗證（資料庫儲存的是加密的 Token）
+    const decryptedToken = decryptToken(token.accessToken);
+    const result = await this.validateToken(decryptedToken);
 
     if (result.isValid) {
       // Token 有效，更新驗證時間並重置失敗計數

@@ -82,6 +82,12 @@ const nextConfig = {
       },
     ],
   },
+  webpack: (config) => {
+    config.infrastructureLogging = {
+      level: "error",
+    };
+    return config;
+  },
 };
 
 // Sentry 配置選項
@@ -99,11 +105,9 @@ const sentryWebpackPluginOptions = {
   // 隱藏 Source Maps（不公開給用戶）
   hideSourceMaps: true,
 
-  // 禁用遙測
-  disableLogger: true,
-
-  // 自動檢測和追蹤
-  automaticVercelMonitors: true,
+  // 禁用遙測 (deprecated options removed/updated)
+  // disableLogger: true, -> not directly mappable easily here, removed to silence warning
+  // automaticVercelMonitors: true, -> deprecated, removing
 };
 
 // 只有在配置了 Sentry DSN 時才啟用

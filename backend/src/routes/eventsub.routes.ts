@@ -21,6 +21,7 @@ import {
   type ChannelSubscribeEvent,
   type ChannelCheerEvent,
 } from "../services/eventsub.service";
+import { logger } from "../utils/logger";
 
 const router = Router();
 
@@ -45,7 +46,7 @@ router.post("/callback", verifyEventSubSignature, async (req: EventSubRequest, r
     // 處理 Challenge 驗證請求
     if (messageType === EVENTSUB_MESSAGE_TYPE.VERIFICATION) {
       const challenge = req.body.challenge;
-      console.log("🔐 EventSub Challenge 驗證請求");
+      logger.info("EventSub", "Challenge 驗證請求");
       res.status(200).type("text/plain").send(challenge);
       return;
     }
@@ -56,7 +57,7 @@ router.post("/callback", verifyEventSubSignature, async (req: EventSubRequest, r
         type: string;
         status: string;
       };
-      console.warn(`⚠️ EventSub 訂閱已撤銷: ${subscription.type} (${subscription.status})`);
+      logger.warn("EventSub", `訂閱已撤銷: ${subscription.type} (${subscription.status})`);
       res.status(204).send();
       return;
     }
@@ -66,7 +67,7 @@ router.post("/callback", verifyEventSubSignature, async (req: EventSubRequest, r
       const notification = req.body as unknown as EventSubNotification;
       const eventType = notification.subscription.type;
 
-      console.log(`📩 收到 EventSub 事件: ${eventType}`);
+      logger.info("EventSub", `收到事件: ${eventType}`);
 
       // 根據事件類型分發處理
       switch (eventType) {
@@ -92,7 +93,7 @@ router.post("/callback", verifyEventSubSignature, async (req: EventSubRequest, r
           break;
 
         default:
-          console.log(`ℹ️ 未處理的事件類型: ${eventType}`);
+          logger.info("EventSub", `未處理的事件類型: ${eventType}`);
       }
 
       res.status(204).send();
@@ -100,10 +101,10 @@ router.post("/callback", verifyEventSubSignature, async (req: EventSubRequest, r
     }
 
     // 未知的 message type
-    console.warn(`⚠️ 未知的 EventSub message type: ${messageType}`);
+    logger.warn("EventSub", `未知的 message type: ${messageType}`);
     res.status(400).json({ error: "Unknown message type" });
   } catch (error) {
-    console.error("❌ EventSub 處理錯誤:", error);
+    logger.error("EventSub", "處理錯誤:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

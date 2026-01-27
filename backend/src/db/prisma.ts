@@ -19,7 +19,7 @@ console.log(`[INFO] 資料庫模式: ${isTurso ? "Turso 雲端" : "本地 SQLite
 console.log(`[INFO] DATABASE_URL: ${databaseUrl.substring(0, 30)}...`);
 
 // 建立 Prisma adapter
-let adapter: PrismaLibSql;
+let adapter: PrismaLibSql | null = null;
 
 if (isTurso && authToken) {
   // 生產環境：使用 Turso 雲端資料庫
@@ -29,18 +29,17 @@ if (isTurso && authToken) {
     authToken: authToken,
   });
 } else {
-  // 開發環境：使用本地 SQLite 檔案
-  console.log("[DEBUG] 使用本地資料庫:", databaseUrl);
-  adapter = new PrismaLibSql({ url: databaseUrl });
+  // 開發環境：使用本地原生 SQLite (避免 Adapter 版本相容問題)
+  console.log("[DEBUG] 使用原生 Prisma Client (本地 SQLite)");
 }
 
-export const prisma =
-  global.prisma ||
-  new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-    // 查詢優化
-  });
+const prismaOptions = {
+  log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+  adapter: adapter ?? null,
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const prisma = global.prisma || new PrismaClient(prismaOptions as any);
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;

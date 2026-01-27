@@ -8,6 +8,7 @@
 import { prisma } from "../db/prisma";
 import type { DeletionRequest } from "@prisma/client";
 import { randomUUID } from "crypto";
+import { logger } from "../utils/logger";
 
 // 冷靜期天數
 const COOLING_PERIOD_DAYS = 7;
@@ -250,8 +251,9 @@ export class AccountDeletionService {
       };
     });
 
-    console.log(
-      `🗑️ 帳號 ${viewerId} 已匿名化: 刪除 ${result.messages} 則訊息, ${result.dashboardLayouts} 個佈局`
+    logger.info(
+      "AccountDeletion",
+      `帳號 ${viewerId} 已匿名化: 刪除 ${result.messages} 則訊息, ${result.dashboardLayouts} 個佈局`
     );
 
     return {
@@ -304,7 +306,7 @@ export class AccountDeletionService {
         success++;
       } else {
         failed++;
-        console.error(`匿名化失敗 (viewerId: ${deletion.viewerId}): ${result.message}`);
+        logger.error("AccountDeletion", `匿名化失敗 (viewerId: ${deletion.viewerId}): ${result.message}`);
       }
     }
 

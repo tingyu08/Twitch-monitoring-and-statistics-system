@@ -8,6 +8,8 @@
  * - 最大佇列大小限制
  */
 
+import { logger } from "./logger";
+
 export interface QueueJob<T = unknown> {
   id: string;
   data: T;
@@ -58,7 +60,7 @@ export class MemoryQueue<T = unknown> {
    */
   add(data: T, priority: number = 0): string | null {
     if (this.queue.length >= this.maxQueueSize) {
-      console.warn(`[MemoryQueue] Queue is full (${this.maxQueueSize} jobs). Job rejected.`);
+      logger.warn("MemoryQueue", `Queue is full (${this.maxQueueSize} jobs). Job rejected.`);
       return null;
     }
 
@@ -78,7 +80,7 @@ export class MemoryQueue<T = unknown> {
       this.queue.splice(insertIndex, 0, job);
     }
 
-    console.log(`[MemoryQueue] Job ${job.id} added. Queue size: ${this.queue.length}`);
+    logger.debug("MemoryQueue", `Job ${job.id} added. Queue size: ${this.queue.length}`);
 
     // 嘗試處理
     this.tick();
@@ -106,7 +108,7 @@ export class MemoryQueue<T = unknown> {
    */
   clear(): void {
     this.queue = [];
-    console.log("[MemoryQueue] Queue cleared");
+    logger.debug("MemoryQueue", "Queue cleared");
   }
 
   /**
@@ -135,18 +137,24 @@ export class MemoryQueue<T = unknown> {
    * 處理單個任務
    */
   private async processJob(job: QueueJob<T>): Promise<void> {
+    if (!this.processor) {
+      logger.warn("MemoryQueue", `No processor set, skipping job ${job.id}`);
+      return;
+    }
+
     try {
-      console.log(`[MemoryQueue] Processing job ${job.id}...`);
-      await this.processor!(job.data);
-      console.log(`[MemoryQueue] Job ${job.id} completed successfully`);
+      logger.debug("MemoryQueue", `Processing job ${job.id}...`);
+      await this.processor(job.data);
+      logger.debug("MemoryQueue", `Job ${job.id} completed successfully`);
     } catch (error) {
-      console.error(`[MemoryQueue] Job ${job.id} failed:`, error);
+      logger.error("MemoryQueue", `Job ${job.id} failed:`, error);
 
       // 檢查是否可以重試
       if (job.retries < this.maxRetries) {
         job.retries++;
-        console.log(
-          `[MemoryQueue] Job ${job.id} will retry (${job.retries}/${this.maxRetries}) in ${this.retryDelayMs}ms`
+        logger.info(
+          "MemoryQueue",
+          `Job ${job.id} will retry (${job.retries}/${this.maxRetries}) in ${this.retryDelayMs}ms`
         );
 
         // 延遲後重新加入佇列
@@ -162,7 +170,7 @@ export class MemoryQueue<T = unknown> {
           this.tick();
         }, this.retryDelayMs);
       } else {
-        console.error(`[MemoryQueue] Job ${job.id} failed after ${this.maxRetries} retries. Giving up.`);
+        logger.error("MemoryQueue", `Job ${job.id} failed after ${this.maxRetries} retries. Giving up.`);
       }
     }
   }

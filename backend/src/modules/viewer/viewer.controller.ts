@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import { recordConsent, getChannelStats, getFollowedChannels } from "./viewer.service";
 import type { AuthRequest } from "../auth/auth.middleware";
+import { logger } from "../../utils/logger";
 
 export class ViewerController {
   public consent = async (req: AuthRequest, res: Response) => {
@@ -68,14 +69,12 @@ export class ViewerController {
       // 效能監控：僅記錄慢查詢 (> 200ms)
       const duration = Date.now() - requestStart;
       if (duration > 200) {
-        console.warn(
-          `[API Performance Warning] Slow query: ${duration}ms for channel ${channelId}`
-        );
+        logger.warn("ViewerAPI", `Slow query: ${duration}ms for channel ${channelId}`);
       }
 
       return res.json(stats);
     } catch (err) {
-      console.error("Error getting viewer stats:", err);
+      logger.error("ViewerAPI", "Error getting viewer stats:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   };
@@ -90,7 +89,7 @@ export class ViewerController {
       const channels = await getFollowedChannels(req.user.viewerId);
       return res.json(channels);
     } catch (err) {
-      console.error("Error getting viewer channels:", err);
+      logger.error("ViewerAPI", "Error getting viewer channels:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   };

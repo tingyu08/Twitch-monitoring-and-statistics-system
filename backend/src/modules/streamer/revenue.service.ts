@@ -1,7 +1,9 @@
 import * as path from "path";
 import { prisma } from "../../db/prisma";
-import { dynamicImport } from "../../utils/dynamic-import";
+import { dynamicImport, importTwurpleApi, importTwurpleAuth } from "../../utils/dynamic-import";
+import { decryptToken, encryptToken } from "../../utils/crypto.utils";
 import { cacheManager, CacheKeys, CacheTTL } from "../../utils/cache-manager";
+import { logger } from "../../utils/logger";
 import {
   REVENUE_SHARE,
   BITS_TO_USD_RATE,
@@ -113,45 +115,28 @@ export class RevenueService {
     broadcasterId: string,
     tokenData: import("../../types/twitch.types").TwitchTokenData
   ): Promise<{ total: number; tier1: number; tier2: number; tier3: number }> {
-    // 使用 dynamicImport 來載入 ES Module，避免被 TypeScript 轉換為 require()
-    const { ApiClient } = (await dynamicImport("@twurple/api")) as typeof import("@twurple/api");
-    const { RefreshingAuthProvider } = (await dynamicImport(
-      "@twurple/auth"
-    )) as typeof import("@twurple/auth");
-    // Debug logging for dynamic import diagnosis
+    // 使用型別安全的動態 import 載入 ES Module
+    const { ApiClient } = await importTwurpleApi();
+    const { RefreshingAuthProvider } = await importTwurpleAuth();
+
+    // 動態載入內部 auth service
     const isDev = !!process.env.TS_NODE_DEV;
     const cwd = process.cwd();
-    console.log(`[RevenueService] Dynamic loading. Dev: ${isDev}, CWD: ${cwd}, Dir: ${__dirname}`);
 
     let authServicePath: string;
-    let cryptoUtilsPath: string;
-
     if (isDev) {
       authServicePath =
         "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/services/twurple-auth.service.ts";
-      cryptoUtilsPath = "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/utils/crypto.utils.ts";
     } else {
-      // Production: Use absolute path based on CWD to ensure we target 'dist' correctly
       authServicePath =
         "file://" + path.resolve(cwd, "dist/services/twurple-auth.service.js").replace(/\\/g, "/");
-      cryptoUtilsPath =
-        "file://" + path.resolve(cwd, "dist/utils/crypto.utils.js").replace(/\\/g, "/");
     }
 
-    console.log(`[RevenueService] Resolving Auth Path: ${authServicePath}`);
-    console.log(`[RevenueService] Resolving Crypto Path: ${cryptoUtilsPath}`);
-
-    // 使用 dynamicImport 來載入 ES Module
     const { twurpleAuthService } = (await dynamicImport(authServicePath)) as {
       twurpleAuthService: {
         getClientId: () => string;
         getClientSecret: () => string;
       };
-    };
-
-    const { decryptToken, encryptToken } = (await dynamicImport(cryptoUtilsPath)) as {
-      decryptToken: (encrypted: string) => string;
-      encryptToken: (token: string) => string;
     };
 
     const clientId = twurpleAuthService.getClientId();
@@ -177,7 +162,7 @@ export class RevenueService {
         newTokenData: import("../../types/twitch.types").TwurpleRefreshCallbackData
       ) => {
         try {
-          console.log(`[RevenueService] Token refreshed for streamer ${broadcasterId}`);
+          logger.info("RevenueService", `Token refreshed for streamer ${broadcasterId}`);
           await prisma.twitchToken.update({
             where: { id: tokenData.id },
             data: {
@@ -191,12 +176,10 @@ export class RevenueService {
               lastValidatedAt: new Date(),
             },
           });
-          console.log(`[RevenueService] Token successfully saved to database`);
+          logger.info("RevenueService", "Token successfully saved to database");
         } catch (error) {
           // Token 刷新成功但儲存失敗 - 記錄錯誤但不中斷流程
-          // 因為 Twurple 已經更新了記憶體中的 token，這次請求仍可正常進行
-          console.error(`[RevenueService] Failed to save refreshed token to database:`, error);
-          // 可選：發送到監控系統（Sentry）
+          logger.error("RevenueService", "Failed to save refreshed token to database:", error);
           if (process.env.SENTRY_DSN) {
             const Sentry = await import("@sentry/node");
             Sentry.captureException(error, {
@@ -254,15 +237,16 @@ export class RevenueService {
 
         // 超過上限或時間過長則停止
         if (result.total >= SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS) {
-          console.error(`[RevenueService] 訂閱者數量超過 ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS}`);
+          logger.error("RevenueService", `訂閱者數量超過 ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS}`);
           throw new Error(
             `SUBSCRIPTION_LIMIT_EXCEEDED: Channel has more than ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS} subscribers. Please contact support for enterprise solutions.`
           );
         }
 
         if (Date.now() - startTime > SUBSCRIPTION_SYNC.MAX_TIME_MS) {
-          console.error(
-            `[RevenueService] 同步超時 (${SUBSCRIPTION_SYNC.MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`
+          logger.error(
+            "RevenueService",
+            `同步超時 (${SUBSCRIPTION_SYNC.MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`
           );
           throw new Error(
             `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
@@ -273,7 +257,7 @@ export class RevenueService {
       // 處理權限不足或 Token 無效的情況
       const apiError = error as import("../../types/twitch.types").TwitchApiError;
       if (apiError.statusCode === 401 || apiError.statusCode === 403) {
-        console.error(`[RevenueService] Permission error for ${broadcasterId}:`, apiError.message);
+        logger.error("RevenueService", `Permission error for ${broadcasterId}: ${apiError.message}`);
         throw new Error("Permission denied - requires Affiliate/Partner status");
       }
       throw error;

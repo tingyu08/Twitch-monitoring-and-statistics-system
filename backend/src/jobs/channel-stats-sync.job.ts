@@ -8,6 +8,7 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
+import { logger } from "../utils/logger";
 
 // 每小時同步一次 (作為 EventSub 的備援與數據補全)
 const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "0 * * * *";
@@ -25,7 +26,7 @@ export class ChannelStatsSyncJob {
    * Start Cron Job
    */
   start(): void {
-    console.log(`INFO: Channel Stats Sync Job scheduled: ${CHANNEL_STATS_CRON}`);
+    logger.info("ChannelStatsSync", `Job scheduled: ${CHANNEL_STATS_CRON}`);
 
     cron.schedule(CHANNEL_STATS_CRON, async () => {
       await this.execute();
@@ -37,12 +38,12 @@ export class ChannelStatsSyncJob {
    */
   async execute(): Promise<ChannelStatsSyncResult> {
     if (this.isRunning) {
-      console.log("WARN: Channel Stats Sync Job already running, skipping...");
+      logger.warn("ChannelStatsSync", "Job already running, skipping...");
       return { synced: 0, failed: 0, dailyStatsUpdated: 0 };
     }
 
     this.isRunning = true;
-    console.log("INFO: Starting Channel Stats Sync...");
+    logger.info("ChannelStatsSync", "Starting Channel Stats Sync...");
 
     const result: ChannelStatsSyncResult = {
       synced: 0,
@@ -61,7 +62,7 @@ export class ChannelStatsSyncJob {
       });
 
       if (channels.length === 0) {
-        console.log("INFO: No channels to sync");
+        logger.info("ChannelStatsSync", "No channels to sync");
         return result;
       }
 
@@ -71,22 +72,22 @@ export class ChannelStatsSyncJob {
           await this.syncChannelStats(channel);
           result.synced++;
         } catch (error) {
-          console.error(`ERROR: Failed to sync channel ${channel.channelName}:`, error);
+          logger.error("ChannelStatsSync", `Failed to sync channel ${channel.channelName}:`, error);
           result.failed++;
         }
       }
 
       // Update daily stats
-      // console.log("[DEBUG] Calling updateDailyStats...");
       result.dailyStatsUpdated = await this.updateDailyStats();
 
-      console.log(
-        `SUCCESS: Channel Stats Sync Job done: ${result.synced} synced, ${result.failed} failed, ${result.dailyStatsUpdated} daily stats updated`
+      logger.info(
+        "ChannelStatsSync",
+        `Job done: ${result.synced} synced, ${result.failed} failed, ${result.dailyStatsUpdated} daily stats updated`
       );
 
       return result;
     } catch (error) {
-      console.error("ERROR: Channel Stats Sync Job execution failed:", error);
+      logger.error("ChannelStatsSync", "Job execution failed:", error);
       throw error;
     } finally {
       this.isRunning = false;
@@ -105,7 +106,7 @@ export class ChannelStatsSyncJob {
     const channelInfo = await unifiedTwitchService.getChannelInfo(channel.channelName);
 
     if (!channelInfo) {
-      console.warn(`WARN: Could not get channel info: ${channel.channelName}`);
+      logger.warn("ChannelStatsSync", `Could not get channel info: ${channel.channelName}`);
       return;
     }
 

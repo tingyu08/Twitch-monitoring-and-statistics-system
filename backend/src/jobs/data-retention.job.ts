@@ -9,6 +9,7 @@ import cron from "node-cron";
 import { accountDeletionService } from "../services/account-deletion.service";
 import { dataExportService } from "../services/data-export.service";
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
 // 每日凌晨 3 點執行
 const DATA_RETENTION_CRON = process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 * * *";
@@ -20,7 +21,7 @@ export class DataRetentionJob {
    * 啟動 Cron Job
    */
   start(): void {
-    console.log(`📅 Data Retention Job 已排程: ${DATA_RETENTION_CRON}`);
+    logger.info("DataRetention", `Job 已排程: ${DATA_RETENTION_CRON}`);
 
     cron.schedule(DATA_RETENTION_CRON, async () => {
       await this.execute();
@@ -32,28 +33,29 @@ export class DataRetentionJob {
    */
   async execute(): Promise<void> {
     if (this.isRunning) {
-      console.log("⚠️ Data Retention Job 正在執行中，跳過...");
+      logger.warn("DataRetention", "Job 正在執行中，跳過...");
       return;
     }
 
     this.isRunning = true;
-    console.log("🗑️ 開始執行 Data Retention Job...");
+    logger.info("DataRetention", "開始執行資料保留任務...");
 
     try {
       // 1. 執行到期的帳號刪除請求
-      console.log("📋 檢查到期的刪除請求...");
+      logger.info("DataRetention", "檢查到期的刪除請求...");
       const deletionResult = await accountDeletionService.executeExpiredDeletions();
-      console.log(
-        `   處理了 ${deletionResult.processed} 個刪除請求 (成功: ${deletionResult.success}, 失敗: ${deletionResult.failed})`
+      logger.info(
+        "DataRetention",
+        `處理了 ${deletionResult.processed} 個刪除請求 (成功: ${deletionResult.success}, 失敗: ${deletionResult.failed})`
       );
 
       // 2. 清理過期的匯出檔案
-      console.log("📋 清理過期的匯出檔案...");
+      logger.info("DataRetention", "清理過期的匯出檔案...");
       const cleanedExports = await dataExportService.cleanupExpiredExports();
-      console.log(`   清理了 ${cleanedExports} 個過期匯出檔案`);
+      logger.info("DataRetention", `清理了 ${cleanedExports} 個過期匯出檔案`);
 
       // 3. 清理過期的影片與剪輯 (7天)
-      console.log("📋 清理過期的 VOD 與 Clip...");
+      logger.info("DataRetention", "清理過期的 VOD 與 Clip...");
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -63,11 +65,14 @@ export class DataRetentionJob {
       const deletedClips = await prisma.clip.deleteMany({
         where: { createdAt: { lt: sevenDaysAgo } },
       });
-      console.log(`   清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯`);
+      logger.info(
+        "DataRetention",
+        `清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯`
+      );
 
-      console.log("✅ Data Retention Job 執行完成");
+      logger.info("DataRetention", "Job 執行完成");
     } catch (error) {
-      console.error("❌ Data Retention Job 執行失敗:", error);
+      logger.error("DataRetention", "Job 執行失敗:", error);
     } finally {
       this.isRunning = false;
     }

@@ -7,6 +7,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
+import { logger } from "../utils/logger";
 
 // Twitch EventSub 訊息類型
 export const EVENTSUB_MESSAGE_TYPE = {
@@ -89,14 +90,14 @@ export function verifyEventSubSignature(req: Request, res: Response, next: NextF
 
     // 檢查是否有必要的 headers
     if (!messageId || !timestamp || !signature) {
-      console.warn("⚠️ EventSub: 缺少必要的 headers");
+      logger.warn("EventSub", "缺少必要的 headers");
       res.status(403).json({ error: "Missing required headers" });
       return;
     }
 
     // 驗證時間戳
     if (!verifyTimestamp(timestamp)) {
-      console.warn("⚠️ EventSub: 時間戳過期或無效");
+      logger.warn("EventSub", "時間戳過期或無效");
       res.status(403).json({ error: "Timestamp expired" });
       return;
     }
@@ -111,7 +112,7 @@ export function verifyEventSubSignature(req: Request, res: Response, next: NextF
 
     // 驗證簽名
     if (!verifySignature(signature, expectedSignature)) {
-      console.warn("⚠️ EventSub: 簽名驗證失敗");
+      logger.warn("EventSub", "簽名驗證失敗");
       res.status(403).json({ error: "Invalid signature" });
       return;
     }
@@ -119,10 +120,10 @@ export function verifyEventSubSignature(req: Request, res: Response, next: NextF
     // 將 message type 附加到 request 物件
     (req as EventSubRequest).eventsubMessageType = messageType;
 
-    console.log(`✅ EventSub: 簽名驗證成功 [${messageType}]`);
+    logger.info("EventSub", `簽名驗證成功 [${messageType}]`);
     next();
   } catch (error) {
-    console.error("❌ EventSub 驗證錯誤:", error);
+    logger.error("EventSub", "驗證錯誤:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 }

@@ -3,6 +3,9 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { lifetimeStatsAggregator } from "../services/lifetime-stats-aggregator.service";
 
+// 批次處理大小
+const BATCH_SIZE = 50;
+
 export const updateLifetimeStatsJob = () => {
   // 每天凌晨 2 點執行
   cron.schedule("0 2 * * *", async () => {
@@ -54,23 +57,36 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
 
     const affectedChannels = new Set<string>();
 
-    // 更新 Stats
+    // 批次並行處理 Stats（修復 N+1 問題）
     let processed = 0;
-    for (const target of targets) {
-      const [viewerId, channelId] = target.split("|");
-      await lifetimeStatsAggregator.aggregateStats(viewerId, channelId);
-      affectedChannels.add(channelId);
+    const targetArray = Array.from(targets);
 
-      processed++;
-      if (processed % 100 === 0) {
+    for (let i = 0; i < targetArray.length; i += BATCH_SIZE) {
+      const batch = targetArray.slice(i, i + BATCH_SIZE);
+
+      await Promise.all(
+        batch.map(async (target) => {
+          const [viewerId, channelId] = target.split("|");
+          await lifetimeStatsAggregator.aggregateStats(viewerId, channelId);
+          affectedChannels.add(channelId);
+        })
+      );
+
+      processed += batch.length;
+      if (processed % 100 === 0 || processed === targetArray.length) {
         logger.info("CronJob", `已處理 ${processed}/${targets.size} 組配對...`);
       }
     }
 
-    // 更新受影響頻道的 Ranking
+    // 批次更新受影響頻道的 Ranking
     logger.info("CronJob", `正在更新 ${affectedChannels.size} 個頻道的排名...`);
-    for (const channelId of affectedChannels) {
-      await lifetimeStatsAggregator.updatePercentileRankings(channelId);
+    const channelArray = Array.from(affectedChannels);
+
+    for (let i = 0; i < channelArray.length; i += BATCH_SIZE) {
+      const batch = channelArray.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map((channelId) => lifetimeStatsAggregator.updatePercentileRankings(channelId))
+      );
     }
 
     const duration = Date.now() - startTime;

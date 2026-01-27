@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
 // EventSub 事件類型
 export const EVENTSUB_TYPES = {
@@ -122,7 +123,7 @@ export class EventSubService {
     this.secret = process.env.EVENTSUB_SECRET || "";
 
     if (!this.callbackUrl) {
-      console.warn("⚠️ EVENTSUB_CALLBACK_URL 未設定，EventSub 功能將無法使用");
+      logger.warn("EventSub", "EVENTSUB_CALLBACK_URL 未設定，EventSub 功能將無法使用");
     }
   }
 
@@ -130,7 +131,7 @@ export class EventSubService {
    * 處理開播事件
    */
   async handleStreamOnline(event: StreamOnlineEvent): Promise<void> {
-    console.log(`🔴 開播事件: ${event.broadcaster_user_name} (${event.type})`);
+    logger.info("EventSub", `開播事件: ${event.broadcaster_user_name} (${event.type})`);
 
     try {
       // 找到對應的 Channel
@@ -139,7 +140,7 @@ export class EventSubService {
       });
 
       if (!channel) {
-        console.warn(`⚠️ 找不到頻道: ${event.broadcaster_user_id}`);
+        logger.warn("EventSub", `找不到頻道: ${event.broadcaster_user_id}`);
         return;
       }
 
@@ -153,9 +154,9 @@ export class EventSubService {
         },
       });
 
-      console.log(`✅ StreamSession 已建立: ${channel.channelName}`);
+      logger.info("EventSub", `StreamSession 已建立: ${channel.channelName}`);
     } catch (error) {
-      console.error("❌ 處理開播事件失敗:", error);
+      logger.error("EventSub", "處理開播事件失敗:", error);
     }
   }
 
@@ -163,7 +164,7 @@ export class EventSubService {
    * 處理下播事件
    */
   async handleStreamOffline(event: StreamOfflineEvent): Promise<void> {
-    console.log(`⚫ 下播事件: ${event.broadcaster_user_name}`);
+    logger.info("EventSub", `下播事件: ${event.broadcaster_user_name}`);
 
     try {
       // 找到對應的 Channel
@@ -172,7 +173,7 @@ export class EventSubService {
       });
 
       if (!channel) {
-        console.warn(`⚠️ 找不到頻道: ${event.broadcaster_user_id}`);
+        logger.warn("EventSub", `找不到頻道: ${event.broadcaster_user_id}`);
         return;
       }
 
@@ -186,7 +187,7 @@ export class EventSubService {
       });
 
       if (!session) {
-        console.warn(`⚠️ 找不到進行中的 StreamSession: ${channel.channelName}`);
+        logger.warn("EventSub", `找不到進行中的 StreamSession: ${channel.channelName}`);
         return;
       }
 
@@ -202,11 +203,12 @@ export class EventSubService {
         },
       });
 
-      console.log(
-        `✅ StreamSession 已結束: ${channel.channelName} (${Math.floor(durationSeconds / 60)} 分鐘)`
+      logger.info(
+        "EventSub",
+        `StreamSession 已結束: ${channel.channelName} (${Math.floor(durationSeconds / 60)} 分鐘)`
       );
     } catch (error) {
-      console.error("❌ 處理下播事件失敗:", error);
+      logger.error("EventSub", "處理下播事件失敗:", error);
     }
   }
 
@@ -214,7 +216,7 @@ export class EventSubService {
    * 處理頻道更新事件
    */
   async handleChannelUpdate(event: ChannelUpdateEvent): Promise<void> {
-    console.log(`📝 頻道更新: ${event.broadcaster_user_name} - ${event.title}`);
+    logger.info("EventSub", `頻道更新: ${event.broadcaster_user_name} - ${event.title}`);
 
     try {
       // 找到對應的 Channel
@@ -223,7 +225,7 @@ export class EventSubService {
       });
 
       if (!channel) {
-        console.warn(`⚠️ 找不到頻道: ${event.broadcaster_user_id}`);
+        logger.warn("EventSub", `找不到頻道: ${event.broadcaster_user_id}`);
         return;
       }
 
@@ -244,10 +246,10 @@ export class EventSubService {
             category: event.category_name, // 使用分類名稱
           },
         });
-        console.log(`✅ StreamSession 標題已更新`);
+        logger.info("EventSub", "StreamSession 標題已更新");
       }
     } catch (error) {
-      console.error("❌ 處理頻道更新事件失敗:", error);
+      logger.error("EventSub", "處理頻道更新事件失敗:", error);
     }
   }
 
@@ -255,8 +257,9 @@ export class EventSubService {
    * 處理訂閱事件
    */
   async handleSubscription(event: ChannelSubscribeEvent): Promise<void> {
-    console.log(
-      `💎 訂閱事件: ${event.user_name} → ${event.broadcaster_user_name} (Tier ${event.tier})`
+    logger.info(
+      "EventSub",
+      `訂閱事件: ${event.user_name} → ${event.broadcaster_user_name} (Tier ${event.tier})`
     );
 
     // TODO: 記錄訂閱事件到統計表
@@ -267,7 +270,7 @@ export class EventSubService {
    */
   async handleCheer(event: ChannelCheerEvent): Promise<void> {
     const username = event.is_anonymous ? "匿名" : event.user_name;
-    console.log(`💰 Cheer 事件: ${username} → ${event.broadcaster_user_name} (${event.bits} bits)`);
+    logger.info("EventSub", `Cheer 事件: ${username} → ${event.broadcaster_user_name} (${event.bits} bits)`);
 
     // TODO: 記錄 Cheer 事件到統計表
   }

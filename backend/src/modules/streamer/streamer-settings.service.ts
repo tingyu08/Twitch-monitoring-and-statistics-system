@@ -2,6 +2,7 @@ import { prisma } from "../../db/prisma";
 import { TwitchOAuthClient } from "../auth/twitch-oauth.client";
 import { env } from "../../config/env";
 import { decryptToken, encryptToken } from "../../utils/crypto.utils";
+import { logger } from "../../utils/logger";
 
 export interface ChannelInfo {
   title: string;
@@ -58,7 +59,7 @@ export class StreamerSettingsService {
       },
     });
 
-    console.log(`[StreamerSettingsService] Token ${tokenId} refreshed successfully`);
+    logger.info("StreamerSettings", `Token ${tokenId} refreshed successfully`);
     return newTokenData.access_token;
   }
 
@@ -78,7 +79,7 @@ export class StreamerSettingsService {
     });
 
     if (!streamer || streamer.twitchTokens.length === 0) {
-      console.warn(`[StreamerSettingsService] No active token found for streamer ${streamerId}`);
+      logger.warn("StreamerSettings", `No active token found for streamer ${streamerId}`);
       return null;
     }
 
@@ -99,8 +100,9 @@ export class StreamerSettingsService {
 
     // 如果 Token 過期 (401)，嘗試刷新
     if (response.status === 401 && tokenRecord.refreshToken) {
-      console.log(
-        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`
+      logger.info(
+        "StreamerSettings",
+        `Token expired for streamer ${streamerId}, attempting refresh...`
       );
       try {
         accessToken = await this.refreshAndSaveToken(tokenRecord.id, tokenRecord.refreshToken);
@@ -116,7 +118,7 @@ export class StreamerSettingsService {
           }
         );
       } catch (refreshError) {
-        console.error("[StreamerSettingsService] Token refresh failed:", refreshError);
+        logger.error("StreamerSettings", "Token refresh failed:", refreshError);
         // 標記 Token 為失效
         await prisma.twitchToken.update({
           where: { id: tokenRecord.id },
@@ -192,8 +194,9 @@ export class StreamerSettingsService {
 
     // 如果 Token 過期 (401)，嘗試刷新
     if (response.status === 401 && tokenRecord.refreshToken) {
-      console.log(
-        `[StreamerSettingsService] Token expired for streamer ${streamerId}, attempting refresh...`
+      logger.info(
+        "StreamerSettings",
+        `Token expired for streamer ${streamerId}, attempting refresh...`
       );
       try {
         accessToken = await this.refreshAndSaveToken(tokenRecord.id, tokenRecord.refreshToken);
@@ -212,7 +215,7 @@ export class StreamerSettingsService {
           }
         );
       } catch (refreshError) {
-        console.error("[StreamerSettingsService] Token refresh failed:", refreshError);
+        logger.error("StreamerSettings", "Token refresh failed:", refreshError);
         await prisma.twitchToken.update({
           where: { id: tokenRecord.id },
           data: { status: "expired", failureCount: { increment: 1 } },
@@ -223,7 +226,7 @@ export class StreamerSettingsService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[StreamerSettingsService] updateChannelInfo error:", errorText);
+      logger.error("StreamerSettings", "updateChannelInfo error:", errorText);
       throw new Error(`Twitch API error: ${response.status}`);
     }
 
