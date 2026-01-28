@@ -27,9 +27,32 @@ export class RevenueController {
     try {
       const streamerId = getStreamerId(req);
 
-      const overview = await revenueService.getRevenueOverview(streamerId);
+      // Render Free Tier 超時保護（25 秒）
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+      });
+
+      const overview = await Promise.race([
+        revenueService.getRevenueOverview(streamerId),
+        timeoutPromise,
+      ]);
+
       return res.json(overview);
     } catch (error) {
+      const err = error as Error;
+
+      if (err.message === "QUERY_TIMEOUT") {
+        logger.warn("RevenueController", "Revenue overview query timeout");
+        // 降級策略：返回空數據而不是 502
+        return res.json({
+          subscriptions: { current: 0, estimatedMonthlyRevenue: 0, tier1: 0, tier2: 0, tier3: 0 },
+          bits: { totalBits: 0, estimatedRevenue: 0, eventCount: 0 },
+          totalEstimatedRevenue: 0,
+          _timeout: true,
+          _message: "查詢超時，請稍後重試或聯繫支援"
+        });
+      }
+
       logger.error("RevenueController", "Get revenue overview error:", error);
       return res.status(500).json({ error: "Failed to get revenue overview" });
     }
@@ -46,9 +69,27 @@ export class RevenueController {
         Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
         QUERY_LIMITS.MAX_DAYS
       );
-      const stats = await revenueService.getSubscriptionStats(streamerId, days);
+
+      // Render Free Tier 超時保護（25 秒）
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+      });
+
+      const stats = await Promise.race([
+        revenueService.getSubscriptionStats(streamerId, days),
+        timeoutPromise,
+      ]);
+
       return res.json(stats);
     } catch (error) {
+      const err = error as Error;
+
+      if (err.message === "QUERY_TIMEOUT") {
+        logger.warn("RevenueController", "Subscription stats query timeout");
+        // 降級策略：返回空陣列
+        return res.json([]);
+      }
+
       logger.error("RevenueController", "Get subscription stats error:", error);
       return res.status(500).json({ error: "Failed to get subscription stats" });
     }
@@ -65,9 +106,27 @@ export class RevenueController {
         Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
         QUERY_LIMITS.MAX_DAYS
       );
-      const stats = await revenueService.getBitsStats(streamerId, days);
+
+      // Render Free Tier 超時保護（25 秒）
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+      });
+
+      const stats = await Promise.race([
+        revenueService.getBitsStats(streamerId, days),
+        timeoutPromise,
+      ]);
+
       return res.json(stats);
     } catch (error) {
+      const err = error as Error;
+
+      if (err.message === "QUERY_TIMEOUT") {
+        logger.warn("RevenueController", "Bits stats query timeout");
+        // 降級策略：返回空陣列
+        return res.json([]);
+      }
+
       logger.error("RevenueController", "Get bits stats error:", error);
       return res.status(500).json({ error: "Failed to get bits stats" });
     }

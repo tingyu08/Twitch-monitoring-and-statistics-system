@@ -12,9 +12,7 @@ export async function GET(request: NextRequest) {
 
   // 1. 處理 Twitch 回傳的錯誤 (例如：access_denied)
   if (error) {
-    console.error(
-      `[Auth Callback] Twitch Error: ${error} - ${errorDescription}`,
-    );
+    console.error(`[Auth Callback] Twitch Error: ${error} - ${errorDescription}`);
     return NextResponse.redirect(new URL(`/?error=${error}`, request.url));
   }
 
@@ -29,9 +27,7 @@ export async function GET(request: NextRequest) {
   try {
     // Server-side fetch needs absolute URL
     const backendUrl =
-      process.env.BACKEND_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      "http://localhost:4000";
+      process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
     // 呼叫後端交換 Token
     const res = await fetch(`${backendUrl}/auth/twitch/callback?code=${code}`, {
@@ -49,7 +45,7 @@ export async function GET(request: NextRequest) {
 
       if (token) {
         const response = NextResponse.redirect(
-          new URL(`/${locale}/dashboard/streamer`, request.url),
+          new URL(`/${locale}/dashboard/streamer`, request.url)
         );
 
         // 設置 HttpOnly Cookie
@@ -70,9 +66,7 @@ export async function GET(request: NextRequest) {
     } else {
       const errorText = await res.text();
       console.error("[Auth Callback] Backend error:", res.status, errorText);
-      return NextResponse.redirect(
-        new URL("/?error=login_failed", request.url),
-      );
+      return NextResponse.redirect(new URL("/?error=login_failed", request.url));
     }
   } catch (err) {
     console.error("[Auth Callback] Server error:", err);
