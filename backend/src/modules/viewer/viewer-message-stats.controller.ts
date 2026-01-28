@@ -121,12 +121,10 @@ export class ViewerMessageStatsController {
       { date: null, count: 0 }
     );
 
-    // 最近留言時間 (需要查詳細表)
-    const lastMessage = await prisma.viewerChannelMessage.findFirst({
-      where: { viewerId, channelId },
-      orderBy: { timestamp: "desc" },
-      select: { timestamp: true },
-    });
+    // 性能優化：避免查詢 viewer_channel_messages 大表
+    // 直接使用聚合數據中的最後一天作為近似值 (Render Free Tier Optimization)
+    // 雖然這樣精確度只有到"天"，但能避免 SQLite 全表掃描或索引查找的 I/O 延遲
+    const lastAggregate = aggs.length > 0 ? aggs[aggs.length - 1] : null;
 
     // 格式化最活躍日期
     const mostActiveDateStr = mostActive.date ? mostActive.date.toISOString().split("T")[0] : null;
@@ -143,7 +141,7 @@ export class ViewerMessageStatsController {
         avgMessagesPerStream,
         mostActiveDate: mostActiveDateStr,
         mostActiveDateCount: mostActive.count,
-        lastMessageAt: lastMessage?.timestamp.toISOString() || null,
+        lastMessageAt: lastAggregate ? lastAggregate.date.toISOString().split("T")[0] : null,
       },
       interactionBreakdown: {
         chatMessages: summary.chatMessages,

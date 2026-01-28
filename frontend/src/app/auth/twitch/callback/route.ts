@@ -8,9 +8,10 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
   const error = searchParams.get("error");
+  const state = searchParams.get("state"); // 必須傳遞 state 用於 CSRF 驗證
   const errorDescription = searchParams.get("error_description");
 
-  // 1. 處理 Twitch 回傳的錯誤 (例如：access_denied)
+  // 1. 處理 Twitch 回傳的錯誤
   if (error) {
     console.error(`[Auth Callback] Twitch Error: ${error} - ${errorDescription}`);
     return NextResponse.redirect(new URL(`/?error=${error}`, request.url));
@@ -23,51 +24,29 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Server-side fetch needs absolute URL
-    const backendUrl =
-      process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+    // 建構後端 Callback URL
+    // P1 Fix: 確保使用正確的環境變數，與 getApiUrl 邏輯一致，避免 origin 不匹配
+    const backendDataUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      process.env.BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      "http://127.0.0.1:4000";
 
-    // 呼叫後端交換 Token
-    const res = await fetch(`${backendUrl}/auth/twitch/callback?code=${code}`, {
-      method: "GET",
-      credentials: "include",
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-
-      // 從後端取得 JWT Token 並設置為 Cookie
-      const token = data.token;
-      // 嘗試獲取語言偏好，預設為 zh-TW
-      const locale = request.cookies.get("NEXT_LOCALE")?.value || "zh-TW";
-
-      if (token) {
-        const response = NextResponse.redirect(
-          new URL(`/${locale}/dashboard/streamer`, request.url)
-        );
-
-        // 設置 HttpOnly Cookie
-        response.cookies.set("auth_token", token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 60 * 60 * 24 * 7, // 7 天
-        });
-
-        return response;
-      }
-
-      // 如果沒有 token，仍然重導向到 dashboard
-      const response = NextResponse.redirect(new URL(`/${locale}/dashboard/streamer`, request.url));
-      return response;
-    } else {
-      const errorText = await res.text();
-      console.error("[Auth Callback] Backend error:", res.status, errorText);
-      return NextResponse.redirect(new URL("/?error=login_failed", request.url));
+    const backendCallbackUrl = new URL(`${backendDataUrl}/auth/twitch/callback`);
+    backendCallbackUrl.searchParams.set("code", code);
+    if (state) {
+      backendCallbackUrl.searchParams.set("state", state);
     }
+    // 轉發所有可能的錯誤參數
+    if (error) backendCallbackUrl.searchParams.set("error", error);
+    if (errorDescription)
+      backendCallbackUrl.searchParams.set("error_description", errorDescription);
+
+    // 3. 直接重導向到後端，讓瀏覽器帶著 Cookies (State) 訪問後端
+    // 後端驗證成功後會寫入 Auth Cookies 並重導回前端 Dashboard
+    return NextResponse.redirect(backendCallbackUrl.toString());
   } catch (err) {
-    console.error("[Auth Callback] Server error:", err);
+    console.error("[Auth Callback] Error building redirect URL:", err);
     return NextResponse.redirect(new URL("/?error=server_error", request.url));
   }
 }
