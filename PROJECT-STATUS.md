@@ -1,6 +1,6 @@
 # Twitch Analytics - 專案狀態報告
 
-**版本**: v1.6.0 (Production) | **最後更新**: 2026-01-25
+**版本**: v1.6.1 (Production) | **最後更新**: 2026-01-28
 
 ---
 
@@ -14,9 +14,29 @@
 [█████████████████████████████████████░░░] 78%
 ```
 
+**⚠️ 最新狀態**: 2026-01-28 完成重大資料恢復事件處理，已實施自動備份機制
+
 ---
 
-## 🚀 最新發布 (v1.6.0) - 2026-01-25
+## 🚀 最新發布 (v1.6.1 - Hotfix) - 2026-01-28
+
+**核心重點**: 資料庫安全性強化與自動備份機制
+
+### 🔒 關鍵成果
+
+1.  **資料恢復完成**
+    - **事件**: 2026-01-27 發生資料遺失（留言與觀看時數記錄被清空）
+    - **恢復**: 成功從 Turso 24 小時前的 branch 恢復 1,014 筆留言與 43 筆觀看時數記錄
+    - **影響**: 僅遺失 2026-01-27 一天的資料
+2.  **自動備份機制**
+    - **GitHub Actions**: 每日凌晨 2 點（UTC）自動執行資料庫備份
+    - **保留期限**: 30 天備份歷史
+    - **格式**: JSON 格式，支援完整資料恢復
+3.  **Migration 安全性改善**
+    - **移除**: 刪除使用危險 `DROP TABLE` 操作的 migration 檔案
+    - **預防**: 避免未來再次發生資料遺失問題
+
+### 📋 前一版本 (v1.6.0) - 2026-01-25
 
 **核心重點**: Epic 4 實況主快速操作中心完成
 
@@ -68,6 +88,16 @@
 <details>
 <summary><b>點擊展開過往更新詳情</b></summary>
 
+### 2026-01-28 (v1.6.1 - Critical Hotfix)
+
+- **事件**: 資料庫 migration 錯誤導致留言與觀看時數記錄遺失
+- **恢復**: 從 Turso 24 小時前的 branch 成功恢復資料（1,014 筆留言 + 43 筆觀看時數）
+- **修復**: 刪除兩個使用 `DROP TABLE` 的危險 migration 檔案
+- **新增**: 實施 GitHub Actions 每日自動備份機制（保留 30 天）
+- **新增**: 手動備份腳本 (`backend/scripts/manual-backup.js`)
+- **優化**: 更新 `.gitignore` 排除備份檔案，避免提交大型備份到 Git
+- **影響**: 僅遺失 2026-01-27 一天的新增資料，核心功能正常運作
+
 ### 2026-01-25 (v1.6.0 - Epic 4 Complete)
 
 - **功能**: 完成 Epic 4.5 收益綜合報表，新增 RevenueOverview 總覽面板。
@@ -102,12 +132,26 @@
 
 ## 🛠️ 技術架構 (Technical Stack)
 
-| 層級            | 技術方案                                                |
-| :-------------- | :------------------------------------------------------ |
-| **Frontend**    | Next.js 14 (App Router), TailwindCSS, Zustand, Recharts |
-| **Backend**     | Express, TypeScript, Prisma ORM, Socket.IO              |
-| **Database**    | Turso (LibSQL) - Edge Compatible                        |
-| **Integration** | Twurple (Twitch API), Google Analytics                  |
+| 層級            | 技術方案                                                 |
+| :-------------- | :------------------------------------------------------- |
+| **Frontend**    | Next.js 14 (App Router), TailwindCSS, Zustand, Recharts  |
+| **Backend**     | Express, TypeScript, Prisma ORM, Socket.IO               |
+| **Database**    | Turso (LibSQL) - Edge Compatible                         |
+| **Integration** | Twurple (Twitch API), Google Analytics                   |
+| **CI/CD**       | GitHub Actions (自動備份、測試、部署)                     |
+| **Monitoring**  | Sentry (錯誤追蹤), 每日自動資料庫備份                     |
+
+---
+
+## 🔒 資料安全措施 (Data Security)
+
+| 措施            | 實施狀態 | 說明                                      |
+| :-------------- | :------- | :---------------------------------------- |
+| **自動備份**    | ✅ 已實施 | GitHub Actions 每日凌晨 2 點自動備份      |
+| **備份保留**    | ✅ 已實施 | 保留 30 天備份歷史，可隨時下載恢復         |
+| **手動備份**    | ✅ 已實施 | 提供手動備份腳本，隨時可執行               |
+| **Branch 恢復** | ✅ 已驗證 | Turso PITR 功能可恢復到任意時間點          |
+| **Migration 審查** | ✅ 已強化 | 禁止使用 DROP TABLE 等危險操作          |
 
 ---
 

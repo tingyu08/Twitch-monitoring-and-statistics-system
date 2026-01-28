@@ -72,6 +72,13 @@ Desktop.ini
 # 資料庫
 *.sqlite
 *.db
+backend/prisma/dev.db*
+
+# 備份檔案
+backend/backups/
+*.backup
+*.dump
+*backup*.json
 
 # 其他
 .bmad-core/
