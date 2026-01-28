@@ -34,6 +34,7 @@ export class TwurpleChatService {
   private chatClient: ChatClientInterface | null = null;
   private channels: Set<string> = new Set();
   private isConnected = false;
+  private notInitializedWarned = false; // 避免重複警告
 
   // 熱度追蹤：channelName -> timestamps[]
   private messageTimestamps: Map<string, number[]> = new Map();
@@ -196,6 +197,7 @@ export class TwurpleChatService {
 
       await this.chatClient.connect();
       this.isConnected = true;
+      this.notInitializedWarned = false; // 重設警告 flag
       logger.info(
         "Twurple Chat",
         `已連接至 Twitch Chat: ${tokenRecord.streamer?.displayName} (自動刷新)`
@@ -296,7 +298,10 @@ export class TwurpleChatService {
    */
   public async joinChannel(channel: string): Promise<void> {
     if (!this.chatClient) {
-      logger.warn("Twurple Chat", "Chat client not initialized");
+      if (!this.notInitializedWarned) {
+        logger.warn("Twurple Chat", "Chat client not initialized. Please login first.");
+        this.notInitializedWarned = true;
+      }
       return;
     }
 

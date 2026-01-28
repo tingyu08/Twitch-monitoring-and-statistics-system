@@ -1,0 +1,48 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    # 每天凌晨 2 點（UTC）執行 = 台灣時間上午 10 點
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 允許手動觸發
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          cd backend
+          node scripts/manual-backup.js
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ github.run_number }}
+          path: backend/backups/
+          retention-days: 30 # 保留 30 天
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "⚠️ 備份失敗！請檢查 GitHub Actions 日誌"
