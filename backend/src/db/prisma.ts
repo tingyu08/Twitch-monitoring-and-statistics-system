@@ -48,4 +48,12 @@ if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;
 }
 
+// 本地 SQLite 效能優化：啟用 WAL 模式以支援併發讀寫
+// 這能解決本地開發時 Dashboard 多個請求同時卡住的問題
+if (!isTurso) {
+  prisma.$queryRaw`PRAGMA journal_mode = WAL;`
+    .then(() => console.log("[INFO] SQLite WAL mode enabled"))
+    .catch((err) => console.warn("[WARN] Failed to enable WAL mode:", err));
+}
+
 export default prisma;
