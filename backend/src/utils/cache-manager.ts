@@ -41,8 +41,8 @@ export class CacheManager {
     this.maxMemoryBytes = maxMemoryMB * 1024 * 1024;
     this.currentMemoryUsage = 0;
 
-    // Render Free Tier 優化：更頻繁清理過期項目（每 2 分鐘）
-    const cleanupInterval = setInterval(() => this.cleanup(), 2 * 60 * 1000);
+    // Render Free Tier 優化：更頻繁清理過期項目（每 30 秒）
+    const cleanupInterval = setInterval(() => this.cleanup(), 30 * 1000);
 
     // Don't prevent Node.js from exiting
     if (cleanupInterval.unref) {
@@ -56,9 +56,12 @@ export class CacheManager {
   set<T>(key: string, value: T, ttlSeconds: number = 300): void {
     const size = this.estimateSize(value);
 
-    // 如果單個項目超過最大記憶體限制的 50%，拒絕快取
-    if (size > this.maxMemoryBytes * 0.5) {
-      logger.warn("Cache", `Item too large to cache: ${key} (${(size / 1024 / 1024).toFixed(2)}MB)`);
+    // 如果單個項目超過最大記憶體限制的 25%，拒絕快取 (Render Free Tier 優化)
+    if (size > this.maxMemoryBytes * 0.25) {
+      logger.warn(
+        "Cache",
+        `Item too large to cache: ${key} (${(size / 1024 / 1024).toFixed(2)}MB)`
+      );
       return;
     }
 
@@ -160,11 +163,7 @@ export class CacheManager {
   /**
    * 取得或設定（如果不存在則執行 factory 函數）
    */
-  async getOrSet<T>(
-    key: string,
-    factory: () => Promise<T>,
-    ttlSeconds: number = 300
-  ): Promise<T> {
+  async getOrSet<T>(key: string, factory: () => Promise<T>, ttlSeconds: number = 300): Promise<T> {
     const cached = this.get<T>(key);
     if (cached !== null) {
       return cached;
@@ -179,9 +178,10 @@ export class CacheManager {
    * 獲取快取統計
    */
   getStats(): CacheStats {
-    const hitRate = this.stats.hits + this.stats.misses > 0
-      ? (this.stats.hits / (this.stats.hits + this.stats.misses)) * 100
-      : 0;
+    const hitRate =
+      this.stats.hits + this.stats.misses > 0
+        ? (this.stats.hits / (this.stats.hits + this.stats.misses)) * 100
+        : 0;
 
     return {
       ...this.stats,
@@ -241,7 +241,7 @@ export class CacheManager {
 
 // 導出單例
 export const cacheManager = new CacheManager(
-  process.env.NODE_ENV === "production" ? 30 : 50 // 生產環境限制 30MB
+  process.env.NODE_ENV === "production" ? 15 : 30 // 生產環境限制 15MB (Render Free Tier)
 );
 
 // 預定義的快取鍵生成器
@@ -259,10 +259,8 @@ export const CacheKeys = {
 
   // 主播收益相關（較短的 TTL）
   revenueOverview: (streamerId: string) => `revenue:${streamerId}:overview`,
-  revenueSubscriptions: (streamerId: string, days: number) =>
-    `revenue:${streamerId}:subs:${days}d`,
-  revenueBits: (streamerId: string, days: number) =>
-    `revenue:${streamerId}:bits:${days}d`,
+  revenueSubscriptions: (streamerId: string, days: number) => `revenue:${streamerId}:subs:${days}d`,
+  revenueBits: (streamerId: string, days: number) => `revenue:${streamerId}:bits:${days}d`,
 
   // 系統快取
   liveChannels: () => "system:live_channels",
@@ -271,8 +269,8 @@ export const CacheKeys = {
 
 // 預定義的 TTL（秒）
 export const CacheTTL = {
-  SHORT: 60,           // 1 分鐘 - 即時資料
-  MEDIUM: 300,         // 5 分鐘 - 一般資料
-  LONG: 1800,          // 30 分鐘 - 較穩定的資料
-  VERY_LONG: 3600,     // 1 小時 - 很少變動的資料
+  SHORT: 60, // 1 分鐘 - 即時資料
+  MEDIUM: 300, // 5 分鐘 - 一般資料
+  LONG: 1800, // 30 分鐘 - 較穩定的資料
+  VERY_LONG: 3600, // 1 小時 - 很少變動的資料
 };

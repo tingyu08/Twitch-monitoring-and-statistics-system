@@ -43,7 +43,7 @@ interface PerformanceStats {
 // 預設配置
 const DEFAULT_CONFIG = {
   slowThreshold: 1000, // 慢速請求閾值 (ms)
-  maxMetricsHistory: 1000, // 最多保存多少個請求記錄
+  maxMetricsHistory: 100, // Render Free Tier: 減少為 100 以節省記憶體
   enableLogging: false, // 關閉日誌輸出
 };
 

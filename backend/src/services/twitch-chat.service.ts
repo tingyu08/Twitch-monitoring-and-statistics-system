@@ -27,8 +27,8 @@ import { webSocketGateway } from "./websocket.gateway";
 const HEAT_WINDOW_MS = 5000; // 5秒視窗
 const HEAT_THRESHOLD_MSG = 50; // 5秒內超過50則訊息視為有熱度
 const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
-const HEAT_CLEANUP_INTERVAL_MS = 60000; // P1 Memory: 每 60 秒清理一次過期數據
-const HEAT_STALE_THRESHOLD_MS = 60000; // P1 Memory: 超過 60 秒沒活動的頻道視為過期
+const HEAT_CLEANUP_INTERVAL_MS = 30000; // Render Free Tier: 每 30 秒清理一次
+const HEAT_STALE_THRESHOLD_MS = 30000; // Render Free Tier: 超過 30 秒沒活動即清理
 
 export class TwurpleChatService {
   private chatClient: ChatClientInterface | null = null;
@@ -92,7 +92,7 @@ export class TwurpleChatService {
       logger.debug(
         "Twurple Chat",
         `Cleaned up heat data for ${cleanedChannels} inactive channels. ` +
-        `Active: ${this.messageTimestamps.size} channels`
+          `Active: ${this.messageTimestamps.size} channels`
       );
     }
   }
@@ -153,23 +153,28 @@ export class TwurpleChatService {
       });
 
       // 設定 Token 刷新回調（刷新後更新資料庫）
-      authProvider.onRefresh(async (userId: string, newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData) => {
-        logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
+      authProvider.onRefresh(
+        async (
+          userId: string,
+          newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData
+        ) => {
+          logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
 
-        // 更新資料庫中的 Token
-        await prisma.twitchToken.update({
-          where: { id: tokenRecord.id },
-          data: {
-            accessToken: encryptToken(newTokenData.accessToken),
-            refreshToken: newTokenData.refreshToken
-              ? encryptToken(newTokenData.refreshToken)
-              : tokenRecord.refreshToken,
-            expiresAt: newTokenData.expiresIn
-              ? new Date(Date.now() + newTokenData.expiresIn * 1000)
-              : null,
-          },
-        });
-      });
+          // 更新資料庫中的 Token
+          await prisma.twitchToken.update({
+            where: { id: tokenRecord.id },
+            data: {
+              accessToken: encryptToken(newTokenData.accessToken),
+              refreshToken: newTokenData.refreshToken
+                ? encryptToken(newTokenData.refreshToken)
+                : tokenRecord.refreshToken,
+              expiresAt: newTokenData.expiresIn
+                ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+                : null,
+            },
+          });
+        }
+      );
 
       // 添加使用者的 Token
       await authProvider.addUserForToken(
@@ -232,24 +237,14 @@ export class TwurpleChatService {
 
     // 監聯訂閱事件
     this.chatClient.onSub(
-      (
-        channel: string,
-        user: string,
-        subInfo: TwitchSubInfo,
-        msg: TwitchChatMessage | null
-      ) => {
+      (channel: string, user: string, subInfo: TwitchSubInfo, msg: TwitchChatMessage | null) => {
         this.handleSubscription(channel, user, subInfo, msg);
       }
     );
 
     // 監聽續訂事件
     this.chatClient.onResub(
-      (
-        channel: string,
-        user: string,
-        subInfo: TwitchSubInfo,
-        msg: TwitchChatMessage | null
-      ) => {
+      (channel: string, user: string, subInfo: TwitchSubInfo, msg: TwitchChatMessage | null) => {
         this.handleSubscription(channel, user, subInfo, msg);
       }
     );
@@ -268,12 +263,7 @@ export class TwurpleChatService {
 
     // 監聽揪團 (Raid)
     this.chatClient.onRaid(
-      (
-        channel: string,
-        user: string,
-        raidInfo: TwitchRaidInfo,
-        msg: TwitchChatMessage | null
-      ) => {
+      (channel: string, user: string, raidInfo: TwitchRaidInfo, msg: TwitchChatMessage | null) => {
         this.handleRaid(channel, user, raidInfo, msg);
       }
     );
@@ -340,12 +330,7 @@ export class TwurpleChatService {
   /**
    * 處理一般訊息
    */
-  private handleMessage(
-    channel: string,
-    user: string,
-    text: string,
-    msg: TwitchChatMessage
-  ): void {
+  private handleMessage(channel: string, user: string, text: string, msg: TwitchChatMessage): void {
     const channelName = channel.replace(/^#/, "");
 
     try {
