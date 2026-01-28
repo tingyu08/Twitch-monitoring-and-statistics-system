@@ -9,7 +9,10 @@ declare global {
 
 // 取得資料庫 URL（預設使用本地 SQLite）
 const dbPath = path.resolve(__dirname, "../../prisma/dev.db");
-const databaseUrl = process.env.DATABASE_URL || `file:${dbPath}`;
+// P1 Fix: 增加 connection_limit 以支援 WAL 模式下的併發讀取
+// 預設 Prisma 對 SQLite 限制為 1，這會導致請求排隊。在 WAL 模式下我們可以安全地增加此限制。
+const databaseUrl =
+  process.env.DATABASE_URL || `file:${dbPath}?connection_limit=10&socket_timeout=30`;
 const authToken = process.env.TURSO_AUTH_TOKEN;
 
 // 判斷是否使用 Turso 雲端資料庫（URL 以 libsql:// 開頭）
