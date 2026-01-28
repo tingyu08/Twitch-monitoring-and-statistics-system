@@ -4,7 +4,12 @@ import { revenueService } from "./revenue.service";
 import PDFDocument from "pdfkit";
 import { cacheManager } from "../../utils/cache-manager";
 import { prisma } from "../../db/prisma";
-import { SYNC_TIMEOUT_MS, PDF_EXPORT, QUERY_LIMITS, BITS_TO_USD_RATE } from "../../config/revenue.config";
+import {
+  SYNC_TIMEOUT_MS,
+  PDF_EXPORT,
+  QUERY_LIMITS,
+  BITS_TO_USD_RATE,
+} from "../../config/revenue.config";
 import { logger } from "../../utils/logger";
 
 /**
@@ -49,7 +54,7 @@ export class RevenueController {
           bits: { totalBits: 0, estimatedRevenue: 0, eventCount: 0 },
           totalEstimatedRevenue: 0,
           _timeout: true,
-          _message: "查詢超時，請稍後重試或聯繫支援"
+          _message: "查詢超時，請稍後重試或聯繫支援",
         });
       }
 
@@ -66,7 +71,10 @@ export class RevenueController {
       const streamerId = getStreamerId(req);
 
       const days = Math.min(
-        Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
+        Math.max(
+          parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS,
+          QUERY_LIMITS.MIN_DAYS
+        ),
         QUERY_LIMITS.MAX_DAYS
       );
 
@@ -103,7 +111,10 @@ export class RevenueController {
       const streamerId = getStreamerId(req);
 
       const days = Math.min(
-        Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
+        Math.max(
+          parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS,
+          QUERY_LIMITS.MIN_DAYS
+        ),
         QUERY_LIMITS.MAX_DAYS
       );
 
@@ -140,7 +151,10 @@ export class RevenueController {
       const streamerId = getStreamerId(req);
 
       const limit = Math.min(
-        Math.max(parseInt(req.query.limit as string) || QUERY_LIMITS.DEFAULT_LIMIT, QUERY_LIMITS.MIN_LIMIT),
+        Math.max(
+          parseInt(req.query.limit as string) || QUERY_LIMITS.DEFAULT_LIMIT,
+          QUERY_LIMITS.MIN_LIMIT
+        ),
         QUERY_LIMITS.MAX_LIMIT
       );
       const supporters = await revenueService.getTopSupporters(streamerId, limit);
@@ -165,10 +179,7 @@ export class RevenueController {
       });
 
       try {
-        await Promise.race([
-          revenueService.syncSubscriptionSnapshot(streamerId),
-          timeoutPromise,
-        ]);
+        await Promise.race([revenueService.syncSubscriptionSnapshot(streamerId), timeoutPromise]);
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
       }
@@ -186,28 +197,30 @@ export class RevenueController {
       if (err.message === "SYNC_TIMEOUT") {
         return res.status(504).json({
           error: "Sync timeout - try again later",
-          details: "The sync operation took too long. This may happen for channels with many subscribers."
+          details:
+            "The sync operation took too long. This may happen for channels with many subscribers.",
         });
       }
 
       if (err.message?.includes("no valid token") || err.message?.includes("No refresh token")) {
         return res.status(401).json({
           error: "Token expired - please re-login",
-          details: "Your Twitch authorization has expired. Please log out and log in again."
+          details: "Your Twitch authorization has expired. Please log out and log in again.",
         });
       }
 
       if (err.message?.includes("Permission") || err.message?.includes("403")) {
         return res.status(403).json({
           error: "Permission denied",
-          details: "This feature requires Twitch Affiliate or Partner status to access subscription data."
+          details:
+            "This feature requires Twitch Affiliate or Partner status to access subscription data.",
         });
       }
 
       if (err.message?.includes("SUBSCRIPTION_LIMIT_EXCEEDED")) {
         return res.status(507).json({
           error: "Subscription limit exceeded",
-          details: err.message.replace("SUBSCRIPTION_LIMIT_EXCEEDED: ", "")
+          details: err.message.replace("SUBSCRIPTION_LIMIT_EXCEEDED: ", ""),
         });
       }
 
@@ -228,7 +241,10 @@ export class RevenueController {
       const streamerId = getStreamerId(req);
 
       const days = Math.min(
-        Math.max(parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS, QUERY_LIMITS.MIN_DAYS),
+        Math.max(
+          parseInt(req.query.days as string) || QUERY_LIMITS.DEFAULT_DAYS,
+          QUERY_LIMITS.MIN_DAYS
+        ),
         QUERY_LIMITS.MAX_DAYS
       );
       const format = (req.query.format as string) || "csv";
@@ -242,7 +258,7 @@ export class RevenueController {
       if (format === "pdf" && days > PDF_EXPORT.MAX_DAYS) {
         return res.status(400).json({
           error: `PDF export is limited to ${PDF_EXPORT.MAX_DAYS} days maximum`,
-          suggestion: "Please use CSV format for longer periods or reduce the date range"
+          suggestion: "Please use CSV format for longer periods or reduce the date range",
         });
       }
 
@@ -267,7 +283,8 @@ export class RevenueController {
           return res.status(500).json({
             error: "PDF generation failed",
             suggestion: "Please try CSV format instead or reduce the date range",
-            details: process.env.NODE_ENV === "development" ? (pdfError as Error).message : undefined
+            details:
+              process.env.NODE_ENV === "development" ? (pdfError as Error).message : undefined,
           });
         }
       }
@@ -346,8 +363,8 @@ export class RevenueController {
 
         res.write(
           `${dateStr},${sub.tier1Count},${sub.tier2Count},${sub.tier3Count},` +
-          `${sub.totalSubscribers},${(sub.estimatedRevenue || 0).toFixed(2)},` +
-          `${bits?.totalBits || 0},${bitsRevenue.toFixed(2)}\n`
+            `${sub.totalSubscribers},${(sub.estimatedRevenue || 0).toFixed(2)},` +
+            `${bits?.totalBits || 0},${bitsRevenue.toFixed(2)}\n`
         );
       }
 
@@ -359,9 +376,7 @@ export class RevenueController {
     for (const [dateStr, bits] of bitsMap.entries()) {
       if (!processedDates.has(dateStr)) {
         const bitsRevenue = bits.totalBits * BITS_TO_USD_RATE;
-        res.write(
-          `${dateStr},0,0,0,0,0.00,${bits.totalBits},${bitsRevenue.toFixed(2)}\n`
-        );
+        res.write(`${dateStr},0,0,0,0,0.00,${bits.totalBits},${bitsRevenue.toFixed(2)}\n`);
       }
     }
 
@@ -387,7 +402,7 @@ export class RevenueController {
     const doc = new PDFDocument({
       margin: 50,
       bufferPages: false, // 禁用頁面緩衝
-      compress: true,     // 啟用壓縮
+      compress: true, // 啟用壓縮
       autoFirstPage: true,
       size: "A4",
     });
@@ -436,19 +451,28 @@ export class RevenueController {
       doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
       doc.moveDown(0.5);
       doc.fontSize(14).font("Helvetica-Bold").text("SUBSCRIPTION HISTORY");
-      doc.fontSize(9).font("Helvetica-Oblique")
-        .text(`(Showing last 10 records out of ${subscriptionStats.length} total)`, { align: "left" });
+      doc
+        .fontSize(9)
+        .font("Helvetica-Oblique")
+        .text(`(Showing last 10 records out of ${subscriptionStats.length} total)`, {
+          align: "left",
+        });
       doc.moveDown(0.5);
 
       // 表格標題
       doc.fontSize(9).font("Helvetica-Bold");
       const colWidths = { date: 80, t1: 40, t2: 40, t3: 40, total: 50, revenue: 70 };
       let x = 50;
-      doc.text("Date", x, doc.y); x += colWidths.date;
-      doc.text("T1", x, doc.y); x += colWidths.t1;
-      doc.text("T2", x, doc.y); x += colWidths.t2;
-      doc.text("T3", x, doc.y); x += colWidths.t3;
-      doc.text("Total", x, doc.y); x += colWidths.total;
+      doc.text("Date", x, doc.y);
+      x += colWidths.date;
+      doc.text("T1", x, doc.y);
+      x += colWidths.t1;
+      doc.text("T2", x, doc.y);
+      x += colWidths.t2;
+      doc.text("T3", x, doc.y);
+      x += colWidths.t3;
+      doc.text("Total", x, doc.y);
+      x += colWidths.total;
       doc.text("Revenue", x, doc.y);
       doc.moveDown(0.3);
 
@@ -458,11 +482,16 @@ export class RevenueController {
       for (const stat of recentSubscriptions) {
         x = 50;
         const y = doc.y;
-        doc.text(stat.date, x, y); x += colWidths.date;
-        doc.text(String(stat.tier1Count), x, y); x += colWidths.t1;
-        doc.text(String(stat.tier2Count), x, y); x += colWidths.t2;
-        doc.text(String(stat.tier3Count), x, y); x += colWidths.t3;
-        doc.text(String(stat.totalSubscribers), x, y); x += colWidths.total;
+        doc.text(stat.date, x, y);
+        x += colWidths.date;
+        doc.text(String(stat.tier1Count), x, y);
+        x += colWidths.t1;
+        doc.text(String(stat.tier2Count), x, y);
+        x += colWidths.t2;
+        doc.text(String(stat.tier3Count), x, y);
+        x += colWidths.t3;
+        doc.text(String(stat.totalSubscribers), x, y);
+        x += colWidths.total;
         doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
         doc.moveDown(0.5);
       }
@@ -474,7 +503,9 @@ export class RevenueController {
       doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
       doc.moveDown(0.5);
       doc.fontSize(14).font("Helvetica-Bold").text("BITS HISTORY");
-      doc.fontSize(9).font("Helvetica-Oblique")
+      doc
+        .fontSize(9)
+        .font("Helvetica-Oblique")
         .text(`(Showing last 10 records out of ${bitsStats.length} total)`, { align: "left" });
       doc.moveDown(0.5);
 
@@ -482,9 +513,12 @@ export class RevenueController {
       doc.fontSize(9).font("Helvetica-Bold");
       const colWidths = { date: 80, bits: 80, events: 60, revenue: 70 };
       let x = 50;
-      doc.text("Date", x, doc.y); x += colWidths.date;
-      doc.text("Total Bits", x, doc.y); x += colWidths.bits;
-      doc.text("Events", x, doc.y); x += colWidths.events;
+      doc.text("Date", x, doc.y);
+      x += colWidths.date;
+      doc.text("Total Bits", x, doc.y);
+      x += colWidths.bits;
+      doc.text("Events", x, doc.y);
+      x += colWidths.events;
       doc.text("Revenue", x, doc.y);
       doc.moveDown(0.3);
 
@@ -494,9 +528,12 @@ export class RevenueController {
       for (const stat of recentBits) {
         x = 50;
         const y = doc.y;
-        doc.text(stat.date, x, y); x += colWidths.date;
-        doc.text(String(stat.totalBits), x, y); x += colWidths.bits;
-        doc.text(String(stat.eventCount), x, y); x += colWidths.events;
+        doc.text(stat.date, x, y);
+        x += colWidths.date;
+        doc.text(String(stat.totalBits), x, y);
+        x += colWidths.bits;
+        doc.text(String(stat.eventCount), x, y);
+        x += colWidths.events;
         doc.text(`$${stat.estimatedRevenue.toFixed(2)}`, x, y);
         doc.moveDown(0.5);
       }

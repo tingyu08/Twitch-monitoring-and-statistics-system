@@ -38,11 +38,12 @@ export async function getMeHandler(req: AuthRequest, res: Response): Promise<voi
         where: { id: req.user.viewerId },
         select: { consentedAt: true, consentVersion: true },
       });
+
       consentedAt = viewerRecord?.consentedAt?.toISOString() ?? null;
       consentVersion = viewerRecord?.consentVersion ?? null;
     }
 
-    res.json({
+    const response = {
       streamerId: req.user?.streamerId,
       viewerId: req.user?.viewerId,
       twitchUserId: req.user?.twitchUserId,
@@ -52,7 +53,9 @@ export async function getMeHandler(req: AuthRequest, res: Response): Promise<voi
       role: req.user?.role,
       consentedAt: consentedAt ?? req.user?.consentedAt ?? null,
       consentVersion: consentVersion ?? req.user?.consentVersion ?? null,
-    });
+    };
+
+    res.json(response);
   } catch {
     res.status(500).json({ error: "Failed to load user profile" });
   }

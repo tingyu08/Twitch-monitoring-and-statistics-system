@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useMemo,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from "react";
 import {
   getMe,
   logout as apiLogout,
@@ -39,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       setError(null);
+
       const userData = await getMe();
       setUser(userData);
     } catch (err) {
@@ -82,10 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, []);
 
-  const isStreamer = useMemo(
-    () => user !== null && checkIsStreamer(user),
-    [user]
-  );
+  const isStreamer = useMemo(() => user !== null && checkIsStreamer(user), [user]);
   const isViewer = useMemo(() => user !== null && checkIsViewer(user), [user]);
 
   // 同步用戶資訊到擴充功能
