@@ -22,8 +22,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/?error=no_code", request.url));
   }
 
-  console.log("[Auth Callback] Received code, forwarding to backend...");
-
   try {
     // Server-side fetch needs absolute URL
     const backendUrl =

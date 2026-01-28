@@ -391,15 +391,10 @@ export class RevenueService {
    * 優化：使用 $transaction 合併多次查詢
    */
   async getRevenueOverview(streamerId: string): Promise<RevenueOverview> {
-    const startTime = Date.now();
-    logger.debug("RevenueService", "getRevenueOverview started");
-
     // 參數驗證
     if (!streamerId?.trim()) {
       throw new Error("Invalid streamerId");
     }
-
-    logger.debug("RevenueService", `Checking cache... (${Date.now() - startTime}ms)`);
 
     // 使用快取（1 分鐘 TTL，因為是總覽資料需要較即時）
     return cacheManager.getOrSet(
@@ -416,11 +411,6 @@ export class RevenueService {
         });
 
         try {
-          logger.debug(
-            "RevenueService",
-            `Cache miss, querying DB... (${Date.now() - startTime}ms)`
-          );
-
           // 使用 Promise.all 平行查詢，避免 SQLite 事務鎖定
           const [latestSnapshot, bitsAgg] = await Promise.race([
             Promise.all([
@@ -440,17 +430,10 @@ export class RevenueService {
             timeoutPromise,
           ]);
 
-          logger.debug("RevenueService", `DB query completed (${Date.now() - startTime}ms)`);
-
           const totalBits = bitsAgg._sum.bits || 0;
           const bitsRevenue = totalBits * BITS_TO_USD_RATE;
 
           const subRevenue = latestSnapshot?.estimatedRevenue || 0;
-
-          logger.debug(
-            "RevenueService",
-            `getRevenueOverview total time: ${Date.now() - startTime}ms`
-          );
 
           return {
             subscriptions: {
