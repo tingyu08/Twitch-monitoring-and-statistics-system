@@ -9,8 +9,11 @@ export function getApiUrl(endpoint: string): string {
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
   // 移除 rewrites 後，必須使用完整 URL
-  // P1 Perf: 使用 127.0.0.1 避免 Windows 下 localhost (IPv6) 解析延遲
-  const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:4000";
+  // P1 Fix: 優先支援 Vercel 設定的 NEXT_PUBLIC_BACKEND_URL，並使用 127.0.0.1 避免 IPv6 解析延遲
+  const backendUrl =
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://127.0.0.1:4000";
 
   return `${backendUrl}${path}`;
 }
