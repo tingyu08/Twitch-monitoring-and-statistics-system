@@ -24,10 +24,13 @@ let adapter: PrismaLibSql | null = null;
 if (isTurso && authToken) {
   // 生產環境：使用 Turso 雲端資料庫
   console.log("[INFO] 使用 Turso 雲端資料庫");
+
   adapter = new PrismaLibSql({
     url: databaseUrl,
     authToken: authToken,
   });
+
+  // 注意：Turso 的連線池由服務端自動管理，客戶端無需配置
 } else {
   // 開發環境：使用本地原生 SQLite (避免 Adapter 版本相容問題)
   console.log("[DEBUG] 使用原生 Prisma Client (本地 SQLite)");

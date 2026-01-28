@@ -30,6 +30,7 @@ import { webSocketGateway } from "./services/websocket.gateway";
 import { startAllJobs } from "./jobs";
 import { twurpleEventSubService } from "./services/twurple-eventsub.service";
 import { logger } from "./utils/logger";
+import { memoryMonitor } from "./utils/memory-monitor";
 
 const PORT = process.env.PORT || 4000;
 
@@ -46,6 +47,11 @@ httpServer.listen(PORT, async () => {
   // 優化：記錄啟動時記憶體使用
   const initialMemory = process.memoryUsage();
   console.log(`📊 初始記憶體: ${(initialMemory.heapUsed / 1024 / 1024).toFixed(2)}MB`);
+
+  // 啟動記憶體監控（生產環境自動啟動，開發環境手動啟動）
+  if (process.env.NODE_ENV !== "production") {
+    memoryMonitor.start(60000); // 開發環境每分鐘檢查一次
+  }
 
   // 延遲初始化：使用 setImmediate 避免啟動時記憶體峰值
   // 先讓 Express 伺服器完全啟動，再逐步載入背景服務
