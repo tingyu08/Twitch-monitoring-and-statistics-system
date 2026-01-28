@@ -1,20 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import {
-  ArrowLeft,
-  Download,
-  RefreshCw,
-  Loader2,
-  ChevronDown,
-} from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Loader2, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { SubscriptionStats } from "@/features/streamer-dashboard/charts/SubscriptionStats";
 import { BitsStats } from "@/features/streamer-dashboard/charts/BitsStats";
 import { RevenueOverview } from "@/features/streamer-dashboard/charts/RevenueOverview";
+import { getApiUrl } from "@/lib/api/getApiUrl";
 
 export default function RevenuePage() {
   const t = useTranslations("streamer.revenue");
@@ -22,20 +17,29 @@ export default function RevenuePage() {
   const params = useParams();
   const locale = (params?.locale as string) || "zh-TW";
 
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "subscriptions" | "bits"
-  >("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "subscriptions" | "bits">("overview");
   const [days, setDays] = useState(30);
   const [syncing, setSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 用於觸發資料重新獲取
 
+  // Performance tracking
+  useEffect(() => {
+    const pageStartTime = performance.now();
+    console.log("[DEBUG] [RevenuePage] Component mounted at", pageStartTime);
+
+    return () => {
+      const pageLoadTime = performance.now() - pageStartTime;
+      console.log(`[DEBUG] [RevenuePage] Total mount duration: ${pageLoadTime.toFixed(2)}ms`);
+    };
+  }, []);
+
   const handleSync = async () => {
     setSyncing(true);
     try {
-      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-      const res = await fetch("/api/streamer/revenue/sync", {
+      // 開發環境直接連接後端以避免 Next.js rewrites 延遲
+      const res = await fetch(getApiUrl("/api/streamer/revenue/sync"), {
         method: "POST",
         credentials: "include",
       });
@@ -69,7 +73,7 @@ export default function RevenuePage() {
           // 訂閱數量超限錯誤
           toast.error(
             t("subscriptionLimitExceeded") ||
-            "Channel has too many subscribers. Please contact support for enterprise solutions."
+              "Channel has too many subscribers. Please contact support for enterprise solutions."
           );
         } else if (res.status === 401) {
           toast.error(t("syncAuthError") || "Please re-login to sync");
@@ -86,9 +90,9 @@ export default function RevenuePage() {
 
       toast.success(t("syncSuccess"));
       // 使用狀態更新觸發資料重新獲取，避免整頁重新載入
-      setRefreshKey(prev => prev + 1);
+      setRefreshKey((prev) => prev + 1);
     } catch (error) {
-      console.error('Sync error:', error);
+      console.error("Sync error:", error);
       toast.error(t("syncError"));
     } finally {
       setSyncing(false);
@@ -99,10 +103,10 @@ export default function RevenuePage() {
     setExporting(true);
     setShowExportMenu(false);
     try {
-      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+      // 開發環境直接連接後端以避免 Next.js rewrites 延遲
       const res = await fetch(
-        `/api/streamer/revenue/export?format=${format}&days=${days}`,
-        { credentials: "include" },
+        getApiUrl(`/api/streamer/revenue/export?format=${format}&days=${days}`),
+        { credentials: "include" }
       );
       if (!res.ok) throw new Error("Export failed");
 
@@ -118,8 +122,8 @@ export default function RevenuePage() {
 
       toast.success(t("exportSuccess"));
     } catch (error) {
-      console.error('Export error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error("Export error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
       toast.error(`${t("exportError")}: ${errorMessage}`);
     } finally {
       setExporting(false);
@@ -245,13 +249,15 @@ export default function RevenuePage() {
 
         {/* 內容區域 */}
         <div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/50">
-          {activeTab === "overview" ? (
+          <div className={activeTab === "overview" ? "block" : "hidden"}>
             <RevenueOverview key={`overview-${refreshKey}`} />
-          ) : activeTab === "subscriptions" ? (
+          </div>
+          <div className={activeTab === "subscriptions" ? "block" : "hidden"}>
             <SubscriptionStats key={`subs-${refreshKey}`} days={days} />
-          ) : (
+          </div>
+          <div className={activeTab === "bits" ? "block" : "hidden"}>
             <BitsStats key={`bits-${refreshKey}`} days={days} />
-          )}
+          </div>
         </div>
       </div>
     </div>

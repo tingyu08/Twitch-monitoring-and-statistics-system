@@ -186,7 +186,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
           logger.error("Auth", "Chat service reinit failed after login", err)
         );
     });
-  }, 5000); // 延遲 5 秒，讓登入回應先完成
+  }, 30000); // 延遲 30 秒，避開 Dashboard 初次載入高峰，讓登入回應先完成
 
   return { streamer, accessToken, refreshToken };
 }

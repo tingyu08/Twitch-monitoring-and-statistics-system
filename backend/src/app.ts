@@ -71,7 +71,9 @@ class App {
     // 蝣箔??喃蝙鋡恍?瘚??賣迤蝣箄???CORS headers
     this.express.use(
       cors({
-        origin: process.env.FRONTEND_URL || "http://localhost:3000",
+        origin: process.env.FRONTEND_URL
+          ? [process.env.FRONTEND_URL, "http://localhost:3000", "http://127.0.0.1:3000"]
+          : ["http://localhost:3000", "http://127.0.0.1:3000"],
         credentials: true,
         methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
@@ -83,15 +85,13 @@ class App {
     this.express.use("/auth", authLimiter);
 
     // 3. 閫?? JSON Body (? EventSub 頝臬?嚗???Twurple ?閬?raw body)
-    this.express.use(
-      (req: Request, res: Response, next: NextFunction) => {
-        if (req.path.startsWith("/api/eventsub")) {
-          next();
-        } else {
-          express.json()(req, res, next);
-        }
+    this.express.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api/eventsub")) {
+        next();
+      } else {
+        express.json()(req, res, next);
       }
-    );
+    });
 
     // 4. 閫?? Cookies (?? httpOnly cookie 敹?)
     this.express.use(cookieParser());

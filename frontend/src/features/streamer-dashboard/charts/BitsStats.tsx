@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import { Loader2, Zap, Trophy, TrendingUp } from "lucide-react";
+import { getApiUrl } from "@/lib/api/getApiUrl";
 
 interface BitsData {
   date: string;
@@ -37,13 +38,13 @@ export function BitsStats({ days = 30 }: BitsStatsProps) {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
+        // 開發環境直接連接後端以避免 Next.js rewrites 延遲
         const [bitsRes, supportersRes] = await Promise.all([
-          fetch(`/api/streamer/revenue/bits?days=${days}`, {
+          fetch(getApiUrl(`/api/streamer/revenue/bits?days=${days}`), {
             credentials: "include",
             signal: abortController.signal,
           }),
-          fetch(`/api/streamer/revenue/top-supporters?limit=5`, {
+          fetch(getApiUrl(`/api/streamer/revenue/top-supporters?limit=5`), {
             credentials: "include",
             signal: abortController.signal,
           }),

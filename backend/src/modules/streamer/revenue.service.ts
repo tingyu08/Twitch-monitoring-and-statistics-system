@@ -273,22 +273,44 @@ export class RevenueService {
         startDate.setDate(startDate.getDate() - days);
         startDate.setHours(0, 0, 0, 0);
 
-        const snapshots = await prisma.subscriptionSnapshot.findMany({
-          where: {
-            streamerId,
-            snapshotDate: { gte: startDate },
-          },
-          orderBy: { snapshotDate: "asc" },
+        // Render Free Tier: 查詢超時保護（20 秒）
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
         });
 
-        return snapshots.map((snap) => ({
-          date: snap.snapshotDate.toISOString().split("T")[0],
-          tier1Count: snap.tier1Count,
-          tier2Count: snap.tier2Count,
-          tier3Count: snap.tier3Count,
-          totalSubscribers: snap.totalSubscribers,
-          estimatedRevenue: snap.estimatedRevenue || 0,
-        }));
+        try {
+          const snapshots = await Promise.race([
+            prisma.subscriptionSnapshot.findMany({
+              where: {
+                streamerId,
+                snapshotDate: { gte: startDate },
+              },
+              orderBy: { snapshotDate: "asc" },
+              take: 100, // 最多 100 筆（超過 100 天的數據不太可能）
+            }),
+            timeoutPromise,
+          ]);
+
+          return snapshots.map((snap) => ({
+            date: snap.snapshotDate.toISOString().split("T")[0],
+            tier1Count: snap.tier1Count,
+            tier2Count: snap.tier2Count,
+            tier3Count: snap.tier3Count,
+            totalSubscribers: snap.totalSubscribers,
+            estimatedRevenue: snap.estimatedRevenue || 0,
+          }));
+        } catch (error) {
+          const err = error as Error;
+          if (err.message === "DB_QUERY_TIMEOUT") {
+            logger.error(
+              "RevenueService",
+              `getSubscriptionStats query timeout for streamer ${streamerId}`
+            );
+            // 超時時返回空陣列
+            return [];
+          }
+          throw error;
+        }
       },
       CacheTTL.MEDIUM
     );
@@ -314,32 +336,51 @@ export class RevenueService {
         startDate.setDate(startDate.getDate() - days);
         startDate.setHours(0, 0, 0, 0);
 
-        // 優化：使用資料庫 GROUP BY 而非記憶體聚合
-        // 注意：SQLite 不直接支援按日期分組，需要使用 DATE() 函數
-        const results = await prisma.$queryRaw<
-          Array<{
-            date: string;
-            totalBits: bigint;
-            eventCount: bigint;
-          }>
-        >`
-          SELECT
-            DATE(cheeredAt) as date,
-            SUM(bits) as totalBits,
-            COUNT(*) as eventCount
-          FROM cheer_events
-          WHERE streamerId = ${streamerId}
-            AND cheeredAt >= ${startDate.toISOString()}
-          GROUP BY DATE(cheeredAt)
-          ORDER BY date ASC
-        `;
+        // Render Free Tier: 查詢超時保護（20 秒）
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
+        });
 
-        return results.map((row) => ({
-          date: row.date,
-          totalBits: Number(row.totalBits),
-          estimatedRevenue: Number(row.totalBits) * BITS_TO_USD_RATE,
-          eventCount: Number(row.eventCount),
-        }));
+        try {
+          // 優化：使用資料庫 GROUP BY 而非記憶體聚合
+          // 注意：SQLite 不直接支援按日期分組，需要使用 DATE() 函數
+          const results = await Promise.race([
+            prisma.$queryRaw<
+              Array<{
+                date: string;
+                totalBits: bigint;
+                eventCount: bigint;
+              }>
+            >`
+              SELECT
+                DATE(cheeredAt) as date,
+                SUM(bits) as totalBits,
+                COUNT(*) as eventCount
+              FROM cheer_events
+              WHERE streamerId = ${streamerId}
+                AND cheeredAt >= ${startDate.toISOString()}
+              GROUP BY DATE(cheeredAt)
+              ORDER BY date ASC
+              LIMIT 100
+            `,
+            timeoutPromise,
+          ]);
+
+          return results.map((row) => ({
+            date: row.date,
+            totalBits: Number(row.totalBits),
+            estimatedRevenue: Number(row.totalBits) * BITS_TO_USD_RATE,
+            eventCount: Number(row.eventCount),
+          }));
+        } catch (error) {
+          const err = error as Error;
+          if (err.message === "DB_QUERY_TIMEOUT") {
+            logger.error("RevenueService", `getBitsStats query timeout for streamer ${streamerId}`);
+            // 超時時返回空陣列，避免拖垮整個系統
+            return [];
+          }
+          throw error;
+        }
       },
       CacheTTL.MEDIUM
     );
@@ -350,10 +391,15 @@ export class RevenueService {
    * 優化：使用 $transaction 合併多次查詢
    */
   async getRevenueOverview(streamerId: string): Promise<RevenueOverview> {
+    const startTime = Date.now();
+    logger.debug("RevenueService", "getRevenueOverview started");
+
     // 參數驗證
     if (!streamerId?.trim()) {
       throw new Error("Invalid streamerId");
     }
+
+    logger.debug("RevenueService", `Checking cache... (${Date.now() - startTime}ms)`);
 
     // 使用快取（1 分鐘 TTL，因為是總覽資料需要較即時）
     return cacheManager.getOrSet(
@@ -364,42 +410,85 @@ export class RevenueService {
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
 
-        // 使用 $transaction 合併查詢，減少資料庫往返
-        const [latestSnapshot, bitsAgg] = await prisma.$transaction([
-          prisma.subscriptionSnapshot.findFirst({
-            where: { streamerId },
-            orderBy: { snapshotDate: "desc" },
-          }),
-          prisma.cheerEvent.aggregate({
-            where: {
-              streamerId,
-              cheeredAt: { gte: startOfMonth },
+        // Render Free Tier: 查詢超時保護（20 秒）
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
+        });
+
+        try {
+          logger.debug(
+            "RevenueService",
+            `Cache miss, querying DB... (${Date.now() - startTime}ms)`
+          );
+
+          // 使用 Promise.all 平行查詢，避免 SQLite 事務鎖定
+          const [latestSnapshot, bitsAgg] = await Promise.race([
+            Promise.all([
+              prisma.subscriptionSnapshot.findFirst({
+                where: { streamerId },
+                orderBy: { snapshotDate: "desc" },
+              }),
+              prisma.cheerEvent.aggregate({
+                where: {
+                  streamerId,
+                  cheeredAt: { gte: startOfMonth },
+                },
+                _sum: { bits: true },
+                _count: true,
+              }),
+            ]),
+            timeoutPromise,
+          ]);
+
+          logger.debug("RevenueService", `DB query completed (${Date.now() - startTime}ms)`);
+
+          const totalBits = bitsAgg._sum.bits || 0;
+          const bitsRevenue = totalBits * BITS_TO_USD_RATE;
+
+          const subRevenue = latestSnapshot?.estimatedRevenue || 0;
+
+          logger.debug(
+            "RevenueService",
+            `getRevenueOverview total time: ${Date.now() - startTime}ms`
+          );
+
+          return {
+            subscriptions: {
+              current: latestSnapshot?.totalSubscribers || 0,
+              estimatedMonthlyRevenue: subRevenue,
+              tier1: latestSnapshot?.tier1Count || 0,
+              tier2: latestSnapshot?.tier2Count || 0,
+              tier3: latestSnapshot?.tier3Count || 0,
             },
-            _sum: { bits: true },
-            _count: true,
-          }),
-        ]);
-
-        const totalBits = bitsAgg._sum.bits || 0;
-        const bitsRevenue = totalBits * BITS_TO_USD_RATE;
-
-        const subRevenue = latestSnapshot?.estimatedRevenue || 0;
-
-        return {
-          subscriptions: {
-            current: latestSnapshot?.totalSubscribers || 0,
-            estimatedMonthlyRevenue: subRevenue,
-            tier1: latestSnapshot?.tier1Count || 0,
-            tier2: latestSnapshot?.tier2Count || 0,
-            tier3: latestSnapshot?.tier3Count || 0,
-          },
-          bits: {
-            totalBits,
-            estimatedRevenue: bitsRevenue,
-            eventCount: bitsAgg._count,
-          },
-          totalEstimatedRevenue: subRevenue + bitsRevenue,
-        };
+            bits: {
+              totalBits,
+              estimatedRevenue: bitsRevenue,
+              eventCount: bitsAgg._count,
+            },
+            totalEstimatedRevenue: subRevenue + bitsRevenue,
+          };
+        } catch (error) {
+          const err = error as Error;
+          if (err.message === "DB_QUERY_TIMEOUT") {
+            logger.error(
+              "RevenueService",
+              `getRevenueOverview query timeout for streamer ${streamerId}`
+            );
+            // 超時時返回空數據
+            return {
+              subscriptions: {
+                current: 0,
+                estimatedMonthlyRevenue: 0,
+                tier1: 0,
+                tier2: 0,
+                tier3: 0,
+              },
+              bits: { totalBits: 0, estimatedRevenue: 0, eventCount: 0 },
+              totalEstimatedRevenue: 0,
+            };
+          }
+          throw error;
+        }
       },
       CacheTTL.SHORT
     );

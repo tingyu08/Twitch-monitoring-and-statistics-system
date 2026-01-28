@@ -4,14 +4,8 @@ import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
-import {
-  Loader2,
-  DollarSign,
-  Users,
-  Zap,
-  TrendingUp,
-  AlertCircle,
-} from "lucide-react";
+import { Loader2, DollarSign, Users, Zap, TrendingUp, AlertCircle } from "lucide-react";
+import { getApiUrl } from "@/lib/api/getApiUrl";
 
 interface RevenueOverviewData {
   subscriptions: {
@@ -38,27 +32,29 @@ export function RevenueOverview() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // P1 Fix: 使用 AbortController 來處理清理和避免競態條件
+    // 使用 AbortController 來處理清理和避免競態條件
     const abortController = new AbortController();
 
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-        const res = await fetch("/api/streamer/revenue/overview", {
+        // 開發環境直接連接後端以避免 Next.js rewrites 延遲
+        const res = await fetch(getApiUrl("/api/streamer/revenue/overview"), {
           credentials: "include",
           signal: abortController.signal,
         });
+
         if (!res.ok) throw new Error("Failed to fetch");
+
         const json = await res.json();
 
-        // P1 Fix: 只在未被取消時更新狀態
+        // 只在未被取消時更新狀態
         if (!abortController.signal.aborted) {
           setData(json);
         }
       } catch (err) {
-        // P1 Fix: 忽略取消的請求錯誤
+        // 忽略取消的請求錯誤
         if (err instanceof Error && err.name === "AbortError") {
           return;
         }
@@ -74,7 +70,7 @@ export function RevenueOverview() {
 
     fetchData();
 
-    // P1 Fix: cleanup function
+    // cleanup function
     return () => {
       abortController.abort();
     };
@@ -113,14 +109,10 @@ export function RevenueOverview() {
 
   // 計算百分比
   const totalRevenue = data.totalEstimatedRevenue || 1;
-  const subPercentage = (
-    (data.subscriptions.estimatedMonthlyRevenue / totalRevenue) *
-    100
-  ).toFixed(1);
-  const bitsPercentage = (
-    (data.bits.estimatedRevenue / totalRevenue) *
-    100
-  ).toFixed(1);
+  const subPercentage = ((data.subscriptions.estimatedMonthlyRevenue / totalRevenue) * 100).toFixed(
+    1
+  );
+  const bitsPercentage = ((data.bits.estimatedRevenue / totalRevenue) * 100).toFixed(1);
 
   return (
     <div className="space-y-6">
@@ -193,9 +185,7 @@ export function RevenueOverview() {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-gray-400">
               <span>{t("totalBits")}</span>
-              <span className="text-white">
-                {data.bits.totalBits.toLocaleString()}
-              </span>
+              <span className="text-white">{data.bits.totalBits.toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-gray-400">
               <span>{t("cheerEvents")}</span>
@@ -239,17 +229,12 @@ export function RevenueOverview() {
                     border: "1px solid #374151",
                     borderRadius: "8px",
                   }}
-                  formatter={(value) => [
-                    `$${Number(value ?? 0).toFixed(2)}`,
-                    "",
-                  ]}
+                  formatter={(value) => [`$${Number(value ?? 0).toFixed(2)}`, ""]}
                 />
                 <Legend
                   verticalAlign="bottom"
                   height={36}
-                  formatter={(value) => (
-                    <span style={{ color: "#E5E7EB" }}>{value}</span>
-                  )}
+                  formatter={(value) => <span style={{ color: "#E5E7EB" }}>{value}</span>}
                 />
               </PieChart>
             </SafeResponsiveContainer>

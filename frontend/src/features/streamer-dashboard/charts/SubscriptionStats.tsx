@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { SafeResponsiveContainer } from "@/components/charts/SafeResponsiveContainer";
 import { Loader2, TrendingUp, Users, DollarSign } from "lucide-react";
+import { getApiUrl } from "@/lib/api/getApiUrl";
 
 interface SubscriptionData {
   date: string;
@@ -26,24 +27,48 @@ export function SubscriptionStats({ days = 30 }: SubscriptionStatsProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // P1 Fix: 使用 AbortController 來處理清理和避免競態條件
+    const abortController = new AbortController();
+
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-        const res = await fetch(`/api/streamer/revenue/subscriptions?days=${days}`, {
+        // 開發環境直接連接後端以避免 Next.js rewrites 延遲
+        const res = await fetch(getApiUrl(`/api/streamer/revenue/subscriptions?days=${days}`), {
           credentials: "include",
+          signal: abortController.signal,
         });
+
         if (!res.ok) throw new Error("Failed to fetch");
+
         const json = await res.json();
-        setData(json);
-      } catch {
-        setError("Failed to load subscription data");
+
+        // P1 Fix: 只在未被取消時更新狀態
+        if (!abortController.signal.aborted) {
+          setData(json);
+        }
+      } catch (err) {
+        // P1 Fix: 忽略取消的請求錯誤
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        if (!abortController.signal.aborted) {
+          setError("Failed to load subscription data");
+        }
       } finally {
-        setLoading(false);
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+
+    // P1 Fix: cleanup function
+    return () => {
+      abortController.abort();
+    };
   }, [days]);
 
   // 計算摘要統計
