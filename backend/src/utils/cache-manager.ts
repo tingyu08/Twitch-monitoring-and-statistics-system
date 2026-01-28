@@ -28,9 +28,12 @@ export class CacheManager {
   private stats: CacheStats;
   private maxMemoryBytes: number;
   private currentMemoryUsage: number;
+  // P1 Fix: 防止快取擊穿 (Cache Stampede) 的等待隊列
+  private pendingPromises: Map<string, Promise<unknown>>;
 
   constructor(maxMemoryMB: number = 50) {
     this.cache = new Map();
+    this.pendingPromises = new Map();
     this.stats = {
       hits: 0,
       misses: 0,
@@ -49,6 +52,8 @@ export class CacheManager {
       cleanupInterval.unref();
     }
   }
+
+  // ... (set, get, delete, clear, deletePattern, deleteRevenueCache methods remain unchanged)
 
   /**
    * 設定快取項目
@@ -128,6 +133,7 @@ export class CacheManager {
    */
   clear(): void {
     this.cache.clear();
+    this.pendingPromises.clear();
     this.currentMemoryUsage = 0;
     this.stats.itemCount = 0;
     this.stats.memoryUsage = 0;
@@ -161,17 +167,37 @@ export class CacheManager {
   }
 
   /**
-   * 取得或設定（如果不存在則執行 factory 函數）
+   * 取得或設定（防止快取擊穿機制）
+   * 如果多個請求同時要求同一個 Key，只會執行一次 factory
    */
   async getOrSet<T>(key: string, factory: () => Promise<T>, ttlSeconds: number = 300): Promise<T> {
+    // 1. 快速路徑：如果有快取，直接回傳
     const cached = this.get<T>(key);
     if (cached !== null) {
       return cached;
     }
 
-    const value = await factory();
-    this.set(key, value, ttlSeconds);
-    return value;
+    // 2. 合併路徑：如果已經有正在進行的查詢，等待它
+    const pending = this.pendingPromises.get(key);
+    if (pending) {
+      // logger.debug("Cache", `Request coalesced for key: ${key}`);
+      return pending as Promise<T>;
+    }
+
+    // 3. 慢速路徑：執行查詢並建立 Promise
+    const promise = (async () => {
+      try {
+        const value = await factory();
+        this.set(key, value, ttlSeconds);
+        return value;
+      } finally {
+        // 無論成功失敗，都要移除 pending 標記
+        this.pendingPromises.delete(key);
+      }
+    })();
+
+    this.pendingPromises.set(key, promise);
+    return promise as Promise<T>;
   }
 
   /**
@@ -188,6 +214,7 @@ export class CacheManager {
       size: this.cache.size,
       itemCount: this.cache.size,
       memoryUsage: this.currentMemoryUsage,
+      pendingRequests: this.pendingPromises.size,
       ...({ hitRate: Math.round(hitRate * 100) / 100 } as Record<string, unknown>),
     } as CacheStats;
   }
@@ -226,8 +253,12 @@ export class CacheManager {
    */
   private estimateSize(value: unknown): number {
     // 簡化的大小估算
-    const json = JSON.stringify(value);
-    return json.length * 2; // UTF-16 characters = 2 bytes each
+    try {
+      const json = JSON.stringify(value);
+      return json.length * 2; // UTF-16 characters = 2 bytes each
+    } catch {
+      return 1024; // Fallback
+    }
   }
 
   /**
