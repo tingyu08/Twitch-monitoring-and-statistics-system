@@ -1,6 +1,5 @@
-import * as path from "path";
 import { prisma } from "../../db/prisma";
-import { dynamicImport, importTwurpleApi, importTwurpleAuth } from "../../utils/dynamic-import";
+import { importTwurpleApi, importTwurpleAuth } from "../../utils/dynamic-import";
 import { decryptToken, encryptToken } from "../../utils/crypto.utils";
 import { cacheManager, CacheKeys, CacheTTL } from "../../utils/cache-manager";
 import { logger } from "../../utils/logger";
@@ -119,28 +118,13 @@ export class RevenueService {
     const { ApiClient } = await importTwurpleApi();
     const { RefreshingAuthProvider } = await importTwurpleAuth();
 
-    // 動態載入內部 auth service
-    const isDev = !!process.env.TS_NODE_DEV;
-    const cwd = process.cwd();
+    // 直接從環境變數獲取 Twitch 憑證（避免動態載入模組的問題）
+    const clientId = process.env.TWITCH_CLIENT_ID;
+    const clientSecret = process.env.TWITCH_CLIENT_SECRET;
 
-    let authServicePath: string;
-    if (isDev) {
-      authServicePath =
-        "file:///C:/Users/Terry.Lin/Coding1/Bmad/backend/src/services/twurple-auth.service.ts";
-    } else {
-      authServicePath =
-        "file://" + path.resolve(cwd, "dist/services/twurple-auth.service.js").replace(/\\/g, "/");
+    if (!clientId || !clientSecret) {
+      throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET environment variables");
     }
-
-    const { twurpleAuthService } = (await dynamicImport(authServicePath)) as {
-      twurpleAuthService: {
-        getClientId: () => string;
-        getClientSecret: () => string;
-      };
-    };
-
-    const clientId = twurpleAuthService.getClientId();
-    const clientSecret = twurpleAuthService.getClientSecret();
 
     // 解密 Token
     const accessToken = decryptToken(tokenData.accessToken);
@@ -257,7 +241,10 @@ export class RevenueService {
       // 處理權限不足或 Token 無效的情況
       const apiError = error as import("../../types/twitch.types").TwitchApiError;
       if (apiError.statusCode === 401 || apiError.statusCode === 403) {
-        logger.error("RevenueService", `Permission error for ${broadcasterId}: ${apiError.message}`);
+        logger.error(
+          "RevenueService",
+          `Permission error for ${broadcasterId}: ${apiError.message}`
+        );
         throw new Error("Permission denied - requires Affiliate/Partner status");
       }
       throw error;

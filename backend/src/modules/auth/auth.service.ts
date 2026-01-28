@@ -170,17 +170,23 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   const accessToken = signAccessToken(jwtPayload);
   const refreshToken = signRefreshToken(jwtPayload);
 
-  // 非同步觸發追蹤名單同步（不阻塞登入流程）
-  triggerFollowSyncForUser(result.viewerRecord.id, tokenData.access_token).catch((err: unknown) =>
-    logger.error("Auth", "Follow sync failed after login", err)
-  );
+  // 延遲執行後台任務（避免阻塞登入回應，防止 Render 502 超時）
+  // 在 Render 免費版資源受限的環境下，立即啟動這些任務可能導致回應超時
+  setTimeout(() => {
+    // 非同步觸發追蹤名單同步（不阻塞登入流程）
+    triggerFollowSyncForUser(result.viewerRecord.id, tokenData.access_token).catch((err: unknown) =>
+      logger.error("Auth", "Follow sync failed after login", err)
+    );
 
-  // 非同步觸發聊天室服務重新初始化（不阻塞登入流程）
-  import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
-    twurpleChatService
-      .initialize()
-      .catch((err: unknown) => logger.error("Auth", "Chat service reinit failed after login", err));
-  });
+    // 非同步觸發聊天室服務重新初始化（不阻塞登入流程）
+    import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
+      twurpleChatService
+        .initialize()
+        .catch((err: unknown) =>
+          logger.error("Auth", "Chat service reinit failed after login", err)
+        );
+    });
+  }, 5000); // 延遲 5 秒，讓登入回應先完成
 
   return { streamer, accessToken, refreshToken };
 }
