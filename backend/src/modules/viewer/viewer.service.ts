@@ -23,6 +23,17 @@ export interface ViewerDailyStat {
   emoteCount: number;
 }
 
+export interface ViewerChannelInfo {
+  id: string;
+  name: string;
+  displayName: string;
+  avatarUrl: string;
+  isLive: boolean;
+  totalWatchHours: number;
+  totalMessages: number;
+  lastWatched: string;
+}
+
 export interface ViewerChannelStatsResponse {
   dailyStats: ViewerDailyStat[];
   timeRange: {
@@ -30,6 +41,7 @@ export interface ViewerChannelStatsResponse {
     endDate: string;
     days: number;
   };
+  channel?: ViewerChannelInfo | null;
 }
 
 /**
@@ -65,19 +77,25 @@ export async function getChannelStats(
       actualDays = daysToQuery;
     }
 
-    const stats = await prisma.viewerChannelDailyStat.findMany({
-      where: {
-        viewerId,
-        channelId,
-        date: {
-          gte: queryStartDate,
-          lte: queryEndDate,
+    const [stats, channelInfo] = await Promise.all([
+      prisma.viewerChannelDailyStat.findMany({
+        where: {
+          viewerId,
+          channelId,
+          date: {
+            gte: queryStartDate,
+            lte: queryEndDate,
+          },
         },
-      },
-      orderBy: {
-        date: "asc",
-      },
-    });
+        orderBy: {
+          date: "asc",
+        },
+      }),
+      prisma.channel.findUnique({
+        where: { id: channelId },
+        include: { streamer: true },
+      }),
+    ]);
 
     // 轉換為前端友好的格式
     const dailyStats = stats.map((stat) => ({
@@ -87,6 +105,25 @@ export async function getChannelStats(
       emoteCount: stat.emoteCount,
     }));
 
+    // 構建頻道基本資訊
+    const totalWatchHours = dailyStats.reduce((sum, s) => sum + s.watchHours, 0);
+    const totalMessages = dailyStats.reduce((sum, s) => sum + s.messageCount, 0);
+
+    // 如果找不到頻道，使用 fallback
+    const channelDisplay: ViewerChannelInfo | null = channelInfo
+      ? {
+          id: channelInfo.id,
+          name: channelInfo.channelName,
+          displayName: channelInfo.streamer?.displayName || channelInfo.channelName,
+          avatarUrl: channelInfo.streamer?.avatarUrl || "",
+          isLive: channelInfo.isLive,
+          totalWatchHours, // 這些是基於查詢範圍的，前端可能會用累積值，但這裡先給範圍內的
+          totalMessages,
+          lastWatched:
+            stats.length > 0 ? stats[stats.length - 1].date.toISOString().split("T")[0] : "",
+        }
+      : null;
+
     return {
       dailyStats,
       timeRange: {
@@ -94,6 +131,7 @@ export async function getChannelStats(
         endDate: queryEndDate.toISOString().split("T")[0],
         days: actualDays,
       },
+      channel: channelDisplay,
     };
   } catch (error) {
     logger.error(

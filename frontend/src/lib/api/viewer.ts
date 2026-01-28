@@ -119,19 +119,13 @@ export async function getFollowedChannels(): Promise<FollowedChannel[]> {
   try {
     return await httpClient<FollowedChannel[]>("/api/viewer/channels");
   } catch (error) {
-    console.warn(
-      "Failed to fetch followed channels, returning empty list",
-      error,
-    );
+    console.warn("Failed to fetch followed channels, returning empty list", error);
     return [];
   }
 }
 
 export const viewerApi = {
-  async submitConsent(
-    consented: boolean,
-    consentVersion = 1,
-  ): Promise<ViewerConsentResponse> {
+  async submitConsent(consented: boolean, consentVersion = 1): Promise<ViewerConsentResponse> {
     return httpClient<ViewerConsentResponse>("/api/viewer/consent", {
       method: "POST",
       body: JSON.stringify({ consented, consentVersion }),
@@ -149,75 +143,60 @@ export const viewerApi = {
     return channels.filter(
       (ch) =>
         ch.channelName.toLowerCase().includes(lowerQuery) ||
-        ch.displayName.toLowerCase().includes(lowerQuery),
+        ch.displayName.toLowerCase().includes(lowerQuery)
     );
   },
 
   /**
    * 取得特定頻道的統計資料
    */
-  async getChannelStats(
-    channelId: string,
-    days = 30,
-  ): Promise<ViewerChannelStats | null> {
-    // 1. 從追蹤清單中獲取真實頻道資訊
-    const followedChannels = await getFollowedChannels();
-    const realChannel = followedChannels.find((ch) => ch.id === channelId);
-
-    const targetChannel: ChannelInfo = realChannel
-      ? {
-          id: realChannel.id,
-          name: realChannel.channelName,
-          displayName: realChannel.displayName,
-          avatarUrl: realChannel.avatarUrl,
-          isLive: realChannel.isLive,
-          totalWatchHours: Math.round(realChannel.totalWatchMinutes / 60),
-          totalMessages: realChannel.messageCount,
-          lastWatched: realChannel.lastWatched || "",
-        }
-      : {
-          id: channelId,
-          name: "unknown",
-          displayName: "Unknown Channel",
-          avatarUrl: "",
-          isLive: false,
-          totalWatchHours: 0,
-          totalMessages: 0,
-          lastWatched: "",
-        };
-
+  async getChannelStats(channelId: string, days = 30): Promise<ViewerChannelStats | null> {
     let dailyStats: RealViewerDailyStat[] = [];
+    let receivedChannel: ChannelInfo | undefined;
+    let fallbackInfo: Partial<ChannelInfo> | undefined;
+
     try {
+      // P1 Perf: 直接查詢後端，後端現在會回傳 channel 資訊，無需先拉取 getFollowedChannels
       const response = await httpClient<{
         dailyStats: RealViewerDailyStat[];
         timeRange: { startDate: string; endDate: string; days: number };
+        channel?: ChannelInfo;
       }>(`/api/viewer/stats/${channelId}?days=${days}`);
 
-      if (response && Array.isArray(response.dailyStats)) {
-        dailyStats = response.dailyStats;
-      } else if (Array.isArray(response)) {
-        dailyStats = response as RealViewerDailyStat[];
+      if (response) {
+        if (Array.isArray(response.dailyStats)) {
+          dailyStats = response.dailyStats;
+        }
+        if (response.channel) {
+          receivedChannel = response.channel;
+        }
       }
     } catch (err) {
-      console.warn("Failed to fetch real stats, returning empty", err);
+      console.warn("Failed to fetch real stats", err);
+      // 如果失敗，我們可能需要 fallback，但這通常意味著後端掛了
     }
 
-    const totalWatchHours = dailyStats.reduce(
-      (sum, s) => sum + s.watchHours,
-      0,
-    );
-    const totalMessages = dailyStats.reduce(
-      (sum, s) => sum + s.messageCount,
-      0,
-    );
+    // 計算統計摘要
+    const totalWatchHours = dailyStats.reduce((sum, s) => sum + s.watchHours, 0);
+    const totalMessages = dailyStats.reduce((sum, s) => sum + s.messageCount, 0);
     const totalEmotes = dailyStats.reduce((sum, s) => sum + s.emoteCount, 0);
 
     const sessionCount = dailyStats.filter((s) => s.watchHours > 0).length;
 
     const avgWatchMin =
-      dailyStats.length > 0
-        ? Math.round((totalWatchHours * 60) / dailyStats.length)
-        : 0;
+      dailyStats.length > 0 ? Math.round((totalWatchHours * 60) / dailyStats.length) : 0;
+
+    // 構建 Channel Info (優先使用後端回傳的，否則構建基本物件)
+    const targetChannel: ChannelInfo = receivedChannel || {
+      id: channelId,
+      name: "unknown",
+      displayName: "Loading...",
+      avatarUrl: "",
+      isLive: false,
+      totalWatchHours: 0,
+      totalMessages: 0,
+      lastWatched: "",
+    };
 
     return {
       channel: targetChannel,
@@ -229,8 +208,7 @@ export const viewerApi = {
         sessionCount,
         averageWatchMinutesPerDay: avgWatchMin,
         firstWatchDate: dailyStats.length > 0 ? dailyStats[0].date : "",
-        lastWatchDate:
-          dailyStats.length > 0 ? dailyStats[dailyStats.length - 1].date : "",
+        lastWatchDate: dailyStats.length > 0 ? dailyStats[dailyStats.length - 1].date : "",
       },
     };
   },
@@ -242,7 +220,7 @@ export const viewerApi = {
     viewerId: string,
     channelId: string,
     startDate?: string,
-    endDate?: string,
+    endDate?: string
   ): Promise<ViewerMessageStatsResponse | null> {
     try {
       const params = new URLSearchParams();
@@ -252,7 +230,7 @@ export const viewerApi = {
       const queryString = params.toString() ? `?${params.toString()}` : "";
 
       return await httpClient<ViewerMessageStatsResponse>(
-        `/api/viewer/${viewerId}/channels/${channelId}/message-stats${queryString}`,
+        `/api/viewer/${viewerId}/channels/${channelId}/message-stats${queryString}`
       );
     } catch (err) {
       console.warn("Failed to fetch message stats", err);
@@ -288,7 +266,7 @@ export const viewerApi = {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pauseCollection }),
-        },
+        }
       );
     } catch (err) {
       console.warn("Failed to update privacy settings", err);
@@ -359,9 +337,7 @@ export const viewerApi = {
     }
   },
 
-  async setListenChannels(
-    channels: Array<{ channelName: string; isLive: boolean }>,
-  ): Promise<{
+  async setListenChannels(channels: Array<{ channelName: string; isLive: boolean }>): Promise<{
     success: boolean;
     message: string;
     listening: string[];
@@ -385,14 +361,10 @@ export const viewerApi = {
   /**
    * 取得頻道的 VOD 列表 (公開)
    */
-  async getChannelVideos(
-    channelId: string,
-    page = 1,
-    limit = 6,
-  ): Promise<VideoResponse | null> {
+  async getChannelVideos(channelId: string, page = 1, limit = 6): Promise<VideoResponse | null> {
     try {
       return await httpClient<VideoResponse>(
-        `/api/streamer/${channelId}/videos?page=${page}&limit=${limit}`,
+        `/api/streamer/${channelId}/videos?page=${page}&limit=${limit}`
       );
     } catch (err) {
       console.warn("Failed to fetch videos", err);
@@ -403,14 +375,10 @@ export const viewerApi = {
   /**
    * 取得頻道的 Clip 列表 (公開)
    */
-  async getChannelClips(
-    channelId: string,
-    page = 1,
-    limit = 6,
-  ): Promise<ClipResponse | null> {
+  async getChannelClips(channelId: string, page = 1, limit = 6): Promise<ClipResponse | null> {
     try {
       return await httpClient<ClipResponse>(
-        `/api/streamer/${channelId}/clips?page=${page}&limit=${limit}`,
+        `/api/streamer/${channelId}/clips?page=${page}&limit=${limit}`
       );
     } catch (err) {
       console.warn("Failed to fetch clips", err);
@@ -421,14 +389,9 @@ export const viewerApi = {
   /**
    * 取得頻道的遊戲統計 (公開)
    */
-  async getChannelGameStats(
-    channelId: string,
-    range = "30d",
-  ): Promise<GameStats[] | null> {
+  async getChannelGameStats(channelId: string, range = "30d"): Promise<GameStats[] | null> {
     try {
-      return await httpClient<GameStats[]>(
-        `/api/streamer/${channelId}/game-stats?range=${range}`,
-      );
+      return await httpClient<GameStats[]>(`/api/streamer/${channelId}/game-stats?range=${range}`);
     } catch (err) {
       console.warn("Failed to fetch game stats", err);
       return null;
@@ -440,11 +403,11 @@ export const viewerApi = {
    */
   async getChannelViewerTrends(
     channelId: string,
-    range = "30d",
+    range = "30d"
   ): Promise<ViewerTrendPoint[] | null> {
     try {
       return await httpClient<ViewerTrendPoint[]>(
-        `/api/streamer/${channelId}/viewer-trends?range=${range}`,
+        `/api/streamer/${channelId}/viewer-trends?range=${range}`
       );
     } catch (err) {
       console.warn("Failed to fetch viewer trends", err);
@@ -457,11 +420,11 @@ export const viewerApi = {
    */
   async getChannelStreamHourlyStats(
     channelId: string,
-    date: string,
+    date: string
   ): Promise<HourlyViewerStat[] | null> {
     try {
       return await httpClient<HourlyViewerStat[]>(
-        `/api/streamer/${channelId}/stream-hourly?date=${date}`,
+        `/api/streamer/${channelId}/stream-hourly?date=${date}`
       );
     } catch (err) {
       console.warn("Failed to fetch stream hourly stats", err);
