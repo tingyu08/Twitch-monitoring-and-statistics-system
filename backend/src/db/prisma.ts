@@ -9,10 +9,8 @@ declare global {
 
 // 取得資料庫 URL（預設使用本地 SQLite）
 const dbPath = path.resolve(__dirname, "../../prisma/dev.db");
-// P1 Fix: 增加 connection_limit 以支援 WAL 模式下的併發讀取
-// 預設 Prisma 對 SQLite 限制為 1，這會導致請求排隊。在 WAL 模式下我們可以安全地增加此限制。
-const databaseUrl =
-  process.env.DATABASE_URL || `file:${dbPath}?connection_limit=10&socket_timeout=30`;
+// Revert: 恢復預設連線限制。SQLite 即使在 WAL 模式下，過多的連線池也可能導致鎖競爭惡化。
+const databaseUrl = process.env.DATABASE_URL || `file:${dbPath}`;
 const authToken = process.env.TURSO_AUTH_TOKEN;
 
 // 判斷是否使用 Turso 雲端資料庫（URL 以 libsql:// 開頭）
@@ -49,14 +47,6 @@ export const prisma = global.prisma || new PrismaClient(prismaOptions as any);
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;
-}
-
-// 本地 SQLite 效能優化：啟用 WAL 模式以支援併發讀寫
-// 這能解決本地開發時 Dashboard 多個請求同時卡住的問題
-if (!isTurso) {
-  prisma.$queryRaw`PRAGMA journal_mode = WAL;`
-    .then(() => console.log("[INFO] SQLite WAL mode enabled"))
-    .catch((err) => console.warn("[WARN] Failed to enable WAL mode:", err));
 }
 
 export default prisma;

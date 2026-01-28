@@ -133,7 +133,39 @@ export const viewerApi = {
   },
 
   async getFollowedChannels(): Promise<FollowedChannel[]> {
-    return getFollowedChannels();
+    // P1 Opt: 加入簡單快取以避免重複請求轟炸 Turso
+    const CACHE_KEY = "viewer_followed_channels";
+    const CACHE_TTL = 30000; // 30 seconds
+
+    // 檢查快取
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) {
+        try {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_TTL) {
+            return data;
+          }
+        } catch (e) {
+          sessionStorage.removeItem(CACHE_KEY);
+        }
+      }
+    }
+
+    const channels = await getFollowedChannels();
+
+    // 寫入快取
+    if (typeof window !== "undefined" && channels.length > 0) {
+      sessionStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          data: channels,
+          timestamp: Date.now(),
+        })
+      );
+    }
+
+    return channels;
   },
 
   async searchChannels(query: string): Promise<FollowedChannel[]> {
