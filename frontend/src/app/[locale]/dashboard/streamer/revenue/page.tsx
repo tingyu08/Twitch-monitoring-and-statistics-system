@@ -24,17 +24,6 @@ export default function RevenuePage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 用於觸發資料重新獲取
 
-  // Performance tracking
-  useEffect(() => {
-    const pageStartTime = performance.now();
-    console.log("[DEBUG] [RevenuePage] Component mounted at", pageStartTime);
-
-    return () => {
-      const pageLoadTime = performance.now() - pageStartTime;
-      console.log(`[DEBUG] [RevenuePage] Total mount duration: ${pageLoadTime.toFixed(2)}ms`);
-    };
-  }, []);
-
   const handleSync = async () => {
     setSyncing(true);
     try {
