@@ -41,9 +41,29 @@ export default function RevenuePage() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
+        const contentType = res.headers.get("content-type") || "";
+        let errorData: Record<string, unknown> = {};
+        let errorText: string | undefined;
+
+        if (contentType.includes("application/json")) {
+          errorData = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        } else {
+          errorText = await res.text().catch(() => undefined);
+        }
+
+        // 開發環境中輸出詳細錯誤資訊
+        console.error("Sync failed:", {
+          status: res.status,
+          contentType,
+          error: errorData.error,
+          details: errorData.details,
+          stack: errorData.stack,
+          errorText,
+        });
+        const errorString = typeof errorData.error === "string" ? errorData.error : undefined;
+
         // 根據不同錯誤顯示不同訊息
-        if (res.status === 504 || errorData.error?.includes("timeout")) {
+        if (res.status === 504 || errorString?.includes("timeout")) {
           toast.error(t("syncTimeout") || "Sync timeout - please try again");
         } else if (res.status === 507) {
           // 訂閱數量超限錯誤
@@ -56,7 +76,10 @@ export default function RevenuePage() {
         } else if (res.status === 403) {
           toast.error(t("syncPermissionError") || "Requires Affiliate/Partner status");
         } else {
-          toast.error(t("syncError"));
+          // 顯示詳細錯誤（開發環境）
+          const detail = (errorData.details as string | undefined) || errorText;
+          const detailMsg = detail ? `: ${detail}` : "";
+          toast.error(`${t("syncError")}${detailMsg}`);
         }
         return;
       }

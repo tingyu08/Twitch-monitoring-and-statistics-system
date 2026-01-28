@@ -145,6 +145,22 @@ class App {
     if (process.env.SENTRY_DSN) {
       Sentry.setupExpressErrorHandler(this.express);
     }
+
+    // Global error handler (must be registered last)
+    this.express.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+      const error = err instanceof Error ? err : new Error("Unknown error");
+
+      // Ensure we don't leak details in production
+      if (process.env.NODE_ENV === "development") {
+        return res.status(500).json({
+          error: "Internal Server Error",
+          message: error.message,
+          stack: error.stack,
+        });
+      }
+
+      return res.status(500).json({ error: "Internal Server Error" });
+    });
   }
 }
 

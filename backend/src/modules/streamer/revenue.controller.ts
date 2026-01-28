@@ -100,14 +100,19 @@ export class RevenueController {
       const streamerId = getStreamerId(req);
 
       // 使用 Promise.race 設定超時（Render 免費版有 30 秒限制）
+      let timeoutId: NodeJS.Timeout | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("SYNC_TIMEOUT")), SYNC_TIMEOUT_MS);
+        timeoutId = setTimeout(() => reject(new Error("SYNC_TIMEOUT")), SYNC_TIMEOUT_MS);
       });
 
-      await Promise.race([
-        revenueService.syncSubscriptionSnapshot(streamerId),
-        timeoutPromise,
-      ]);
+      try {
+        await Promise.race([
+          revenueService.syncSubscriptionSnapshot(streamerId),
+          timeoutPromise,
+        ]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
 
       // 同步成功後清除所有相關快取（包含 overview、subscriptions、bits）
       cacheManager.deleteRevenueCache(streamerId);
@@ -147,7 +152,12 @@ export class RevenueController {
         });
       }
 
-      return res.status(500).json({ error: "Failed to sync subscriptions" });
+      // 開發環境提供詳細錯誤訊息以便除錯
+      return res.status(500).json({
+        error: "Failed to sync subscriptions",
+        details: process.env.NODE_ENV === "development" ? err.message : undefined,
+        stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+      });
     }
   }
 

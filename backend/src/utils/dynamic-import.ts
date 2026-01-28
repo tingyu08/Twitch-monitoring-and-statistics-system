@@ -23,10 +23,10 @@ const ALLOWED_EXTERNAL_MODULES = new Set([
  * 允許動態導入的內部模組路徑模式
  */
 const ALLOWED_INTERNAL_PATTERNS = [
-  // 開發環境：絕對路徑
-  /^file:\/\/.*\/Bmad\/backend\/src\/(services|utils)\//,
+  // 開發環境：絕對路徑（支援 Windows 和 Unix 路徑）
+  /^file:\/\/.*[/\\]backend[/\\](src|dist)[/\\](services|utils)[/\\]/,
   // 生產環境：dist 目錄
-  /^file:\/\/.*\/dist\/(services|utils)\//,
+  /^file:\/\/.*[/\\]dist[/\\](services|utils)[/\\]/,
   // 相對路徑
   /^\.\.?\/(services|utils)\//,
 ];
