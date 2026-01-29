@@ -286,7 +286,7 @@ export class TwurpleChatService {
   /**
    * 加入頻道
    */
-  public async joinChannel(channel: string): Promise<void> {
+  public async joinChannel(channel: string, retryCount = 0): Promise<void> {
     if (!this.chatClient) {
       if (!this.notInitializedWarned) {
         logger.warn("Twurple Chat", "Chat client not initialized. Please login first.");
@@ -296,15 +296,37 @@ export class TwurpleChatService {
     }
 
     const channelName = channel.toLowerCase().replace(/^#/, "");
+    const MAX_RETRIES = 2; // 最多重試 2 次
+    const RETRY_DELAY = 2000; // 重試延遲 2 秒
 
     try {
       if (!this.channels.has(channelName)) {
         await this.chatClient.join(channelName);
         this.channels.add(channelName);
+        if (retryCount > 0) {
+          logger.info("Twurple Chat", `Successfully joined channel ${channelName} after ${retryCount} retries`);
+        }
         // logger.info("Twurple Chat", `Joined channel: ${channelName}`);
       }
     } catch (error) {
-      logger.error("Twurple Chat", `Failed to join channel ${channelName}`, error);
+      // IRC 連線超時：嘗試重試
+      if (error instanceof Error && error.message.includes("Did not receive a reply")) {
+        if (retryCount < MAX_RETRIES) {
+          logger.debug(
+            "Twurple Chat",
+            `Join timeout for ${channelName}, retrying in ${RETRY_DELAY}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`
+          );
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+          return this.joinChannel(channel, retryCount + 1);
+        } else {
+          logger.warn(
+            "Twurple Chat",
+            `Failed to join channel ${channelName} after ${MAX_RETRIES} retries: IRC timeout`
+          );
+        }
+      } else {
+        logger.error("Twurple Chat", `Failed to join channel ${channelName}`, error);
+      }
     }
   }
 

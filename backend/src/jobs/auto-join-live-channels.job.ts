@@ -80,9 +80,9 @@ export class AutoJoinLiveChannelsJob {
 
               // if (joined) joinedCount++;
 
-              // 避免觸發 Twurple JOIN rate limiter warning (20/10s)
-              // (User requested to remove delay and accept warning)
-              // await new Promise((resolve) => setTimeout(resolve, 500));
+              // 避免觸發 Twitch IRC 速率限制和超時錯誤
+              // Twitch 限制: 20 joins/10 seconds (authenticated) or 50 joins/15 seconds (verified bot)
+              await new Promise((resolve) => setTimeout(resolve, 300)); // 300ms 延遲
 
               // 更新 Channel Live 狀態 (如果變更)
               if (!channel.isLive) {
