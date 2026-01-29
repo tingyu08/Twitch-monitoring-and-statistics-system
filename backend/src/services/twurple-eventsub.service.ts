@@ -24,6 +24,7 @@ import { twurpleAuthService } from "./twurple-auth.service";
 import { webSocketGateway } from "./websocket.gateway";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { retryDatabaseOperation } from "../utils/db-retry";
 
 // EventSub 配置介面
 interface EventSubConfig {
@@ -296,44 +297,51 @@ class TwurpleEventSubService {
     data: { displayName: string; startedAt: Date }
   ): Promise<void> {
     try {
-      const channel = await prisma.channel.findUnique({
-        where: { twitchChannelId },
-      });
+      // 使用重試機制查詢頻道
+      const channel = await retryDatabaseOperation(() =>
+        prisma.channel.findUnique({
+          where: { twitchChannelId },
+        })
+      );
 
       if (!channel) {
         logger.warn("TwurpleEventSub", `Channel not found: ${twitchChannelId}`);
         return;
       }
 
-      // 檢查是否已有進行中的 session (避免重複)
-      const existingSession = await prisma.streamSession.findFirst({
-        where: {
-          channelId: channel.id,
-          endedAt: null,
-        },
-      });
+      // 使用重試機制檢查是否已有進行中的 session
+      const existingSession = await retryDatabaseOperation(() =>
+        prisma.streamSession.findFirst({
+          where: {
+            channelId: channel.id,
+            endedAt: null,
+          },
+        })
+      );
 
       if (existingSession) {
-        logger.info("TwurpleEventSub", `Session already exists for ${data.displayName}`);
+        logger.debug("TwurpleEventSub", `Session already exists for ${data.displayName}`);
         return;
       }
 
-      // 創建新的 StreamSession
-      await prisma.streamSession.create({
-        data: {
-          channelId: channel.id,
-          twitchStreamId: `eventsub_${Date.now()}`,
-          startedAt: data.startedAt,
-          title: "",
-          category: "",
-        },
-      });
-
-      // 更新頻道的開台狀態
-      await prisma.channel.update({
-        where: { id: channel.id },
-        data: { isLive: true, currentStreamStartedAt: data.startedAt },
-      });
+      // 使用重試機制創建新的 StreamSession 並更新頻道狀態（使用 transaction）
+      await retryDatabaseOperation(() =>
+        prisma.$transaction([
+          prisma.streamSession.create({
+            data: {
+              channelId: channel.id,
+              twitchStreamId: `eventsub_${Date.now()}`,
+              startedAt: data.startedAt,
+              title: "",
+              category: "",
+            },
+          }),
+          prisma.channel.update({
+            where: { id: channel.id },
+            data: { isLive: true, currentStreamStartedAt: data.startedAt },
+          }),
+        ])
+      );
 
       // 推送 WebSocket 事件
       webSocketGateway.emit("stream.online", {
@@ -346,7 +354,11 @@ class TwurpleEventSubService {
 
       logger.info("TwurpleEventSub", `Stream online: ${data.displayName} (WebSocket event sent)`);
     } catch (error) {
-      logger.error("TwurpleEventSub", "Error handling stream.online", error);
+      logger.warn(
+        "TwurpleEventSub",
+        `Failed to handle stream.online for ${data.displayName}`,
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 
@@ -355,50 +367,57 @@ class TwurpleEventSubService {
    */
   private async handleStreamOffline(twitchChannelId: string): Promise<void> {
     try {
-      const channel = await prisma.channel.findUnique({
-        where: { twitchChannelId },
-      });
+      // 使用重試機制查詢頻道
+      const channel = await retryDatabaseOperation(() =>
+        prisma.channel.findUnique({
+          where: { twitchChannelId },
+        })
+      );
 
       if (!channel) {
         logger.warn("TwurpleEventSub", `Channel not found: ${twitchChannelId}`);
         return;
       }
 
-      // 找到進行中的 session
-      const openSession = await prisma.streamSession.findFirst({
-        where: {
-          channelId: channel.id,
-          endedAt: null,
-        },
-        orderBy: { startedAt: "desc" },
-      });
+      // 使用重試機制找到進行中的 session
+      const openSession = await retryDatabaseOperation(() =>
+        prisma.streamSession.findFirst({
+          where: {
+            channelId: channel.id,
+            endedAt: null,
+          },
+          orderBy: { startedAt: "desc" },
+        })
+      );
 
       if (!openSession) {
-        // Debug 級別：這是正常情況，可能是重複的 offline 事件或訂閱前已下播
         logger.debug("TwurpleEventSub", `No open session found for ${channel.channelName}`);
         return;
       }
 
-      // 結束 session
+      // 計算時長
       const endedAt = new Date();
       const durationSeconds = Math.floor(
         (endedAt.getTime() - openSession.startedAt.getTime()) / 1000
       );
 
-      await prisma.streamSession.update({
-        where: { id: openSession.id },
-        data: { endedAt, durationSeconds },
-      });
-
-      // 更新頻道的開台狀態
-      await prisma.channel.update({
-        where: { id: channel.id },
-        data: {
-          isLive: false,
-          currentViewerCount: 0,
-          currentStreamStartedAt: null,
-        },
-      });
+      // 使用重試機制更新 session 和頻道狀態（使用 transaction）
+      await retryDatabaseOperation(() =>
+        prisma.$transaction([
+          prisma.streamSession.update({
+            where: { id: openSession.id },
+            data: { endedAt, durationSeconds },
+          }),
+          prisma.channel.update({
+            where: { id: channel.id },
+            data: {
+              isLive: false,
+              currentViewerCount: 0,
+              currentStreamStartedAt: null,
+            },
+          }),
+        ])
+      );
 
       // 推送 WebSocket 事件
       webSocketGateway.emit("stream.offline", {
@@ -414,7 +433,11 @@ class TwurpleEventSubService {
         `Stream offline: ${channel.channelName}, duration: ${durationMinutes} min (WebSocket event sent)`
       );
     } catch (error) {
-      logger.error("TwurpleEventSub", "Error handling stream.offline", error);
+      logger.warn(
+        "TwurpleEventSub",
+        `Failed to handle stream.offline for ${twitchChannelId}`,
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 
@@ -426,33 +449,46 @@ class TwurpleEventSubService {
     data: { title: string; category: string }
   ): Promise<void> {
     try {
-      const channel = await prisma.channel.findUnique({
-        where: { twitchChannelId },
-      });
+      // 使用重試機制查詢頻道
+      const channel = await retryDatabaseOperation(() =>
+        prisma.channel.findUnique({
+          where: { twitchChannelId },
+        })
+      );
 
       if (!channel) return;
 
-      // 更新進行中的 session
-      const openSession = await prisma.streamSession.findFirst({
-        where: {
-          channelId: channel.id,
-          endedAt: null,
-        },
-        orderBy: { startedAt: "desc" },
-      });
+      // 使用重試機制查詢進行中的 session
+      const openSession = await retryDatabaseOperation(() =>
+        prisma.streamSession.findFirst({
+          where: {
+            channelId: channel.id,
+            endedAt: null,
+          },
+          orderBy: { startedAt: "desc" },
+        })
+      );
 
       if (openSession) {
-        await prisma.streamSession.update({
-          where: { id: openSession.id },
-          data: {
-            title: data.title,
-            category: data.category,
-          },
-        });
-        logger.info("TwurpleEventSub", `Updated session info for ${channel.channelName}`);
+        // 使用重試機制更新 session
+        await retryDatabaseOperation(() =>
+          prisma.streamSession.update({
+            where: { id: openSession.id },
+            data: {
+              title: data.title,
+              category: data.category,
+            },
+          })
+        );
+        logger.debug("TwurpleEventSub", `Updated session info for ${channel.channelName}`);
       }
     } catch (error) {
-      logger.error("TwurpleEventSub", "Error handling channel.update", error);
+      // 降級為 warning，因為 channel.update 事件失敗不影響核心功能
+      logger.warn(
+        "TwurpleEventSub",
+        `Failed to handle channel.update for ${twitchChannelId}`,
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 

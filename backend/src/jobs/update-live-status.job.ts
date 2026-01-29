@@ -2,6 +2,7 @@ import { prisma } from "../db/prisma";
 
 import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
+import { retryDatabaseOperation } from "../utils/db-retry";
 
 import cron from "node-cron";
 
@@ -121,28 +122,59 @@ export async function updateLiveStatusFn() {
     }
 
     // 4. 批量更新 DB (使用 Transaction 以提高效能)
-    // 雖然 Prisma 沒有原生的 bulkUpdate，但我們可以用 $transaction 這裡包裝多個 update
-    // 若數量大多，建議用 SQL raw query，但這裡先用 $transaction
+    // Turso Free Tier 優化：減小批次大小並添加重試機制
+    const TX_BATCH_SIZE = 10; // 降到 10，避免超時和 502 錯誤
+    let updateSuccessCount = 0;
+    let updateFailCount = 0;
 
-    const updatePromises = updates.map((update) =>
-      prisma.channel.update({
-        where: { twitchChannelId: update.twitchId },
-        data: {
-          isLive: update.isLive,
-          currentViewerCount: update.viewerCount,
-          currentTitle: update.title || undefined, // undefined 代表不更新? 不，未開台時可能想保留標題。但這裡我們先簡單處理
-          currentGameName: update.gameName || undefined,
-          currentStreamStartedAt: update.startedAt,
-          lastLiveCheckAt: now,
-        },
-      })
-    );
+    for (let i = 0; i < updates.length; i += TX_BATCH_SIZE) {
+      const batch = updates.slice(i, i + TX_BATCH_SIZE);
+      const batchIndex = Math.floor(i / TX_BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(updates.length / TX_BATCH_SIZE);
 
-    // 分批執行 Transaction 避免過大
-    const TX_BATCH_SIZE = 50;
-    for (let i = 0; i < updatePromises.length; i += TX_BATCH_SIZE) {
-      const txBatch = updatePromises.slice(i, i + TX_BATCH_SIZE);
-      await prisma.$transaction(txBatch);
+      try {
+        // 使用重試機制執行批次更新
+        await retryDatabaseOperation(async () => {
+          const updatePromises = batch.map((update) =>
+            prisma.channel.update({
+              where: { twitchChannelId: update.twitchId },
+              data: {
+                isLive: update.isLive,
+                currentViewerCount: update.viewerCount,
+                currentTitle: update.title || undefined,
+                currentGameName: update.gameName || undefined,
+                currentStreamStartedAt: update.startedAt,
+                lastLiveCheckAt: now,
+              },
+            })
+          );
+
+          await prisma.$transaction(updatePromises);
+        });
+
+        updateSuccessCount += batch.length;
+      } catch (error) {
+        updateFailCount += batch.length;
+        logger.error(
+          "Jobs",
+          `批次更新失敗 (${batchIndex}/${totalBatches}):`,
+          error instanceof Error ? error.message : String(error)
+        );
+        // 繼續處理下一批，不中斷整個流程
+      }
+
+      // 批次之間延遲，避免壓垮 Turso
+      if (i + TX_BATCH_SIZE < updates.length) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    }
+
+    // 記錄更新結果
+    if (updateFailCount > 0) {
+      logger.warn(
+        "Jobs",
+        `批次更新完成: 成功 ${updateSuccessCount}/${updates.length}, 失敗 ${updateFailCount}`
+      );
     }
 
     // 5. 推送 WebSocket 事件（只推送狀態有變更的頻道）
