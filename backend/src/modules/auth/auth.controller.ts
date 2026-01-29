@@ -157,20 +157,28 @@ export class AuthController {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // 立即回傳使用者資料，不阻塞回應
+    const response = res.json({ user: req.user });
+
+    // 非同步執行聊天室監聽（不阻塞回應）
     // 當前端查詢個人資料時，順便確保該使用者的聊天室已被監聽
     // 這是一個保險機制，確保即時互動能被記錄
     // 注意：必須使用英文 login (從 channelUrl 提取)，而非中文 displayName
     if (req.user.channelUrl) {
-      // 例如：https://www.twitch.tv/capookawaii -> capookawaii
-      const channelLogin = req.user.channelUrl.split("/").pop();
-      if (channelLogin) {
-        import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
-          twurpleChatService.joinChannel(channelLogin).catch(() => {});
-        });
-      }
+      // 延遲執行，避免阻塞回應
+      setImmediate(() => {
+        const channelLogin = req.user.channelUrl.split("/").pop();
+        if (channelLogin) {
+          import("../../services/twitch-chat.service")
+            .then(({ twurpleChatService }) => {
+              twurpleChatService.joinChannel(channelLogin).catch(() => {});
+            })
+            .catch(() => {});
+        }
+      });
     }
 
-    return res.json({ user: req.user });
+    return response;
   };
 
   public logout = async (req: Request, res: Response) => {

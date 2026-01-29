@@ -12,6 +12,7 @@ import { performanceMonitor } from "./utils/performance-monitor";
 import { performanceRoutes } from "./modules/admin/performance.routes";
 import { healthRoutes } from "./modules/admin/health.routes";
 import tokenManagementRoutes from "./modules/admin/token-management.routes";
+import monitoringRoutes from "./routes/monitoring.routes";
 import twitchRoutes from "./routes/twitch.routes";
 import { eventSubRoutes } from "./routes/eventsub.routes";
 import extensionRoutes from "./modules/extension/extension.routes";
@@ -131,6 +132,11 @@ class App {
     this.express.use("/api/health", healthRoutes);
 
     // ?汗?冽????API
+    // 效能監控路由（根據環境變數啟用）
+    if (process.env.ENABLE_MONITORING === "true") {
+      this.express.use("/api/monitoring", monitoringRoutes);
+    }
+
     this.express.use("/api/extension", extensionRoutes);
 
     // EventSub Webhook 頝舐 (Twitch 鈭辣閮)

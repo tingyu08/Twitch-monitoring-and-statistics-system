@@ -38,6 +38,16 @@ interface PerformanceStats {
       minDuration: number;
     }
   >;
+  memory?: MemorySnapshot; // 記憶體使用情況
+}
+
+// 記憶體快照類型
+interface MemorySnapshot {
+  heapUsed: number;
+  heapTotal: number;
+  rss: number;
+  external: number;
+  timestamp: Date;
 }
 
 // 預設配置
@@ -45,14 +55,20 @@ const DEFAULT_CONFIG = {
   slowThreshold: 1000, // 慢速請求閾值 (ms)
   maxMetricsHistory: 100, // Render Free Tier: 減少為 100 以節省記憶體
   enableLogging: false, // 關閉日誌輸出
+  memoryWarningThresholdMB: 350, // 0.5GB 環境下的警告閾值
+  memoryCheckIntervalMs: 30000, // 每 30 秒檢查記憶體
 };
 
 class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
   private config = DEFAULT_CONFIG;
+  private memoryCheckInterval?: NodeJS.Timeout;
+  private lastMemoryWarning = 0;
+  private readonly MEMORY_WARNING_COOLDOWN = 60000; // 1 分鐘只警告一次
 
   constructor(config?: Partial<typeof DEFAULT_CONFIG>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.startMemoryMonitoring();
   }
 
   /**
@@ -174,6 +190,7 @@ class PerformanceMonitor {
       p95: getPercentile(95),
       p99: getPercentile(99),
       requestsByPath,
+      memory: this.getMemorySnapshot(), // 加入記憶體資訊
     };
   }
 
@@ -197,6 +214,74 @@ class PerformanceMonitor {
   getSlowRequests(): PerformanceMetric[] {
     return this.metrics.filter((m) => m.duration > this.config.slowThreshold);
   }
+
+  /**
+   * 啟動記憶體監控（針對 0.5GB RAM 環境）
+   */
+  private startMemoryMonitoring(): void {
+    this.memoryCheckInterval = setInterval(() => {
+      this.checkMemoryUsage();
+    }, this.config.memoryCheckIntervalMs);
+
+    // Don't prevent Node.js from exiting
+    if (this.memoryCheckInterval.unref) {
+      this.memoryCheckInterval.unref();
+    }
+  }
+
+  /**
+   * 檢查記憶體使用並在必要時發出警告
+   */
+  private checkMemoryUsage(): void {
+    const memUsage = process.memoryUsage();
+    const rssMB = memUsage.rss / 1024 / 1024;
+
+    // 如果 RSS 超過閾值且距上次警告超過冷卻時間
+    if (
+      rssMB > this.config.memoryWarningThresholdMB &&
+      Date.now() - this.lastMemoryWarning > this.MEMORY_WARNING_COOLDOWN
+    ) {
+      logger.warn(
+        "PERFORMANCE",
+        `⚠️ High memory usage: ${rssMB.toFixed(0)}MB / 512MB (${((rssMB / 512) * 100).toFixed(1)}%)`
+      );
+      this.lastMemoryWarning = Date.now();
+
+      // 建議觸發 GC（如果可用）
+      if (global.gc) {
+        logger.info("PERFORMANCE", "🧹 Triggering manual garbage collection");
+        global.gc();
+      } else {
+        logger.info(
+          "PERFORMANCE",
+          "💡 Tip: Run with --expose-gc to enable manual GC"
+        );
+      }
+    }
+  }
+
+  /**
+   * 獲取記憶體快照
+   */
+  getMemorySnapshot(): MemorySnapshot {
+    const memUsage = process.memoryUsage();
+    return {
+      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+      rss: Math.round(memUsage.rss / 1024 / 1024),
+      external: Math.round(memUsage.external / 1024 / 1024),
+      timestamp: new Date(),
+    };
+  }
+
+  /**
+   * 停止監控（清理資源）
+   */
+  stop(): void {
+    if (this.memoryCheckInterval) {
+      clearInterval(this.memoryCheckInterval);
+    }
+  }
 }
 
 // 導出單例
@@ -211,7 +296,7 @@ export const performanceLogger = {
 };
 
 // 導出類型
-export type { PerformanceMetric, PerformanceStats };
+export type { PerformanceMetric, PerformanceStats, MemorySnapshot };
 
 // 導出類別本身 (用於測試或自訂配置)
 export { PerformanceMonitor };

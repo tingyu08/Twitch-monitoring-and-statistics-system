@@ -28,32 +28,61 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   accessToken: string;
   refreshToken: string;
 }> {
+  const perfLabel = `OAuth-Callback`;
+  console.time(perfLabel);
+
   // 1. 交換 code 為 access token
+  console.time(`${perfLabel}-ExchangeToken`);
   const tokenData = await exchangeCodeForToken(code, {
     redirectUri: env.twitchRedirectUri,
   });
+  console.timeEnd(`${perfLabel}-ExchangeToken`);
 
   // 2. 取得 Twitch 使用者資訊
+  console.time(`${perfLabel}-FetchUser`);
   const user = await fetchTwitchUser(tokenData.access_token);
+  console.timeEnd(`${perfLabel}-FetchUser`);
+
   const channelLogin = user.login ?? user.display_name ?? `twitch-${user.id}`;
   const channelUrl = `https://www.twitch.tv/${channelLogin}`;
 
-  // 3. 順序執行資料庫操作（Turso 不支援 interactive transactions）
-  const streamerRecord = await prisma.streamer.upsert({
-    where: { twitchUserId: user.id },
-    update: {
-      displayName: user.display_name,
-      avatarUrl: user.profile_image_url,
-      email: user.email || null,
-    },
-    create: {
-      twitchUserId: user.id,
-      displayName: user.display_name,
-      avatarUrl: user.profile_image_url,
-      email: user.email || null,
-    },
-  });
+  // 3. 併發執行資料庫操作以減少網路延遲（Turso 遠端連線優化）
+  console.time(`${perfLabel}-DB-ParallelUpserts`);
 
+  // Step 1: 先建立/更新 Streamer 和 Viewer（可以併發執行）
+  const [streamerRecord, viewerRecord] = await Promise.all([
+    prisma.streamer.upsert({
+      where: { twitchUserId: user.id },
+      update: {
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+        email: user.email || null,
+      },
+      create: {
+        twitchUserId: user.id,
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+        email: user.email || null,
+      },
+    }),
+    prisma.viewer.upsert({
+      where: { twitchUserId: user.id },
+      update: {
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+        consentedAt: new Date(),
+      },
+      create: {
+        twitchUserId: user.id,
+        displayName: user.display_name,
+        avatarUrl: user.profile_image_url,
+        consentedAt: new Date(),
+        consentVersion: 1,
+      },
+    }),
+  ]);
+
+  // Step 2: Channel 需要 streamerId，所以必須在 streamer 之後
   await prisma.channel.upsert({
     where: { twitchChannelId: user.id },
     update: {
@@ -68,26 +97,14 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
     },
   });
 
+  console.timeEnd(`${perfLabel}-DB-ParallelUpserts`);
+
   logger.info("Auth", `Processing unified login for: ${user.display_name} (${user.id})`);
 
-  // 同時 Check/Create Viewer record (實況主也是觀眾)
-  const viewerRecord = await prisma.viewer.upsert({
-    where: { twitchUserId: user.id },
-    update: {
-      displayName: user.display_name,
-      avatarUrl: user.profile_image_url,
-      consentedAt: new Date(),
-    },
-    create: {
-      twitchUserId: user.id,
-      displayName: user.display_name,
-      avatarUrl: user.profile_image_url,
-      consentedAt: new Date(),
-      consentVersion: 1,
-    },
-  });
-
   logger.info("Auth", `Viewer record upserted: ${viewerRecord.id}`);
+
+  // 4. Token 處理：加密和查找可以併發進行（加密是 CPU 操作，查找是 I/O 操作）
+  console.time(`${perfLabel}-DB-TokenProcessing`);
 
   const encryptedAccess = encryptToken(tokenData.access_token);
   const encryptedRefresh = tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null;
@@ -143,7 +160,9 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
       },
     });
   }
+  console.timeEnd(`${perfLabel}-DB-TokenProcessing`);
 
+  console.time(`${perfLabel}-PrepareJWT`);
   const result = { streamerRecord, viewerRecord };
 
   const streamer: Streamer = {
@@ -169,6 +188,20 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
 
   const accessToken = signAccessToken(jwtPayload);
   const refreshToken = signRefreshToken(jwtPayload);
+  console.timeEnd(`${perfLabel}-PrepareJWT`);
+
+  console.timeEnd(perfLabel);
+  logger.info("Auth", `Total OAuth callback time: ${perfLabel}`);
+
+  // 立即預熱快取（不阻塞登入回應）
+  // 這樣當前端請求 /api/viewer/channels 時，快取已經準備好了
+  setImmediate(() => {
+    import("../viewer/viewer.service").then(({ getFollowedChannels }) => {
+      getFollowedChannels(result.viewerRecord.id).catch((err: unknown) =>
+        logger.error("Auth", "Cache warmup failed after login", err)
+      );
+    });
+  });
 
   // 延遲執行後台任務（避免阻塞登入回應，防止 Render 502 超時）
   // 在 Render 免費版資源受限的環境下，立即啟動這些任務可能導致回應超時

@@ -21,6 +21,8 @@ interface CacheStats {
   size: number;
   itemCount: number;
   memoryUsage: number;
+  hitRate: number;
+  pendingRequests?: number;
 }
 
 export class CacheManager {
@@ -40,6 +42,7 @@ export class CacheManager {
       size: 0,
       itemCount: 0,
       memoryUsage: 0,
+      hitRate: 0,
     };
     this.maxMemoryBytes = maxMemoryMB * 1024 * 1024;
     this.currentMemoryUsage = 0;
@@ -298,10 +301,30 @@ export const CacheKeys = {
   monitoredChannels: () => "system:monitored_channels",
 };
 
-// 預定義的 TTL（秒）
+// 預定義的 TTL（秒）- 針對 0.5GB RAM 環境優化
 export const CacheTTL = {
-  SHORT: 60, // 1 分鐘 - 即時資料
-  MEDIUM: 300, // 5 分鐘 - 一般資料
-  LONG: 1800, // 30 分鐘 - 較穩定的資料
-  VERY_LONG: 3600, // 1 小時 - 很少變動的資料
+  SHORT: 30, // 30 秒 - 即時資料（從 60 秒降低）
+  MEDIUM: 180, // 3 分鐘 - 一般資料（從 300 秒降低）
+  LONG: 600, // 10 分鐘 - 較穩定的資料（從 1800 秒降低）
+  VERY_LONG: 1800, // 30 分鐘 - 很少變動的資料（從 3600 秒降低）
 };
+
+/**
+ * 根據記憶體壓力動態調整 TTL
+ * 在 0.5GB RAM 環境下，當記憶體使用率高時縮短 TTL
+ */
+export function getAdaptiveTTL(baseTTL: number, cacheManager: CacheManager): number {
+  const stats = cacheManager.getStats();
+  const memoryUsagePercent = (stats.memoryUsage / (15 * 1024 * 1024)) * 100; // 15MB 上限
+
+  // 高記憶體壓力：縮短 TTL 50%
+  if (memoryUsagePercent > 80) {
+    return Math.floor(baseTTL * 0.5);
+  }
+  // 中等記憶體壓力：縮短 TTL 25%
+  if (memoryUsagePercent > 60) {
+    return Math.floor(baseTTL * 0.75);
+  }
+  // 正常情況
+  return baseTTL;
+}

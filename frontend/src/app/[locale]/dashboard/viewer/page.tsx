@@ -43,6 +43,10 @@ export default function ViewerDashboardPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const lastNotifiedChannelsRef = useRef<string>("");
 
+  // 追蹤是否已載入，避免重複請求
+  const hasLoadedRef = useRef(false);
+  const loadChannelsRef = useRef<(silent?: boolean) => Promise<void>>();
+
   const { socket, connected: socketConnected } = useSocket();
 
   const loadChannels = useCallback(async (silent = false) => {
@@ -50,6 +54,9 @@ export default function ViewerDashboardPage() {
       if (!silent) setLoading(true);
       const data = await viewerApi.getFollowedChannels();
       setChannels(data);
+      if (!hasLoadedRef.current) {
+        hasLoadedRef.current = true;
+      }
     } catch (err) {
       if (!silent) setError(err instanceof Error ? err.message : "載入頻道失敗");
     } finally {
@@ -57,6 +64,10 @@ export default function ViewerDashboardPage() {
     }
   }, []);
 
+  // 儲存最新的 loadChannels 到 ref
+  loadChannelsRef.current = loadChannels;
+
+  // 初始載入資料（只執行一次）
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -64,14 +75,19 @@ export default function ViewerDashboardPage() {
       return;
     }
 
-    // (Consent check removed for unified login)
+    // 只在尚未載入時執行
+    if (!hasLoadedRef.current) {
+      loadChannels();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user, router]);
 
-    loadChannels();
+  // WebSocket 事件監聽（分離到獨立的 useEffect）
+  useEffect(() => {
+    if (!socket || !socketConnected) return;
 
-    // WebSocket 即時更新邏輯
-    if (socket && socketConnected) {
-      // 處理訊息統計更新
-      const handleStatsUpdate = (data: { channelId: string; messageCount: number }) => {
+    // 處理訊息統計更新
+    const handleStatsUpdate = (data: { channelId: string; messageCount: number }) => {
         setChannels((prev) =>
           prev.map((ch) => {
             if (ch.id === data.channelId) {
@@ -155,19 +171,18 @@ export default function ViewerDashboardPage() {
         );
       };
 
-      socket.on("stats-update", handleStatsUpdate);
-      socket.on("stream.online", handleStreamOnline);
-      socket.on("stream.offline", handleStreamOffline);
-      socket.on("channel.update", handleChannelUpdate);
+    socket.on("stats-update", handleStatsUpdate);
+    socket.on("stream.online", handleStreamOnline);
+    socket.on("stream.offline", handleStreamOffline);
+    socket.on("channel.update", handleChannelUpdate);
 
-      return () => {
-        socket.off("stats-update", handleStatsUpdate);
-        socket.off("stream.online", handleStreamOnline);
-        socket.off("stream.offline", handleStreamOffline);
-        socket.off("channel.update", handleChannelUpdate);
-      };
-    }
-  }, [authLoading, user, router, socket, socketConnected, loadChannels]);
+    return () => {
+      socket.off("stats-update", handleStatsUpdate);
+      socket.off("stream.online", handleStreamOnline);
+      socket.off("stream.offline", handleStreamOffline);
+      socket.off("channel.update", handleChannelUpdate);
+    };
+  }, [socket, socketConnected]);
 
   // 自動輪詢: 每 60 秒更新一次頻道列表 (包含開台狀態)
   useEffect(() => {
@@ -175,8 +190,8 @@ export default function ViewerDashboardPage() {
 
     const poll = () => {
       // 只有在頁面可見時才執行更新，節省資源
-      if (document.visibilityState === "visible") {
-        loadChannels(true);
+      if (document.visibilityState === "visible" && loadChannelsRef.current) {
+        loadChannelsRef.current(true);
       }
     };
 
@@ -184,8 +199,8 @@ export default function ViewerDashboardPage() {
 
     // 額外: 當使用者切換回此分頁時，立即更新一次
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        loadChannels(true);
+      if (document.visibilityState === "visible" && loadChannelsRef.current) {
+        loadChannelsRef.current(true);
       }
     };
 
@@ -195,7 +210,7 @@ export default function ViewerDashboardPage() {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [user, loadChannels]);
+  }, [user]);
 
   // 過濾頻道
   useEffect(() => {
@@ -242,12 +257,13 @@ export default function ViewerDashboardPage() {
     }
   }, []);
 
-  // 當頁面變更時通知後端
+  // 當頁面變更時通知後端（只在頁碼變化時執行）
   useEffect(() => {
     if (currentPageChannels.length > 0) {
       notifyListenChannels(currentPageChannels);
     }
-  }, [currentPage, currentPageChannels, notifyListenChannels]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   const handleChannelClick = (channelId: string) => {
     router.push(`/dashboard/viewer/${channelId}`);

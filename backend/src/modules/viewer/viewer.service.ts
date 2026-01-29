@@ -1,6 +1,6 @@
 import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
-import { cacheManager } from "../../utils/cache-manager";
+import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 
 export interface ViewerDailyStat {
   date: string;
@@ -151,8 +151,8 @@ export async function getChannelStats(
 export async function getFollowedChannels(viewerId: string): Promise<FollowedChannel[]> {
   const cacheKey = `viewer:${viewerId}:channels_list`;
 
-  // P1 Fix: 使用後端快取避免昂貴的 groupBy 聚合查詢 (TTL 5分鐘)
-  // 這解決了 Turso 遠端連線下聚合查詢導致的 60s 超時問題
+  // P1 Fix: 使用後端快取避免昂貴的查詢（適應性 TTL，根據記憶體壓力調整）
+  const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
   return cacheManager.getOrSet(
     cacheKey,
     async () => {
@@ -160,27 +160,52 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
       console.time(label);
 
       try {
-        // 1. 聚合查詢：找出該 Viewer 在所有頻道的總數據
-        console.timeLog(label, "Start Aggregation");
+        // 1. 優先使用預先聚合的 LifetimeStats 表（快速），如果為空則 fallback 到 groupBy（慢但完整）
+        console.timeLog(label, "Start Stats Query");
 
-        // Opt: 減少聚合欄位，只取最後觀看日期，如果不需要總時數排序的話
-        const stats = await prisma.viewerChannelDailyStat.groupBy({
-          by: ["channelId"],
+        let lifetimeStats = await prisma.viewerChannelLifetimeStats.findMany({
           where: { viewerId },
-          _sum: {
-            watchSeconds: true,
-            messageCount: true,
-          },
-          _max: {
-            date: true,
+          select: {
+            channelId: true,
+            totalWatchTimeMinutes: true,
+            totalMessages: true,
+            lastWatchedAt: true,
           },
           orderBy: {
-            _max: {
-              date: "desc",
-            },
+            lastWatchedAt: "desc",
           },
         });
-        console.timeLog(label, `Aggregation Done: ${stats.length} channels`);
+
+        // Fallback: 如果 LifetimeStats 為空，使用 groupBy 查詢（新使用者或資料尚未聚合）
+        if (lifetimeStats.length === 0) {
+          console.timeLog(label, "LifetimeStats empty, fallback to groupBy");
+          const stats = await prisma.viewerChannelDailyStat.groupBy({
+            by: ["channelId"],
+            where: { viewerId },
+            _sum: {
+              watchSeconds: true,
+              messageCount: true,
+            },
+            _max: {
+              date: true,
+            },
+            orderBy: {
+              _max: {
+                date: "desc",
+              },
+            },
+          });
+
+          // 轉換為 LifetimeStats 格式
+          lifetimeStats = stats.map((s) => ({
+            channelId: s.channelId,
+            totalWatchTimeMinutes: Math.floor((s._sum.watchSeconds || 0) / 60),
+            totalMessages: s._sum.messageCount || 0,
+            lastWatchedAt: s._max.date,
+          }));
+        }
+
+        console.timeLog(label, `Stats Query Done: ${lifetimeStats.length} channels`);
 
         // 2. 獲取外部追蹤
         const follows = await prisma.userFollow.findMany({
@@ -196,7 +221,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         console.timeLog(label, `Follows Fetched: ${follows.length}`);
 
         // 3. 合併頻道 ID 列表
-        const statsChannelIds = new Set(stats.map((s) => s.channelId));
+        const statsChannelIds = new Set(lifetimeStats.map((s) => s.channelId));
         const followChannelIds = new Set(follows.map((f) => f.channelId));
         const allChannelIds = Array.from(new Set([...statsChannelIds, ...followChannelIds]));
 
@@ -223,7 +248,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         console.timeLog(label, "Details Fetched");
 
         // 建立 Stats Map 以便快速查找
-        const statsMap = new Map(stats.map((s) => [s.channelId, s]));
+        const statsMap = new Map(lifetimeStats.map((s) => [s.channelId, s]));
         const followsMap = new Map(follows.map((f) => [f.channelId, f.followedAt]));
 
         // 6. 轉換為前端格式
@@ -250,9 +275,9 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
             streamStartedAt: channel.currentStreamStartedAt?.toISOString() ?? null,
             followedAt: followedAt?.toISOString() ?? null,
             tags: ["中文", "遊戲"],
-            lastWatched: stat?._max.date?.toISOString() ?? null,
-            totalWatchMinutes: Math.floor((stat?._sum.watchSeconds || 0) / 60),
-            messageCount: stat?._sum.messageCount ?? 0,
+            lastWatched: stat?.lastWatchedAt?.toISOString() ?? null,
+            totalWatchMinutes: stat?.totalWatchTimeMinutes ?? 0,
+            messageCount: stat?.totalMessages ?? 0,
             isExternal: channel.source === "external",
           };
         });
@@ -278,6 +303,6 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         throw error;
       }
     },
-    300 // Cache for 5 minutes
+    ttl // 適應性 TTL（根據記憶體壓力從 30 秒到 3 分鐘）
   );
 }

@@ -154,6 +154,8 @@ model ViewerChannelDailyStat {
 
   @@unique([viewerId, channelId, date])
   @@index([viewerId, channelId, date])
+  @@index([viewerId]) // 優化：支援 getFollowedChannels 的 groupBy 查詢
+  @@index([updatedAt]) // 優化：支援增量更新查詢（lifetime stats job）
   @@map("viewer_channel_daily_stats")
 }
 
@@ -198,6 +200,7 @@ model ViewerChannelMessageDailyAgg {
   @@unique([viewerId, channelId, date])
   @@index([viewerId])
   @@index([channelId])
+  @@index([updatedAt]) // 優化：支援增量更新查詢（lifetime stats job）
   @@map("viewer_channel_message_daily_aggs")
 }
 
@@ -326,8 +329,9 @@ model ViewerChannelLifetimeStats {
   channel               Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([viewerId, channelId])
-  @@index([viewerId])
-  @@index([channelId])
+  @@index([viewerId]) // 優化：支援 getFollowedChannels 查詢
+  @@index([channelId]) // 優化：支援 updatePercentileRankings 查詢
+  @@index([viewerId, lastWatchedAt]) // 優化：支援按最後觀看時間排序
   @@map("viewer_channel_lifetime_stats")
 }
 
