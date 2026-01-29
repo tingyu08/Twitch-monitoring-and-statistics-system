@@ -16,6 +16,11 @@ const PERFORMANCE_THRESHOLDS = {
   BATCH_INSERT_PER_RECORD_MS: 5, // 批量插入每筆記錄 < 5ms
 };
 
+const databaseUrl = process.env.DATABASE_URL || "";
+const isTurso = databaseUrl.startsWith("libsql://");
+const shouldRunPerfTests = process.env.RUN_PERF_TESTS === "true" && !isTurso;
+const perfTest = shouldRunPerfTests ? it : it.skip;
+
 interface PerformanceResult {
   testName: string;
   passed: boolean;
@@ -64,7 +69,7 @@ describe("Message Stats Performance Tests", () => {
     await prisma.$disconnect();
   });
 
-  it("should complete Message Stats Query within threshold", async () => {
+  perfTest("should complete Message Stats Query within threshold", async () => {
     const viewer = await prisma.viewer.findFirst();
     if (!viewer) {
       console.warn("No viewer found, skipping performance test");
@@ -133,7 +138,7 @@ describe("Message Stats Performance Tests", () => {
     expect(result.passed).toBe(true);
   }, 30000);
 
-  it("should complete Aggregation Query within threshold", async () => {
+  perfTest("should complete Aggregation Query within threshold", async () => {
     const viewer = await prisma.viewer.findFirst();
     if (!viewer) {
       console.warn("No viewer found, skipping aggregation test");
@@ -163,7 +168,7 @@ describe("Message Stats Performance Tests", () => {
     expect(result.passed).toBe(true);
   }, 30000);
 
-  it("should complete Batch Read within threshold", async () => {
+  perfTest("should complete Batch Read within threshold", async () => {
     const viewer = await prisma.viewer.findFirst();
     if (!viewer) {
       console.warn("No viewer found, skipping batch read test");

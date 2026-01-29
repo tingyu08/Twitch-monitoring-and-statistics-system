@@ -66,6 +66,7 @@ jest.mock("../viewer.controller", () => ({
     consent: jest.fn(),
     getChannelStats: jest.fn(),
     getChannels: jest.fn(),
+    getChannelDetailAll: jest.fn(),
   })),
 }));
 jest.mock("../viewer-message-stats.controller", () => ({

@@ -195,13 +195,15 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
 
   // 立即預熱快取（不阻塞登入回應）
   // 這樣當前端請求 /api/viewer/channels 時，快取已經準備好了
-  setImmediate(() => {
-    import("../viewer/viewer.service").then(({ getFollowedChannels }) => {
-      getFollowedChannels(result.viewerRecord.id).catch((err: unknown) =>
-        logger.error("Auth", "Cache warmup failed after login", err)
-      );
-    });
-  });
+    if (process.env.NODE_ENV !== "test") {
+      setImmediate(() => {
+        import("../viewer/viewer.service").then(({ getFollowedChannels }) => {
+          getFollowedChannels(result.viewerRecord.id).catch((err: unknown) =>
+            logger.error("Auth", "Cache warmup failed after login", err)
+          );
+        });
+      });
+    }
 
   // 延遲執行後台任務（避免阻塞登入回應，防止 Render 502 超時）
   // 在 Render 免費版資源受限的環境下，立即啟動這些任務可能導致回應超時
@@ -212,13 +214,15 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
     );
 
     // 非同步觸發聊天室服務重新初始化（不阻塞登入流程）
-    import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
-      twurpleChatService
-        .initialize()
-        .catch((err: unknown) =>
-          logger.error("Auth", "Chat service reinit failed after login", err)
-        );
-    });
+    if (process.env.NODE_ENV !== "test") {
+      import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
+        twurpleChatService
+          .initialize()
+          .catch((err: unknown) =>
+            logger.error("Auth", "Chat service reinit failed after login", err)
+          );
+      });
+    }
   }, 30000); // 延遲 30 秒，避開 Dashboard 初次載入高峰，讓登入回應先完成
 
   return { streamer, accessToken, refreshToken };
