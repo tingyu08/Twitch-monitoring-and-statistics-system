@@ -3,6 +3,7 @@ import type { AuthRequest } from "../auth/auth.middleware";
 import { prisma } from "../../db/prisma";
 import { getStreamerGameStats, getStreamerVideos, getStreamerClips } from "./streamer.service";
 import { streamerLogger } from "../../utils/logger";
+import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 
 /**
  * 取得遊戲/分類統計
@@ -30,7 +31,7 @@ export async function getGameStatsHandler(req: AuthRequest, res: Response): Prom
 }
 
 /**
- * 公開: 取得指定頻道的遊戲/分類統計
+ * 公開: 取得指定頻道的遊戲/分類統計（帶快取）
  * GET /api/streamer/:channelId/game-stats?range=30d
  */
 export async function getPublicGameStatsHandler(req: Request, res: Response): Promise<void> {
@@ -41,23 +42,33 @@ export async function getPublicGameStatsHandler(req: Request, res: Response): Pr
       return;
     }
 
-    const channel = await prisma.channel.findUnique({
-      where: { id: channelId },
-      select: { streamerId: true },
-    });
-
-    if (!channel?.streamerId) {
-      res.status(404).json({ error: "Streamer not found for this channel" });
-      return;
-    }
-
     const range = (req.query.range as string) || "30d";
     if (!["7d", "30d", "90d"].includes(range)) {
       res.status(400).json({ error: "Invalid range parameter." });
       return;
     }
 
-    const stats = await getStreamerGameStats(channel.streamerId, range as "7d" | "30d" | "90d");
+    // 快取鍵
+    const cacheKey = `channel:${channelId}:gamestats:${range}`;
+    const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
+
+    const stats = await cacheManager.getOrSet(
+      cacheKey,
+      async () => {
+        const channel = await prisma.channel.findUnique({
+          where: { id: channelId },
+          select: { streamerId: true },
+        });
+
+        if (!channel?.streamerId) {
+          throw new Error("Streamer not found for this channel");
+        }
+
+        return await getStreamerGameStats(channel.streamerId, range as "7d" | "30d" | "90d");
+      },
+      ttl
+    );
+
     res.json(stats);
   } catch (error) {
     streamerLogger.error("Get Public Game Stats Error:", error);
@@ -214,7 +225,7 @@ export async function getPublicClipsHandler(req: Request, res: Response): Promis
 }
 
 /**
- * 公開: 取得指定頻道的觀眾人數趨勢
+ * 公開: 取得指定頻道的觀眾人數趨勢（帶快取）
  * GET /api/streamer/:channelId/viewer-trends?range=30d
  */
 export async function getPublicViewerTrendsHandler(req: Request, res: Response): Promise<void> {
@@ -225,46 +236,56 @@ export async function getPublicViewerTrendsHandler(req: Request, res: Response):
       return;
     }
 
-    const channel = await prisma.channel.findUnique({
-      where: { id: channelId },
-      select: { id: true },
-    });
-
-    if (!channel) {
-      res.status(404).json({ error: "Channel not found" });
-      return;
-    }
-
     const range = (req.query.range as string) || "30d";
     const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
 
-    const sessions = await prisma.streamSession.findMany({
-      where: {
-        channelId: channelId,
-        startedAt: { gte: startDate },
-        endedAt: { not: null },
-      },
-      orderBy: { startedAt: "asc" },
-      select: {
-        startedAt: true,
-        title: true,
-        category: true,
-        avgViewers: true,
-        peakViewers: true,
-        durationSeconds: true,
-      },
-    });
+    // 快取鍵
+    const cacheKey = `channel:${channelId}:viewertrends:${range}`;
+    const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
 
-    const data = sessions.map((s) => ({
-      date: s.startedAt.toISOString().split("T")[0],
-      title: s.title || "Untitled",
-      avgViewers: s.avgViewers || 0,
-      peakViewers: s.peakViewers || 0,
-      durationHours: Math.round(((s.durationSeconds || 0) / 3600) * 10) / 10,
-      category: s.category || "Just Chatting",
-    }));
+    const data = await cacheManager.getOrSet(
+      cacheKey,
+      async () => {
+        const channel = await prisma.channel.findUnique({
+          where: { id: channelId },
+          select: { id: true },
+        });
+
+        if (!channel) {
+          throw new Error("Channel not found");
+        }
+
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        const sessions = await prisma.streamSession.findMany({
+          where: {
+            channelId: channelId,
+            startedAt: { gte: startDate },
+            endedAt: { not: null },
+          },
+          orderBy: { startedAt: "asc" },
+          select: {
+            startedAt: true,
+            title: true,
+            category: true,
+            avgViewers: true,
+            peakViewers: true,
+            durationSeconds: true,
+          },
+        });
+
+        return sessions.map((s) => ({
+          date: s.startedAt.toISOString().split("T")[0],
+          title: s.title || "Untitled",
+          avgViewers: s.avgViewers || 0,
+          peakViewers: s.peakViewers || 0,
+          durationHours: Math.round(((s.durationSeconds || 0) / 3600) * 10) / 10,
+          category: s.category || "Just Chatting",
+        }));
+      },
+      ttl
+    );
 
     res.json(data);
   } catch (error) {
@@ -274,7 +295,7 @@ export async function getPublicViewerTrendsHandler(req: Request, res: Response):
 }
 
 /**
- * 公開: 取得特定直播的小時觀眾分佈
+ * 公開: 取得特定直播的小時觀眾分佈（帶快取）
  * GET /api/streamer/:channelId/stream-hourly?date=YYYY-MM-DD
  */
 export async function getPublicStreamHourlyHandler(req: Request, res: Response): Promise<void> {
@@ -287,87 +308,97 @@ export async function getPublicStreamHourlyHandler(req: Request, res: Response):
       return;
     }
 
-    const startOfDay = new Date(date as string);
-    const endOfDay = new Date(date as string);
-    endOfDay.setDate(endOfDay.getDate() + 1);
+    // 快取鍵（歷史資料可以長時間快取）
+    const cacheKey = `channel:${channelId}:streamhourly:${date}`;
 
-    const session = await prisma.streamSession.findFirst({
-      where: {
-        channelId: channelId,
-        startedAt: {
-          gte: startOfDay,
-          lt: endOfDay,
-        },
-      },
-      select: {
-        id: true,
-        startedAt: true,
-        durationSeconds: true,
-        avgViewers: true,
-        peakViewers: true,
-        metrics: {
-          orderBy: { timestamp: "asc" },
-          select: {
-            timestamp: true,
-            viewerCount: true,
+    // 歷史資料使用較長的 TTL（30 分鐘），因為不會再變動
+    const ttl = getAdaptiveTTL(CacheTTL.VERY_LONG, cacheManager);
+
+    const data = await cacheManager.getOrSet(
+      cacheKey,
+      async () => {
+        const startOfDay = new Date(date as string);
+        const endOfDay = new Date(date as string);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+
+        const session = await prisma.streamSession.findFirst({
+          where: {
+            channelId: channelId,
+            startedAt: {
+              gte: startOfDay,
+              lt: endOfDay,
+            },
           },
-        },
+          select: {
+            id: true,
+            startedAt: true,
+            durationSeconds: true,
+            avgViewers: true,
+            peakViewers: true,
+            metrics: {
+              orderBy: { timestamp: "asc" },
+              select: {
+                timestamp: true,
+                viewerCount: true,
+              },
+            },
+          },
+        });
+
+        if (!session) {
+          return [];
+        }
+
+        // 1. 如果有真實數據 (Metrics)，優先使用
+        if (session.metrics && session.metrics.length > 0) {
+          return session.metrics.map((m) => ({
+            timestamp: m.timestamp.toISOString(),
+            viewers: m.viewerCount,
+          }));
+        }
+
+        // 2. 如果沒有真實數據，且無法模擬 (無 duration/avg)，回傳空
+        if (!session.durationSeconds || !session.avgViewers) {
+          return [];
+        }
+
+        // 3. Fallback: 使用模擬演算法 (舊資料/未能採集到時使用)
+        const durationHours = Math.ceil(session.durationSeconds / 3600);
+        const result = [];
+        const avg = session.avgViewers;
+        const peak = session.peakViewers || avg * 1.2;
+
+        for (let i = 0; i < durationHours; i++) {
+          // 模擬曲線：中間高，兩邊低
+          // 使用正弦波模擬: sin(0..PI) -> 0..1..0
+          const progress = (i + 0.5) / durationHours; // 0.1 ~ 0.9
+          const curve = Math.sin(progress * Math.PI); // 0 ~ 1 ~ 0
+
+          // 基礎值是平均值的 80%，加上曲線部分帶來的增量
+          let viewers = avg * 0.8 + (peak - avg * 0.8) * curve;
+
+          // 加入一點隨機波動 (+- 5%)
+          const noise = 1 + (Math.random() * 0.1 - 0.05);
+          viewers *= noise;
+
+          // 確保不超過 Peak，不低於 0
+          viewers = Math.min(peak, Math.max(0, viewers));
+
+          // 計算該小時的準確時間
+          const pointTime = new Date(session.startedAt.getTime() + i * 60 * 60 * 1000);
+
+          result.push({
+            timestamp: pointTime.toISOString(),
+            viewers: Math.round(viewers),
+          });
+        }
+
+        return result;
       },
-    });
+      ttl
+    );
 
-    if (!session) {
-      res.json([]);
-      return;
-    }
-
-    // 1. 如果有真實數據 (Metrics)，優先使用
-    if (session.metrics && session.metrics.length > 0) {
-      const realData = session.metrics.map((m) => ({
-        timestamp: m.timestamp.toISOString(),
-        viewers: m.viewerCount,
-      }));
-      res.json(realData);
-      return;
-    }
-
-    // 2. 如果沒有真實數據，且無法模擬 (無 duration/avg)，回傳空
-    if (!session.durationSeconds || !session.avgViewers) {
-      res.json([]);
-      return;
-    }
-
-    // 3. Fallback: 使用模擬演算法 (舊資料/未能採集到時使用)
-    const durationHours = Math.ceil(session.durationSeconds / 3600);
-    const result = [];
-    const avg = session.avgViewers;
-    const peak = session.peakViewers || avg * 1.2;
-
-    for (let i = 0; i < durationHours; i++) {
-      // 模擬曲線：中間高，兩邊低
-      // 使用正弦波模擬: sin(0..PI) -> 0..1..0
-      const progress = (i + 0.5) / durationHours; // 0.1 ~ 0.9
-      const curve = Math.sin(progress * Math.PI); // 0 ~ 1 ~ 0
-
-      // 基礎值是平均值的 80%，加上曲線部分帶來的增量
-      let viewers = avg * 0.8 + (peak - avg * 0.8) * curve;
-
-      // 加入一點隨機波動 (+- 5%)
-      const noise = 1 + (Math.random() * 0.1 - 0.05);
-      viewers *= noise;
-
-      // 確保不超過 Peak，不低於 0
-      viewers = Math.min(peak, Math.max(0, viewers));
-
-      // 計算該小時的準確時間
-      const pointTime = new Date(session.startedAt.getTime() + i * 60 * 60 * 1000);
-
-      result.push({
-        timestamp: pointTime.toISOString(),
-        viewers: Math.round(viewers),
-      });
-    }
-
-    res.json(result);
+    res.json(data);
   } catch (error) {
     streamerLogger.error("Get Public Stream Hourly Error:", error);
     res.status(500).json({ error: "Internal Server Error" });

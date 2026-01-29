@@ -61,7 +61,7 @@ export async function recordConsent(viewerId: string, version: number = 1) {
 }
 
 /**
- * 獲取觀看者對特定頻道的統計數據
+ * 獲取觀看者對特定頻道的統計數據（帶快取）
  */
 export async function getChannelStats(
   viewerId: string,
@@ -79,70 +79,81 @@ export async function getChannelStats(
     (queryEndDate.getTime() - queryStartDate.getTime()) / (1000 * 60 * 60 * 24)
   );
 
-  // 1. 併發查詢: 統計數據 + 頻道資訊
-  const [stats, channelInfo] = await Promise.all([
-    prisma.viewerChannelDailyStat.findMany({
-      where: {
-        viewerId,
-        channelId,
-        date: {
-          gte: queryStartDate,
-          lte: queryEndDate,
-        },
-      },
-      orderBy: {
-        date: "asc",
-      },
-    }),
-    prisma.channel.findUnique({
-      where: { id: channelId },
-      include: {
-        streamer: {
-          select: {
-            displayName: true,
-            avatarUrl: true,
+  // 快取鍵（包含 viewerId, channelId, days）
+  const cacheKey = `viewer:${viewerId}:channel:${channelId}:stats:${actualDays}d`;
+
+  // 使用適應性 TTL 快取
+  const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
+  return cacheManager.getOrSet(
+    cacheKey,
+    async () => {
+      // 1. 併發查詢: 統計數據 + 頻道資訊
+      const [stats, channelInfo] = await Promise.all([
+        prisma.viewerChannelDailyStat.findMany({
+          where: {
+            viewerId,
+            channelId,
+            date: {
+              gte: queryStartDate,
+              lte: queryEndDate,
+            },
           },
+          orderBy: {
+            date: "asc",
+          },
+        }),
+        prisma.channel.findUnique({
+          where: { id: channelId },
+          include: {
+            streamer: {
+              select: {
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      // 轉換為前端友好的格式
+      const dailyStats = stats.map((stat) => ({
+        date: stat.date.toISOString().split("T")[0],
+        watchHours: Math.round((stat.watchSeconds / 3600) * 10) / 10,
+        messageCount: stat.messageCount,
+        emoteCount: stat.emoteCount,
+      }));
+
+      // 構建頻道基本資訊
+      const totalWatchHours = dailyStats.reduce((sum, s) => sum + s.watchHours, 0);
+      const totalMessages = dailyStats.reduce((sum, s) => sum + s.messageCount, 0);
+
+      // 如果找不到頻道，使用 fallback
+      const channelDisplay: ViewerChannelInfo | null = channelInfo
+        ? {
+            id: channelInfo.id,
+            name: channelInfo.channelName,
+            displayName: channelInfo.streamer?.displayName || channelInfo.channelName,
+            avatarUrl: channelInfo.streamer?.avatarUrl || "",
+            isLive: channelInfo.isLive,
+            totalWatchHours,
+            totalMessages,
+            lastWatched:
+              stats.length > 0 ? stats[stats.length - 1].date.toISOString().split("T")[0] : "",
+          }
+        : null;
+
+      return {
+        dailyStats,
+        timeRange: {
+          startDate: queryStartDate.toISOString().split("T")[0],
+          endDate: queryEndDate.toISOString().split("T")[0],
+          days: actualDays,
         },
-      },
-    }),
-  ]);
-
-  // 轉換為前端友好的格式
-  const dailyStats = stats.map((stat) => ({
-    date: stat.date.toISOString().split("T")[0],
-    watchHours: Math.round((stat.watchSeconds / 3600) * 10) / 10,
-    messageCount: stat.messageCount,
-    emoteCount: stat.emoteCount,
-  }));
-
-  // 構建頻道基本資訊
-  const totalWatchHours = dailyStats.reduce((sum, s) => sum + s.watchHours, 0);
-  const totalMessages = dailyStats.reduce((sum, s) => sum + s.messageCount, 0);
-
-  // 如果找不到頻道，使用 fallback
-  const channelDisplay: ViewerChannelInfo | null = channelInfo
-    ? {
-        id: channelInfo.id,
-        name: channelInfo.channelName,
-        displayName: channelInfo.streamer?.displayName || channelInfo.channelName,
-        avatarUrl: channelInfo.streamer?.avatarUrl || "",
-        isLive: channelInfo.isLive,
-        totalWatchHours,
-        totalMessages,
-        lastWatched:
-          stats.length > 0 ? stats[stats.length - 1].date.toISOString().split("T")[0] : "",
-      }
-    : null;
-
-  return {
-    dailyStats,
-    timeRange: {
-      startDate: queryStartDate.toISOString().split("T")[0],
-      endDate: queryEndDate.toISOString().split("T")[0],
-      days: actualDays,
+        channel: channelDisplay,
+      };
     },
-    channel: channelDisplay,
-  };
+    ttl
+  );
 }
 
 /**

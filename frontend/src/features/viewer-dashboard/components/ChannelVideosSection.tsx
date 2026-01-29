@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { viewerApi } from "@/lib/api/viewer";
 import type { StreamerVideo, StreamerClip } from "@/lib/api/streamer";
@@ -18,9 +18,30 @@ export function ChannelVideosSection({ channelId }: Props) {
   const [clips, setClips] = useState<StreamerClip[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // 追蹤已載入的資料，避免重複請求（包括 Strict Mode）
+  const loadedDataRef = useRef<{ channelId: string; tab: "vods" | "clips" } | null>(null);
+  const isFetchingRef = useRef(false);
+
   useEffect(() => {
     async function fetchData() {
+      const key = `${channelId}:${activeTab}`;
+
+      // 檢查是否已經載入過相同的資料
+      if (
+        loadedDataRef.current?.channelId === channelId &&
+        loadedDataRef.current?.tab === activeTab
+      ) {
+        return;
+      }
+
+      // 防止 Strict Mode 雙重請求
+      if (isFetchingRef.current) {
+        return;
+      }
+
+      isFetchingRef.current = true;
       setLoading(true);
+
       try {
         if (activeTab === "vods") {
           const res = await viewerApi.getChannelVideos(channelId, 1, 6);
@@ -29,10 +50,13 @@ export function ChannelVideosSection({ channelId }: Props) {
           const res = await viewerApi.getChannelClips(channelId, 1, 6);
           if (res) setClips(res.data);
         }
+        // 記錄已載入的資料
+        loadedDataRef.current = { channelId, tab: activeTab };
       } catch (error) {
         console.error("Failed to fetch videos/clips", error);
       } finally {
         setLoading(false);
+        isFetchingRef.current = false;
       }
     }
     fetchData();

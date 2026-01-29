@@ -78,6 +78,8 @@ export default function ViewerChannelStatsPage() {
 
   // Request ID to prevent race conditions - only apply results from the latest request
   const requestIdRef = useRef(0);
+  const hasLoadedRef = useRef(false);
+  const loadStatsRef = useRef<(days: number) => Promise<void>>();
 
   const loadStats = useCallback(
     async (days: number) => {
@@ -158,23 +160,41 @@ export default function ViewerChannelStatsPage() {
     [channelId, user]
   );
 
+  // Store loadStats in ref for stable reference
+  loadStatsRef.current = loadStats;
+
+  // Initial load - only runs once when component mounts with valid data
   useEffect(() => {
     if (authLoading) return;
 
     if (!user) {
       router.push("/");
-
       return;
     }
 
-    if (user && channelId) {
-      loadStats(getRangeDays(timeRange));
-    } else if (user && !channelId) {
+    if (!user.viewerId || !channelId) {
       setError("缺少頻道代碼");
-
       setLoading(false);
+      return;
+    }
+
+    // Only load once on mount
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadStats(getRangeDays(timeRange));
     }
   }, [authLoading, user, channelId, router, loadStats, timeRange]);
+
+  // Time range change - separate useEffect
+  useEffect(() => {
+    // Skip initial load (handled above)
+    if (!hasLoadedRef.current) return;
+
+    // Reload when time range changes
+    if (loadStatsRef.current) {
+      loadStatsRef.current(getRangeDays(timeRange));
+    }
+  }, [timeRange]);
 
   const handleRangeChange = (newRange: TimeRange) => {
     setTimeRange(newRange);
