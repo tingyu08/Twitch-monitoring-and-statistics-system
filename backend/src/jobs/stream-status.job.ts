@@ -16,8 +16,8 @@ const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
 
-// 超時時間（毫秒）- 3 分鐘
-const JOB_TIMEOUT_MS = 3 * 60 * 1000;
+// 超時時間（毫秒）- 5 分鐘（Render Free Tier 優化：增加容錯時間）
+const JOB_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface StreamStatusResult {
   checked: number;
@@ -96,6 +96,11 @@ export class StreamStatusJob {
 
       return result;
     } catch (error) {
+      // 如果是超時錯誤，降級為警告（允許繼續運行）
+      if (error instanceof Error && error.message.includes("超時")) {
+        logger.warn("JOB", `Stream Status Job 超時 (已處理 ${result.checked} 個頻道)，將在下次執行時繼續`);
+        return result; // 返回部分結果而不是拋出錯誤
+      }
       logger.error("JOB", "Stream Status Job 執行失敗:", error);
       throw error;
     } finally {
@@ -138,7 +143,8 @@ export class StreamStatusJob {
     const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
     // 4. 處理每個頻道的狀態變化（並行處理，限制並發數）
-    const CONCURRENCY_LIMIT = 5; // 限制同時 5 個 DB 操作以保護連線池
+    // Render Free Tier 優化：降低並發以減少遠端 DB 壓力
+    const CONCURRENCY_LIMIT = process.env.NODE_ENV === "production" ? 3 : 5;
 
     // 將任務分組進行並行處理
     const tasks = channels.map(async (channel) => {
@@ -251,9 +257,9 @@ export class StreamStatusJob {
         logger.error("JOB", `批次查詢失敗 (${i}-${i + batch.length}):`, error);
       }
 
-      // 記憶體/CPU 優化：批次之間休息一下
+      // 記憶體/CPU 優化：批次之間休息一下（Render Free Tier 優化：增加延遲）
       if (i + MAX_CHANNELS_PER_BATCH < twitchChannelIds.length) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 500)); // 從 100ms 增加到 500ms
       }
     }
 

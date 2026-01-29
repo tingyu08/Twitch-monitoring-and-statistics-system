@@ -374,7 +374,8 @@ class TwurpleEventSubService {
       });
 
       if (!openSession) {
-        logger.warn("TwurpleEventSub", `No open session found for ${channel.channelName}`);
+        // Debug 級別：這是正常情況，可能是重複的 offline 事件或訂閱前已下播
+        logger.debug("TwurpleEventSub", `No open session found for ${channel.channelName}`);
         return;
       }
 
