@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 
 import { useRouter, useParams } from "next/navigation";
 
@@ -12,15 +12,7 @@ import { Clock, Eye, MessageSquare, Smile, Activity, Calendar, History } from "l
 
 import { useAuthSession } from "@/features/auth/AuthContext";
 
-import {
-  viewerApi,
-  type ViewerChannelStats,
-  type ViewerMessageStatsResponse,
-} from "@/lib/api/viewer";
-
 import { isViewer } from "@/lib/api/auth";
-
-import type { GameStats } from "@/lib/api/streamer";
 
 import { MessageStatsSummary } from "@/features/viewer-dashboard/components/MessageStatsSummary";
 
@@ -42,6 +34,7 @@ import { ViewerTrendsChart } from "@/features/viewer-dashboard/components/Viewer
 import { StreamHourlyDialog } from "@/features/viewer-dashboard/components/StreamHourlyDialog";
 import type { ViewerTrendPoint } from "@/lib/api/viewer";
 import { WatchTimeTrendChart } from "@/features/viewer-dashboard/components/WatchTimeTrendChart";
+import { useChannelDetail } from "@/hooks/useViewer";
 
 export default function ViewerChannelStatsPage() {
   const t = useTranslations();
@@ -56,145 +49,43 @@ export default function ViewerChannelStatsPage() {
 
   const { user, loading: authLoading } = useAuthSession();
 
-  const [stats, setStats] = useState<ViewerChannelStats | null>(null);
-
-  const [messageStats, setMessageStats] = useState<ViewerMessageStatsResponse | null>(null);
-
-  const [gameStats, setGameStats] = useState<GameStats[] | null>(null);
-
-  const [viewerTrends, setViewerTrends] = useState<ViewerTrendPoint[] | null>(null);
-
   const [selectedStream, setSelectedStream] = useState<ViewerTrendPoint | null>(null);
 
   const [isHourlyModalOpen, setIsHourlyModalOpen] = useState(false);
-
-  const [loading, setLoading] = useState(true);
-
-  const [error, setError] = useState<string | null>(null);
 
   const [timeRange, setTimeRange] = useState<TimeRange>("30");
 
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(null);
 
-  // Request ID to prevent race conditions - only apply results from the latest request
-  const requestIdRef = useRef(0);
-  const hasLoadedRef = useRef(false);
-  const loadStatsRef = useRef<(days: number) => Promise<void>>();
+  // 計算當前顯示的天數
+  const getDisplayDays = () => {
+    if (timeRange === "custom" && customRange) {
+      return getCustomRangeDays(customRange);
+    }
+    return getRangeDays(timeRange);
+  };
 
-  const loadStats = useCallback(
-    async (days: number) => {
-      if (!channelId || !user || !isViewer(user) || !user.viewerId) {
-        setError("缺少資料或無權限");
+  // P1 優化：使用 React Query 管理頻道詳細資料，自動處理快取、去重和 race condition
+  const {
+    data: result,
+    isLoading: loading,
+    error: queryError,
+  } = useChannelDetail(channelId || "", getDisplayDays());
 
-        return;
-      }
+  const error = queryError ? queryError.message : null;
 
-      const viewerId = user.viewerId;
+  // 解構資料
+  const stats = result?.channelStats || null;
+  const messageStats = result?.messageStats || null;
+  const gameStats = result?.gameStats || null;
+  const viewerTrends = result?.viewerTrends || null;
 
-      // Increment request ID to track this specific request
-      const currentRequestId = ++requestIdRef.current;
-
-      try {
-        setLoading(true);
-
-        setError(null);
-
-        const endDate = new Date();
-
-        const startDate = new Date();
-
-        startDate.setDate(endDate.getDate() - days);
-
-        const rangeKey = days === 7 ? "7d" : days === 90 ? "90d" : "30d";
-
-        const [channelData, messageData, gameData, trendsData] = await Promise.all([
-          viewerApi.getChannelStats(channelId, days),
-
-          viewerApi.getMessageStats(
-            viewerId,
-
-            channelId,
-
-            startDate.toISOString(),
-
-            endDate.toISOString()
-          ),
-
-          viewerApi.getChannelGameStats(channelId, rangeKey),
-
-          viewerApi.getChannelViewerTrends(channelId, rangeKey),
-        ]);
-
-        // Check if this request is still the latest one (race condition guard)
-        if (currentRequestId !== requestIdRef.current) {
-          // A newer request has been made, discard these results
-          return;
-        }
-
-        if (!channelData) {
-          setError("查無資料");
-
-          return;
-        }
-
-        setStats(channelData);
-
-        setMessageStats(messageData);
-
-        setGameStats(gameData);
-
-        setViewerTrends(trendsData);
-      } catch (err) {
-        // Only set error if this is still the latest request
-        if (currentRequestId === requestIdRef.current) {
-          setError(err instanceof Error ? err.message : "載入統計時發生錯誤");
-        }
-      } finally {
-        // Only clear loading if this is still the latest request
-        if (currentRequestId === requestIdRef.current) {
-          setLoading(false);
-        }
-      }
-    },
-
-    [channelId, user]
-  );
-
-  // Store loadStats in ref for stable reference
-  loadStatsRef.current = loadStats;
-
-  // Initial load - only runs once when component mounts with valid data
+  // 重定向未登入使用者
   useEffect(() => {
-    if (authLoading) return;
-
-    if (!user) {
+    if (!authLoading && !user) {
       router.push("/");
-      return;
     }
-
-    if (!user.viewerId || !channelId) {
-      setError("缺少頻道代碼");
-      setLoading(false);
-      return;
-    }
-
-    // Only load once on mount
-    if (!hasLoadedRef.current) {
-      hasLoadedRef.current = true;
-      loadStats(getRangeDays(timeRange));
-    }
-  }, [authLoading, user, channelId, router, loadStats, timeRange]);
-
-  // Time range change - separate useEffect
-  useEffect(() => {
-    // Skip initial load (handled above)
-    if (!hasLoadedRef.current) return;
-
-    // Reload when time range changes
-    if (loadStatsRef.current) {
-      loadStatsRef.current(getRangeDays(timeRange));
-    }
-  }, [timeRange]);
+  }, [authLoading, user, router]);
 
   const handleRangeChange = (newRange: TimeRange) => {
     setTimeRange(newRange);
@@ -206,18 +97,7 @@ export default function ViewerChannelStatsPage() {
 
   const handleCustomRangeChange = (range: CustomDateRange) => {
     setCustomRange(range);
-
-    const days = getCustomRangeDays(range);
-
-    loadStats(days);
-  };
-
-  const getDisplayDays = () => {
-    if (timeRange === "custom" && customRange) {
-      return getCustomRangeDays(customRange);
-    }
-
-    return getRangeDays(timeRange);
+    // React Query 會自動檢測 days 參數變化並重新請求
   };
 
   if (authLoading || loading) {

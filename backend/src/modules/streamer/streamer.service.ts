@@ -458,6 +458,107 @@ export async function getStreamerGameStats(
     .sort((a, b) => b.totalHours - a.totalHours);
 }
 
+/**
+ * 取得頻道的遊戲/分類統計 (By Channel ID)
+ */
+export async function getChannelGameStats(
+  channelId: string,
+  range: "7d" | "30d" | "90d" = "30d"
+): Promise<GameStats[]> {
+  const now = new Date();
+  let days = 30;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
+  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+  const sessions = await prisma.streamSession.findMany({
+    where: {
+      channelId: channelId,
+      startedAt: { gte: cutoffDate },
+    },
+  });
+
+  const statsMap = new Map<
+    string,
+    { totalSeconds: number; weightedViewersSum: number; peakViewers: number; count: number }
+  >();
+  let totalAllSeconds = 0;
+
+  sessions.forEach((session) => {
+    const game = session.category || "Uncategorized";
+    const duration = session.durationSeconds || 0;
+    const avgViewers = session.avgViewers || 0;
+    const peakViewers = session.peakViewers || 0;
+
+    totalAllSeconds += duration;
+
+    const current = statsMap.get(game) || {
+      totalSeconds: 0,
+      weightedViewersSum: 0,
+      peakViewers: 0,
+      count: 0,
+    };
+    current.totalSeconds += duration;
+    current.weightedViewersSum += avgViewers * duration;
+    current.peakViewers = Math.max(current.peakViewers, peakViewers);
+    current.count += 1;
+    statsMap.set(game, current);
+  });
+
+  return Array.from(statsMap.entries())
+    .map(([gameName, data]) => ({
+      gameName,
+      totalHours: Math.round((data.totalSeconds / 3600) * 10) / 10,
+      avgViewers:
+        data.totalSeconds > 0 ? Math.round(data.weightedViewersSum / data.totalSeconds) : 0,
+      peakViewers: data.peakViewers,
+      streamCount: data.count,
+      percentage:
+        totalAllSeconds > 0 ? Math.round((data.totalSeconds / totalAllSeconds) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.totalHours - a.totalHours);
+}
+
+export interface ViewerTrendPoint {
+  date: string;
+  title: string;
+  avgViewers: number;
+  peakViewers: number;
+  durationHours: number;
+  category: string;
+}
+
+/**
+ * 取得頻道的觀眾趨勢 (By Channel ID)
+ */
+export async function getChannelViewerTrends(
+  channelId: string,
+  range: "7d" | "30d" | "90d" = "30d"
+): Promise<ViewerTrendPoint[]> {
+  const now = new Date();
+  let days = 30;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
+  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+  const sessions = await prisma.streamSession.findMany({
+    where: {
+      channelId: channelId,
+      startedAt: { gte: cutoffDate },
+    },
+    orderBy: { startedAt: "asc" },
+  });
+
+  return sessions.map((session) => ({
+    date: session.startedAt.toISOString(),
+    title: session.title || "Untitled",
+    avgViewers: session.avgViewers || 0,
+    peakViewers: session.peakViewers || 0,
+    durationHours: Math.round(((session.durationSeconds || 0) / 3600) * 10) / 10,
+    category: session.category || "Uncategorized",
+  }));
+}
+
 // ========== Story 6.4 Helpers ==========
 
 export async function getStreamerVideos(streamerId: string, limit = 20, page = 1) {

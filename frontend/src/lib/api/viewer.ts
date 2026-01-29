@@ -1,5 +1,6 @@
 import { httpClient } from "./httpClient";
-import type { VideoResponse, ClipResponse, GameStats } from "./streamer";
+import type { VideoResponse, ClipResponse, GameStats as StreamerGameStats } from "./streamer";
+export type GameStats = StreamerGameStats;
 
 export interface ViewerTrendPoint {
   date: string;
@@ -74,6 +75,98 @@ export interface ViewerChannelStats {
     averageWatchMinutesPerDay: number;
     firstWatchDate: string;
     lastWatchDate: string;
+  };
+}
+
+type ViewerChannelStatsBackendResponse = {
+  dailyStats: RealViewerDailyStat[];
+  timeRange?: { startDate: string; endDate: string; days: number };
+  channel?: ChannelInfo | null;
+  // Some endpoints may already include summary.
+  summary?: Partial<ViewerChannelStats["summary"]>;
+};
+
+function buildViewerChannelSummary(
+  dailyStats: RealViewerDailyStat[]
+): ViewerChannelStats["summary"] {
+  const totalWatchHours = dailyStats.reduce((sum, s) => sum + s.watchHours, 0);
+  const totalMessages = dailyStats.reduce((sum, s) => sum + s.messageCount, 0);
+  const totalEmotes = dailyStats.reduce((sum, s) => sum + s.emoteCount, 0);
+
+  const sessionCount = dailyStats.filter((s) => s.watchHours > 0).length;
+
+  const avgWatchMin =
+    dailyStats.length > 0 ? Math.round((totalWatchHours * 60) / dailyStats.length) : 0;
+
+  return {
+    totalWatchHours: Math.round(totalWatchHours * 10) / 10,
+    totalMessages,
+    totalEmotes,
+    sessionCount,
+    averageWatchMinutesPerDay: avgWatchMin,
+    firstWatchDate: dailyStats.length > 0 ? dailyStats[0].date : "",
+    lastWatchDate: dailyStats.length > 0 ? dailyStats[dailyStats.length - 1].date : "",
+  };
+}
+
+function normalizeViewerChannelStats(
+  channelId: string,
+  input: ViewerChannelStats | ViewerChannelStatsBackendResponse
+): ViewerChannelStats {
+  const dailyStats = Array.isArray(input.dailyStats) ? input.dailyStats : [];
+
+  const receivedChannel = input.channel ?? undefined;
+  const targetChannel: ChannelInfo = receivedChannel || {
+    id: channelId,
+    name: "unknown",
+    displayName: "Loading...",
+    avatarUrl: "",
+    isLive: false,
+    totalWatchHours: 0,
+    totalMessages: 0,
+    lastWatched: "",
+  };
+
+  const computedSummary = buildViewerChannelSummary(dailyStats);
+  const rawSummary = input.summary;
+
+  const summary: ViewerChannelStats["summary"] = rawSummary
+    ? {
+        totalWatchHours:
+          typeof rawSummary.totalWatchHours === "number"
+            ? rawSummary.totalWatchHours
+            : computedSummary.totalWatchHours,
+        totalMessages:
+          typeof rawSummary.totalMessages === "number"
+            ? rawSummary.totalMessages
+            : computedSummary.totalMessages,
+        totalEmotes:
+          typeof rawSummary.totalEmotes === "number"
+            ? rawSummary.totalEmotes
+            : computedSummary.totalEmotes,
+        sessionCount:
+          typeof rawSummary.sessionCount === "number"
+            ? rawSummary.sessionCount
+            : computedSummary.sessionCount,
+        averageWatchMinutesPerDay:
+          typeof rawSummary.averageWatchMinutesPerDay === "number"
+            ? rawSummary.averageWatchMinutesPerDay
+            : computedSummary.averageWatchMinutesPerDay,
+        firstWatchDate:
+          typeof rawSummary.firstWatchDate === "string"
+            ? rawSummary.firstWatchDate
+            : computedSummary.firstWatchDate,
+        lastWatchDate:
+          typeof rawSummary.lastWatchDate === "string"
+            ? rawSummary.lastWatchDate
+            : computedSummary.lastWatchDate,
+      }
+    : computedSummary;
+
+  return {
+    channel: targetChannel,
+    dailyStats,
+    summary,
   };
 }
 
@@ -460,6 +553,41 @@ export const viewerApi = {
       );
     } catch (err) {
       console.warn("Failed to fetch stream hourly stats", err);
+      return null;
+    }
+  },
+
+  /**
+   * P0 BFF Endpoint: 一次取得詳細頁所有資料
+   * 包含：channelStats + messageStats + gameStats + viewerTrends
+   */
+  async getChannelDetailAll(
+    channelId: string,
+    days = 30
+  ): Promise<{
+    channelStats: ViewerChannelStats | null;
+    messageStats: ViewerMessageStatsResponse | null;
+    gameStats: GameStats[] | null;
+    viewerTrends: ViewerTrendPoint[] | null;
+  } | null> {
+    try {
+      const response = await httpClient<{
+        channelStats: ViewerChannelStats | ViewerChannelStatsBackendResponse | null;
+        messageStats: ViewerMessageStatsResponse | null;
+        gameStats: GameStats[] | null;
+        viewerTrends: ViewerTrendPoint[] | null;
+      }>(`/api/viewer/channel-detail/${channelId}?days=${days}`);
+
+      const channelStats = response.channelStats
+        ? normalizeViewerChannelStats(channelId, response.channelStats)
+        : null;
+
+      return {
+        ...response,
+        channelStats,
+      };
+    } catch (err) {
+      console.warn("Failed to fetch channel detail", err);
       return null;
     }
   },

@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Suspense } from "react";
-import { AuthProvider } from "@/features/auth/AuthContext";
-import { ThemeProvider } from "@/features/theme";
+import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 // Google Analytics
@@ -52,15 +51,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <meta name="theme-color" content="#0e0e10" />
       </head>
       <body className={`theme-transition font-sans`}>
-        <ThemeProvider>
-          <AuthProvider>
-            {children}
-            <Toaster />
-            <Suspense fallback={null}>
-              <ConsentBannerWrapper />
-            </Suspense>
-          </AuthProvider>
-        </ThemeProvider>
+        <Providers>
+          {children}
+          <Toaster />
+          <Suspense fallback={null}>
+            <ConsentBannerWrapper />
+          </Suspense>
+        </Providers>
         {process.env.NEXT_PUBLIC_GA_ID && <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />}
       </body>
     </html>

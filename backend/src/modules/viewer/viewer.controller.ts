@@ -2,6 +2,9 @@ import type { Response } from "express";
 import { recordConsent, getChannelStats, getFollowedChannels } from "./viewer.service";
 import type { AuthRequest } from "../auth/auth.middleware";
 import { logger } from "../../utils/logger";
+import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
+import { ViewerMessageStatsController } from "./viewer-message-stats.controller";
+import { getChannelGameStats, getChannelViewerTrends } from "../streamer/streamer.service";
 
 export class ViewerController {
   public consent = async (req: AuthRequest, res: Response) => {
@@ -93,4 +96,134 @@ export class ViewerController {
       return res.status(500).json({ error: "Internal Server Error" });
     }
   };
+
+  /**
+   * P0 BFF Endpoint: 聚合詳細頁所需的所有資料
+   * 一次 API 呼叫返回：channelStats + messageStats + gameStats + viewerTrends
+   */
+  public getChannelDetailAll = async (req: AuthRequest, res: Response) => {
+    const requestStart = Date.now();
+
+    if (!req.user?.viewerId) {
+      return res.status(403).json({ error: "Forbidden: No viewer profile" });
+    }
+
+    const { channelId } = req.params;
+    if (!channelId) {
+      return res.status(400).json({ error: "Channel ID is required" });
+    }
+
+    // 解析查詢參數
+    const days = parseInt((req.query.days as string) || "30");
+    const rangeKey = days === 7 ? "7d" : days === 90 ? "90d" : "30d";
+
+    if (isNaN(days) || days < 1 || days > 365) {
+      return res.status(400).json({ error: "days must be between 1 and 365" });
+    }
+
+    const viewerId = req.user.viewerId;
+
+    // 使用快取
+    const cacheKey = `channel-detail-all:${viewerId}:${channelId}:${days}d`;
+    const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
+
+    try {
+      const result = await cacheManager.getOrSet(
+        cacheKey,
+        async () => {
+          // 計算日期範圍
+          const endDate = new Date();
+          const startDate = new Date();
+          startDate.setDate(endDate.getDate() - days);
+
+          // 並行查詢所有資料源，使用 Promise.allSettled 避免單點失敗
+          const [channelStatsResult, messageStatsResult, gameStatsResult, viewerTrendsResult] =
+            await Promise.allSettled([
+              getChannelStats(viewerId, channelId, days),
+              this.getMessageStatsInternal(
+                viewerId,
+                channelId,
+                startDate.toISOString(),
+                endDate.toISOString()
+              ),
+              getChannelGameStats(channelId, rangeKey),
+              getChannelViewerTrends(channelId, rangeKey),
+            ]);
+
+          // 提取成功的結果
+          const channelStats =
+            channelStatsResult.status === "fulfilled" ? channelStatsResult.value : null;
+          const messageStats =
+            messageStatsResult.status === "fulfilled" ? messageStatsResult.value : null;
+          const gameStats = gameStatsResult.status === "fulfilled" ? gameStatsResult.value : null;
+          const viewerTrends =
+            viewerTrendsResult.status === "fulfilled" ? viewerTrendsResult.value : null;
+
+          // 記錄失敗的請求
+          if (channelStatsResult.status === "rejected") {
+            logger.warn("BFF", "channelStats failed:", channelStatsResult.reason);
+          }
+          if (messageStatsResult.status === "rejected") {
+            logger.warn("BFF", "messageStats failed:", messageStatsResult.reason);
+          }
+          if (gameStatsResult.status === "rejected") {
+            logger.warn("BFF", "gameStats failed:", gameStatsResult.reason);
+          }
+          if (viewerTrendsResult.status === "rejected") {
+            logger.warn("BFF", "viewerTrends failed:", viewerTrendsResult.reason);
+          }
+
+          return {
+            channelStats,
+            messageStats,
+            gameStats,
+            viewerTrends,
+          };
+        },
+        ttl
+      );
+
+      const duration = Date.now() - requestStart;
+      if (duration > 500) {
+        logger.warn("BFF", `Slow BFF query: ${duration}ms for channel ${channelId}`);
+      }
+
+      return res.json(result);
+    } catch (err) {
+      logger.error("BFF", "Error in getChannelDetailAll:", err);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+  };
+
+  /**
+   * 內部方法：獲取留言統計（用於 BFF 聚合）
+   */
+  private async getMessageStatsInternal(
+    viewerId: string,
+    channelId: string,
+    startDate: string,
+    endDate: string
+  ) {
+    const messageStatsController = new ViewerMessageStatsController();
+    // 創建模擬的 req 和 res 對象
+    const mockReq = {
+      params: { viewerId, channelId },
+      query: { startDate, endDate },
+      // Mock AuthRequest parts if needed by getMessageStats
+      user: { viewerId },
+    } as unknown as AuthRequest;
+
+    let result: unknown = null;
+    const mockRes = {
+      json: (data: unknown) => {
+        result = data;
+        return mockRes;
+      },
+      status: () => mockRes,
+      // Add other methods if needed
+    } as unknown as Response;
+
+    await messageStatsController.getMessageStats(mockReq, mockRes);
+    return result;
+  }
 }

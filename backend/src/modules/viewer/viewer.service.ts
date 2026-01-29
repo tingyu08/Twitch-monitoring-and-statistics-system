@@ -296,15 +296,21 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         console.timeLog(label, "Mapping Done");
 
         // 排序
-        const sorted = results.sort((a, b) => {
-          // 1. Live first
-          if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
-          // 2. Last Watched desc
-          if (a.lastWatched && b.lastWatched) {
-            return new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime();
-          }
-          return 0;
-        });
+          const sorted = results.sort((a, b) => {
+            // 1. Live first
+            if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+
+            // 2. Last Watched desc (treat missing lastWatched as older)
+            const aLast = a.lastWatched ? new Date(a.lastWatched).getTime() : null;
+            const bLast = b.lastWatched ? new Date(b.lastWatched).getTime() : null;
+
+            if (aLast !== null && bLast !== null) return bLast - aLast;
+            if (aLast !== null && bLast === null) return -1;
+            if (aLast === null && bLast !== null) return 1;
+
+            return 0;
+          });
+
 
         console.timeEnd(label);
         return sorted;

@@ -9,6 +9,8 @@ import { viewerApi, type FollowedChannel } from "@/lib/api/viewer";
 import { isViewer } from "@/lib/api/auth";
 import { useSocket } from "@/lib/socket";
 import { DashboardHeader } from "@/components";
+import { useChannels } from "@/hooks/useViewer";
+import { useQueryClient } from "@tanstack/react-query";
 
 // 每頁顯示的頻道數量
 const CHANNELS_PER_PAGE = 24;
@@ -33,143 +35,124 @@ export default function ViewerDashboardPage() {
   const locale = useLocale();
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuthSession();
-  const [channels, setChannels] = useState<FollowedChannel[]>([]);
+  const queryClient = useQueryClient();
+
+  // P1 優化：使用 React Query 管理頻道資料，自動處理快取和去重
+  const {
+    data: channels = [],
+    isLoading: loading,
+    error: queryError,
+    refetch: refetchChannels,
+  } = useChannels();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredChannels, setFilteredChannels] = useState<FollowedChannel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // 分頁狀態
   const [currentPage, setCurrentPage] = useState(1);
   const lastNotifiedChannelsRef = useRef<string>("");
 
-  // 追蹤是否已載入，避免重複請求
-  const hasLoadedRef = useRef(false);
-  const loadChannelsRef = useRef<(silent?: boolean) => Promise<void>>();
-
   const { socket, connected: socketConnected } = useSocket();
 
-  const loadChannels = useCallback(async (silent = false) => {
-    try {
-      if (!silent) setLoading(true);
-      const data = await viewerApi.getFollowedChannels();
-      setChannels(data);
-      if (!hasLoadedRef.current) {
-        hasLoadedRef.current = true;
-      }
-    } catch (err) {
-      if (!silent) setError(err instanceof Error ? err.message : "載入頻道失敗");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+  const error = queryError ? queryError.message : null;
 
-  // 儲存最新的 loadChannels 到 ref
-  loadChannelsRef.current = loadChannels;
-
-  // 初始載入資料（只執行一次）
+  // 重定向未登入使用者
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
+    if (!authLoading && !user) {
       router.push("/");
-      return;
     }
-
-    // 只在尚未載入時執行
-    if (!hasLoadedRef.current) {
-      loadChannels();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user, router]);
 
-  // WebSocket 事件監聽（分離到獨立的 useEffect）
+  // WebSocket 事件監聽（使用 React Query 更新快取）
   useEffect(() => {
     if (!socket || !socketConnected) return;
 
     // 處理訊息統計更新
     const handleStatsUpdate = (data: { channelId: string; messageCount: number }) => {
-        setChannels((prev) =>
-          prev.map((ch) => {
-            if (ch.id === data.channelId) {
-              return {
-                ...ch,
-                messageCount: ch.messageCount + data.messageCount,
-              };
-            }
-            return ch;
-          })
-        );
-      };
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+        return prev.map((ch) => {
+          if (ch.id === data.channelId) {
+            return {
+              ...ch,
+              messageCount: ch.messageCount + data.messageCount,
+            };
+          }
+          return ch;
+        });
+      });
+    };
 
-      // 處理開台事件
-      const handleStreamOnline = (data: {
-        channelId: string;
-        channelName: string;
-        title?: string;
-        gameName?: string;
-        viewerCount?: number;
-        startedAt?: string;
-      }) => {
-        console.log("[WebSocket] Stream online:", data);
-        setChannels((prev) =>
-          prev.map((ch) => {
-            if (ch.id === data.channelId || ch.channelName === data.channelName) {
-              return {
-                ...ch,
-                isLive: true,
-                currentTitle: data.title || ch.currentTitle,
-                currentGameName: data.gameName || ch.currentGameName,
-                currentViewerCount: data.viewerCount || 0,
-                currentStreamStartedAt: data.startedAt || new Date().toISOString(),
-              };
-            }
-            return ch;
-          })
-        );
-      };
+    // 處理開台事件
+    const handleStreamOnline = (data: {
+      channelId: string;
+      channelName: string;
+      title?: string;
+      gameName?: string;
+      viewerCount?: number;
+      startedAt?: string;
+    }) => {
+      console.log("[WebSocket] Stream online:", data);
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+        return prev.map((ch) => {
+          if (ch.id === data.channelId || ch.channelName === data.channelName) {
+            return {
+              ...ch,
+              isLive: true,
+              currentTitle: data.title || ch.currentTitle,
+              currentGameName: data.gameName || ch.currentGameName,
+              currentViewerCount: data.viewerCount || 0,
+              currentStreamStartedAt: data.startedAt || new Date().toISOString(),
+            };
+          }
+          return ch;
+        });
+      });
+    };
 
-      // 處理關台事件
-      const handleStreamOffline = (data: { channelId: string; channelName: string }) => {
-        console.log("[WebSocket] Stream offline:", data);
-        setChannels((prev) =>
-          prev.map((ch) => {
-            if (ch.id === data.channelId || ch.channelName === data.channelName) {
-              return {
-                ...ch,
-                isLive: false,
-                currentViewerCount: 0,
-                currentStreamStartedAt: undefined,
-              };
-            }
-            return ch;
-          })
-        );
-      };
+    // 處理關台事件
+    const handleStreamOffline = (data: { channelId: string; channelName: string }) => {
+      console.log("[WebSocket] Stream offline:", data);
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+        return prev.map((ch) => {
+          if (ch.id === data.channelId || ch.channelName === data.channelName) {
+            return {
+              ...ch,
+              isLive: false,
+              currentViewerCount: 0,
+              currentStreamStartedAt: undefined,
+            };
+          }
+          return ch;
+        });
+      });
+    };
 
-      // 處理頻道更新事件（觀眾數、標題等）
-      const handleChannelUpdate = (data: {
-        channelId: string;
-        channelName: string;
-        isLive?: boolean;
-        viewerCount?: number;
-        title?: string;
-        gameName?: string;
-      }) => {
-        setChannels((prev) =>
-          prev.map((ch) => {
-            if (ch.id === data.channelId || ch.channelName === data.channelName) {
-              return {
-                ...ch,
-                isLive: data.isLive ?? ch.isLive,
-                currentViewerCount: data.viewerCount ?? ch.currentViewerCount,
-                currentTitle: data.title || ch.currentTitle,
-                currentGameName: data.gameName || ch.currentGameName,
-              };
-            }
-            return ch;
-          })
-        );
-      };
+    // 處理頻道更新事件（觀眾數、標題等）
+    const handleChannelUpdate = (data: {
+      channelId: string;
+      channelName: string;
+      isLive?: boolean;
+      viewerCount?: number;
+      title?: string;
+      gameName?: string;
+    }) => {
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+        return prev.map((ch) => {
+          if (ch.id === data.channelId || ch.channelName === data.channelName) {
+            return {
+              ...ch,
+              isLive: data.isLive ?? ch.isLive,
+              currentViewerCount: data.viewerCount ?? ch.currentViewerCount,
+              currentTitle: data.title || ch.currentTitle,
+              currentGameName: data.gameName || ch.currentGameName,
+            };
+          }
+          return ch;
+        });
+      });
+    };
 
     socket.on("stats-update", handleStatsUpdate);
     socket.on("stream.online", handleStreamOnline);
@@ -182,35 +165,26 @@ export default function ViewerDashboardPage() {
       socket.off("stream.offline", handleStreamOffline);
       socket.off("channel.update", handleChannelUpdate);
     };
-  }, [socket, socketConnected]);
+  }, [socket, socketConnected, queryClient]);
 
-  // 自動輪詢: 每 60 秒更新一次頻道列表 (包含開台狀態)
+  // P1 優化：React Query 自動處理輪詢，不需要手動設置 interval
+  // 只需要在頁面可見時定期重新驗證資料
   useEffect(() => {
     if (!user) return;
 
-    const poll = () => {
-      // 只有在頁面可見時才執行更新，節省資源
-      if (document.visibilityState === "visible" && loadChannelsRef.current) {
-        loadChannelsRef.current(true);
-      }
-    };
-
-    const intervalId = setInterval(poll, 60000); // 60秒
-
-    // 額外: 當使用者切換回此分頁時，立即更新一次
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && loadChannelsRef.current) {
-        loadChannelsRef.current(true);
+      if (document.visibilityState === "visible") {
+        // React Query 會自動檢查 staleTime，避免過度請求
+        refetchChannels();
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [user]);
+  }, [user, refetchChannels]);
 
   // 過濾頻道
   useEffect(() => {

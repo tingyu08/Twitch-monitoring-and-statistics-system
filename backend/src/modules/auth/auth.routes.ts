@@ -4,6 +4,8 @@ import { requireAuth, type AuthRequest } from "./auth.middleware";
 import type { Response } from "express";
 import { prisma } from "../../db/prisma";
 import { env } from "../../config/env";
+import { getFollowedChannels } from "../viewer/viewer.service";
+import { logger } from "../../utils/logger";
 
 // P1 Fix: 統一 Cookie 設定，避免 sameSite 不一致導致清除失敗
 const getCookieOptions = () => ({
@@ -41,6 +43,16 @@ export async function getMeHandler(req: AuthRequest, res: Response): Promise<voi
 
       consentedAt = viewerRecord?.consentedAt?.toISOString() ?? null;
       consentVersion = viewerRecord?.consentVersion ?? null;
+
+      // P1 優化：預熱 channels 快取，讓使用者進入 dashboard 時資料已經準備好
+      // 使用 Promise 但不等待，讓它在背景執行，不阻塞回應
+      getFollowedChannels(req.user.viewerId)
+        .then(() => {
+          logger.info("AuthAPI", `Preheated channels cache for viewer ${req.user.viewerId}`);
+        })
+        .catch((err) => {
+          logger.warn("AuthAPI", "Failed to preheat channels cache:", err);
+        });
     }
 
     const response = {

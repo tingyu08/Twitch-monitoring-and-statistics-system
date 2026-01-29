@@ -9,6 +9,7 @@ import { ViewerPrivacyController } from "./viewer-privacy.controller";
 import { chatListenerManager } from "../../services/chat-listener-manager";
 import type { AuthRequest } from "../auth/auth.middleware";
 import { logger } from "../../utils/logger";
+import { semiStaticCache, dynamicCache, noCache } from "../../middlewares/cache-control.middleware";
 
 const controller = new ViewerController();
 const messageStatsController = new ViewerMessageStatsController();
@@ -27,19 +28,30 @@ viewerApiRoutes.post(
 viewerApiRoutes.get(
   "/stats/:channelId",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  dynamicCache, // P2 優化：10 秒快取
   controller.getChannelStats
+);
+
+// P0 BFF Endpoint: 聚合詳細頁所有資料
+viewerApiRoutes.get(
+  "/channel-detail/:channelId",
+  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  dynamicCache, // P2 優化：10 秒快取（BFF 聚合端點）
+  controller.getChannelDetailAll
 );
 
 // New Interaction Stats Route
 viewerApiRoutes.get(
   "/:viewerId/channels/:channelId/message-stats",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  dynamicCache, // P2 優化：10 秒快取
   messageStatsController.getMessageStats
 );
 
 viewerApiRoutes.get(
   "/channels",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  semiStaticCache, // P2 優化：30 秒快取
   controller.getChannels
 );
 
@@ -47,6 +59,7 @@ viewerApiRoutes.get(
 viewerApiRoutes.get(
   "/privacy/settings",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  noCache, // P2 優化：隱私資料不快取
   privacyController.getPrivacySettings.bind(privacyController)
 );
 
@@ -54,12 +67,14 @@ viewerApiRoutes.put(
   "/privacy/settings",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
   validateRequest(schemas.updatePrivacySettingsSchema),
+  noCache, // P2 優化：隱私資料不快取
   privacyController.updatePrivacySettings.bind(privacyController)
 );
 
 viewerApiRoutes.get(
   "/privacy/data-summary",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  noCache, // P2 優化：隱私資料不快取
   privacyController.getDataSummary.bind(privacyController)
 );
 

@@ -20,6 +20,7 @@ import {
 } from "./streamer-stats.controller";
 import streamerSettingsRoutes from "./streamer-settings.routes";
 import revenueRoutes from "./revenue.routes";
+import { staticDataCache, dynamicCache } from "../../middlewares/cache-control.middleware";
 
 const router = Router();
 
@@ -68,10 +69,11 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // Public Routes (Viewer Dashboard Access)
-router.get("/:streamerId/videos", getPublicVideosHandler);
-router.get("/:streamerId/clips", getPublicClipsHandler);
-router.get("/:streamerId/game-stats", getPublicGameStatsHandler);
-router.get("/:streamerId/viewer-trends", getPublicViewerTrendsHandler);
-router.get("/:streamerId/stream-hourly", getPublicStreamHourlyHandler);
+// P2 優化：靜態資料使用長時間快取（5 分鐘）
+router.get("/:streamerId/videos", staticDataCache, getPublicVideosHandler);
+router.get("/:streamerId/clips", staticDataCache, getPublicClipsHandler);
+router.get("/:streamerId/game-stats", staticDataCache, getPublicGameStatsHandler);
+router.get("/:streamerId/viewer-trends", staticDataCache, getPublicViewerTrendsHandler);
+router.get("/:streamerId/stream-hourly", dynamicCache, getPublicStreamHourlyHandler); // 小時統計較動態，使用 10 秒快取
 
 export const streamerRoutes = router;

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useRef, type ReactNode } from "react";
 import {
   getMe,
   logout as apiLogout,
@@ -28,18 +28,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // P0 Fix: 防止重複初始化
+  const isInitializedRef = useRef(false);
+  const isFetchingRef = useRef(false);
+
   const fetchUser = async () => {
+    // 防止並發請求
+    if (isFetchingRef.current) {
+      return;
+    }
+
     try {
+      isFetchingRef.current = true;
       setLoading(true);
       setError(null);
 
       const userData = await getMe();
       setUser(userData);
+      isInitializedRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch user");
       setUser(null);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
@@ -72,8 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/";
   };
 
+  // P0 Fix: 只在首次掛載時執行一次
   useEffect(() => {
-    fetchUser();
+    if (!isInitializedRef.current && !isFetchingRef.current) {
+      fetchUser();
+    }
   }, []);
 
   const isStreamer = useMemo(() => user !== null && checkIsStreamer(user), [user]);
