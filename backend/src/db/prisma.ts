@@ -26,16 +26,29 @@ if (isTurso && authToken) {
   // 生產環境：使用 Turso 雲端資料庫
   console.log("[INFO] 使用 Turso 雲端資料庫");
 
+  // 診斷日誌：確認變數值
+  console.log("[DEBUG] databaseUrl =", databaseUrl);
+  console.log("[DEBUG] authToken length =", authToken?.length || 0);
+  console.log("[DEBUG] isTurso =", isTurso);
+
   // 直接傳配置物件給 PrismaLibSql adapter
-  adapter = new PrismaLibSql({
+  const adapterConfig = {
     url: databaseUrl,
     authToken: authToken,
-  });
+  };
+
+  console.log("[DEBUG] Adapter config:", JSON.stringify({
+    url: adapterConfig.url?.substring(0, 30) + "...",
+    hasAuthToken: !!adapterConfig.authToken
+  }));
+
+  adapter = new PrismaLibSql(adapterConfig);
 
   console.log("[INFO] Turso 連線配置完成");
 } else {
   // 開發環境：使用本地原生 SQLite (避免 Adapter 版本相容問題)
   console.log("[DEBUG] 使用原生 Prisma Client (本地 SQLite)");
+  console.log("[DEBUG] isTurso =", isTurso, "authToken =", !!authToken);
 }
 
 const prismaOptions = {
