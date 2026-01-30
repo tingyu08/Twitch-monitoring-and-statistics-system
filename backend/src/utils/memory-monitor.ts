@@ -126,16 +126,33 @@ export class MemoryMonitor {
    * 處理記憶體危險
    */
   private handleCritical(stats: MemoryStats): void {
+    const percentage = ((stats.heapUsed / 512) * 100).toFixed(1);
     logger.error(
       "MemoryMonitor",
-      `🚨 記憶體使用超過危險線: ${stats.heapUsed}MB / ${this.criticalThresholdMB}MB`
+      `🚨 記憶體使用超過危險線: ${stats.heapUsed}MB / 512MB (${percentage}%)`
     );
 
-    // 強制觸發 GC
+    // 強制觸發 GC（多次）
     this.tryGC();
 
-    // 可以在這裡添加更激進的清理邏輯
-    // 例如：清空快取、中斷長任務等
+    // 激進清理：清空快取
+    this.clearCaches();
+  }
+
+  /**
+   * 清空快取以釋放記憶體
+   */
+  private clearCaches(): void {
+    try {
+      // 清空快取管理器
+      const { cacheManager } = require("./cache-manager");
+      if (cacheManager && typeof cacheManager.clear === "function") {
+        cacheManager.clear();
+        logger.info("MemoryMonitor", "已清空所有快取");
+      }
+    } catch (error) {
+      logger.error("MemoryMonitor", "清空快取失敗", error);
+    }
   }
 
   /**
@@ -184,12 +201,13 @@ export class MemoryMonitor {
 }
 
 // 導出單例（Render Free Tier: 512MB 限制）
+// 降低閾值以更早觸發 GC
 export const memoryMonitor = new MemoryMonitor(
-  parseInt(process.env.MEMORY_WARNING_MB || "400"),
-  parseInt(process.env.MEMORY_CRITICAL_MB || "480")
+  parseInt(process.env.MEMORY_WARNING_MB || "300"),  // 從 400 降至 300
+  parseInt(process.env.MEMORY_CRITICAL_MB || "380")  // 從 480 降至 380
 );
 
 // 自動啟動監控（生產環境）
 if (process.env.NODE_ENV === "production") {
-  memoryMonitor.start(30000); // 每 30 秒檢查一次
+  memoryMonitor.start(15000); // 從 30 秒縮短到 15 秒，更頻繁檢查
 }

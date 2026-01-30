@@ -16,36 +16,17 @@ import { updateLiveStatusJob } from "./update-live-status.job";
 import { logger } from "../utils/logger";
 
 /**
- * 啟動所有定時任務
+ * 啟動所有定時任務（Render Free Tier 優化版）
  */
 export function startAllJobs(): void {
-  logger.info("Jobs", "正在啟動所有定時任務...");
+  logger.info("Jobs", "正在啟動定時任務（分階段啟動以減少記憶體壓力）...");
 
-  // 訊息聚合任務
-  startMessageAggregationJob();
+  // === 階段 1: 立即啟動核心任務 ===
 
-  // 全時段統計聚合任務
-  updateLifetimeStatsJob();
-
-  // Story 2.5: 資料保留與刪除任務
-  dataRetentionJob.start();
-
-  // Story 3.3: 開播狀態輪詢任務
+  // Story 3.3: 開播狀態輪詢任務（核心功能）
   streamStatusJob.start();
 
-  // Story 3.3: 頻道統計同步任務
-  channelStatsSyncJob.start();
-
-  // Story 3.6: 使用者追蹤同步任務
-  syncUserFollowsJob.start();
-
-  // Story 6.4: VOD 與剪輯同步任務
-  syncVideosJob.start();
-
-  // Epic 4: 訂閱快照同步任務
-  syncSubscriptionsJob.start();
-
-  // 優化: 即時直播狀態更新任務
+  // 優化: 即時直播狀態更新任務（核心功能）
   updateLiveStatusJob.start();
 
   // Token 驗證任務 - 每天凌晨 4 點執行（低流量時段）
@@ -59,7 +40,38 @@ export function startAllJobs(): void {
     }
   });
 
-  logger.info("Jobs", "所有定時任務已啟動");
+  // === 階段 2: 延遲 2 分鐘後啟動次要任務 ===
+  setTimeout(() => {
+    logger.info("Jobs", "啟動次要任務...");
+
+    // 訊息聚合任務
+    startMessageAggregationJob();
+
+    // 全時段統計聚合任務
+    updateLifetimeStatsJob();
+
+    // Story 3.3: 頻道統計同步任務
+    channelStatsSyncJob.start();
+  }, 2 * 60 * 1000); // 2 分鐘
+
+  // === 階段 3: 延遲 5 分鐘後啟動低優先級任務 ===
+  setTimeout(() => {
+    logger.info("Jobs", "啟動低優先級任務...");
+
+    // Story 2.5: 資料保留與刪除任務
+    dataRetentionJob.start();
+
+    // Story 3.6: 使用者追蹤同步任務
+    syncUserFollowsJob.start();
+
+    // Story 6.4: VOD 與剪輯同步任務
+    syncVideosJob.start();
+
+    // Epic 4: 訂閱快照同步任務
+    syncSubscriptionsJob.start();
+  }, 5 * 60 * 1000); // 5 分鐘
+
+  logger.info("Jobs", "核心定時任務已啟動（其他任務將在背景分階段啟動）");
 }
 
 /**

@@ -9,6 +9,7 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
+import { memoryMonitor } from "../utils/memory-monitor";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
@@ -16,8 +17,8 @@ const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
 
-// 超時時間（毫秒）- 5 分鐘（Render Free Tier 優化：增加容錯時間）
-const JOB_TIMEOUT_MS = 5 * 60 * 1000;
+// 超時時間（毫秒）- Render Free Tier 優化：縮短超時以避免長時間佔用資源
+const JOB_TIMEOUT_MS = 2 * 60 * 1000; // 從 5 分鐘縮短到 2 分鐘
 
 export interface StreamStatusResult {
   checked: number;
@@ -48,6 +49,18 @@ export class StreamStatusJob {
   async execute(): Promise<StreamStatusResult> {
     if (this.isRunning) {
       logger.debug("JOB", "Stream Status Job 正在執行中，跳過...");
+      return {
+        checked: 0,
+        online: 0,
+        offline: 0,
+        newSessions: 0,
+        endedSessions: 0,
+      };
+    }
+
+    // 記憶體檢查：如果記憶體不足，跳過此次執行
+    if (memoryMonitor.isOverLimit()) {
+      logger.warn("JOB", "記憶體不足，跳過 Stream Status Job");
       return {
         checked: 0,
         online: 0,
@@ -116,7 +129,20 @@ export class StreamStatusJob {
    * 實際執行邏輯（優化版：並行處理 + 減少 DB 查詢）
    */
   private async doExecute(result: StreamStatusResult): Promise<void> {
-    // 1. 獲取所有需要監控的頻道
+    // 1. 資料庫連線檢查（超時保護）
+    try {
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("DB connection timeout")), 3000)
+        ),
+      ]);
+    } catch (error) {
+      logger.error("JOB", "資料庫連線失敗，跳過此次執行", error);
+      return;
+    }
+
+    // 2. 獲取所有需要監控的頻道
     const channels = await this.getActiveChannels();
     result.checked = channels.length;
 
@@ -125,14 +151,14 @@ export class StreamStatusJob {
       return;
     }
 
-    // 2. 批次查詢開播狀態
+    // 3. 批次查詢開播狀態
     const twitchChannelIds = channels.map((c) => c.twitchChannelId);
     const liveStreams = await this.fetchStreamStatuses(twitchChannelIds);
     const liveStreamMap = new Map(liveStreams.map((s) => [s.userId, s]));
 
     logger.debug("JOB", `正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`);
 
-    // 3. 一次查詢所有 active sessions
+    // 4. 一次查詢所有 active sessions
     const channelIds = channels.map((c) => c.id);
     const activeSessions = await prisma.streamSession.findMany({
       where: {
@@ -142,9 +168,9 @@ export class StreamStatusJob {
     });
     const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
-    // 4. 處理每個頻道的狀態變化（並行處理，限制並發數）
-    // Render Free Tier 優化：降低並發以減少遠端 DB 壓力
-    const CONCURRENCY_LIMIT = process.env.NODE_ENV === "production" ? 3 : 5;
+    // 5. 處理每個頻道的狀態變化（並行處理，限制並發數）
+    // Render Free Tier 優化：大幅降低並發以減少記憶體使用
+    const CONCURRENCY_LIMIT = process.env.NODE_ENV === "production" ? 2 : 5;
 
     // 將任務分組進行並行處理
     const tasks = channels.map(async (channel) => {
@@ -178,6 +204,16 @@ export class StreamStatusJob {
 
     // 執行並發控制
     await this.runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+
+    // 6. 清理大型物件以釋放記憶體
+    liveStreamMap.clear();
+    activeSessionMap.clear();
+
+    // 7. 執行後觸發 GC（如果記憶體使用較高）
+    if (memoryMonitor.isNearLimit() && global.gc) {
+      global.gc();
+      logger.debug("JOB", "Job 執行後觸發 GC");
+    }
   }
 
   /**

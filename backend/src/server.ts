@@ -59,11 +59,16 @@ httpServer.listen(PORT, async () => {
     try {
       // 1. 先啟動定時任務（輕量級）- 但在生產環境延遲啟動
       if (process.env.NODE_ENV === "production") {
-        // 生產環境：延遲 30 秒啟動定時任務，讓健康檢查先通過
+        // 生產環境：延遲 60 秒啟動定時任務，讓伺服器完全穩定後再啟動背景任務
         setTimeout(() => {
-          startAllJobs();
-          logger.info("Server", "定時任務已啟動（延遲啟動）");
-        }, 30000);
+          // 檢查記憶體狀況，如果記憶體已經很高則跳過
+          if (!memoryMonitor.isOverLimit()) {
+            startAllJobs();
+            logger.info("Server", "定時任務已啟動（延遲啟動）");
+          } else {
+            logger.warn("Server", "記憶體不足，跳過定時任務啟動");
+          }
+        }, 60000); // 從 30 秒增加到 60 秒
       } else {
         startAllJobs();
       }

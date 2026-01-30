@@ -18,6 +18,11 @@ services:
         value: production
       - key: PORT
         value: 4000
+      # 記憶體管理（Render Free Tier: 512MB）
+      - key: MEMORY_WARNING_MB
+        value: 300
+      - key: MEMORY_CRITICAL_MB
+        value: 380
       # 資料庫設定 (Turso)
       - key: DATABASE_URL
         sync: false # libsql://xxx.turso.io
