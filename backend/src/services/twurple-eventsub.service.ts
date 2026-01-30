@@ -344,7 +344,7 @@ class TwurpleEventSubService {
       );
 
       // 推送 WebSocket 事件
-      webSocketGateway.emit("stream.online", {
+      webSocketGateway.broadcastStreamStatus("stream.online", {
         channelId: channel.id,
         channelName: channel.channelName,
         twitchChannelId,
@@ -420,7 +420,7 @@ class TwurpleEventSubService {
       );
 
       // 推送 WebSocket 事件
-      webSocketGateway.emit("stream.offline", {
+      webSocketGateway.broadcastStreamStatus("stream.offline", {
         channelId: channel.id,
         channelName: channel.channelName,
         twitchChannelId,

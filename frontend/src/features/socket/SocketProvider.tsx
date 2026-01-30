@@ -14,6 +14,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const joinedChannelsRef = useRef<Set<string>>(new Set());
   const joinedViewerRef = useRef<string | null>(null);
 
+  // Implement join/leave channel methods
+
   // Event handlers for WebSocket lifecycle
   const handleConnect = useCallback(
     (socket: Socket) => {
@@ -27,7 +29,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       // Re-join any previously joined channels
       joinedChannelsRef.current.forEach((channelId) => {
-        socket.emit("join-channel", { channelId });
+        socket.emit("join-channel", channelId);
       });
     },
     [user?.viewerId]
@@ -53,6 +55,41 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     onReconnecting: handleReconnecting,
     onError: handleError,
   });
+
+  // Implement join/leave channel methods
+  const joinChannel = useCallback(
+    (channelId: string) => {
+      if (!channelId) return;
+
+      // Track joined channels locally
+      if (!joinedChannelsRef.current.has(channelId)) {
+        joinedChannelsRef.current.add(channelId);
+        console.log(`[SocketProvider] Tracking channel join: ${channelId}`);
+
+        if (socket?.connected) {
+          // Backend expects a string ID, not an object
+          socket.emit("join-channel", channelId);
+        }
+      }
+    },
+    [socket]
+  );
+
+  const leaveChannel = useCallback(
+    (channelId: string) => {
+      if (!channelId) return;
+
+      if (joinedChannelsRef.current.has(channelId)) {
+        joinedChannelsRef.current.delete(channelId);
+        console.log(`[SocketProvider] Tracking channel leave: ${channelId}`);
+
+        if (socket?.connected) {
+          socket.emit("leave-channel", channelId);
+        }
+      }
+    },
+    [socket]
+  );
 
   // Connect/disconnect based on user authentication
   useEffect(() => {
@@ -102,11 +139,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
 
     // 監聽聊天室熱度
-    const handleChatHeat = (data: {
-      channelName: string;
-      heatLevel: number;
-      message: string;
-    }) => {
+    const handleChatHeat = (data: { channelName: string; heatLevel: number; message: string }) => {
       console.log("Chat Heat:", data);
       toast.warning(`${data.channelName} ${t("chatHeat")} 🔥 (${data.heatLevel}+ / 5s)`, {
         description: data.message,
@@ -116,11 +149,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
 
     // 監聽 Raid 事件
-    const handleStreamRaid = (data: {
-      channelName: string;
-      raider: string;
-      viewers: number;
-    }) => {
+    const handleStreamRaid = (data: { channelName: string; raider: string; viewers: number }) => {
       console.log("Raid:", data);
       toast.success(`🚀 ${data.raider} → ${data.channelName}`, {
         description: `${t("raidAlert", {
@@ -165,7 +194,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [reconnectAttempt]);
 
   return (
-    <SocketContext.Provider value={{ socket, connected }}>
+    <SocketContext.Provider value={{ socket, connected, joinChannel, leaveChannel }}>
       {children}
     </SocketContext.Provider>
   );

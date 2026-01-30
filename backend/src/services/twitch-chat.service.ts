@@ -304,7 +304,10 @@ export class TwurpleChatService {
         await this.chatClient.join(channelName);
         this.channels.add(channelName);
         if (retryCount > 0) {
-          logger.info("Twurple Chat", `Successfully joined channel ${channelName} after ${retryCount} retries`);
+          logger.info(
+            "Twurple Chat",
+            `Successfully joined channel ${channelName} after ${retryCount} retries`
+          );
         }
         // logger.info("Twurple Chat", `Joined channel: ${channelName}`);
       }
@@ -412,7 +415,7 @@ export class TwurpleChatService {
           `🔥 Channel ${channelName} is heating up! (${timestamps.length} msgs/5s)`
         );
 
-        webSocketGateway.emit("chat.heat", {
+        webSocketGateway.broadcastChatHeat({
           channelName,
           heatLevel: timestamps.length,
           message: text.substring(0, 20), // 附帶最後一則訊息作為範例
@@ -518,7 +521,7 @@ export class TwurpleChatService {
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
 
       // 強制推播 Raid 事件
-      webSocketGateway.emit("stream.raid", {
+      webSocketGateway.broadcastRaid({
         channelName,
         raider: raidInfo.displayName || user,
         viewers: viewerCount,

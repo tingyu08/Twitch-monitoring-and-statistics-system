@@ -7,11 +7,15 @@ export const SOCKET_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localho
 interface SocketContextType {
   socket: Socket | null;
   connected: boolean;
+  joinChannel: (channelId: string) => void;
+  leaveChannel: (channelId: string) => void;
 }
 
 export const SocketContext = createContext<SocketContextType>({
   socket: null,
   connected: false,
+  joinChannel: () => {},
+  leaveChannel: () => {},
 });
 
 export const useSocket = () => useContext(SocketContext);

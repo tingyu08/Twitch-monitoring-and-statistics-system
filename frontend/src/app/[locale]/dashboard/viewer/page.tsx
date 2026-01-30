@@ -50,7 +50,7 @@ export default function ViewerDashboardPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const lastNotifiedChannelsRef = useRef<string>("");
 
-  const { socket, connected: socketConnected } = useSocket();
+  const { socket, connected: socketConnected, joinChannel, leaveChannel } = useSocket();
 
   const error = queryError ? queryError.message : null;
 
@@ -238,6 +238,29 @@ export default function ViewerDashboardPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
+
+  // P1 Fix: Subscribe to all followed channels for WebSocket updates
+  // This ensures we get "Stream Online" toasts
+  useEffect(() => {
+    if (!channels || channels.length === 0) return;
+
+    // Join all channels
+    channels.forEach((ch) => {
+      joinChannel(ch.id);
+    });
+
+    return () => {
+      // Optional: Leave channels on unmount?
+      // Or keep them joined if we want background notifications while on other pages?
+      // For now, let's leave them to be clean, logic in SocketProvider handles re-joins if needed (e.g. if we kept the list).
+      // However, SocketProvider Ref is manual.
+      // If we want notifications across the app, we should probably move this logic to a higher level or not leave on unmount.
+      // But since this is the "Followed Channels" page, it makes sense to listen here.
+      channels.forEach((ch) => {
+        leaveChannel(ch.id);
+      });
+    };
+  }, [channels, joinChannel, leaveChannel]);
 
   const handleChannelClick = (channelId: string) => {
     router.push(`/dashboard/viewer/${channelId}`);
