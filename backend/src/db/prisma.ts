@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
 import * as path from "path";
 
 // 使用單例模式確保只有一個 Prisma Client 實例
@@ -27,13 +26,11 @@ if (isTurso && authToken) {
   // 生產環境：使用 Turso 雲端資料庫
   console.log("[INFO] 使用 Turso 雲端資料庫");
 
-  // 創建 libsql client（基本配置）
-  const libsqlClient = createClient({
+  // 直接傳配置物件給 PrismaLibSql adapter
+  adapter = new PrismaLibSql({
     url: databaseUrl,
     authToken: authToken,
   });
-
-  adapter = new PrismaLibSql(libsqlClient);
 
   console.log("[INFO] Turso 連線配置完成");
 } else {
