@@ -109,8 +109,10 @@ export class AuthController {
     }
   };
 
-  // Callback：驗證 State 並處理登入
+  // Callback：驗證 State 並處理登入（含超時保護）
   public twitchCallback = async (req: Request, res: Response) => {
+    const startTime = Date.now();
+
     try {
       // 確保將 query 參數視為字串處理
       const code = req.query.code as string;
@@ -137,17 +139,38 @@ export class AuthController {
         return res.status(400).json({ message: "Authorization code missing" });
       }
 
-      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(code);
+      authLogger.info("Auth", "Starting OAuth callback processing...");
+
+      // Render Free Tier 超時保護：25 秒超時（留 5 秒緩衝）
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Callback processing timeout")), 25000);
+      });
+
+      const callbackPromise = handleStreamerTwitchCallback(code);
+
+      const { accessToken, refreshToken } = await Promise.race([
+        callbackPromise,
+        timeoutPromise,
+      ]);
 
       setAuthCookies(res, accessToken, refreshToken);
 
+      const totalTime = Date.now() - startTime;
+      authLogger.info("Auth", `OAuth callback completed in ${totalTime}ms`);
+
       res.redirect(`${env.frontendUrl}/dashboard/viewer`);
     } catch (error) {
+      const totalTime = Date.now() - startTime;
       // P0 Security Fix: 避免日誌洩漏敏感資訊（如 tokens、密碼）
-      // 只記錄錯誤訊息和類型，不記錄完整 error 物件
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorName = error instanceof Error ? error.name : "UnknownError";
-      authLogger.error("Twitch Callback Error", { errorName, errorMessage });
+      authLogger.error("Twitch Callback Error", { errorName, errorMessage, duration: totalTime });
+
+      // 如果是超時錯誤，返回特定錯誤頁面
+      if (errorMessage.includes("timeout")) {
+        return res.redirect(`${env.frontendUrl}/auth/error?reason=timeout`);
+      }
+
       res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
     }
   };

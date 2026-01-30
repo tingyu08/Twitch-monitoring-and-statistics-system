@@ -93,7 +93,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   logger.info("Auth", `Processing unified login for: ${user.display_name} (${user.id})`);
   logger.info("Auth", `Viewer record upserted: ${viewerRecord.id}`);
 
-  // 4. Token 處理：加密和查找可以併發進行（加密是 CPU 操作，查找是 I/O 操作）
+  // 4. Token 處理：簡化流程，先刪除舊 token 再建立新的（減少查詢）
 
   const encryptedAccess = encryptToken(tokenData.access_token);
   const encryptedRefresh = tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null;
@@ -102,53 +102,43 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
     ? new Date(Date.now() + tokenData.expires_in * 1000)
     : null;
 
-  const existingToken = await prisma.twitchToken.findFirst({
-    where: {
-      ownerType: "streamer",
-      streamerId: streamerRecord.id,
-    },
-  });
-
-  const tokenDataToSave = {
-    ownerType: "streamer" as const,
-    streamerId: streamerRecord.id,
-    viewerId: viewerRecord.id,
-    accessToken: encryptedAccess,
-    refreshToken: encryptedRefresh,
-    expiresAt,
-    scopes: JSON.stringify([
-      "user:read:email",
-      "channel:read:subscriptions",
-      "analytics:read:games",
-      "analytics:read:extensions",
-      "chat:read",
-      "chat:edit",
-      "user:read:follows",
-      "user:read:subscriptions",
-      "user:read:blocked_users",
-      "user:manage:blocked_users",
-      "whispers:read",
-    ]),
-  };
-
-  if (existingToken) {
-    await prisma.twitchToken.update({
-      where: { id: existingToken.id },
-      data: {
-        ...tokenDataToSave,
-        status: "active", // 重要：重設 Token 狀態
-        failureCount: 0, // 重要：重設失敗計數
+  // 優化：使用 deleteMany + create 替代 findFirst + update/create
+  // deleteMany 不會失敗即使沒有符合的記錄
+  await prisma.$transaction([
+    // 刪除該 streamer 的所有舊 token
+    prisma.twitchToken.deleteMany({
+      where: {
+        streamerId: streamerRecord.id,
+        ownerType: "streamer",
       },
-    });
-  } else {
-    await prisma.twitchToken.create({
+    }),
+    // 建立新 token
+    prisma.twitchToken.create({
       data: {
-        ...tokenDataToSave,
+        ownerType: "streamer",
+        streamerId: streamerRecord.id,
+        viewerId: viewerRecord.id,
+        accessToken: encryptedAccess,
+        refreshToken: encryptedRefresh,
+        expiresAt,
         status: "active",
         failureCount: 0,
+        scopes: JSON.stringify([
+          "user:read:email",
+          "channel:read:subscriptions",
+          "analytics:read:games",
+          "analytics:read:extensions",
+          "chat:read",
+          "chat:edit",
+          "user:read:follows",
+          "user:read:subscriptions",
+          "user:read:blocked_users",
+          "user:manage:blocked_users",
+          "whispers:read",
+        ]),
       },
-    });
-  }
+    }),
+  ]);
 
   const result = { streamerRecord, viewerRecord };
 
