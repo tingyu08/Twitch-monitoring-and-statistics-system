@@ -197,7 +197,7 @@ export async function updateLiveStatusFn() {
 
       // 狀態從 offline -> online
       if (!previousStatus && update.isLive) {
-        webSocketGateway.emit("stream.online", {
+        webSocketGateway.broadcastStreamStatus("stream.online", {
           channelId: update.channelId,
           channelName: update.channelName,
           twitchChannelId: update.twitchId,
@@ -210,7 +210,7 @@ export async function updateLiveStatusFn() {
       }
       // 狀態從 online -> offline
       else if (previousStatus && !update.isLive) {
-        webSocketGateway.emit("stream.offline", {
+        webSocketGateway.broadcastStreamStatus("stream.offline", {
           channelId: update.channelId,
           channelName: update.channelName,
           twitchChannelId: update.twitchId,
@@ -219,7 +219,7 @@ export async function updateLiveStatusFn() {
       }
       // 持續開台中，推送觀眾數更新
       else if (previousStatus && update.isLive) {
-        webSocketGateway.emit("channel.update", {
+        webSocketGateway.broadcastStreamStatus("channel.update", {
           channelId: update.channelId,
           channelName: update.channelName,
           twitchChannelId: update.twitchId,

@@ -96,7 +96,32 @@ export class WebSocketGateway {
   }
 
   /**
+   * P1 Memory: Broadcast stream status updates ONLY to interested clients
+   * Replaces global emit for stream.online/offline/update events
+   */
+  public broadcastStreamStatus(
+    event: "stream.online" | "stream.offline" | "channel.update",
+    channelData: { channelId?: string; twitchChannelId?: string; [key: string]: unknown }
+  ) {
+    if (!this.io) return;
+
+    // Client can join room by channelId (DB ID) or twitchChannelId
+    // We emit to both rooms to be safe
+    if (channelData.channelId) {
+      this.io.to(`channel:${channelData.channelId}`).emit(event, channelData);
+    }
+    if (channelData.twitchChannelId) {
+      this.io.to(`channel:${channelData.twitchChannelId}`).emit(event, channelData);
+    }
+
+    // Still emit 'stats-update-global' for the main dashboard (if really needed)
+    // But throttle this if possible
+  }
+
+  /**
    * 通用廣播 (use sparingly - prefer room-based emit)
+   * ⚠️ Warning: This is O(N) where N is number of connected clients.
+   * Avoid using this for high-frequency events like channel updates.
    */
   public emit(event: string, data: unknown) {
     if (this.io) {
