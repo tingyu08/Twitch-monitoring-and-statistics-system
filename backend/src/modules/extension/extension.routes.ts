@@ -13,9 +13,9 @@ import * as schemas from "./extension.schema";
 
 const router = Router();
 
-// POST /api/extension/token
+// POST /api/extension/token => /api/sync/auth-token
 // Generate extension JWT token (requires auth cookie from normal login)
-router.post("/token", getExtensionTokenHandler);
+router.post("/auth-token", getExtensionTokenHandler);
 
 // POST /api/extension/heartbeat
 // P0 Security: Now uses JWT authentication via middleware

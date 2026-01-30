@@ -9,29 +9,21 @@ interface ConsentBannerProps {
   onCustomize: () => void;
 }
 
-export function ConsentBanner({
-  onAcceptAll,
-  onCustomize,
-}: ConsentBannerProps) {
+export function ConsentBanner({ onAcceptAll, onCustomize }: ConsentBannerProps) {
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 shadow-lg z-50">
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row items-center gap-6">
           {/* 說明文字 */}
           <div className="flex-1 text-gray-300">
-            <h3 className="text-lg font-semibold text-white mb-2">
-              🔒 我們重視您的隱私
-            </h3>
+            <h3 className="text-lg font-semibold text-white mb-2">🔒 我們重視您的隱私</h3>
             <p className="text-sm">
               Twitch Analytics
               會收集您的觀看時數、互動統計和成就進度，以為您提供個人化的分析儀表板。您可以隨時在設定中調整這些偏好，或完全停用資料收集。
             </p>
             <p className="text-sm mt-2">
               閱讀我們的{" "}
-              <a
-                href="/privacy-policy"
-                className="text-purple-400 underline hover:text-purple-300"
-              >
+              <a href="/privacy-policy" className="text-purple-400 underline hover:text-purple-300">
                 隱私政策
               </a>{" "}
               了解更多。
@@ -79,9 +71,7 @@ export function ConsentBannerWrapper() {
 
         // Check API for consent record
         // httpClient handles base URL and credentials automatically
-        const data = await httpClient<{ hasConsent: boolean }>(
-          "/api/viewer/privacy/consent"
-        );
+        const data = await httpClient<{ hasConsent: boolean }>("/api/viewer/pref/status");
 
         if (!data.hasConsent) {
           setShowBanner(true);
@@ -99,7 +89,7 @@ export function ConsentBannerWrapper() {
 
   const handleAcceptAll = async () => {
     try {
-      await httpClient("/api/viewer/privacy/consent/accept-all", {
+      await httpClient("/api/viewer/pref/opt-all", {
         method: "POST",
       });
 
@@ -120,10 +110,5 @@ export function ConsentBannerWrapper() {
     return null;
   }
 
-  return (
-    <ConsentBanner
-      onAcceptAll={handleAcceptAll}
-      onCustomize={handleCustomize}
-    />
-  );
+  return <ConsentBanner onAcceptAll={handleAcceptAll} onCustomize={handleCustomize} />;
 }

@@ -93,20 +93,20 @@ viewerApiRoutes.delete(
 
 // Story 2.5: Privacy Consent Routes (Fine-grained)
 viewerApiRoutes.get(
-  "/privacy/consent",
+  "/pref/status",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
   privacyController.getConsentSettings.bind(privacyController)
 );
 
 viewerApiRoutes.patch(
-  "/privacy/consent",
+  "/pref/status",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
   validateRequest(schemas.updateConsentSettingsSchema),
   privacyController.updateConsentSettings.bind(privacyController)
 );
 
 viewerApiRoutes.post(
-  "/privacy/consent/accept-all",
+  "/pref/opt-all",
   (req, res, next) => requireAuth(req, res, next, ["viewer"]),
   privacyController.acceptAllConsent.bind(privacyController)
 );

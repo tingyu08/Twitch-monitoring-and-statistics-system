@@ -62,7 +62,7 @@ export function useExtensionSync(userId: string | null) {
   const syncToExtension = useCallback(async () => {
     try {
       // Fetch dedicated extension JWT from backend
-      const response = await httpClient<ExtensionTokenResponse>("/api/extension/token", {
+      const response = await httpClient<ExtensionTokenResponse>("/api/sync/auth-token", {
         method: "POST",
       });
 

@@ -29,10 +29,7 @@ const privacyCategories = [
   },
   {
     id: "badges",
-    settings: [
-      { key: "collectBadgeProgress" },
-      { key: "collectFootprintData" },
-    ],
+    settings: [{ key: "collectBadgeProgress" }, { key: "collectFootprintData" }],
   },
   {
     id: "analytics",
@@ -100,11 +97,9 @@ export default function ViewerSettingsPage() {
     try {
       // Parallel fetch of settings, summary, and deletion status
       const [consentData, summary, deletionData] = await Promise.all([
-        httpClient<any>("/api/viewer/privacy/consent").catch(() => null),
+        httpClient<any>("/api/viewer/pref/status").catch(() => null),
         viewerApi.getDataSummary().catch(() => null),
-        httpClient<any>("/api/viewer/privacy/deletion-status").catch(
-          () => null
-        ),
+        httpClient<any>("/api/viewer/privacy/deletion-status").catch(() => null),
       ]);
 
       if (consentData) {
@@ -131,7 +126,7 @@ export default function ViewerSettingsPage() {
 
     setIsSaving(true);
     try {
-      await httpClient("/api/viewer/privacy/consent", {
+      await httpClient("/api/viewer/pref/status", {
         method: "PATCH",
         body: JSON.stringify({ [key]: newValue }),
       });
@@ -171,10 +166,7 @@ export default function ViewerSettingsPage() {
   // 下載匯出檔案
   const handleDownload = () => {
     if (exportStatus.jobId) {
-      window.open(
-        `/api/viewer/privacy/export/${exportStatus.jobId}/download`,
-        "_blank"
-      );
+      window.open(`/api/viewer/privacy/export/${exportStatus.jobId}/download`, "_blank");
     }
   };
 
@@ -228,9 +220,7 @@ export default function ViewerSettingsPage() {
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse theme-text-secondary">
-          {t("common.loading")}
-        </div>
+        <div className="animate-pulse theme-text-secondary">{t("common.loading")}</div>
       </main>
     );
   }
@@ -251,12 +241,7 @@ export default function ViewerSettingsPage() {
             onClick={() => router.push("/dashboard/viewer")}
             className="text-purple-600 dark:text-purple-300 hover:text-purple-800 dark:hover:text-white transition-colors flex items-center gap-2"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -266,9 +251,7 @@ export default function ViewerSettingsPage() {
             </svg>
             {t("settings.backToDashboard")}
           </button>
-          <h1 className="text-lg font-semibold theme-text-gradient">
-            {t("settings.title")}
-          </h1>
+          <h1 className="text-lg font-semibold theme-text-gradient">{t("settings.title")}</h1>
           <div className="w-24" />
         </div>
       </header>
@@ -292,9 +275,7 @@ export default function ViewerSettingsPage() {
           <div className="p-4 bg-yellow-900/50 border border-yellow-500 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-yellow-200">
-                  ⚠️ 帳號刪除請求進行中
-                </h3>
+                <h3 className="font-semibold text-yellow-200">⚠️ 帳號刪除請求進行中</h3>
                 <p className="text-yellow-200/80 text-sm mt-1">
                   您的帳號將在 {deletionStatus.remainingDays} 天後被刪除。
                 </p>
@@ -323,6 +304,7 @@ export default function ViewerSettingsPage() {
                 height={80}
                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 sm:border-4 border-purple-500/50 object-cover ring-2 sm:ring-4 ring-purple-500/20 flex-shrink-0"
                 unoptimized
+                priority
               />
             )}
             <div className="min-w-0">
@@ -358,9 +340,7 @@ export default function ViewerSettingsPage() {
                     {t(`settings.privacy.${category.id}`)}
                   </h3>
                   <p className="theme-text-muted text-sm">
-                    {category.id === "id"
-                      ? ""
-                      : t(`settings.privacy.${category.id}Desc`)}
+                    {category.id === "id" ? "" : t(`settings.privacy.${category.id}Desc`)}
                   </p>
                 </div>
 
@@ -388,9 +368,7 @@ export default function ViewerSettingsPage() {
                         onClick={() => handleToggle(setting.key)}
                         disabled={isSaving}
                         className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 self-end sm:self-center ${
-                          settings[setting.key]
-                            ? "bg-purple-600"
-                            : "bg-gray-400 dark:bg-gray-600"
+                          settings[setting.key] ? "bg-purple-600" : "bg-gray-400 dark:bg-gray-600"
                         } ${isSaving ? "opacity-50" : ""}`}
                       >
                         <span
@@ -470,32 +448,28 @@ export default function ViewerSettingsPage() {
                 </p>
               </div>
               <button
-                onClick={
-                  exportStatus.downloadReady ? handleDownload : handleExport
-                }
+                onClick={exportStatus.downloadReady ? handleDownload : handleExport}
                 disabled={exportStatus.isExporting}
                 className={`flex-shrink-0 px-6 py-2 rounded-lg font-medium transition-colors ${
                   exportStatus.isExporting
                     ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
                     : exportStatus.downloadReady
-                    ? "bg-green-600 hover:bg-green-700 text-white"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                      ? "bg-green-600 hover:bg-green-700 text-white"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
                 }`}
               >
                 {exportStatus.isExporting
                   ? t("settings.dataManagement.exporting")
                   : exportStatus.downloadReady
-                  ? `📥 ${t("settings.dataManagement.download")}`
-                  : `📤 ${t("settings.dataManagement.exportButton")}`}
+                    ? `📥 ${t("settings.dataManagement.download")}`
+                    : `📤 ${t("settings.dataManagement.exportButton")}`}
               </button>
             </div>
 
             {/* Logout */}
             <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-white/50 dark:bg-white/5 rounded-xl border border-purple-100 dark:border-white/5 gap-4">
               <div>
-                <p className="font-medium theme-text-primary">
-                  {t("common.logout")}
-                </p>
+                <p className="font-medium theme-text-primary">{t("common.logout")}</p>
                 <p className="text-sm theme-text-muted">
                   {t("settings.dataManagement.logoutDesc")}
                 </p>
@@ -536,10 +510,7 @@ export default function ViewerSettingsPage() {
 
         {/* 隱私政策連結 */}
         <div className="text-center text-gray-400 text-sm">
-          <a
-            href="/privacy-policy"
-            className="text-purple-400 hover:text-purple-300 underline"
-          >
+          <a href="/privacy-policy" className="text-purple-400 hover:text-purple-300 underline">
             {t("settings.privacyPolicy")}
           </a>
         </div>
