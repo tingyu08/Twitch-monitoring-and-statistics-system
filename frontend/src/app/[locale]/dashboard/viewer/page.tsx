@@ -61,27 +61,11 @@ export default function ViewerDashboardPage() {
     }
   }, [authLoading, user, router]);
 
-  // WebSocket 事件監聽（使用 React Query 更新快取）
+  // WebSocket 事件監聽（只處理開台/關台事件，觀眾數由 React Query 輪詢）
   useEffect(() => {
     if (!socket || !socketConnected) return;
 
-    // 處理訊息統計更新
-    const handleStatsUpdate = (data: { channelId: string; messageCount: number }) => {
-      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
-        if (!prev) return prev;
-        return prev.map((ch) => {
-          if (ch.id === data.channelId) {
-            return {
-              ...ch,
-              messageCount: ch.messageCount + data.messageCount,
-            };
-          }
-          return ch;
-        });
-      });
-    };
-
-    // 處理開台事件
+    // 處理開台事件（即時通知）
     const handleStreamOnline = (data: {
       channelId: string;
       channelName: string;
@@ -109,7 +93,7 @@ export default function ViewerDashboardPage() {
       });
     };
 
-    // 處理關台事件
+    // 處理關台事件（即時通知）
     const handleStreamOffline = (data: { channelId: string; channelName: string }) => {
       console.log("[WebSocket] Stream offline:", data);
       queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
@@ -128,42 +112,15 @@ export default function ViewerDashboardPage() {
       });
     };
 
-    // 處理頻道更新事件（觀眾數、標題等）
-    const handleChannelUpdate = (data: {
-      channelId: string;
-      channelName: string;
-      isLive?: boolean;
-      viewerCount?: number;
-      title?: string;
-      gameName?: string;
-    }) => {
-      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
-        if (!prev) return prev;
-        return prev.map((ch) => {
-          if (ch.id === data.channelId || ch.channelName === data.channelName) {
-            return {
-              ...ch,
-              isLive: data.isLive ?? ch.isLive,
-              currentViewerCount: data.viewerCount ?? ch.currentViewerCount,
-              currentTitle: data.title || ch.currentTitle,
-              currentGameName: data.gameName || ch.currentGameName,
-            };
-          }
-          return ch;
-        });
-      });
-    };
+    // P1 Optimization: stats-update and channel.update removed
+    // Now handled by React Query refetchInterval (60s)
 
-    socket.on("stats-update", handleStatsUpdate);
     socket.on("stream.online", handleStreamOnline);
     socket.on("stream.offline", handleStreamOffline);
-    socket.on("channel.update", handleChannelUpdate);
 
     return () => {
-      socket.off("stats-update", handleStatsUpdate);
       socket.off("stream.online", handleStreamOnline);
       socket.off("stream.offline", handleStreamOffline);
-      socket.off("channel.update", handleChannelUpdate);
     };
   }, [socket, socketConnected, queryClient]);
 

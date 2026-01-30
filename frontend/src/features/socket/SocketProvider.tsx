@@ -129,16 +129,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       toast.info(`${data.channelName} ${t("streamOffline")}`);
     };
 
-    const handleChannelUpdate = (data: {
-      channelId: string;
-      channelName: string;
-      title: string;
-      category: string;
-    }) => {
-      console.log("Channel Update:", data);
-    };
+    // P1 Optimization: channel.update removed - now handled by React Query refetchInterval
 
-    // 監聽聊天室熱度
+    // 監聯聊天室熱度
     const handleChatHeat = (data: { channelName: string; heatLevel: number; message: string }) => {
       console.log("Chat Heat:", data);
       toast.warning(`${data.channelName} ${t("chatHeat")} 🔥 (${data.heatLevel}+ / 5s)`, {
@@ -164,7 +157,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     // Register event listeners
     socket.on("stream.online", handleStreamOnline);
     socket.on("stream.offline", handleStreamOffline);
-    socket.on("channel.update", handleChannelUpdate);
     socket.on("chat.heat", handleChatHeat);
     socket.on("stream.raid", handleStreamRaid);
 
@@ -172,7 +164,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     return () => {
       socket.off("stream.online", handleStreamOnline);
       socket.off("stream.offline", handleStreamOffline);
-      socket.off("channel.update", handleChannelUpdate);
       socket.off("chat.heat", handleChatHeat);
       socket.off("stream.raid", handleStreamRaid);
     };

@@ -43,7 +43,7 @@ export class WebSocketGateway {
     socket.on("join-channel", (channelId: string) => {
       if (channelId && typeof channelId === "string") {
         socket.join(`channel:${channelId}`);
-        logger.debug("WebSocket", `Client ${socket.id} joined room: channel:${channelId}`);
+        // logger.debug("WebSocket", `Client ${socket.id} joined room: channel:${channelId}`);
       }
     });
 
@@ -51,7 +51,7 @@ export class WebSocketGateway {
     socket.on("leave-channel", (channelId: string) => {
       if (channelId && typeof channelId === "string") {
         socket.leave(`channel:${channelId}`);
-        logger.debug("WebSocket", `Client ${socket.id} left room: channel:${channelId}`);
+        // logger.debug("WebSocket", `Client ${socket.id} left room: channel:${channelId}`);
       }
     });
 
@@ -59,7 +59,7 @@ export class WebSocketGateway {
     socket.on("join-viewer", (viewerId: string) => {
       if (viewerId && typeof viewerId === "string") {
         socket.join(`viewer:${viewerId}`);
-        logger.debug("WebSocket", `Client ${socket.id} joined room: viewer:${viewerId}`);
+        // logger.debug("WebSocket", `Client ${socket.id} joined room: viewer:${viewerId}`);
       }
     });
 
@@ -72,14 +72,12 @@ export class WebSocketGateway {
   }
 
   /**
-   * P1 Memory: Push stats only to clients subscribed to this channel
-   * Changed from broadcast to room-based emit
+   * @deprecated P1 Optimization: stats-update is no longer used
+   * Message counts are now fetched via React Query refetchInterval
+   * This method is kept for backwards compatibility but does nothing
    */
-  public broadcastChannelStats(channelId: string, stats: Partial<ViewerChannelStats>) {
-    if (!this.io) return;
-
-    // Emit to channel-specific room only (O(n) instead of O(n×m))
-    this.io.to(`channel:${channelId}`).emit("stats-update", { channelId, ...stats });
+  public broadcastChannelStats(_channelId: string, _stats: Partial<ViewerChannelStats>) {
+    // No-op: stats-update removed in favor of React Query polling
   }
 
   /**
@@ -112,48 +110,35 @@ export class WebSocketGateway {
   }
 
   /**
-   * Broadcast Chat Heat alerts to channel subscribers
+   * Broadcast Chat Heat alerts to channel subscribers (room-based)
+   * P1 Optimization: Only send to clients subscribed to this channel
    */
-  public broadcastChatHeat(data: { channelName: string; heatLevel: number; message: string }) {
+  public broadcastChatHeat(data: {
+    channelId: string;
+    channelName: string;
+    heatLevel: number;
+    message: string;
+  }) {
     if (!this.io) return;
 
-    // Broadcast to the channel room (using twitchChannelId/channelName logic)
-    // Since we only have channelName here (from Chat), we assume frontend subscribes to channel:{id}
-    // BUT frontend likely doesn't know channelName -> ID mapping for non-followed channels?
-    // Actually, for followed channels we have the ID.
-    // However, ChatService often works with channelNames.
-    // Ideally we should resolve ID, but as a fallback/simplification for now,
-    // we can also emit to a room named `channel:${channelName}` if we wanted,
-    // OR we broadcast to all if it used to be global.
-    //
-    // WAIT: The previous implementation WAS global broadcast ("emit").
-    // If we want to optimize, we should target it.
-    // But `checkChatHeat` only has `channelName`.
-    //
-    // Strategy:
-    // 1. Frontend currently joins `channel:${id}`.
-    // 2. ChatService has `channelName`.
-    // 3. We can try to look up ID or just valid simple solution:
-    //    For now, let's restore `emit` as `broadcastGlobal` BUT mark it deprecated and only use it where absolutely necessary
-    //    until we can refactor ChatService to look up IDs.
-    //
-    //    Actually, let's look at `TwurpleChatService` again. It has access to Prisma.
-    //    But `checkChatHeat` is hot-path.
-    //
-    //    Alternative: Frontend subscribes to `channel:${channelName}` as well?
-    //    No, I'd rather not complicate frontend rooms.
-    //
-    //    Let's restore `emit` as a temporary fix to stop the crashing,
-    //    THEN plan a proper refactor if needed.
-    //    The user asked to fix the log spam (crash).
-
-    this.io.emit("chat.heat", data);
+    // Room-based broadcast - only clients subscribed to this channel will receive
+    this.io.to(`channel:${data.channelId}`).emit("chat.heat", data);
   }
 
-  public broadcastRaid(data: { channelName: string; raider: string; viewers: number }) {
-    if (this.io) {
-      this.io.emit("stream.raid", data);
-    }
+  /**
+   * Broadcast Raid events to channel subscribers (room-based)
+   * P1 Optimization: Only send to clients subscribed to this channel
+   */
+  public broadcastRaid(data: {
+    channelId: string;
+    channelName: string;
+    raider: string;
+    viewers: number;
+  }) {
+    if (!this.io) return;
+
+    // Room-based broadcast - only clients subscribed to this channel will receive
+    this.io.to(`channel:${data.channelId}`).emit("stream.raid", data);
   }
 
   /**

@@ -3,7 +3,6 @@ import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/messag
 import { logger } from "../../utils/logger";
 import { cacheManager, CacheTTL } from "../../utils/cache-manager";
 import { updateViewerWatchTime } from "../../services/watch-time.service";
-import { webSocketGateway } from "../../services/websocket.gateway";
 
 // 可以接受 ParsedMessage 或 RawChatMessage
 type MessageInput = ParsedMessage | RawChatMessage;
@@ -182,11 +181,8 @@ export class ViewerMessageRepository {
         logger.error("ViewerMessage", "Failed to update watch time", err)
       );
 
-      // 6. 觸發 WebSocket 廣播 (即時更新)
-      webSocketGateway.broadcastChannelStats(channelId, {
-        channelId,
-        messageCount: 1, // 表示這是一條新消息，前端累加
-      });
+      // P1 Optimization: Removed real-time WebSocket stats-update broadcast
+      // Message counts are now fetched via React Query refetchInterval instead
     } catch (error) {
       logger.error("ViewerMessage", "Error saving message", error);
     }

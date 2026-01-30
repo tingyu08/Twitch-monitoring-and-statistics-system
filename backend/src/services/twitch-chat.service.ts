@@ -42,6 +42,8 @@ export class TwurpleChatService {
   private lastHeatAlert: Map<string, number> = new Map();
   // P1 Memory: Cleanup interval reference
   private cleanupInterval: NodeJS.Timeout | null = null;
+  // P1 Optimization: channelName -> channelId cache for room-based broadcasting
+  private channelIdCache: Map<string, string> = new Map();
 
   constructor() {
     // P1 Memory: Start periodic cleanup to prevent unbounded Map growth
@@ -77,6 +79,7 @@ export class TwurpleChatService {
       if (timestamps.length === 0 || timestamps[timestamps.length - 1] < staleThreshold) {
         this.messageTimestamps.delete(channelName);
         this.lastHeatAlert.delete(channelName); // Also clean alert tracking
+        this.channelIdCache.delete(channelName); // Also clean channelId cache
         cleanedChannels++;
       }
     }
@@ -95,6 +98,36 @@ export class TwurpleChatService {
           `Active: ${this.messageTimestamps.size} channels`
       );
     }
+  }
+
+  /**
+   * P1 Optimization: Get channelId from cache or database
+   */
+  private async getChannelId(channelName: string): Promise<string | null> {
+    const normalizedName = channelName.toLowerCase();
+
+    // Check cache first
+    const cached = this.channelIdCache.get(normalizedName);
+    if (cached) {
+      return cached;
+    }
+
+    // Query database
+    try {
+      const channel = await prisma.channel.findFirst({
+        where: { channelName: normalizedName },
+        select: { id: true },
+      });
+
+      if (channel) {
+        this.channelIdCache.set(normalizedName, channel.id);
+        return channel.id;
+      }
+    } catch (error) {
+      logger.error("Twurple Chat", `Failed to lookup channelId for ${channelName}`, error);
+    }
+
+    return null;
   }
 
   // ... (省略 initialize 等方法，保持不變)
@@ -375,8 +408,10 @@ export class TwurpleChatService {
       // 2. 儲存訊息
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
 
-      // 3. 檢測熱度 (Heat Check)
-      this.checkChatHeat(channelName, text);
+      // 3. 檢測熱度 (Heat Check) - now async, fire and forget
+      this.checkChatHeat(channelName, text).catch((err) =>
+        logger.error("Twurple Chat", "Error in heat check", err)
+      );
     } catch (err) {
       logger.error("Twurple Chat", "Error handling message", err);
     }
@@ -384,8 +419,9 @@ export class TwurpleChatService {
 
   /**
    * 檢測聊天室熱度
+   * P1 Optimization: Now uses room-based broadcasting with channelId
    */
-  private checkChatHeat(channelName: string, text: string) {
+  private async checkChatHeat(channelName: string, text: string): Promise<void> {
     const now = Date.now();
 
     // 獲取該頻道的訊息時間戳
@@ -409,6 +445,13 @@ export class TwurpleChatService {
 
       // 檢查是否在冷卻時間內
       if (now - lastAlert > HEAT_COOLDOWN_MS) {
+        // Get channelId for room-based broadcasting
+        const channelId = await this.getChannelId(channelName);
+        if (!channelId) {
+          logger.debug("Chat Heat", `Skipping heat alert for ${channelName}: channel not found`);
+          return;
+        }
+
         // 觸發熱度警報！
         logger.debug(
           "Chat Heat",
@@ -416,6 +459,7 @@ export class TwurpleChatService {
         );
 
         webSocketGateway.broadcastChatHeat({
+          channelId,
           channelName,
           heatLevel: timestamps.length,
           message: text.substring(0, 20), // 附帶最後一則訊息作為範例
@@ -452,8 +496,10 @@ export class TwurpleChatService {
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
 
-      // 訂閱也算熱度
-      this.checkChatHeat(channelName, "New Subscription!");
+      // 訂閱也算熱度 - now async, fire and forget
+      this.checkChatHeat(channelName, "New Subscription!").catch((err) =>
+        logger.error("Twurple Chat", "Error in heat check", err)
+      );
     } catch (err) {
       logger.error("Twurple Chat", "Error handling subscription", err);
     }
@@ -487,7 +533,10 @@ export class TwurpleChatService {
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
 
-      this.checkChatHeat(channelName, "Gift Sub!");
+      // Gift sub 也算熱度 - now async, fire and forget
+      this.checkChatHeat(channelName, "Gift Sub!").catch((err) =>
+        logger.error("Twurple Chat", "Error in heat check", err)
+      );
     } catch (err) {
       logger.error("Twurple Chat", "Error handling gift sub", err);
     }
@@ -495,13 +544,14 @@ export class TwurpleChatService {
 
   /**
    * 處理揪團 (Raid)
+   * P1 Optimization: Now uses room-based broadcasting with channelId
    */
-  private handleRaid(
+  private async handleRaid(
     channel: string,
     user: string,
     raidInfo: TwitchRaidInfo,
     msg: TwitchChatMessage | null
-  ): void {
+  ): Promise<void> {
     const channelName = channel.replace(/^#/, "");
 
     try {
@@ -520,14 +570,19 @@ export class TwurpleChatService {
 
       viewerMessageRepository.saveMessage(channelName, parsedMessage);
 
-      // 強制推播 Raid 事件
-      webSocketGateway.broadcastRaid({
-        channelName,
-        raider: raidInfo.displayName || user,
-        viewers: viewerCount,
-      });
+      // Get channelId for room-based broadcasting
+      const channelId = await this.getChannelId(channelName);
+      if (channelId) {
+        // 強制推播 Raid 事件 (room-based)
+        webSocketGateway.broadcastRaid({
+          channelId,
+          channelName,
+          raider: raidInfo.displayName || user,
+          viewers: viewerCount,
+        });
+      }
 
-      this.checkChatHeat(channelName, `Raid from ${user}`);
+      await this.checkChatHeat(channelName, `Raid from ${user}`);
     } catch (err) {
       logger.error("Twurple Chat", "Error handling raid", err);
     }
@@ -600,6 +655,7 @@ export class TwurpleChatService {
       // P1 Memory: Clear heat tracking Maps on disconnect
       this.messageTimestamps.clear();
       this.lastHeatAlert.clear();
+      this.channelIdCache.clear();
       logger.info("Twurple Chat", "手動斷線");
     }
   }

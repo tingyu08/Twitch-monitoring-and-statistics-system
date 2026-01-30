@@ -15,7 +15,8 @@ import type {
 
 /**
  * 取得追蹤的頻道列表
- * 自動快取 30 秒，避免重複請求
+ * P1 Optimization: 使用 refetchInterval 自動更新觀眾數
+ * 取代原本的 WebSocket channel.update 和 stats-update 事件
  */
 export function useChannels() {
   return useQuery<FollowedChannel[], Error>({
@@ -23,6 +24,8 @@ export function useChannels() {
     queryFn: () => viewerApi.getFollowedChannels(),
     staleTime: 30 * 1000, // 30 秒內視為新鮮
     gcTime: 5 * 60 * 1000, // 5 分鐘後清除快取
+    refetchInterval: 60 * 1000, // P1: 每 60 秒自動重新取得（取代 WebSocket 推送）
+    refetchIntervalInBackground: false, // 背景時不輪詢，節省資源
   });
 }
 

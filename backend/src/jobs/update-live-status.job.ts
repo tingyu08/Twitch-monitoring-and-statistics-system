@@ -188,7 +188,8 @@ export async function updateLiveStatusFn() {
       );
     }
 
-    // 5. 推送 WebSocket 事件（只推送狀態有變更的頻道）
+    // 5. 推送 WebSocket 事件（只推送狀態變更：online/offline）
+    // P1 Optimization: Removed channel.update broadcast - now handled by React Query refetchInterval
     let onlineChanges = 0;
     let offlineChanges = 0;
 
@@ -217,18 +218,8 @@ export async function updateLiveStatusFn() {
         });
         offlineChanges++;
       }
-      // 持續開台中，推送觀眾數更新
-      else if (previousStatus && update.isLive) {
-        webSocketGateway.broadcastStreamStatus("channel.update", {
-          channelId: update.channelId,
-          channelName: update.channelName,
-          twitchChannelId: update.twitchId,
-          isLive: true,
-          viewerCount: update.viewerCount,
-          title: update.title,
-          gameName: update.gameName,
-        });
-      }
+      // P1 Optimization: Removed channel.update for continuous live streams
+      // Viewer counts are now fetched via React Query refetchInterval (every 60s)
     }
 
     // 統計開台與未開台頻道數量
