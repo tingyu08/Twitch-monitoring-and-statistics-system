@@ -129,16 +129,31 @@ export class StreamStatusJob {
    * 實際執行邏輯（優化版：並行處理 + 減少 DB 查詢）
    */
   private async doExecute(result: StreamStatusResult): Promise<void> {
-    // 1. 資料庫連線檢查（超時保護）
-    try {
-      await Promise.race([
-        prisma.$queryRaw`SELECT 1`,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("DB connection timeout")), 3000)
-        ),
-      ]);
-    } catch (error) {
-      logger.error("JOB", "資料庫連線失敗，跳過此次執行", error);
+    // 1. 資料庫連線檢查（超時保護 + 重試機制）
+    const maxRetries = 2;
+    let connected = false;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await Promise.race([
+          prisma.$queryRaw`SELECT 1`,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("DB connection timeout")), 5000) // 增加到 5 秒
+          ),
+        ]);
+        connected = true;
+        break;
+      } catch (error) {
+        logger.warn("JOB", `資料庫連線失敗 (嘗試 ${attempt}/${maxRetries})`, error);
+        if (attempt < maxRetries) {
+          // 等待 1 秒後重試
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+
+    if (!connected) {
+      logger.error("JOB", "資料庫連線失敗，已重試 2 次，跳過此次執行");
       return;
     }
 

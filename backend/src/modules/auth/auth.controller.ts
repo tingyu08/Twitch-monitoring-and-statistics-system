@@ -141,17 +141,8 @@ export class AuthController {
 
       authLogger.info("Auth", "Starting OAuth callback processing...");
 
-      // Render Free Tier 超時保護：25 秒超時（留 5 秒緩衝）
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Callback processing timeout")), 25000);
-      });
-
-      const callbackPromise = handleStreamerTwitchCallback(code);
-
-      const { accessToken, refreshToken } = await Promise.race([
-        callbackPromise,
-        timeoutPromise,
-      ]);
+      // 臨時移除超時限制來診斷問題
+      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(code);
 
       setAuthCookies(res, accessToken, refreshToken);
 
@@ -164,12 +155,13 @@ export class AuthController {
       // P0 Security Fix: 避免日誌洩漏敏感資訊（如 tokens、密碼）
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const errorName = error instanceof Error ? error.name : "UnknownError";
-      authLogger.error("Twitch Callback Error", { errorName, errorMessage, duration: totalTime });
-
-      // 如果是超時錯誤，返回特定錯誤頁面
-      if (errorMessage.includes("timeout")) {
-        return res.redirect(`${env.frontendUrl}/auth/error?reason=timeout`);
-      }
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      authLogger.error("Twitch Callback Error", {
+        errorName,
+        errorMessage,
+        errorStack,
+        duration: totalTime,
+      });
 
       res.redirect(`${env.frontendUrl}/auth/error?reason=internal_error`);
     }

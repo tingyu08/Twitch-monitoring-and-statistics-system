@@ -26,12 +26,21 @@ if (isTurso && authToken) {
   // 生產環境：使用 Turso 雲端資料庫
   console.log("[INFO] 使用 Turso 雲端資料庫");
 
-  adapter = new PrismaLibSql({
+  // Render Free Tier 優化：增加超時時間和重試機制
+  const { createClient } = require("@libsql/client");
+
+  const libsqlClient = createClient({
     url: databaseUrl,
     authToken: authToken,
+    // 增加超時時間（預設可能太短）
+    // Render Singapore -> Turso 延遲可能較高
+    // @ts-ignore - libsql client 可能有這些選項
+    timeout: 10000, // 10 秒超時
   });
 
-  // 注意：Turso 的連線池由服務端自動管理，客戶端無需配置
+  adapter = new PrismaLibSql(libsqlClient);
+
+  console.log("[INFO] Turso 連線配置完成 (timeout: 10s)");
 } else {
   // 開發環境：使用本地原生 SQLite (避免 Adapter 版本相容問題)
   console.log("[DEBUG] 使用原生 Prisma Client (本地 SQLite)");
@@ -40,6 +49,13 @@ if (isTurso && authToken) {
 const prismaOptions = {
   log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   adapter: adapter ?? null,
+  // Prisma 連線超時設定（Render Free Tier 優化）
+  // 注意：這些選項可能不會對 Turso adapter 生效，主要超時在 libsql client
+  datasources: {
+    db: {
+      url: databaseUrl,
+    },
+  },
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

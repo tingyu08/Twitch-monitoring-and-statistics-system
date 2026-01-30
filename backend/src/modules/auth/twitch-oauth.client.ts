@@ -54,6 +54,7 @@ export class TwitchOAuthClient {
         grant_type: "authorization_code",
         redirect_uri: options?.redirectUri ?? this.redirectUri,
       },
+      timeout: 10000, // 10 秒超時
     });
     return response.data;
   }
@@ -64,6 +65,7 @@ export class TwitchOAuthClient {
         "Client-Id": this.clientId,
         Authorization: `Bearer ${accessToken}`,
       },
+      timeout: 10000, // 10 秒超時
     });
     return response.data.data?.[0] as TwitchUser;
   }
@@ -89,6 +91,7 @@ export class TwitchOAuthClient {
           grant_type: "refresh_token",
           refresh_token: refreshToken,
         },
+        timeout: 10000, // 10 秒超時
       });
       return response.data;
     } catch (error: unknown) {
