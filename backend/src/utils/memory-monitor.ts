@@ -142,7 +142,6 @@ export class MemoryMonitor {
   private async clearCaches(): Promise<void> {
     try {
       // 清空快取管理器
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { cacheManager } = await import("./cache-manager");
       if (cacheManager && typeof cacheManager.clear === "function") {
         cacheManager.clear();
