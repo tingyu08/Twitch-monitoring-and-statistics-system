@@ -40,36 +40,49 @@ export function startAllJobs(): void {
     }
   });
 
-  // === 階段 2: 延遲 2 分鐘後啟動次要任務 ===
-  setTimeout(() => {
-    logger.info("Jobs", "啟動次要任務...");
+  // === 階段 2: 延遲 5 分鐘後啟動次要任務 ===
+  setTimeout(
+    () => {
+      logger.info("Jobs", "啟動次要任務...");
 
-    // 訊息聚合任務
-    startMessageAggregationJob();
+      // 訊息聚合任務
+      startMessageAggregationJob();
 
-    // 全時段統計聚合任務
-    updateLifetimeStatsJob();
+      // 全時段統計聚合任務
+      updateLifetimeStatsJob();
 
-    // Story 3.3: 頻道統計同步任務
-    channelStatsSyncJob.start();
-  }, 2 * 60 * 1000); // 2 分鐘
+      // Story 3.3: 頻道統計同步任務 (耗資源)
+      // 再次檢查記憶體
+      if (!global.gc || process.memoryUsage().heapUsed < 350 * 1024 * 1024) {
+        channelStatsSyncJob.start();
+      } else {
+        logger.warn("Jobs", "記憶體偏高，暫緩啟動 Channel Stats Sync Job");
+        // 稍後再試...
+        setTimeout(() => channelStatsSyncJob.start(), 5 * 60 * 1000);
+      }
+    },
+    5 * 60 * 1000
+  ); // 延長到 5 分鐘
 
-  // === 階段 3: 延遲 5 分鐘後啟動低優先級任務 ===
-  setTimeout(() => {
-    logger.info("Jobs", "啟動低優先級任務...");
+  // === 階段 3: 延遲 10 分鐘後啟動低優先級任務 ===
+  setTimeout(
+    () => {
+      logger.info("Jobs", "啟動低優先級任務...");
 
-    // Story 2.5: 資料保留與刪除任務
-    dataRetentionJob.start();
+      // Story 2.5: 資料保留與刪除任務
+      dataRetentionJob.start();
 
-    // Story 3.6: 使用者追蹤同步任務
-    syncUserFollowsJob.start();
+      // Story 3.6: 使用者追蹤同步任務
+      syncUserFollowsJob.start();
 
-    // Story 6.4: VOD 與剪輯同步任務
-    syncVideosJob.start();
+      // Story 6.4: VOD 與剪輯同步任務
+      syncVideosJob.start();
 
-    // Epic 4: 訂閱快照同步任務
-    syncSubscriptionsJob.start();
-  }, 5 * 60 * 1000); // 5 分鐘
+      // Epic 4: 訂閱快照同步任務
+      syncSubscriptionsJob.start();
+    },
+    10 * 60 * 1000
+  ); // 延長到 10 分鐘
 
   logger.info("Jobs", "核心定時任務已啟動（其他任務將在背景分階段啟動）");
 }

@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getApiUrl } from "@/lib/api/getApiUrl";
 
 interface ChannelSettings {
   title: string;
@@ -81,8 +82,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
       setLoading(true);
       setError(null);
       try {
-        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-        const res = await fetch("/api/streamer/settings", {
+        // 使用 getApiUrl 取得完整後端 URL
+        const res = await fetch(getApiUrl("/api/streamer/settings"), {
           credentials: "include",
         });
         if (!res.ok) {
@@ -112,34 +113,31 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
   }, [isOpen, t]);
 
   // Search games
-  const searchGames = useCallback(
-    async (query: string) => {
-      if (query.length < 2) {
-        setGameResults([]);
-        return;
-      }
+  const searchGames = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setGameResults([]);
+      return;
+    }
 
-      setSearchingGames(true);
-      try {
-        // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-        const res = await fetch(
-          `/api/streamer/games/search?q=${encodeURIComponent(query)}`,
-          {
-            credentials: "include",
-          }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setGameResults(data);
+    setSearchingGames(true);
+    try {
+      // 使用 getApiUrl 取得完整後端 URL
+      const res = await fetch(
+        getApiUrl(`/api/streamer/games/search?q=${encodeURIComponent(query)}`),
+        {
+          credentials: "include",
         }
-      } catch {
-        // Ignore search errors
-      } finally {
-        setSearchingGames(false);
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setGameResults(data);
       }
-    },
-    []
-  );
+    } catch {
+      // Ignore search errors
+    } finally {
+      setSearchingGames(false);
+    }
+  }, []);
 
   // Debounce game search
   useEffect(() => {
@@ -173,8 +171,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
   const fetchTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
-      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-      const res = await fetch("/api/streamer/templates", {
+      // 使用 getApiUrl 取得完整後端 URL
+      const res = await fetch(getApiUrl("/api/streamer/templates"), {
         credentials: "include",
       });
       if (res.ok) {
@@ -200,8 +198,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
 
     setTemplateActionLoading(true);
     try {
-      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-      const res = await fetch("/api/streamer/templates", {
+      // 使用 getApiUrl 取得完整後端 URL
+      const res = await fetch(getApiUrl("/api/streamer/templates"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -231,8 +229,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
 
     setTemplateActionLoading(true);
     try {
-      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-      const res = await fetch(`/api/streamer/templates/${id}`, {
+      // 使用 getApiUrl 取得完整後端 URL
+      const res = await fetch(getApiUrl(`/api/streamer/templates/${id}`), {
         method: "DELETE",
         credentials: "include",
       });
@@ -268,8 +266,8 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
   const handleSave = async () => {
     setSaving(true);
     try {
-      // 使用相對路徑，讓 Next.js rewrites 處理代理到後端
-      const res = await fetch("/api/streamer/settings", {
+      // 使用 getApiUrl 取得完整後端 URL
+      const res = await fetch(getApiUrl("/api/streamer/settings"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

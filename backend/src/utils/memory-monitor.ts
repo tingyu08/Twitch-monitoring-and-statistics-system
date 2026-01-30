@@ -24,10 +24,7 @@ export class MemoryMonitor {
   private lastWarningTime: number = 0;
   private warningCooldownMs: number = 60000; // 1 分鐘內不重複警告
 
-  constructor(
-    warningThresholdMB: number = 400,
-    criticalThresholdMB: number = 480
-  ) {
+  constructor(warningThresholdMB: number = 400, criticalThresholdMB: number = 480) {
     this.warningThresholdMB = warningThresholdMB;
     this.criticalThresholdMB = criticalThresholdMB;
   }
@@ -142,10 +139,11 @@ export class MemoryMonitor {
   /**
    * 清空快取以釋放記憶體
    */
-  private clearCaches(): void {
+  private async clearCaches(): Promise<void> {
     try {
       // 清空快取管理器
-      const { cacheManager } = require("./cache-manager");
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { cacheManager } = await import("./cache-manager");
       if (cacheManager && typeof cacheManager.clear === "function") {
         cacheManager.clear();
         logger.info("MemoryMonitor", "已清空所有快取");
@@ -167,19 +165,13 @@ export class MemoryMonitor {
         // GC 後再次檢查
         setTimeout(() => {
           const afterGC = this.check();
-          logger.debug(
-            "MemoryMonitor",
-            `GC 後記憶體: ${afterGC.heapUsed}MB`
-          );
+          logger.debug("MemoryMonitor", `GC 後記憶體: ${afterGC.heapUsed}MB`);
         }, 1000);
       } catch (error) {
         logger.error("MemoryMonitor", "GC 觸發失敗", error);
       }
     } else {
-      logger.warn(
-        "MemoryMonitor",
-        "GC 不可用。請使用 --expose-gc 啟動 Node.js"
-      );
+      logger.warn("MemoryMonitor", "GC 不可用。請使用 --expose-gc 啟動 Node.js");
     }
   }
 
@@ -203,8 +195,8 @@ export class MemoryMonitor {
 // 導出單例（Render Free Tier: 512MB 限制）
 // 降低閾值以更早觸發 GC
 export const memoryMonitor = new MemoryMonitor(
-  parseInt(process.env.MEMORY_WARNING_MB || "300"),  // 從 400 降至 300
-  parseInt(process.env.MEMORY_CRITICAL_MB || "380")  // 從 480 降至 380
+  parseInt(process.env.MEMORY_WARNING_MB || "250"), // 從 300 降至 250 (約 50% RAM)
+  parseInt(process.env.MEMORY_CRITICAL_MB || "350") // 從 380 降至 350 (約 70% RAM)
 );
 
 // 自動啟動監控（生產環境）

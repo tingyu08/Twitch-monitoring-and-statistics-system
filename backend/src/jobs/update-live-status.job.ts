@@ -36,10 +36,7 @@ export async function updateLiveStatusFn() {
     const previousStatusMap = new Map(channels.map((c) => [c.twitchChannelId, c.isLive]));
 
     if (channels.length === 0) {
-      logger.warn(
-        "Jobs",
-        "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步"
-      );
+      logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
       return;
     }
 
@@ -122,12 +119,26 @@ export async function updateLiveStatusFn() {
     }
 
     // 4. 批量更新 DB (使用 Transaction 以提高效能)
-    // Turso Free Tier 優化：減小批次大小並添加重試機制
-    const TX_BATCH_SIZE = 10; // 降到 10，避免超時和 502 錯誤
+    // Turso Free Tier 優化：大幅減小批次大小以避免資料庫連線池耗盡
+    const TX_BATCH_SIZE = 5; // 從 10 降到 5
     let updateSuccessCount = 0;
     let updateFailCount = 0;
 
+    // 檢查資料庫連線狀態
+    const { isConnectionReady } = await import("../db/prisma");
+    if (!isConnectionReady()) {
+      logger.warn("Jobs", "資料庫連線尚未預熱，跳過 DB 更新以避免超時");
+      return;
+    }
+
     for (let i = 0; i < updates.length; i += TX_BATCH_SIZE) {
+      // 記憶體保護：如果記憶體過高，中止剩餘更新
+      const { memoryMonitor } = await import("../utils/memory-monitor");
+      if (memoryMonitor.isOverLimit()) {
+        logger.warn("Jobs", "記憶體不足，中止剩餘的狀態更新");
+        break;
+      }
+
       const batch = updates.slice(i, i + TX_BATCH_SIZE);
       const batchIndex = Math.floor(i / TX_BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(updates.length / TX_BATCH_SIZE);
@@ -163,9 +174,9 @@ export async function updateLiveStatusFn() {
         // 繼續處理下一批，不中斷整個流程
       }
 
-      // 批次之間延遲，避免壓垮 Turso
+      // 批次之間大幅延遲，避免壓垮 Turso 和 Render CPU
       if (i + TX_BATCH_SIZE < updates.length) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // 從 300ms 增加到 1000ms
       }
     }
 
