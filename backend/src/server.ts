@@ -57,6 +57,13 @@ httpServer.listen(PORT, async () => {
   // 先讓 Express 伺服器完全啟動，再逐步載入背景服務
   setImmediate(async () => {
     try {
+      // 0. 預熱 Prisma/Turso 連線（最重要，必須在 Job 啟動前完成）
+      const { warmupConnection } = await import("./db/prisma");
+      const connectionReady = await warmupConnection(3, 15000);
+      if (!connectionReady) {
+        logger.warn("Server", "Prisma 連線預熱失敗，Job 可能會遇到超時問題");
+      }
+
       // 1. 先啟動定時任務（輕量級）- 但在生產環境延遲啟動
       if (process.env.NODE_ENV === "production") {
         // 生產環境：延遲 60 秒啟動定時任務，讓伺服器完全穩定後再啟動背景任務
@@ -97,7 +104,10 @@ httpServer.listen(PORT, async () => {
 
           // 記錄初始化後的記憶體使用
           const afterInitMemory = process.memoryUsage();
-          logger.info("Server", `📊 初始化後記憶體: ${(afterInitMemory.heapUsed / 1024 / 1024).toFixed(2)}MB`);
+          logger.info(
+            "Server",
+            `📊 初始化後記憶體: ${(afterInitMemory.heapUsed / 1024 / 1024).toFixed(2)}MB`
+          );
         } catch (error) {
           logger.error("Server", "Twitch 服務初始化失敗", error);
         }

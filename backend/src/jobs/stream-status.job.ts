@@ -111,7 +111,10 @@ export class StreamStatusJob {
     } catch (error) {
       // 如果是超時錯誤，降級為警告（允許繼續運行）
       if (error instanceof Error && error.message.includes("超時")) {
-        logger.warn("JOB", `Stream Status Job 超時 (已處理 ${result.checked} 個頻道)，將在下次執行時繼續`);
+        logger.warn(
+          "JOB",
+          `Stream Status Job 超時 (已處理 ${result.checked} 個頻道)，將在下次執行時繼續`
+        );
         return result; // 返回部分結果而不是拋出錯誤
       }
       logger.error("JOB", "Stream Status Job 執行失敗:", error);
@@ -129,8 +132,10 @@ export class StreamStatusJob {
    * 實際執行邏輯（優化版：並行處理 + 減少 DB 查詢）
    */
   private async doExecute(result: StreamStatusResult): Promise<void> {
-    // 1. 資料庫連線檢查（超時保護 + 重試機制）
-    const maxRetries = 2;
+    // 1. 資料庫連線檢查（優化版：支援預熱檢測 + 更長超時）
+    const { isConnectionReady } = await import("../db/prisma");
+    const maxRetries = 3; // 從 2 增加到 3
+    const timeoutMs = isConnectionReady() ? 5000 : 10000; // 預熱後用較短超時
     let connected = false;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -138,22 +143,27 @@ export class StreamStatusJob {
         await Promise.race([
           prisma.$queryRaw`SELECT 1`,
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("DB connection timeout")), 5000) // 增加到 5 秒
+            setTimeout(() => reject(new Error("DB connection timeout")), timeoutMs)
           ),
         ]);
         connected = true;
         break;
       } catch (error) {
-        logger.warn("JOB", `資料庫連線失敗 (嘗試 ${attempt}/${maxRetries})`, error);
+        logger.warn(
+          "JOB",
+          `資料庫連線失敗 (嘗試 ${attempt}/${maxRetries}, timeout=${timeoutMs}ms)`,
+          error
+        );
         if (attempt < maxRetries) {
-          // 等待 1 秒後重試
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // 指數退避：1s, 2s, 4s
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
     if (!connected) {
-      logger.error("JOB", "資料庫連線失敗，已重試 2 次，跳過此次執行");
+      logger.error("JOB", `資料庫連線失敗，已重試 ${maxRetries} 次，跳過此次執行`);
       return;
     }
 
