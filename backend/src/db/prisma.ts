@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { createClient } from "@libsql/client";
 import * as path from "path";
 
 // 使用單例模式確保只有一個 Prisma Client 實例
@@ -26,21 +27,15 @@ if (isTurso && authToken) {
   // 生產環境：使用 Turso 雲端資料庫
   console.log("[INFO] 使用 Turso 雲端資料庫");
 
-  // Render Free Tier 優化：增加超時時間和重試機制
-  const { createClient } = require("@libsql/client");
-
+  // 創建 libsql client（基本配置）
   const libsqlClient = createClient({
     url: databaseUrl,
     authToken: authToken,
-    // 增加超時時間（預設可能太短）
-    // Render Singapore -> Turso 延遲可能較高
-    // @ts-ignore - libsql client 可能有這些選項
-    timeout: 10000, // 10 秒超時
   });
 
   adapter = new PrismaLibSql(libsqlClient);
 
-  console.log("[INFO] Turso 連線配置完成 (timeout: 10s)");
+  console.log("[INFO] Turso 連線配置完成");
 } else {
   // 開發環境：使用本地原生 SQLite (避免 Adapter 版本相容問題)
   console.log("[DEBUG] 使用原生 Prisma Client (本地 SQLite)");
