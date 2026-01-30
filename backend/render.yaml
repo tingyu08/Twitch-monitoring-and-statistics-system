@@ -4,8 +4,10 @@ services:
     runtime: node
     region: singapore # 離台灣最近的區域
     plan: free
-    buildCommand: npm install && cd backend && npm run build
-    startCommand: cd backend && node dist/server.js
+    # Monorepo 配置：從根目錄安裝依賴，在 backend 目錄建置
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     # 使用輕量級 ping endpoint，加快冷啟動後的健康檢查
     healthCheckPath: /api/health/ping
     # 自動重啟設定
