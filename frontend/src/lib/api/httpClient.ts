@@ -3,12 +3,12 @@
  * 處理認證標頭、錯誤處理和請求日誌
  */
 
-// 生產環境：使用相對路徑（透過 Next.js rewrite 代理到後端，避免跨域 Cookie 問題）
-// 開發環境：直接連接本地後端
+// 移除 rewrites 後，必須使用完整 URL
+// 優先支援 NEXT_PUBLIC_BACKEND_URL，與 getApiUrl.ts 保持一致
 const API_BASE_URL =
-  process.env.NODE_ENV === "production"
-    ? (process.env.NEXT_PUBLIC_API_URL || "") // 生產環境預設使用相對路徑
-    : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000");
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
 
 // 開發環境日誌記錄器
 const apiLogger = {
