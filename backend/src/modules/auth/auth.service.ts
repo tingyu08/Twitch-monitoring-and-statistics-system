@@ -28,27 +28,20 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   accessToken: string;
   refreshToken: string;
 }> {
-  const perfLabel = `OAuth-Callback`;
-  console.time(perfLabel);
+  const startTime = Date.now();
 
   // 1. 交換 code 為 access token
-  console.time(`${perfLabel}-ExchangeToken`);
   const tokenData = await exchangeCodeForToken(code, {
     redirectUri: env.twitchRedirectUri,
   });
-  console.timeEnd(`${perfLabel}-ExchangeToken`);
 
   // 2. 取得 Twitch 使用者資訊
-  console.time(`${perfLabel}-FetchUser`);
   const user = await fetchTwitchUser(tokenData.access_token);
-  console.timeEnd(`${perfLabel}-FetchUser`);
 
   const channelLogin = user.login ?? user.display_name ?? `twitch-${user.id}`;
   const channelUrl = `https://www.twitch.tv/${channelLogin}`;
 
   // 3. 併發執行資料庫操作以減少網路延遲（Turso 遠端連線優化）
-  console.time(`${perfLabel}-DB-ParallelUpserts`);
-
   // Step 1: 先建立/更新 Streamer 和 Viewer（可以併發執行）
   const [streamerRecord, viewerRecord] = await Promise.all([
     prisma.streamer.upsert({
@@ -97,14 +90,10 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
     },
   });
 
-  console.timeEnd(`${perfLabel}-DB-ParallelUpserts`);
-
   logger.info("Auth", `Processing unified login for: ${user.display_name} (${user.id})`);
-
   logger.info("Auth", `Viewer record upserted: ${viewerRecord.id}`);
 
   // 4. Token 處理：加密和查找可以併發進行（加密是 CPU 操作，查找是 I/O 操作）
-  console.time(`${perfLabel}-DB-TokenProcessing`);
 
   const encryptedAccess = encryptToken(tokenData.access_token);
   const encryptedRefresh = tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null;
@@ -160,9 +149,7 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
       },
     });
   }
-  console.timeEnd(`${perfLabel}-DB-TokenProcessing`);
 
-  console.time(`${perfLabel}-PrepareJWT`);
   const result = { streamerRecord, viewerRecord };
 
   const streamer: Streamer = {
@@ -188,10 +175,9 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
 
   const accessToken = signAccessToken(jwtPayload);
   const refreshToken = signRefreshToken(jwtPayload);
-  console.timeEnd(`${perfLabel}-PrepareJWT`);
 
-  console.timeEnd(perfLabel);
-  logger.info("Auth", `Total OAuth callback time: ${perfLabel}`);
+  const totalTime = Date.now() - startTime;
+  logger.info("Auth", `OAuth callback completed in ${totalTime}ms for ${user.display_name}`);
 
   // 立即預熱快取（不阻塞登入回應）
   // 這樣當前端請求 /api/viewer/channels 時，快取已經準備好了

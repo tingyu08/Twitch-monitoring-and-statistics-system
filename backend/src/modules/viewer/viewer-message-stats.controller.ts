@@ -12,9 +12,7 @@ export class ViewerMessageStatsController {
       endDate?: string;
     };
 
-    // Debug Timer
-    const label = `MsgStats-${viewerId}-${channelId}`;
-    console.time(label);
+    const startTime = Date.now();
 
     try {
       // 1. 處理日期範圍
@@ -22,8 +20,6 @@ export class ViewerMessageStatsController {
       const startDate = startDateStr
         ? new Date(startDateStr) // Start date from query
         : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000); // Default 30 days
-
-      console.timeLog(label, "Dates parsed");
 
       // 計算天數差異用於快取鍵
       const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -46,8 +42,6 @@ export class ViewerMessageStatsController {
             },
             orderBy: { date: "asc" },
           });
-
-          console.timeLog(label, `Aggs fetched: ${aggs.length} rows`);
 
           // 3. 計算統計數據
           const summary = {
@@ -79,8 +73,6 @@ export class ViewerMessageStatsController {
             };
           });
 
-          console.timeLog(label, "Summary calculated");
-
           // 計算平均值
           const activeDays = aggs.length;
           const avgMessagesPerStream =
@@ -105,8 +97,6 @@ export class ViewerMessageStatsController {
           const mostActiveDateStr = mostActive.date
             ? mostActive.date.toISOString().split("T")[0]
             : null;
-
-          console.timeEnd(label);
 
           // 4. 構建響應數據
           return {
@@ -136,9 +126,11 @@ export class ViewerMessageStatsController {
         ttl
       );
 
+      const totalTime = Date.now() - startTime;
+      logger.debug("ViewerMessageStats", `Stats retrieved in ${totalTime}ms for viewer ${viewerId}, channel ${channelId}`);
+
       return res.json(result);
     } catch (error) {
-      console.timeEnd(label);
       logger.error("ViewerMessageStats", "Error getting stats", error);
       return res.status(500).json({ error: "Internal Server Error" });
     }

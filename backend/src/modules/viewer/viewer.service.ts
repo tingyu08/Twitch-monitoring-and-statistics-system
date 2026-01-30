@@ -167,12 +167,10 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
   return cacheManager.getOrSet(
     cacheKey,
     async () => {
-      const label = `GetChannels-${viewerId}`;
-      console.time(label);
+      const startTime = Date.now();
 
       try {
         // 1. 優先使用預先聚合的 LifetimeStats 表（快速），如果為空則 fallback 到 groupBy（慢但完整）
-        console.timeLog(label, "Start Stats Query");
 
         let lifetimeStats = await prisma.viewerChannelLifetimeStats.findMany({
           where: { viewerId },
@@ -189,7 +187,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
 
         // Fallback: 如果 LifetimeStats 為空，使用 groupBy 查詢（新使用者或資料尚未聚合）
         if (lifetimeStats.length === 0) {
-          console.timeLog(label, "LifetimeStats empty, fallback to groupBy");
+          logger.debug("ViewerService", "LifetimeStats empty, fallback to groupBy");
           const stats = await prisma.viewerChannelDailyStat.groupBy({
             by: ["channelId"],
             where: { viewerId },
@@ -216,8 +214,6 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
           }));
         }
 
-        console.timeLog(label, `Stats Query Done: ${lifetimeStats.length} channels`);
-
         // 2. 獲取外部追蹤
         const follows = await prisma.userFollow.findMany({
           where: {
@@ -229,7 +225,6 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
             followedAt: true,
           },
         });
-        console.timeLog(label, `Follows Fetched: ${follows.length}`);
 
         // 3. 合併頻道 ID 列表
         const statsChannelIds = new Set(lifetimeStats.map((s) => s.channelId));
@@ -237,12 +232,10 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         const allChannelIds = Array.from(new Set([...statsChannelIds, ...followChannelIds]));
 
         if (allChannelIds.length === 0) {
-          console.timeEnd(label);
           return [];
         }
 
         // 4. 批量查詢頻道詳細資訊
-        console.timeLog(label, `Fetching details for ${allChannelIds.length} channels`);
 
         const channels = await prisma.channel.findMany({
           where: {
@@ -256,7 +249,6 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
             },
           },
         });
-        console.timeLog(label, "Details Fetched");
 
         // 建立 Stats Map 以便快速查找
         const statsMap = new Map(lifetimeStats.map((s) => [s.channelId, s]));
@@ -293,8 +285,6 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
           };
         });
 
-        console.timeLog(label, "Mapping Done");
-
         // 排序
           const sorted = results.sort((a, b) => {
             // 1. Live first
@@ -311,11 +301,10 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
             return 0;
           });
 
-
-        console.timeEnd(label);
+        const totalTime = Date.now() - startTime;
+        logger.debug("ViewerService", `getFollowedChannels completed in ${totalTime}ms (${sorted.length} channels)`);
         return sorted;
       } catch (error) {
-        console.timeEnd(label);
         logger.error("ViewerService", "getFollowedChannels failed", error);
         throw error;
       }
