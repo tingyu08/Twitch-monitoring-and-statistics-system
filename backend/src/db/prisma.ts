@@ -49,13 +49,7 @@ if (isTurso && authToken) {
 const prismaOptions = {
   log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   adapter: adapter ?? null,
-  // Prisma 連線超時設定（Render Free Tier 優化）
-  // 注意：這些選項可能不會對 Turso adapter 生效，主要超時在 libsql client
-  datasources: {
-    db: {
-      url: databaseUrl,
-    },
-  },
+  // 注意：使用 Driver Adapter 時，datasource URL 在 adapter 中設定，不能在這裡重複設定
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
