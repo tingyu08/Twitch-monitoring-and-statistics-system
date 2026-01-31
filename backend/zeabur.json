@@ -1,0 +1,37 @@
+{
+    "serviceName": "twitch-analytics-backend",
+    "project": {
+        "name": "twitch-analytics"
+    },
+    "services": [
+        {
+            "name": "backend",
+            "type": "nix",
+            "args": {
+                "cmd": "npm install && npm start"
+            },
+            "build": {
+                "ignore": [
+                    "frontend",
+                    "docs",
+                    ".github",
+                    "web-bundles"
+                ]
+            },
+            "env": {
+                "NODE_ENV": "production",
+                "PORT": "4000",
+                "DATABASE_URL": "${DATABASE_URL}",
+                "TURSO_AUTH_TOKEN": "${TURSO_AUTH_TOKEN}",
+                "APP_JWT_SECRET": "${APP_JWT_SECRET}",
+                "TWITCH_CLIENT_ID": "${TWITCH_CLIENT_ID}",
+                "TWITCH_CLIENT_SECRET": "${TWITCH_CLIENT_SECRET}",
+                "TWITCH_CALLBACK_URL": "https://${ZEABUR_DOMAIN}/api/auth/twitch/callback",
+                "FRONTEND_URL": "https://twitch-monitoring-and-statistics-sy.vercel.app",
+                "EVENTSUB_ENABLED": "true",
+                "EVENTSUB_SECRET": "${EVENTSUB_SECRET}",
+                "EVENTSUB_CALLBACK_URL": "https://${ZEABUR_DOMAIN}"
+            }
+        }
+    ]
+}
