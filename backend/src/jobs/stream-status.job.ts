@@ -20,6 +20,21 @@ const MAX_CHANNELS_PER_BATCH = 100;
 // 超時時間（毫秒）- Render Free Tier 優化：縮短超時以避免長時間佔用資源
 const JOB_TIMEOUT_MS = 2 * 60 * 1000; // 從 5 分鐘縮短到 2 分鐘
 
+// 避免循環依賴和類型錯誤，定義本地介面
+interface MonitoredChannel {
+  id: string;
+  twitchChannelId: string;
+  channelName: string;
+}
+
+interface ActiveStreamSession {
+  id: string;
+  channelId: string;
+  startedAt: Date;
+  avgViewers: number | null;
+  peakViewers: number | null;
+}
+
 export interface StreamStatusResult {
   checked: number;
   online: number;
@@ -132,40 +147,12 @@ export class StreamStatusJob {
    * 實際執行邏輯（優化版：並行處理 + 減少 DB 查詢）
    */
   private async doExecute(result: StreamStatusResult): Promise<void> {
-    // 1. 資料庫連線檢查（優化版：支援預熱檢測 + 更長超時）
-    const { isConnectionReady } = await import("../db/prisma");
-    const maxRetries = 3; // 從 2 增加到 3
-    const timeoutMs = isConnectionReady() ? 10000 : 20000; // 預熱後用 10s，冷啟動用 20s
-    let connected = false;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await Promise.race([
-          prisma.$queryRaw`SELECT 1`,
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("DB connection timeout")), timeoutMs)
-          ),
-        ]);
-        connected = true;
-        break;
-      } catch (error) {
-        logger.warn(
-          "JOB",
-          `資料庫連線失敗 (嘗試 ${attempt}/${maxRetries}, timeout=${timeoutMs}ms)`,
-          error
-        );
-        if (attempt < maxRetries) {
-          // 指數退避：1s, 2s, 4s
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-      }
-    }
-
-    if (!connected) {
-      logger.error("JOB", `資料庫連線失敗，已重試 ${maxRetries} 次，跳過此次執行`);
-      return;
-    }
+    // 1. 資料庫連線檢查已移除
+    // 理由：
+    // - Turso 冷啟動可能需要 30-60 秒，健康檢查會頻繁超時
+    // - 每個 Prisma 查詢都有自己的錯誤處理和重試機制
+    // - 跳過健康檢查可減少不必要的等待時間
+    // 如果 DB 真的無法連線，後續查詢會失敗並被捕獲
 
     // 2. 獲取所有需要監控的頻道
     const channels = await this.getActiveChannels();
@@ -185,12 +172,12 @@ export class StreamStatusJob {
 
     // 4. 一次查詢所有 active sessions
     const channelIds = channels.map((c) => c.id);
-    const activeSessions = await prisma.streamSession.findMany({
+    const activeSessions = (await prisma.streamSession.findMany({
       where: {
         channelId: { in: channelIds },
         endedAt: null,
       },
-    });
+    })) as unknown as ActiveStreamSession[]; // 使用 unknown cast 避免與 prisma 生成類型衝突
     const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
     // 5. 處理每個頻道的狀態變化（並行處理，限制並發數）
@@ -269,7 +256,7 @@ export class StreamStatusJob {
   /**
    * 獲取所有需要監控的頻道
    */
-  private async getActiveChannels() {
+  private async getActiveChannels(): Promise<MonitoredChannel[]> {
     const totalChannels = await prisma.channel.count();
     const monitoredChannels = await prisma.channel.count({
       where: { isMonitored: true },
@@ -283,14 +270,14 @@ export class StreamStatusJob {
       );
     }
 
-    return prisma.channel.findMany({
+    return (await prisma.channel.findMany({
       where: { isMonitored: true },
       select: {
         id: true,
         twitchChannelId: true,
         channelName: true,
       },
-    });
+    })) as MonitoredChannel[];
   }
 
   /**
