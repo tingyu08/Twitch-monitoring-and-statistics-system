@@ -2,14 +2,12 @@
     "services": [
         {
             "name": "twitch-analytics-backend",
-            "type": "nix",
-            "rootDir": "backend",
-            "args": {
-                "cmd": "cd backend && npm install && npm run build && npm start"
-            },
+            "type": "nodejs",
+            "buildCommand": "cd backend && npm install && npm run build",
+            "startCommand": "cd backend && npm start",
             "env": {
                 "NODE_ENV": "production",
-                "PORT": "4000",
+                "PORT": "${PORT}",
                 "DATABASE_URL": "${DATABASE_URL}",
                 "TURSO_AUTH_TOKEN": "${TURSO_AUTH_TOKEN}",
                 "APP_JWT_SECRET": "${APP_JWT_SECRET}",
