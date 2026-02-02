@@ -89,13 +89,6 @@ export class StreamStatusJob {
     const startTime = Date.now();
     logger.debug("JOB", "開始檢查開播狀態...");
 
-    // 設定超時保護
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      this.timeoutHandle = setTimeout(() => {
-        reject(new Error(`Job 超時 (>${JOB_TIMEOUT_MS / 1000}秒)`));
-      }, JOB_TIMEOUT_MS);
-    });
-
     const result: StreamStatusResult = {
       checked: 0,
       online: 0,
@@ -104,13 +97,25 @@ export class StreamStatusJob {
       endedSessions: 0,
     };
 
+    // 設定超時保護 - 使用 AbortController 模式
+    let timeoutTriggered = false;
+    this.timeoutHandle = setTimeout(() => {
+      timeoutTriggered = true;
+    }, JOB_TIMEOUT_MS);
+
     try {
-      // 使用 Promise.race 實現超時
-      await Promise.race([this.doExecute(result), timeoutPromise]);
+      await this.doExecute(result, () => timeoutTriggered);
 
       const duration = Date.now() - startTime;
-      // 只在有新場次或結束場次時輸出 info，否則輸出 debug
-      if (result.newSessions > 0 || result.endedSessions > 0) {
+
+      // 檢查是否因超時而提前結束
+      if (timeoutTriggered) {
+        logger.warn(
+          "JOB",
+          `Stream Status Job 超時 (${duration}ms, 已處理 ${result.checked} 個頻道)，將在下次執行時繼續`
+        );
+      } else if (result.newSessions > 0 || result.endedSessions > 0) {
+        // 只在有新場次或結束場次時輸出 info
         logger.info(
           "JOB",
           `Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
@@ -124,14 +129,6 @@ export class StreamStatusJob {
 
       return result;
     } catch (error) {
-      // 如果是超時錯誤，降級為警告（允許繼續運行）
-      if (error instanceof Error && error.message.includes("超時")) {
-        logger.warn(
-          "JOB",
-          `Stream Status Job 超時 (已處理 ${result.checked} 個頻道)，將在下次執行時繼續`
-        );
-        return result; // 返回部分結果而不是拋出錯誤
-      }
       logger.error("JOB", "Stream Status Job 執行失敗:", error);
       throw error;
     } finally {
@@ -145,8 +142,13 @@ export class StreamStatusJob {
 
   /**
    * 實際執行邏輯（優化版：並行處理 + 減少 DB 查詢）
+   * @param result 結果物件
+   * @param isTimedOut 檢查是否已超時的函數
    */
-  private async doExecute(result: StreamStatusResult): Promise<void> {
+  private async doExecute(
+    result: StreamStatusResult,
+    isTimedOut: () => boolean = () => false
+  ): Promise<void> {
     // 1. 資料庫連線檢查已移除
     // 理由：
     // - Turso 冷啟動可能需要 30-60 秒，健康檢查會頻繁超時
@@ -186,6 +188,9 @@ export class StreamStatusJob {
 
     // 將任務分組進行並行處理
     const tasks = channels.map(async (channel) => {
+      // 檢查是否已超時
+      if (isTimedOut()) return;
+
       const stream = liveStreamMap.get(channel.twitchChannelId);
       const isLive = !!stream;
       const activeSession = activeSessionMap.get(channel.id);
