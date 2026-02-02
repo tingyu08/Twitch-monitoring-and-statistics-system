@@ -2,6 +2,54 @@ import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 
+// Type definitions for query results
+interface LifetimeStatResult {
+  channelId: string;
+  totalWatchTimeMinutes: number;
+  totalMessages: number;
+  lastWatchedAt: Date | null;
+}
+
+interface FollowResult {
+  channelId: string;
+  followedAt: Date;
+}
+
+interface GroupByStatResult {
+  channelId: string;
+  _sum: { watchSeconds: number | null; messageCount: number | null };
+  _max: { date: Date | null };
+}
+
+interface ChannelWithRelations {
+  id: string;
+  channelName: string;
+  isLive: boolean;
+  currentViewerCount: number | null;
+  currentStreamStartedAt: Date | null;
+  currentGameName: string | null;
+  source: string;
+  streamer: { displayName: string; avatarUrl: string } | null;
+  streamSessions: unknown[];
+}
+
+interface FollowedChannelResult {
+  id: string;
+  channelName: string;
+  displayName: string;
+  avatarUrl: string;
+  category: string;
+  isLive: boolean;
+  viewerCount: number | null;
+  streamStartedAt: string | null;
+  followedAt: string | null;
+  tags: string[];
+  lastWatched: string | null;
+  totalWatchMinutes: number;
+  messageCount: number;
+  isExternal: boolean;
+}
+
 export interface ViewerDailyStat {
   date: string;
   watchHours: number;
@@ -116,7 +164,7 @@ export async function getChannelStats(
       ]);
 
       // 轉換為前端友好的格式
-      const dailyStats = stats.map((stat) => ({
+      const dailyStats = stats.map((stat: { date: Date; watchSeconds: number; messageCount: number; emoteCount: number }) => ({
         date: stat.date.toISOString().split("T")[0],
         watchHours: Math.round((stat.watchSeconds / 3600) * 10) / 10,
         messageCount: stat.messageCount,
@@ -124,8 +172,8 @@ export async function getChannelStats(
       }));
 
       // 構建頻道基本資訊
-      const totalWatchHours = dailyStats.reduce((sum, s) => sum + s.watchHours, 0);
-      const totalMessages = dailyStats.reduce((sum, s) => sum + s.messageCount, 0);
+      const totalWatchHours = dailyStats.reduce((sum: number, s: { watchHours: number }) => sum + s.watchHours, 0);
+      const totalMessages = dailyStats.reduce((sum: number, s: { messageCount: number }) => sum + s.messageCount, 0);
 
       // 如果找不到頻道，使用 fallback
       const channelDisplay: ViewerChannelInfo | null = channelInfo
@@ -206,7 +254,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
           });
 
           // 轉換為 LifetimeStats 格式
-          lifetimeStats = stats.map((s) => ({
+          lifetimeStats = stats.map((s: GroupByStatResult) => ({
             channelId: s.channelId,
             totalWatchTimeMinutes: Math.floor((s._sum.watchSeconds || 0) / 60),
             totalMessages: s._sum.messageCount || 0,
@@ -227,8 +275,8 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         });
 
         // 3. 合併頻道 ID 列表
-        const statsChannelIds = new Set(lifetimeStats.map((s) => s.channelId));
-        const followChannelIds = new Set(follows.map((f) => f.channelId));
+        const statsChannelIds = new Set(lifetimeStats.map((s: LifetimeStatResult) => s.channelId));
+        const followChannelIds = new Set(follows.map((f: FollowResult) => f.channelId));
         const allChannelIds = Array.from(new Set([...statsChannelIds, ...followChannelIds]));
 
         if (allChannelIds.length === 0) {
@@ -251,11 +299,11 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         });
 
         // 建立 Stats Map 以便快速查找
-        const statsMap = new Map(lifetimeStats.map((s) => [s.channelId, s]));
-        const followsMap = new Map(follows.map((f) => [f.channelId, f.followedAt]));
+        const statsMap = new Map<string, LifetimeStatResult>(lifetimeStats.map((s: LifetimeStatResult) => [s.channelId, s]));
+        const followsMap = new Map<string, Date>(follows.map((f: FollowResult) => [f.channelId, f.followedAt]));
 
         // 6. 轉換為前端格式
-        const results = channels.map((channel) => {
+        const results: FollowedChannelResult[] = channels.map((channel: ChannelWithRelations) => {
           const stat = statsMap.get(channel.id);
           const followedAt = followsMap.get(channel.id);
 
@@ -286,7 +334,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         });
 
         // 排序
-          const sorted = results.sort((a, b) => {
+          const sorted = results.sort((a: FollowedChannelResult, b: FollowedChannelResult) => {
             // 1. Live first
             if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
 

@@ -58,7 +58,7 @@ export class AutoJoinLiveChannelsJob {
 
       for (let i = 0; i < monitoredChannels.length; i += batchSize) {
         const batch = monitoredChannels.slice(i, i + batchSize);
-        const twitchIds = batch.map((c) => c.twitchChannelId);
+        const twitchIds = batch.map((c: { twitchChannelId: string }) => c.twitchChannelId);
 
         try {
           const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);

@@ -56,7 +56,7 @@ export class WatchTimeIncrementJob {
         return;
       }
 
-      const liveChannelIds = liveChannels.map((c) => c.id);
+      const liveChannelIds = liveChannels.map((c: { id: string }) => c.id);
 
       // 2. 找出在活躍窗口內有訊息的 viewer-channel 組合
       const activeViewerChannels = await prisma.viewerChannelMessage.groupBy({

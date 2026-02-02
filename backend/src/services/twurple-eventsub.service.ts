@@ -20,6 +20,27 @@
 // } from "@twurple/eventsub-http";
 // import type { ApiClient } from "@twurple/api";
 import type { Application } from "express";
+
+// Types for database query results
+interface ChannelResult {
+  id: string;
+  channelName: string;
+  twitchChannelId: string;
+  isLive: boolean;
+  currentViewerCount: number | null;
+  currentStreamStartedAt: Date | null;
+  currentGameName: string | null;
+}
+
+interface StreamSessionResult {
+  id: string;
+  channelId: string;
+  startedAt: Date;
+  endedAt: Date | null;
+  durationSeconds: number | null;
+  title: string;
+  category: string;
+}
 import { twurpleAuthService } from "./twurple-auth.service";
 import { webSocketGateway } from "./websocket.gateway";
 import { prisma } from "../db/prisma";
@@ -298,7 +319,7 @@ class TwurpleEventSubService {
   ): Promise<void> {
     try {
       // 使用重試機制查詢頻道
-      const channel = await retryDatabaseOperation(() =>
+      const channel = await retryDatabaseOperation<ChannelResult | null>(() =>
         prisma.channel.findUnique({
           where: { twitchChannelId },
         })
@@ -310,7 +331,7 @@ class TwurpleEventSubService {
       }
 
       // 使用重試機制檢查是否已有進行中的 session
-      const existingSession = await retryDatabaseOperation(() =>
+      const existingSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
         prisma.streamSession.findFirst({
           where: {
             channelId: channel.id,
@@ -368,7 +389,7 @@ class TwurpleEventSubService {
   private async handleStreamOffline(twitchChannelId: string): Promise<void> {
     try {
       // 使用重試機制查詢頻道
-      const channel = await retryDatabaseOperation(() =>
+      const channel = await retryDatabaseOperation<ChannelResult | null>(() =>
         prisma.channel.findUnique({
           where: { twitchChannelId },
         })
@@ -380,7 +401,7 @@ class TwurpleEventSubService {
       }
 
       // 使用重試機制找到進行中的 session
-      const openSession = await retryDatabaseOperation(() =>
+      const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
         prisma.streamSession.findFirst({
           where: {
             channelId: channel.id,
@@ -450,7 +471,7 @@ class TwurpleEventSubService {
   ): Promise<void> {
     try {
       // 使用重試機制查詢頻道
-      const channel = await retryDatabaseOperation(() =>
+      const channel = await retryDatabaseOperation<ChannelResult | null>(() =>
         prisma.channel.findUnique({
           where: { twitchChannelId },
         })
@@ -459,7 +480,7 @@ class TwurpleEventSubService {
       if (!channel) return;
 
       // 使用重試機制查詢進行中的 session
-      const openSession = await retryDatabaseOperation(() =>
+      const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
         prisma.streamSession.findFirst({
           where: {
             channelId: channel.id,

@@ -12,6 +12,28 @@ import { prisma } from "../db/prisma";
 import { twurpleHelixService } from "../services/twitch-helix.service";
 import { logger } from "../utils/logger";
 import { decryptToken } from "../utils/crypto.utils";
+import type { Prisma } from "@prisma/client";
+
+// 類型定義
+type TransactionClient = Prisma.TransactionClient;
+
+interface ExistingFollow {
+  id: string;
+  channel: { twitchChannelId: string };
+}
+
+interface ExistingChannel {
+  id: string;
+  twitchChannelId: string;
+  isMonitored: boolean;
+  streamerId: string | null;
+  streamer?: { id: string; twitchUserId: string } | null;
+}
+
+interface ExistingStreamer {
+  id: string;
+  twitchUserId: string;
+}
 
 // 每小時執行一次
 const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "0 * * * *";
@@ -276,7 +298,7 @@ export class SyncUserFollowsJob {
       include: { channel: true },
     });
 
-    const existingFollowMap = new Map(existingFollows.map((f) => [f.channel.twitchChannelId, f]));
+    const existingFollowMap = new Map(existingFollows.map((f: ExistingFollow) => [f.channel.twitchChannelId, f]));
 
     // 3. 批量獲取現有資料（消除 N+1 查詢）
     const broadcasterIds = followedChannels.map((f) => f.broadcasterId);
@@ -286,13 +308,13 @@ export class SyncUserFollowsJob {
       include: { streamer: true },
     });
 
-    const existingChannelMap = new Map(existingChannels.map((ch) => [ch.twitchChannelId, ch]));
+    const existingChannelMap = new Map<string, ExistingChannel>(existingChannels.map((ch: ExistingChannel) => [ch.twitchChannelId, ch]));
 
     const existingStreamers = await prisma.streamer.findMany({
       where: { twitchUserId: { in: broadcasterIds } },
     });
 
-    const existingStreamerMap = new Map(existingStreamers.map((s) => [s.twitchUserId, s]));
+    const existingStreamerMap = new Map<string, ExistingStreamer>(existingStreamers.map((s: ExistingStreamer) => [s.twitchUserId, s]));
 
     // 4. 準備批量操作資料
     const streamersToUpsert: Array<{
@@ -338,7 +360,7 @@ export class SyncUserFollowsJob {
     }
 
     // 5. 批量執行資料庫操作
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: TransactionClient) => {
       for (const streamerData of streamersToUpsert) {
         const upserted = await tx.streamer.upsert({
           where: { twitchUserId: streamerData.twitchUserId },
@@ -440,7 +462,7 @@ export class SyncUserFollowsJob {
     }
 
     // 7. 批量刪除不再追蹤的記錄
-    const followIdsToDelete = Array.from(existingFollowMap.values()).map((f) => f.id);
+    const followIdsToDelete = Array.from(existingFollowMap.values()).map((f: ExistingFollow) => f.id);
     if (followIdsToDelete.length > 0) {
       await prisma.userFollow.deleteMany({
         where: { id: { in: followIdsToDelete } },
@@ -470,7 +492,7 @@ export class SyncUserFollowsJob {
     }
 
     // 使用 updateMany 批次更新（修復 N+1 問題）
-    const orphanedIds = orphanedChannels.map((c) => c.id);
+    const orphanedIds = orphanedChannels.map((c: { id: string }) => c.id);
     await prisma.channel.updateMany({
       where: { id: { in: orphanedIds } },
       data: { isMonitored: false },
@@ -494,6 +516,24 @@ export class SyncUserFollowsJob {
 
 // 匯出單例
 export const syncUserFollowsJob = new SyncUserFollowsJob();
+
+// Additional types for triggerFollowSyncForUser
+interface TriggerExistingFollow {
+  id: string;
+  channel: { twitchChannelId: string };
+}
+
+interface TriggerExistingChannel {
+  id: string;
+  twitchChannelId: string;
+  isMonitored: boolean;
+  streamerId: string | null;
+}
+
+interface TriggerExistingStreamer {
+  id: string;
+  twitchUserId: string;
+}
 
 /**
  * 為單一使用者觸發追蹤名單同步（登入時使用）
@@ -542,7 +582,7 @@ export async function triggerFollowSyncForUser(
       },
     });
 
-    const existingFollowMap = new Map(existingFollows.map((f) => [f.channel.twitchChannelId, f]));
+    const existingFollowMap = new Map<string, TriggerExistingFollow>(existingFollows.map((f: TriggerExistingFollow) => [f.channel.twitchChannelId, f]));
 
     // P1 Fix: 批次查詢所有頻道，避免 N+1 查詢問題
     const allBroadcasterIds = followedChannels.map((f) => f.broadcasterId);
@@ -550,14 +590,14 @@ export async function triggerFollowSyncForUser(
       where: { twitchChannelId: { in: allBroadcasterIds } },
       select: { id: true, twitchChannelId: true, isMonitored: true, streamerId: true },
     });
-    const existingChannelMap = new Map(existingChannels.map((c) => [c.twitchChannelId, c]));
+    const existingChannelMap = new Map<string, TriggerExistingChannel>(existingChannels.map((c: TriggerExistingChannel) => [c.twitchChannelId, c]));
 
     // P1 Fix: 批次查詢所有 Streamer，避免 N+1 查詢問題
     const existingStreamers = await prisma.streamer.findMany({
       where: { twitchUserId: { in: allBroadcasterIds } },
       select: { id: true, twitchUserId: true },
     });
-    const existingStreamerMap = new Map(existingStreamers.map((s) => [s.twitchUserId, s]));
+    const existingStreamerMap = new Map<string, TriggerExistingStreamer>(existingStreamers.map((s: TriggerExistingStreamer) => [s.twitchUserId, s]));
 
     let created = 0;
     let removed = 0;
@@ -673,7 +713,7 @@ export async function triggerFollowSyncForUser(
     }
 
     // 批次刪除不再追蹤的記錄（修復 N+1 問題）
-    const oldFollowIds = Array.from(existingFollowMap.values()).map((f) => f.id);
+    const oldFollowIds = Array.from(existingFollowMap.values()).map((f: TriggerExistingFollow) => f.id);
     if (oldFollowIds.length > 0) {
       await prisma.userFollow.deleteMany({
         where: { id: { in: oldFollowIds } },

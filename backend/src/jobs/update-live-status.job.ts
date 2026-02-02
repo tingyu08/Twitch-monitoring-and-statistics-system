@@ -33,7 +33,7 @@ export async function updateLiveStatusFn() {
     });
 
     // 建立當前狀態 Map 用於比較
-    const previousStatusMap = new Map(channels.map((c) => [c.twitchChannelId, c.isLive]));
+    const previousStatusMap = new Map(channels.map((c: { twitchChannelId: string; isLive: boolean }) => [c.twitchChannelId, c.isLive]));
 
     if (channels.length === 0) {
       logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
@@ -67,7 +67,7 @@ export async function updateLiveStatusFn() {
 
     for (let i = 0; i < channels.length; i += BATCH_SIZE) {
       const batch = channels.slice(i, i + BATCH_SIZE);
-      const twitchIds = batch.map((c) => c.twitchChannelId);
+      const twitchIds = batch.map((c: { twitchChannelId: string }) => c.twitchChannelId);
 
       try {
         // 使用 twurpleHelixService (內部已管理 ApiClient)

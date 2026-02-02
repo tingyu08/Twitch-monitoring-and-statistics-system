@@ -31,8 +31,8 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
         distinct: ["viewerId", "channelId"],
       });
 
-      allStats.forEach((s) => targets.add(`${s.viewerId}|${s.channelId}`));
-      allMsgs.forEach((s) => targets.add(`${s.viewerId}|${s.channelId}`));
+      allStats.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
+      allMsgs.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
     } else {
       // 增量更新：找出過去 26 小時有變動的 (多留一點緩衝)
       const checkTime = new Date(Date.now() - 26 * 60 * 60 * 1000);
@@ -49,8 +49,8 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
         distinct: ["viewerId", "channelId"],
       });
 
-      activeStats.forEach((s) => targets.add(`${s.viewerId}|${s.channelId}`));
-      activeMsgs.forEach((s) => targets.add(`${s.viewerId}|${s.channelId}`));
+      activeStats.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
+      activeMsgs.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
     }
 
     logger.info("CronJob", `找到 ${targets.size} 組觀眾-頻道配對需要更新`);
