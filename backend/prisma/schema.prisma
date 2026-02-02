@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // 支援 Debian Bookworm (OpenSSL 3.0) 和本地開發環境
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
