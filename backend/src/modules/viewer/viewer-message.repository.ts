@@ -12,6 +12,39 @@ function isRawChatMessage(msg: MessageInput): msg is RawChatMessage {
   return "viewerId" in msg && "bitsAmount" in msg;
 }
 
+/**
+ * 重試包裝器：針對 Turso 502 錯誤進行重試
+ */
+async function retryOnTurso502<T>(
+  operation: () => Promise<T>,
+  context: string,
+  maxRetries = 3
+): Promise<T | null> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const is502 = errorMessage.includes("502") || errorMessage.includes("bad gateway");
+
+      if (is502 && attempt < maxRetries) {
+        const delay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // 100ms, 200ms, 400ms
+        logger.warn(
+          "ViewerMessage",
+          `${context} failed (502), retry ${attempt}/${maxRetries} after ${delay}ms`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // 最後一次嘗試失敗，或非 502 錯誤，記錄並返回 null
+      logger.error("ViewerMessage", `${context} failed after ${attempt} attempts`, error);
+      return null;
+    }
+  }
+  return null;
+}
+
 // P1 Memory: Cache key generators for viewer/channel lookup
 const CacheKeys = {
   viewerLookup: (twitchUserId: string) => `lookup:viewer:${twitchUserId}`,
@@ -32,20 +65,24 @@ export class ViewerMessageRepository {
       return cached;
     }
 
-    // If cache returned null but key might exist with null value, check again
-    // Note: cacheManager returns null for both "not found" and "stored null"
-    // We need to handle this by storing a special value or using getOrSet
+    // Query database with retry on 502 errors
+    const result = await retryOnTurso502(
+      () =>
+        prisma.viewer.findUnique({
+          where: { twitchUserId },
+          select: { id: true },
+        }),
+      `getCachedViewerId(${twitchUserId})`
+    );
 
-    // Query database
-    const viewer = await prisma.viewer.findUnique({
-      where: { twitchUserId },
-      select: { id: true },
-    });
+    // Handle null from retry failure or viewer not found
+    if (!result) {
+      return null;
+    }
 
-    const viewerId = viewer?.id || null;
+    const viewerId = (result as { id: string }).id;
 
-    // Store in cache (5 min TTL, matching original CACHE_TTL_MS)
-    // Use special marker for "not found" to distinguish from cache miss
+    // Store in cache (5 min TTL)
     cacheManager.set(cacheKey, viewerId, CacheTTL.MEDIUM);
 
     return viewerId;
@@ -64,14 +101,23 @@ export class ViewerMessageRepository {
       return cached;
     }
 
-    // Query database
+    // Query database with retry on 502 errors
     const normalizedName = channelName.toLowerCase();
-    const channel = await prisma.channel.findFirst({
-      where: { channelName: normalizedName },
-      select: { id: true },
-    });
+    const result = await retryOnTurso502(
+      () =>
+        prisma.channel.findFirst({
+          where: { channelName: normalizedName },
+          select: { id: true },
+        }),
+      `getCachedChannelId(${channelName})`
+    );
 
-    const channelId = channel?.id || null;
+    // Handle null from retry failure or channel not found
+    if (!result) {
+      return null;
+    }
+
+    const channelId = (result as { id: string }).id;
 
     // Store in cache (5 min TTL)
     cacheManager.set(cacheKey, channelId, CacheTTL.MEDIUM);
