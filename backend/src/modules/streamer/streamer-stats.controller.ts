@@ -125,9 +125,11 @@ export async function getClipsHandler(req: AuthRequest, res: Response): Promise<
 }
 
 /**
- * 公開: 取得指定頻道的 VOD 列表
+ * 公開: 取得指定頻道的 VOD 列表（觀眾追蹤名單用）
  * GET /api/streamer/:channelId/videos
- * 注意: 這裡的 channelId 是 Channel 表的 UUID，需要轉換成 streamerId
+ * 
+ * 使用 ViewerChannelVideo 表，此表每個 Channel 最多存 6 部最新影片，
+ * 專門優化給觀眾追蹤名單使用，避免查詢實況主的完整 Video 表。
  */
 export async function getPublicVideosHandler(req: Request, res: Response): Promise<void> {
   try {
@@ -137,35 +139,18 @@ export async function getPublicVideosHandler(req: Request, res: Response): Promi
       return;
     }
 
-    // 先查詢 Channel 取得對應的 streamerId
-    const channel = await prisma.channel.findUnique({
-      where: { id: channelId },
-      select: { streamerId: true },
-    });
-
-    if (!channel?.streamerId) {
-      // 嘗試直接用 channelId 當 streamerId 查詢（相容舊邏輯）
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
-      const safeLimit = Math.min(limit, 100);
-      const result = await getStreamerVideos(channelId, safeLimit, page);
-      res.json(result);
-      return;
-    }
-
-    // 自定義查詢：只取最新 6 部
-    const limit = 6;
-    const videos = await prisma.video.findMany({
-      where: { streamerId: channel.streamerId },
+    // 直接查詢 ViewerChannelVideo 表（已按 Channel 分離，效能最佳）
+    const videos = await prisma.viewerChannelVideo.findMany({
+      where: { channelId },
       orderBy: { publishedAt: "desc" },
-      take: limit,
+      take: 6, // 最多 6 部
     });
 
     res.json({
       data: videos,
       total: videos.length,
       page: 1,
-      limit,
+      limit: 6,
       totalPages: 1,
     });
   } catch (error) {
@@ -175,9 +160,11 @@ export async function getPublicVideosHandler(req: Request, res: Response): Promi
 }
 
 /**
- * 公開: 取得指定頻道的 Clips 列表
+ * 公開: 取得指定頻道的 Clips 列表（觀眾追蹤名單用）
  * GET /api/streamer/:channelId/clips
- * 注意: 這裡的 channelId 是 Channel 表的 UUID，需要轉換成 streamerId
+ * 
+ * 使用 ViewerChannelClip 表，此表每個 Channel 只保留觀看次數最高的 6 部剪輯，
+ * 專門優化給觀眾追蹤名單使用，避免查詢實況主的完整 Clip 表。
  */
 export async function getPublicClipsHandler(req: Request, res: Response): Promise<void> {
   try {
@@ -187,35 +174,18 @@ export async function getPublicClipsHandler(req: Request, res: Response): Promis
       return;
     }
 
-    // 先查詢 Channel 取得對應的 streamerId
-    const channel = await prisma.channel.findUnique({
-      where: { id: channelId },
-      select: { streamerId: true },
-    });
-
-    if (!channel?.streamerId) {
-      // 嘗試直接用 channelId 當 streamerId 查詢（相容舊邏輯）
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
-      const safeLimit = Math.min(limit, 100);
-      const result = await getStreamerClips(channelId, safeLimit, page);
-      res.json(result);
-      return;
-    }
-
-    // 自定義查詢：只取觀看次數最高的 6 部
-    const limit = 6;
-    const clips = await prisma.clip.findMany({
-      where: { streamerId: channel.streamerId },
+    // 直接查詢 ViewerChannelClip 表（已按 Channel 分離，效能最佳）
+    const clips = await prisma.viewerChannelClip.findMany({
+      where: { channelId },
       orderBy: { viewCount: "desc" },
-      take: limit,
+      take: 6, // 最多 6 部
     });
 
     res.json({
       data: clips,
       total: clips.length,
       page: 1,
-      limit,
+      limit: 6,
       totalPages: 1,
     });
   } catch (error) {
@@ -275,14 +245,23 @@ export async function getPublicViewerTrendsHandler(req: Request, res: Response):
           },
         });
 
-        return sessions.map((s) => ({
-          date: s.startedAt.toISOString().split("T")[0],
-          title: s.title || "Untitled",
-          avgViewers: s.avgViewers || 0,
-          peakViewers: s.peakViewers || 0,
-          durationHours: Math.round(((s.durationSeconds || 0) / 3600) * 10) / 10,
-          category: s.category || "Just Chatting",
-        }));
+        return sessions.map(
+          (s: {
+            startedAt: Date;
+            title: string | null;
+            category: string | null;
+            avgViewers: number | null;
+            peakViewers: number | null;
+            durationSeconds: number | null;
+          }) => ({
+            date: s.startedAt.toISOString().split("T")[0],
+            title: s.title || "Untitled",
+            avgViewers: s.avgViewers || 0,
+            peakViewers: s.peakViewers || 0,
+            durationHours: Math.round(((s.durationSeconds || 0) / 3600) * 10) / 10,
+            category: s.category || "Just Chatting",
+          })
+        );
       },
       ttl
     );
@@ -351,7 +330,7 @@ export async function getPublicStreamHourlyHandler(req: Request, res: Response):
 
         // 1. 如果有真實數據 (Metrics)，優先使用
         if (session.metrics && session.metrics.length > 0) {
-          return session.metrics.map((m) => ({
+          return session.metrics.map((m: { timestamp: Date; viewerCount: number }) => ({
             timestamp: m.timestamp.toISOString(),
             viewers: m.viewerCount,
           }));

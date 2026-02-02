@@ -13,8 +13,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const t = useTranslations("common.notifications");
   const joinedChannelsRef = useRef<Set<string>>(new Set());
   const joinedViewerRef = useRef<string | null>(null);
-
-  // Implement join/leave channel methods
+  const prevUserRef = useRef<typeof user>(null);
 
   // Event handlers for WebSocket lifecycle
   const handleConnect = useCallback(
@@ -91,12 +90,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     [socket]
   );
 
-  // Connect/disconnect based on user authentication
+  // Connect/disconnect based on user authentication - only when user actually changes
   useEffect(() => {
-    if (user) {
+    const userChanged = prevUserRef.current !== user;
+    const wasLoggedIn = !!prevUserRef.current;
+    const isLoggedIn = !!user;
+
+    prevUserRef.current = user;
+
+    // Only act on actual user state changes
+    if (!userChanged) return;
+
+    if (isLoggedIn && !wasLoggedIn) {
+      // User logged in
       connect();
-    } else {
-      // Clear room tracking on logout
+    } else if (!isLoggedIn && wasLoggedIn) {
+      // User logged out
       joinedChannelsRef.current.clear();
       joinedViewerRef.current = null;
       disconnect();

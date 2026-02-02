@@ -67,9 +67,9 @@ export function ChannelVideosSection({ channelId }: Props) {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold theme-text-gradient flex items-center gap-2">
           {activeTab === "vods" ? (
-            <>📺 最近 VOD (7天內)</>
+            <>📺 最近 VOD (6天內)</>
           ) : (
-            <>🎬 熱門剪輯 (7天內)</>
+            <>🎬 熱門剪輯 (依觀看數)</>
           )}
         </h2>
 
@@ -154,7 +154,7 @@ export function ChannelVideosSection({ channelId }: Props) {
             ))
           ) : (
             <p className="col-span-full text-center py-10 theme-text-muted bg-gray-50 dark:bg-white/5 rounded-xl border border-dashed border-gray-200 dark:border-white/10">
-              最近 7 天無 VOD 資料
+              最近 6 天無 VOD 資料
             </p>
           )
         ) : clips.length > 0 ? (
@@ -202,7 +202,7 @@ export function ChannelVideosSection({ channelId }: Props) {
           ))
         ) : (
           <p className="col-span-full text-center py-10 theme-text-muted bg-gray-50 dark:bg-white/5 rounded-xl border border-dashed border-gray-200 dark:border-white/10">
-            最近 7 天無 Clips 資料
+            尚無 Clips 資料
           </p>
         )}
       </div>

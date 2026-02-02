@@ -75,29 +75,52 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
   const currentDelayRef = useRef(INITIAL_DELAY_MS);
   const isManualDisconnectRef = useRef(false);
   const isMountedRef = useRef(true);
+  const isInitializedRef = useRef(false);
+  const scheduleReconnectRef = useRef<(() => void) | null>(null);
+
+  // Store callbacks in refs to avoid dependency issues
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+  const onErrorRef = useRef(onError);
+  const onReconnectingRef = useRef(onReconnecting);
+  const onMaxRetriesReachedRef = useRef(onMaxRetriesReached);
+  const maxRetriesRef = useRef(maxRetries);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onConnectRef.current = onConnect;
+  }, [onConnect]);
+
+  useEffect(() => {
+    onDisconnectRef.current = onDisconnect;
+  }, [onDisconnect]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    onReconnectingRef.current = onReconnecting;
+  }, [onReconnecting]);
+
+  useEffect(() => {
+    onMaxRetriesReachedRef.current = onMaxRetriesReached;
+  }, [onMaxRetriesReached]);
+
+  useEffect(() => {
+    maxRetriesRef.current = maxRetries;
+  }, [maxRetries]);
 
   /**
-   * Calculate next delay with exponential backoff
+   * Reset reconnection state
+   * Note: Using refs for all external values to avoid dependency issues
    */
-  const calculateNextDelay = useCallback((currentDelay: number): number => {
-    return Math.min(currentDelay * BACKOFF_MULTIPLIER, MAX_DELAY_MS);
-  }, []);
-
-  /**
-   * Clear any pending reconnect timeout
-   */
-  const clearReconnectTimeout = useCallback(() => {
+  const resetReconnect = useCallback(() => {
+    // Clear timeout inline to avoid dependency
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-  }, []);
-
-  /**
-   * Reset reconnection state
-   */
-  const resetReconnect = useCallback(() => {
-    clearReconnectTimeout();
     reconnectAttemptRef.current = 0;
     currentDelayRef.current = INITIAL_DELAY_MS;
     if (isMountedRef.current) {
@@ -107,10 +130,11 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
         nextReconnectDelay: INITIAL_DELAY_MS,
       }));
     }
-  }, [clearReconnectTimeout]);
+  }, []); // No dependencies - all values come from refs
 
   /**
    * Schedule reconnection with exponential backoff
+   * Note: Using refs for all external values to avoid dependency issues
    */
   const scheduleReconnect = useCallback(() => {
     if (isManualDisconnectRef.current) {
@@ -118,9 +142,9 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
     }
 
     // Check max retries
-    if (maxRetries !== undefined && reconnectAttemptRef.current >= maxRetries) {
-      console.log(`[WebSocket] Max retries (${maxRetries}) reached, stopping reconnection`);
-      onMaxRetriesReached?.();
+    if (maxRetriesRef.current !== undefined && reconnectAttemptRef.current >= maxRetriesRef.current) {
+      console.log(`[WebSocket] Max retries (${maxRetriesRef.current}) reached, stopping reconnection`);
+      onMaxRetriesReachedRef.current?.();
       return;
     }
 
@@ -128,7 +152,7 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
     const attempt = reconnectAttemptRef.current + 1;
 
     console.log(`[WebSocket] Scheduling reconnect attempt ${attempt} in ${delay}ms`);
-    onReconnecting?.(attempt, delay);
+    onReconnectingRef.current?.(attempt, delay);
 
     if (isMountedRef.current) {
       setState((prev) => ({
@@ -145,7 +169,8 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
       }
 
       reconnectAttemptRef.current = attempt;
-      currentDelayRef.current = calculateNextDelay(delay);
+      // Calculate next delay inline to avoid dependency
+      currentDelayRef.current = Math.min(delay * BACKOFF_MULTIPLIER, MAX_DELAY_MS);
 
       // Attempt to reconnect
       if (socketRef.current) {
@@ -153,10 +178,14 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
         socketRef.current.connect();
       }
     }, delay);
-  }, [calculateNextDelay, maxRetries, onMaxRetriesReached, onReconnecting]);
+  }, []); // No dependencies - all values come from refs
+
+  // Store scheduleReconnect in ref so createSocket can use it without dependency
+  scheduleReconnectRef.current = scheduleReconnect;
 
   /**
    * Create and configure socket
+   * Note: Using refs for all external values to avoid dependency issues
    */
   const createSocket = useCallback(() => {
     if (typeof window === "undefined") return null;
@@ -179,8 +208,13 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
       const transport = socket.io.engine.transport.name;
       console.log("[WebSocket] Transport:", transport);
 
-      // Reset reconnection state on successful connect
-      resetReconnect();
+      // Reset reconnection state on successful connect - inline to avoid dependency
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      reconnectAttemptRef.current = 0;
+      currentDelayRef.current = INITIAL_DELAY_MS;
       isManualDisconnectRef.current = false;
 
       if (isMountedRef.current) {
@@ -189,10 +223,12 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
           socket,
           connected: true,
           connecting: false,
+          reconnectAttempt: 0,
+          nextReconnectDelay: INITIAL_DELAY_MS,
         }));
       }
 
-      onConnect?.(socket);
+      onConnectRef.current?.(socket);
 
       // Log transport upgrade
       socket.io.engine.on("upgrade", (transport) => {
@@ -212,16 +248,17 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
         }));
       }
 
-      onDisconnect?.(reason);
+      onDisconnectRef.current?.(reason);
 
       // Only schedule reconnect if not manually disconnected
       if (!isManualDisconnectRef.current) {
         // Server disconnect requires manual reconnect
         if (reason === "io server disconnect") {
-          scheduleReconnect();
+          // Use scheduleReconnect via ref to avoid dependency
+          scheduleReconnectRef.current?.();
         } else if (reason === "transport close" || reason === "transport error") {
           // Transport issues - reconnect with backoff
-          scheduleReconnect();
+          scheduleReconnectRef.current?.();
         }
         // "io client disconnect" = manual disconnect, don't reconnect
       }
@@ -239,19 +276,20 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
         }));
       }
 
-      onError?.(error);
+      onErrorRef.current?.(error);
 
       // Schedule reconnect on connection error
       if (!isManualDisconnectRef.current) {
-        scheduleReconnect();
+        scheduleReconnectRef.current?.();
       }
     });
 
     return socket;
-  }, [onConnect, onDisconnect, onError, resetReconnect, scheduleReconnect]);
+  }, []); // No dependencies - all values come from refs
 
   /**
    * Connect to WebSocket
+   * Note: Using refs for all external values to avoid dependency issues
    */
   const connect = useCallback(() => {
     // Clean up existing socket
@@ -260,7 +298,11 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
       socketRef.current.disconnect();
     }
 
-    clearReconnectTimeout();
+    // Clear timeout inline to avoid dependency
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     isManualDisconnectRef.current = false;
 
     setState((prev) => ({
@@ -276,16 +318,23 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
         socket,
       }));
     }
-  }, [clearReconnectTimeout, createSocket]);
+  }, [createSocket]);
 
   /**
    * Disconnect from WebSocket
+   * Note: Using refs for all external values to avoid dependency issues
    */
   const disconnect = useCallback(() => {
     console.log("[WebSocket] Manual disconnect requested");
     isManualDisconnectRef.current = true;
-    clearReconnectTimeout();
-    resetReconnect();
+    
+    // Clear timeout and reset inline to avoid dependencies
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    reconnectAttemptRef.current = 0;
+    currentDelayRef.current = INITIAL_DELAY_MS;
 
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -295,20 +344,28 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
       ...prev,
       connected: false,
       connecting: false,
+      reconnectAttempt: 0,
+      nextReconnectDelay: INITIAL_DELAY_MS,
     }));
-  }, [clearReconnectTimeout, resetReconnect]);
+  }, []); // No dependencies - all values come from refs
 
-  // Auto-connect on mount if enabled
+  // Auto-connect on mount if enabled - only run once
   useEffect(() => {
     isMountedRef.current = true;
 
-    if (autoConnect) {
+    // Only initialize once
+    if (!isInitializedRef.current && autoConnect) {
+      isInitializedRef.current = true;
       connect();
     }
 
     return () => {
       isMountedRef.current = false;
-      clearReconnectTimeout();
+      // Clear timeout inline
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
 
       if (socketRef.current) {
         socketRef.current.removeAllListeners();
@@ -316,7 +373,9 @@ export function useWebSocket(options: WebSocketOptions = {}): WebSocketState & W
         socketRef.current = null;
       }
     };
-  }, [autoConnect, connect, clearReconnectTimeout]);
+    // Only depend on autoConnect for the initial setup
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoConnect]);
 
   return {
     ...state,

@@ -84,6 +84,8 @@ model Channel {
   viewerLifetimeStats ViewerChannelLifetimeStats[]
   viewerDashboardLayouts ViewerDashboardLayout[]
   userFollows     UserFollow[]             // Story 3.6: 追蹤此頻道的用戶
+  viewerVideos    ViewerChannelVideo[]     // 觀眾追蹤名單用的影片
+  viewerClips     ViewerChannelClip[]      // 觀眾追蹤名單用的剪輯
 
   @@map("channels")
 }
@@ -442,6 +444,48 @@ model PrivacyAuditLog {
 
 // ========== Story 6.4: VOD & Clips ==========
 
+// 觀眾追蹤名單用的精簡影片表（每個 Channel 最多 6 部，效能優化）
+model ViewerChannelVideo {
+  id              String   @id @default(uuid())
+  twitchVideoId   String   @unique
+  channelId       String
+  title           String
+  url             String
+  thumbnailUrl    String?
+  viewCount       Int
+  duration        String
+  publishedAt     DateTime
+  syncedAt        DateTime @default(now())
+
+  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([publishedAt])
+  @@map("viewer_channel_videos")
+}
+
+// 觀眾追蹤名單用的精簡剪輯表（每個 Channel 只保留觀看次數最高的 6 部）
+model ViewerChannelClip {
+  id              String   @id @default(uuid())
+  twitchClipId    String   @unique
+  channelId       String
+  creatorName     String?
+  title           String
+  url             String
+  thumbnailUrl    String?
+  viewCount       Int
+  duration        Float    // Seconds
+  createdAt       DateTime // Clip creation time on Twitch
+  syncedAt        DateTime @default(now())
+
+  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([viewCount(sort: Desc)])  // 優化：按觀看次數降序查詢
+  @@map("viewer_channel_clips")
+}
+
+// 實況主用的完整影片表（保留 90 天）
 model Video {
   id              String   @id @default(uuid())
   twitchVideoId   String   @unique

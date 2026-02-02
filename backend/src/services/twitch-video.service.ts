@@ -69,9 +69,75 @@ export class TwurpleVideoService {
         syncedCount++;
       }
 
+      // 清理超過 90 天的影片（實況主用表格）
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+      const deleteResult = await prisma.video.deleteMany({
+        where: {
+          streamerId: streamerId,
+          publishedAt: { lt: ninetyDaysAgo },
+        },
+      });
+
+      if (deleteResult.count > 0) {
+        logger.debug("TwitchVideo", `Cleaned up ${deleteResult.count} videos older than 90 days for streamer ${streamerId}`);
+      }
+
       logger.debug("TwitchVideo", `Synced ${syncedCount} videos for user ${userId}`);
     } catch (error) {
       logger.error("TwitchVideo", `Failed to sync videos for user ${userId}`, error);
+    }
+  }
+
+  /**
+   * 同步觀眾追蹤名單用的影片（ViewerChannelVideo）
+   * 每個 Channel 最多保留 6 部最新影片
+   * 
+   * @param channelId - 資料庫中的 Channel ID
+   * @param twitchUserId - Twitch 用戶 ID
+   */
+  async syncViewerVideos(channelId: string, twitchUserId: string) {
+    try {
+      const client = await this.getClient();
+      
+      // 獲取最新 6 筆 Archive (過往實況)
+      const videos = await client.videos.getVideosByUser(twitchUserId, {
+        limit: 6,
+        type: "archive",
+      });
+
+      // 使用 transaction：先刪除舊資料，再插入新資料
+      await prisma.$transaction(async (tx) => {
+        // 1. 刪除該 Channel 的所有舊影片
+        await tx.viewerChannelVideo.deleteMany({
+          where: { channelId },
+        });
+
+        // 2. 插入新的影片
+        for (const video of videos.data) {
+          await tx.viewerChannelVideo.create({
+            data: {
+              twitchVideoId: video.id,
+              channelId: channelId,
+              title: video.title,
+              url: video.url,
+              thumbnailUrl: video.thumbnailUrl
+                .replace("%{width}", "320")
+                .replace("%{height}", "180")
+                .replace("{width}", "320")
+                .replace("{height}", "180"),
+              viewCount: video.views,
+              duration: video.duration,
+              publishedAt: video.publishDate,
+            },
+          });
+        }
+      });
+
+      logger.debug("TwitchVideo", `Synced ${videos.data.length} viewer videos for channel ${channelId}`);
+    } catch (error) {
+      logger.error("TwitchVideo", `Failed to sync viewer videos for channel ${channelId}`, error);
     }
   }
 
@@ -196,6 +262,76 @@ export class TwurpleVideoService {
       );
     } catch (error) {
       logger.error("TwitchVideo", `Failed to sync clips for user ${userId}`, error);
+    }
+  }
+
+  /**
+   * 同步觀眾追蹤名單用的剪輯（ViewerChannelClip）
+   * 只保留觀看次數最高的 6 部剪輯
+   * 
+   * 策略：
+   * - 從 Twitch API 抓取 Top 6 熱門剪輯
+   * - 與現有資料比較，只更新有變化的部分
+   * - 刪除不在 Top 6 的舊資料
+   * 
+   * @param channelId - 資料庫中的 Channel ID
+   * @param twitchUserId - Twitch 用戶 ID
+   */
+  async syncViewerClips(channelId: string, twitchUserId: string) {
+    try {
+      const client = await this.getClient();
+      
+      // 獲取觀看次數最高的 6 部剪輯（Twitch API 預設按熱門排序）
+      const topClips = await client.clips.getClipsForBroadcaster(twitchUserId, {
+        limit: 6,
+      });
+
+      const newTopClipIds = new Set<string>(topClips.data.map((clip: { id: string }) => clip.id));
+
+      await prisma.$transaction(async (tx) => {
+        // 1. 刪除不在新 Top 6 中的舊剪輯
+        await tx.viewerChannelClip.deleteMany({
+          where: {
+            channelId,
+            twitchClipId: { notIn: [...newTopClipIds] },
+          },
+        });
+
+        // 2. Upsert 新的 Top 6 剪輯
+        for (const clip of topClips.data) {
+          await tx.viewerChannelClip.upsert({
+            where: { twitchClipId: clip.id },
+            create: {
+              twitchClipId: clip.id,
+              channelId: channelId,
+              creatorName: clip.creatorDisplayName,
+              title: clip.title,
+              url: clip.url,
+              thumbnailUrl: clip.thumbnailUrl
+                .replace("%{width}", "320")
+                .replace("%{height}", "180")
+                .replace("{width}", "320")
+                .replace("{height}", "180"),
+              viewCount: clip.views,
+              duration: clip.duration,
+              createdAt: clip.creationDate,
+            },
+            update: {
+              title: clip.title,
+              viewCount: clip.views,
+              thumbnailUrl: clip.thumbnailUrl
+                .replace("%{width}", "320")
+                .replace("%{height}", "180")
+                .replace("{width}", "320")
+                .replace("{height}", "180"),
+            },
+          });
+        }
+      });
+
+      logger.debug("TwitchVideo", `Synced ${topClips.data.length} viewer clips for channel ${channelId}`);
+    } catch (error) {
+      logger.error("TwitchVideo", `Failed to sync viewer clips for channel ${channelId}`, error);
     }
   }
 }

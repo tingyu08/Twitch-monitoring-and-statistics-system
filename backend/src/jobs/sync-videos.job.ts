@@ -7,6 +7,12 @@ import { logger } from "../utils/logger";
  * Sync Videos & Clips Job (記憶體優化版)
  * 頻率: 每 6 小時一次 ('0 0 *\/6 * * *')
  *
+ * 同步內容：
+ * 1. 實況主影片 (Video 表) - 保留 90 天，用於實況主後台
+ * 2. 實況主剪輯 (Clip 表) - 永久保留，用於實況主後台
+ * 3. 觀眾影片 (ViewerChannelVideo 表) - 每個 Channel 最多 6 部最新，用於觀眾追蹤名單
+ * 4. 觀眾剪輯 (ViewerChannelClip 表) - 每個 Channel 最多 6 部最高觀看，用於觀眾追蹤名單
+ *
  * 優化重點：
  * - 分批處理，避免一次載入所有實況主資料
  * - 批次之間強制 GC 和休息
@@ -25,8 +31,10 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
   const startTime = Date.now();
   let totalProcessed = 0;
   let totalSkipped = 0;
+  let viewerChannelsSynced = 0;
 
   try {
+    // ========== Part 1: 同步實況主的 Videos 和 Clips ==========
     // 只取得 ID 和基本資訊，減少記憶體佔用
     const streamers = await prisma.streamer.findMany({
       select: {
@@ -97,13 +105,82 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
       }
     }
 
+    // ========== Part 2: 同步觀眾追蹤名單用的影片和剪輯 ==========
+    logger.info("Jobs", "開始同步觀眾追蹤名單影片和剪輯...");
+
+    // 找出所有被追蹤的 Channel（有 UserFollow 記錄的）
+    const followedChannels = await prisma.channel.findMany({
+      where: {
+        userFollows: {
+          some: {}, // 有至少一個追蹤者
+        },
+      },
+      select: {
+        id: true,
+        twitchChannelId: true,
+        channelName: true,
+      },
+    });
+
+    logger.info("Jobs", `找到 ${followedChannels.length} 個被追蹤的 Channel 需要同步觀眾影片/剪輯`);
+
+    // 分批處理 Channels
+    for (let i = 0; i < followedChannels.length; i += BATCH_SIZE) {
+      const batch = followedChannels.slice(i, i + BATCH_SIZE);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(followedChannels.length / BATCH_SIZE);
+
+      logger.info("Jobs", `[觀眾內容] 處理第 ${batchNum}/${totalBatches} 批 (${batch.length} 個 Channel)...`);
+
+      // 記憶體檢查
+      const memUsage = process.memoryUsage();
+      const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+
+      if (heapUsedMB > MAX_MEMORY_MB) {
+        logger.warn(
+          "Jobs",
+          `⚠️ 記憶體使用超過警戒線 (${heapUsedMB}MB > ${MAX_MEMORY_MB}MB)，提前結束觀眾內容同步`
+        );
+        break;
+      }
+
+      // 處理此批次
+      for (const channel of batch) {
+        if (!channel.twitchChannelId) {
+          continue;
+        }
+
+        try {
+          // 同步影片和剪輯
+          await twurpleVideoService.syncViewerVideos(channel.id, channel.twitchChannelId);
+          await twurpleVideoService.syncViewerClips(channel.id, channel.twitchChannelId);
+          viewerChannelsSynced++;
+
+          // 每個 Channel 之間短暫休息
+          await new Promise((resolve) => setTimeout(resolve, STREAMER_DELAY_MS));
+        } catch (error) {
+          logger.error("Jobs", `同步觀眾內容失敗 (${channel.channelName}):`, error);
+        }
+      }
+
+      // 批次之間較長休息
+      if (i + BATCH_SIZE < followedChannels.length) {
+        logger.debug("Jobs", `[觀眾內容] 批次完成，休息 ${BATCH_DELAY_MS}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+
+        if (global.gc) {
+          global.gc();
+        }
+      }
+    }
+
     const duration = Math.round((Date.now() - startTime) / 1000);
     const finalMemMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
 
     logger.info(
       "Jobs",
-      `Sync Videos Job 完成: 成功 ${totalProcessed}, 跳過 ${totalSkipped}, ` +
-      `耗時 ${duration}s, 記憶體 ${finalMemMB}MB`
+      `Sync Videos Job 完成: 實況主 ${totalProcessed}, 跳過 ${totalSkipped}, ` +
+      `觀眾 Channel ${viewerChannelsSynced}, 耗時 ${duration}s, 記憶體 ${finalMemMB}MB`
     );
   } catch (error) {
     logger.error("Jobs", "Sync Videos Job 執行失敗", error);
