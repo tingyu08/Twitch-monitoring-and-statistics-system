@@ -7,7 +7,7 @@
  */
 
 // ============ 常數定義 ============
-const API_BASE_URL = "https://twitch-monitoring-and-statistics-system.onrender.com";
+const API_BASE_URL = "https://mao-twitch-analytics.zeabur.app";
 const SUBMIT_ALARM_NAME = "bmad-submit-session";
 const SUBMIT_INTERVAL_MINUTES = 1; // chrome.alarms 最小間隔為 1 分鐘
 const MAX_RETRY_ATTEMPTS = 3;

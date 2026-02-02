@@ -1,4 +1,4 @@
-﻿# 🎮 Twitch Analytics - 直播數據分析平台
+# 🎮 Twitch Analytics - 直播數據分析平台
 
 一個功能完整的全端 Web 應用程式，為 **實況主** 和 **觀眾**
 提供深度的 Twitch 直播數據分析與個人統計追蹤。
@@ -21,9 +21,9 @@
 | 服務            | 網址                                                                                                                         |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | 🖥️ **前端應用** | [https://twitch-monitoring-and-statistics-sy.vercel.app](https://twitch-monitoring-and-statistics-sy.vercel.app)             |
-| 🔌 **後端 API** | [https://twitch-monitoring-and-statistics-system.onrender.com](https://twitch-monitoring-and-statistics-system.onrender.com) |
+| 🔌 **後端 API** | [https://mao-twitch-analytics.zeabur.app](https://mao-twitch-analytics.zeabur.app) |
 
-> 📝 **注意**: 首次載入可能需要 30 秒左右（Render 免費版會休眠）
+> 📝 **注意**: 後端部署於 Zeabur，首次載入可能需要數秒（如遇冷啟動）
 
 ---
 

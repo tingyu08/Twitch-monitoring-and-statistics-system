@@ -13,8 +13,8 @@ WORKDIR /app
 # 複製 package files（利用 Docker layer cache）
 COPY package*.json ./
 
-# 安裝生產依賴
-RUN npm ci --only=production
+# 安裝生產依賴（隱藏 deprecation 警告）
+RUN npm ci --only=production --silent 2>&1 | grep -v "deprecated" || true
 
 # 複製所有原始碼（包含 prisma schema）
 COPY . .
@@ -24,8 +24,8 @@ COPY . .
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
 RUN npm run build 2>&1 | grep -v "prisma:warn" || true
 
-# 暴露端口
-EXPOSE 4000
+# 暴露端口（Zeabur 會動態設定 PORT 環境變數）
+EXPOSE 8080
 
 # 設定環境變數
 ENV NODE_ENV=production

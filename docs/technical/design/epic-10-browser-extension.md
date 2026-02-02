@@ -22,7 +22,7 @@ Extension，解決目前透過 IRC 聊天訊息推算觀看時間不準確的問
   "host_permissions": [
     "*://*.twitch.tv/*",
     "https://twitch-monitoring-and-statistics-sy.vercel.app/*",
-    "https://twitch-monitoring-and-statistics-system.onrender.com/*"
+    "https://mao-twitch-analytics.zeabur.app/*"
   ]
 }
 ```

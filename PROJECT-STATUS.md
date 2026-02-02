@@ -14,13 +14,34 @@
 [█████████████████████████████████████░░░] 78%
 ```
 
-**⚠️ 最新狀態**: 2026-01-28 完成 Render 記憶體優化，解決生產環境記憶體超限問題
+**⚠️ 最新狀態**: 2026-02-02 遷移至 Zeabur 單一後端部署架構
 
 ---
 
-## 🚀 最新發布 (v1.7.0 - Performance) - 2026-01-28
+## 🚀 最新發布 (v1.8.0 - Infrastructure) - 2026-02-02
 
-**核心重點**: Render Free Tier 記憶體優化與穩定性提升
+**核心重點**: 遷移至 Zeabur 單一後端部署架構
+
+### 🔧 關鍵變更
+
+1.  **移除 Render 部署**
+    - **原因**: Render 作為健康檢查中介層無法有效防止 Zeabur 冷啟動
+    - **移除**: 刪除 `render-proxy` 目錄和 `backend/render.yaml`
+    - **簡化**: 單一後端平台，降低維護複雜度
+
+2.  **UptimeRobot 直連 Zeabur**
+    - **調整**: UptimeRobot 現在直接 ping Zeabur 的 `/api/health/ping`
+    - **效果**: 真正防止 Zeabur 冷啟動
+
+3.  **Extension API URL 更新**
+    - **變更**: 從 Render URL 改為 Zeabur URL
+    - **影響**: Chrome Extension 需要重新安裝
+
+---
+
+## 🚀 前一版本 (v1.7.0 - Performance) - 2026-01-28
+
+**核心重點**: 記憶體優化（已遷移至 Zeabur，此優化仍適用）
 
 ### 🔧 關鍵成果
 
@@ -42,7 +63,7 @@
     - **警戒線**: 400MB 觸發警告，480MB 觸發強制 GC
     - **日誌**: 記錄記憶體使用趨勢，便於診斷問題
 
-**Render 部署建議**:
+**部署建議**:
 ```env
 NODE_OPTIONS=--expose-gc --max-old-space-size=480
 MEMORY_WARNING_MB=400
@@ -112,7 +133,7 @@ MEMORY_CRITICAL_MB=480
 | **Epic 5**  | 即時推送           | WebSocket 通知、Raid Alert             | ✅   |
 | **Epic 6**  | 資料自動化         | VOD/Clips 同步、真實數據採集           | ✅   |
 | **Epic 10** | 瀏覽器擴充         | Chrome Extension 觀看時長追蹤          | ✅   |
-| —           | 生產環境部署       | Vercel (FE) + Render (BE) + Turso (DB) | ✅   |
+| —           | 生產環境部署       | Vercel (FE) + Zeabur (BE) + Turso (DB) | ✅   |
 
 ---
 
