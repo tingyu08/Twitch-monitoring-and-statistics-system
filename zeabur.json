@@ -3,16 +3,9 @@
         {
             "name": "twitch-analytics-backend",
             "type": "nix",
+            "rootDir": "backend",
             "args": {
-                "cmd": "npm install && npm run build && npm start"
-            },
-            "build": {
-                "ignore": [
-                    "frontend",
-                    "docs",
-                    ".github",
-                    "web-bundles"
-                ]
+                "cmd": "cd backend && npm install && npm run build && npm start"
             },
             "env": {
                 "NODE_ENV": "production",

@@ -1,5 +1,9 @@
 # BMAD (local only)
 
+_bmad-output/
+_bmad/
+.agent/
+
 # 依賴套件
 node_modules/
 frontend/node_modules/
