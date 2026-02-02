@@ -5,13 +5,13 @@
  * Story 3.6: 使用者追蹤頻道與全域監控
  */
 
-
 import cron from "node-cron";
 import pLimit from "p-limit";
 import { prisma } from "../db/prisma";
 import { twurpleHelixService } from "../services/twitch-helix.service";
 import { logger } from "../utils/logger";
 import { decryptToken } from "../utils/crypto.utils";
+import { cacheManager } from "../utils/cache-manager";
 import type { Prisma } from "@prisma/client";
 
 // 類型定義
@@ -157,10 +157,10 @@ export class SyncUserFollowsJob {
       logger.info(
         "Jobs",
         `✅ Sync User Follows Job 完成: ${result.usersProcessed} 使用者, ` +
-        `${result.channelsCreated} 新頻道, ${result.followsCreated} 新追蹤, ` +
-        `${result.followsRemoved} 移除追蹤, ${result.channelsDeactivated} 停用頻道, ` +
-        `${result.usersFailed} 失敗, ${result.totalMonitoredChannels} 監控中, ` +
-        `耗時 ${result.executionTimeMs}ms`
+          `${result.channelsCreated} 新頻道, ${result.followsCreated} 新追蹤, ` +
+          `${result.followsRemoved} 移除追蹤, ${result.channelsDeactivated} 停用頻道, ` +
+          `${result.usersFailed} 失敗, ${result.totalMonitoredChannels} 監控中, ` +
+          `耗時 ${result.executionTimeMs}ms`
       );
 
       return result;
@@ -298,7 +298,9 @@ export class SyncUserFollowsJob {
       include: { channel: true },
     });
 
-    const existingFollowMap = new Map(existingFollows.map((f: ExistingFollow) => [f.channel.twitchChannelId, f]));
+    const existingFollowMap = new Map(
+      existingFollows.map((f: ExistingFollow) => [f.channel.twitchChannelId, f])
+    );
 
     // 3. 批量獲取現有資料（消除 N+1 查詢）
     const broadcasterIds = followedChannels.map((f) => f.broadcasterId);
@@ -308,15 +310,59 @@ export class SyncUserFollowsJob {
       include: { streamer: true },
     });
 
-    const existingChannelMap = new Map<string, ExistingChannel>(existingChannels.map((ch: ExistingChannel) => [ch.twitchChannelId, ch]));
+    const existingChannelMap = new Map<string, ExistingChannel>(
+      existingChannels.map((ch: ExistingChannel) => [ch.twitchChannelId, ch])
+    );
 
     const existingStreamers = await prisma.streamer.findMany({
       where: { twitchUserId: { in: broadcasterIds } },
     });
 
-    const existingStreamerMap = new Map<string, ExistingStreamer>(existingStreamers.map((s: ExistingStreamer) => [s.twitchUserId, s]));
+    const existingStreamerMap = new Map<string, ExistingStreamer>(
+      existingStreamers.map((s: ExistingStreamer) => [s.twitchUserId, s])
+    );
 
-    // 4. 準備批量操作資料
+    // 4. 找出需要更新頭貼的現有 Streamers
+    const streamersNeedingUpdate: ExistingStreamer[] = [];
+    for (const streamer of existingStreamers) {
+      if (!streamer.avatarUrl || streamer.avatarUrl === "") {
+        streamersNeedingUpdate.push(streamer);
+      }
+    }
+
+    // 5. 批量抓取需要更新的 Streamers 資料
+    if (streamersNeedingUpdate.length > 0) {
+      try {
+        const idsToFetch = streamersNeedingUpdate.map((s) => s.twitchUserId);
+        const twitchUsers = await twurpleHelixService.getUsersByIds(idsToFetch);
+        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
+
+        // 批量更新
+        const updatePromises = streamersNeedingUpdate.map((streamer) => {
+          const twitchUser = userMap.get(streamer.twitchUserId);
+          if (twitchUser) {
+            return prisma.streamer.update({
+              where: { id: streamer.id },
+              data: {
+                displayName: twitchUser.displayName,
+                avatarUrl: twitchUser.profileImageUrl,
+              },
+            });
+          }
+          return Promise.resolve();
+        });
+
+        await Promise.all(updatePromises);
+        logger.info(
+          "SyncFollows",
+          `已更新 ${streamersNeedingUpdate.length} 個現有 Streamer 的頭貼和名稱`
+        );
+      } catch (error) {
+        logger.warn("SyncFollows", "更新現有 Streamer 資料失敗", error);
+      }
+    }
+
+    // 6. 準備批量操作資料
     const streamersToUpsert: Array<{
       twitchUserId: string;
       displayName: string;
@@ -359,13 +405,41 @@ export class SyncUserFollowsJob {
       }
     }
 
-    // 5. 批量執行資料庫操作
+    // 7. 批量抓取新 Streamer 的完整資料（頭貼、顯示名稱）
+    if (streamersToUpsert.length > 0) {
+      try {
+        const twitchIds = streamersToUpsert.map((s) => s.twitchUserId);
+        const twitchUsers = await twurpleHelixService.getUsersByIds(twitchIds);
+
+        // 更新 streamersToUpsert 的資料
+        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
+        for (const streamerData of streamersToUpsert) {
+          const twitchUser = userMap.get(streamerData.twitchUserId);
+          if (twitchUser) {
+            streamerData.displayName = twitchUser.displayName;
+            streamerData.avatarUrl = twitchUser.profileImageUrl;
+          }
+        }
+
+        logger.info(
+          "SyncFollows",
+          `已抓取 ${twitchUsers.length}/${twitchIds.length} 個新 Streamer 的完整資料`
+        );
+      } catch (error) {
+        logger.warn("SyncFollows", "抓取 Streamer 資料失敗，使用預設值", error);
+      }
+    }
+
+    // 8. 批量執行資料庫操作
     await prisma.$transaction(async (tx: TransactionClient) => {
       for (const streamerData of streamersToUpsert) {
         const upserted = await tx.streamer.upsert({
           where: { twitchUserId: streamerData.twitchUserId },
           create: streamerData,
-          update: { displayName: streamerData.displayName },
+          update: {
+            displayName: streamerData.displayName,
+            avatarUrl: streamerData.avatarUrl,
+          },
         });
         existingStreamerMap.set(upserted.twitchUserId, upserted);
       }
@@ -462,7 +536,9 @@ export class SyncUserFollowsJob {
     }
 
     // 7. 批量刪除不再追蹤的記錄
-    const followIdsToDelete = Array.from(existingFollowMap.values()).map((f: ExistingFollow) => f.id);
+    const followIdsToDelete = Array.from(existingFollowMap.values()).map(
+      (f: ExistingFollow) => f.id
+    );
     if (followIdsToDelete.length > 0) {
       await prisma.userFollow.deleteMany({
         where: { id: { in: followIdsToDelete } },
@@ -533,6 +609,7 @@ interface TriggerExistingChannel {
 interface TriggerExistingStreamer {
   id: string;
   twitchUserId: string;
+  avatarUrl?: string | null;
 }
 
 /**
@@ -582,7 +659,9 @@ export async function triggerFollowSyncForUser(
       },
     });
 
-    const existingFollowMap = new Map<string, TriggerExistingFollow>(existingFollows.map((f: TriggerExistingFollow) => [f.channel.twitchChannelId, f]));
+    const existingFollowMap = new Map<string, TriggerExistingFollow>(
+      existingFollows.map((f: TriggerExistingFollow) => [f.channel.twitchChannelId, f])
+    );
 
     // P1 Fix: 批次查詢所有頻道，避免 N+1 查詢問題
     const allBroadcasterIds = followedChannels.map((f) => f.broadcasterId);
@@ -590,18 +669,62 @@ export async function triggerFollowSyncForUser(
       where: { twitchChannelId: { in: allBroadcasterIds } },
       select: { id: true, twitchChannelId: true, isMonitored: true, streamerId: true },
     });
-    const existingChannelMap = new Map<string, TriggerExistingChannel>(existingChannels.map((c: TriggerExistingChannel) => [c.twitchChannelId, c]));
+    const existingChannelMap = new Map<string, TriggerExistingChannel>(
+      existingChannels.map((c: TriggerExistingChannel) => [c.twitchChannelId, c])
+    );
 
     // P1 Fix: 批次查詢所有 Streamer，避免 N+1 查詢問題
     const existingStreamers = await prisma.streamer.findMany({
       where: { twitchUserId: { in: allBroadcasterIds } },
-      select: { id: true, twitchUserId: true },
+      select: { id: true, twitchUserId: true, avatarUrl: true },
     });
-    const existingStreamerMap = new Map<string, TriggerExistingStreamer>(existingStreamers.map((s: TriggerExistingStreamer) => [s.twitchUserId, s]));
+    const existingStreamerMap = new Map<string, TriggerExistingStreamer & { avatarUrl?: string | null }>(
+      existingStreamers.map((s) => [s.twitchUserId, s])
+    );
+
+    // 修復：找出需要更新頭貼的現有 Streamers
+    const streamersNeedingUpdate = existingStreamers.filter(
+      (s) => !s.avatarUrl || s.avatarUrl === ""
+    );
+
+    // 批量抓取需要更新的 Streamers 資料
+    if (streamersNeedingUpdate.length > 0) {
+      try {
+        const idsToFetch = streamersNeedingUpdate.map((s) => s.twitchUserId);
+        const twitchUsers = await twurpleHelixService.getUsersByIds(idsToFetch);
+        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
+
+        // 批量更新
+        const updatePromises = streamersNeedingUpdate.map((streamer) => {
+          const twitchUser = userMap.get(streamer.twitchUserId);
+          if (twitchUser) {
+            return prisma.streamer.update({
+              where: { id: streamer.id },
+              data: {
+                displayName: twitchUser.displayName,
+                avatarUrl: twitchUser.profileImageUrl,
+              },
+            });
+          }
+          return Promise.resolve();
+        });
+
+        await Promise.all(updatePromises);
+        logger.info(
+          "Jobs",
+          `✅ 已更新 ${streamersNeedingUpdate.length} 個現有 Streamer 的頭貼和名稱`
+        );
+      } catch (error) {
+        logger.warn("Jobs", "更新現有 Streamer 資料失敗", error);
+      }
+    }
 
     let created = 0;
     let removed = 0;
     let processed = 0;
+
+    // 收集所有新建立的 streamers，稍後批次抓取資料
+    const newStreamerIds: string[] = [];
 
     // 處理每個追蹤的頻道（批次處理）
     for (const follow of followedChannels) {
@@ -635,6 +758,8 @@ export async function triggerFollowSyncForUser(
               streamer = { id: newStreamer.id, twitchUserId: newStreamer.twitchUserId };
               // 加入 Map 以便後續使用
               existingStreamerMap.set(follow.broadcasterId, streamer);
+              // 記錄新建立的 streamer ID，稍後批次抓取資料
+              newStreamerIds.push(follow.broadcasterId);
             }
             streamerId = streamer.id;
           }
@@ -712,8 +837,41 @@ export async function triggerFollowSyncForUser(
       }
     }
 
+    // 修復：批量抓取新建立 Streamers 的完整資料（頭貼、顯示名稱）
+    if (newStreamerIds.length > 0) {
+      try {
+        const twitchUsers = await twurpleHelixService.getUsersByIds(newStreamerIds);
+        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
+
+        // 批量更新新建立的 streamers
+        const updatePromises = newStreamerIds.map((twitchUserId) => {
+          const twitchUser = userMap.get(twitchUserId);
+          if (twitchUser) {
+            return prisma.streamer.update({
+              where: { twitchUserId },
+              data: {
+                displayName: twitchUser.displayName,
+                avatarUrl: twitchUser.profileImageUrl,
+              },
+            });
+          }
+          return Promise.resolve();
+        });
+
+        await Promise.all(updatePromises);
+        logger.info(
+          "Jobs",
+          `✅ 已抓取 ${twitchUsers.length}/${newStreamerIds.length} 個新 Streamer 的完整資料`
+        );
+      } catch (error) {
+        logger.warn("Jobs", "抓取新 Streamer 資料失敗，使用預設值", error);
+      }
+    }
+
     // 批次刪除不再追蹤的記錄（修復 N+1 問題）
-    const oldFollowIds = Array.from(existingFollowMap.values()).map((f: TriggerExistingFollow) => f.id);
+    const oldFollowIds = Array.from(existingFollowMap.values()).map(
+      (f: TriggerExistingFollow) => f.id
+    );
     if (oldFollowIds.length > 0) {
       await prisma.userFollow.deleteMany({
         where: { id: { in: oldFollowIds } },
@@ -722,6 +880,11 @@ export async function triggerFollowSyncForUser(
     }
 
     logger.info("Jobs", `✅ 追蹤同步完成: 新增 ${created}, 移除 ${removed}`);
+
+    // 清除該用戶的 channels_list 快取，確保下次刷新頁面能看到最新資料
+    const cacheKey = `viewer:${viewerId}:channels_list`;
+    cacheManager.delete(cacheKey);
+    logger.debug("Jobs", `已清除快取: ${cacheKey}`);
 
     // 立即觸發開台狀態更新，確保使用者登入後能看到最新的開台狀態
     try {
