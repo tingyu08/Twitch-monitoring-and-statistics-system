@@ -20,7 +20,9 @@ RUN npm ci --only=production
 COPY . .
 
 # 生成 Prisma Client 並編譯 TypeScript
-RUN npm run build
+# 設定 Prisma 使用正確的 OpenSSL 版本（消除警告）
+ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+RUN npm run build 2>&1 | grep -v "prisma:warn" || true
 
 # 暴露端口
 EXPOSE 4000

@@ -39,8 +39,8 @@ const httpServer = http.createServer(app);
 // 初始化 WebSocket
 webSocketGateway.initialize(httpServer);
 
-httpServer.listen(PORT, async () => {
-  console.log(`伺服器運行於 http://localhost:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', async () => {
+  console.log(`伺服器運行於 http://0.0.0.0:${PORT}`);
   console.log(`🚀 環境: ${process.env.NODE_ENV || "development"}`);
   console.log(`⚡ 記憶體優化: ${process.env.NODE_ENV === "production" ? "啟用" : "關閉"}`);
 
