@@ -102,12 +102,21 @@ export class ChannelStatsSyncJob {
     channelName: string;
     twitchChannelId: string;
   }): Promise<void> {
-    // Get channel info
-    const channelInfo = await unifiedTwitchService.getChannelInfo(channel.channelName);
+    // 使用 twitchChannelId 查詢（ID 永不改變，避免用戶改名後找不到）
+    const channelInfo = await unifiedTwitchService.getChannelInfoById(channel.twitchChannelId);
 
     if (!channelInfo) {
-      logger.warn("ChannelStatsSync", `Could not get channel info: ${channel.channelName}`);
+      logger.warn("ChannelStatsSync", `Could not get channel info for ID: ${channel.twitchChannelId} (${channel.channelName})`);
       return;
+    }
+
+    // 如果頻道名稱有變更，更新資料庫
+    if (channelInfo.login !== channel.channelName) {
+      logger.info("ChannelStatsSync", `Channel renamed: ${channel.channelName} -> ${channelInfo.login}`);
+      await prisma.channel.update({
+        where: { id: channel.id },
+        data: { channelName: channelInfo.login },
+      });
     }
 
     // If live, update active session

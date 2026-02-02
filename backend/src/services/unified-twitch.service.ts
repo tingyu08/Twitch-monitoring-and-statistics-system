@@ -110,6 +110,40 @@ export class UnifiedTwitchService {
   }
 
   /**
+   * 透過 Twitch ID 獲取頻道完整資訊（推薦使用，ID 永不改變）
+   */
+  async getChannelInfoById(twitchId: string): Promise<ChannelInfo | null> {
+    try {
+      const user = await twurpleHelixService.getUserById(twitchId);
+      if (!user) {
+        logger.warn("Twitch Service", `Helix 找不到用戶 ID: ${twitchId}`);
+        return null;
+      }
+
+      // 並行獲取直播狀態和追蹤者數量
+      const [stream, followerCount] = await Promise.all([
+        twurpleHelixService.getStream(user.id),
+        twurpleHelixService.getFollowerCount(user.id).catch(() => 0),
+      ]);
+
+      return {
+        id: user.id,
+        login: user.login,
+        displayName: user.displayName,
+        avatarUrl: user.profileImageUrl,
+        isLive: stream?.type === "live",
+        currentGame: stream?.gameName,
+        streamTitle: stream?.title,
+        viewerCount: stream?.viewerCount,
+        followerCount,
+      };
+    } catch (error) {
+      logger.error("Twitch Service", `透過 ID 獲取頻道資訊失敗: ${twitchId}`, error);
+      return null;
+    }
+  }
+
+  /**
    * 批量獲取頻道資訊
    */
   async getChannelsInfo(channelLogins: string[]): Promise<ChannelInfo[]> {
