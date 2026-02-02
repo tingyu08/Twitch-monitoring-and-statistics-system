@@ -135,7 +135,7 @@ export class StreamStatusJob {
     // 1. 資料庫連線檢查（優化版：支援預熱檢測 + 更長超時）
     const { isConnectionReady } = await import("../db/prisma");
     const maxRetries = 3; // 從 2 增加到 3
-    const timeoutMs = isConnectionReady() ? 5000 : 10000; // 預熱後用較短超時
+    const timeoutMs = isConnectionReady() ? 10000 : 20000; // 預熱後用 10s，冷啟動用 20s
     let connected = false;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
