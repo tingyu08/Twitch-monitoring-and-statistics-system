@@ -143,22 +143,39 @@ export default function ViewerDashboardPage() {
     };
   }, [user, refetchChannels]);
 
-  // 過濾頻道
+  // 過濾並排序頻道
   useEffect(() => {
+    let filtered: FollowedChannel[] = [];
+
     if (searchQuery.trim()) {
       const lowerQuery = searchQuery.toLowerCase();
-      setFilteredChannels(
-        channels.filter(
-          (ch) =>
-            ch.channelName.toLowerCase().includes(lowerQuery) ||
-            ch.displayName.toLowerCase().includes(lowerQuery)
-        )
+      filtered = channels.filter(
+        (ch) =>
+          ch.channelName.toLowerCase().includes(lowerQuery) ||
+          ch.displayName.toLowerCase().includes(lowerQuery)
       );
       // 搜尋時重置到第一頁
       setCurrentPage(1);
     } else {
-      setFilteredChannels(channels);
+      filtered = [...channels];
     }
+
+    // 排序：1. 開台優先 2. 未開台按觀看時數由高到低
+    filtered.sort((a, b) => {
+      // 開台的頻道排在未開台的前面
+      if (a.isLive && !b.isLive) return -1;
+      if (!a.isLive && b.isLive) return 1;
+
+      // 未開台的頻道按觀看時數排序（高到低）
+      if (!a.isLive && !b.isLive) {
+        return b.totalWatchMinutes - a.totalWatchMinutes;
+      }
+
+      // 開台的頻道保持原順序（或可以按其他邏輯排序）
+      return 0;
+    });
+
+    setFilteredChannels(filtered);
   }, [searchQuery, channels]);
 
   // 計算分頁
