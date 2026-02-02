@@ -1,10 +1,9 @@
-FROM node:22-slim
+FROM node:22
 LABEL "language"="nodejs"
 LABEL "framework"="express"
 
 WORKDIR /src
 
-# 安裝 OpenSSL（Prisma 需要）
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 # 複製所有 package.json（利用 Docker layer cache）
