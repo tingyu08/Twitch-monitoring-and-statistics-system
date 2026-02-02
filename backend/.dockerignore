@@ -1,0 +1,33 @@
+# 排除不需要的檔案，加快 Docker build
+node_modules
+dist
+npm-debug.log
+.env
+.env.local
+.env.*.local
+
+# 測試檔案
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+coverage
+jest.config.js
+babel.config.js
+
+# 開發工具
+.vscode
+.cursor
+*.log
+
+# Git
+.git
+.gitignore
+
+# 文件
+*.md
+!README.md
+
+# 其他
+.DS_Store
+backup
+backups

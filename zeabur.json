@@ -2,9 +2,7 @@
     "services": [
         {
             "name": "twitch-analytics-backend",
-            "type": "nodejs",
-            "buildCommand": "cd backend && npm install && npm run build",
-            "startCommand": "cd backend && npm start",
+            "dockerfile": "backend/Dockerfile",
             "env": {
                 "NODE_ENV": "production",
                 "PORT": "${PORT}",
