@@ -116,7 +116,8 @@ export class UnifiedTwitchService {
     try {
       const user = await twurpleHelixService.getUserById(twitchId);
       if (!user) {
-        logger.warn("Twitch Service", `Helix 找不到用戶 ID: ${twitchId}`);
+        // 降為 debug：帳號可能被封禁/刪除，這是正常情況
+        logger.debug("Twitch Service", `Helix 找不到用戶 ID: ${twitchId}（可能已封禁或刪除）`);
         return null;
       }
 
