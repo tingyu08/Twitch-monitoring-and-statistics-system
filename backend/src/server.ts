@@ -32,7 +32,7 @@ import { twurpleEventSubService } from "./services/twurple-eventsub.service";
 import { logger } from "./utils/logger";
 import { memoryMonitor } from "./utils/memory-monitor";
 
-const PORT = process.env.PORT || 4000;
+const PORT = parseInt(process.env.PORT || '4000', 10);
 
 const httpServer = http.createServer(app);
 
