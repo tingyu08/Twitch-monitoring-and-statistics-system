@@ -25,12 +25,18 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
       return (
         message.includes("502") ||
         message.includes("503") ||
+        message.includes("400") ||           // Turso 暫時性錯誤
+        message.includes("404") ||           // Turso 連線問題也可能返回 404
         message.includes("bad gateway") ||
         message.includes("service unavailable") ||
         message.includes("timeout") ||
         message.includes("econnreset") ||
+        message.includes("etimedout") ||
         message.includes("enotfound") ||
-        message.includes("network")
+        message.includes("network") ||
+        message.includes("fetch failed") ||  // 網路層級錯誤
+        message.includes("server_error") ||  // Turso SERVER_ERROR
+        message.includes("batch request")    // 批次請求錯誤
       );
     }
     return false;
@@ -59,11 +65,12 @@ export async function retryDatabaseOperation<T>(
         throw error;
       }
 
-      // 記錄重試資訊
-      logger.warn(
+      // 記錄重試資訊（使用 debug 級別減少日誌噪音）
+      logger.debug(
         "DB Retry",
-        `資料庫操作失敗，將在 ${delay}ms 後重試 (嘗試 ${attempt + 1}/${opts.maxRetries})`,
-        error instanceof Error ? error.message : String(error)
+        `資料庫操作失敗，將在 ${delay}ms 後重試 (嘗試 ${attempt + 1}/${opts.maxRetries}): ${
+          error instanceof Error ? error.message.substring(0, 50) : String(error)
+        }`
       );
 
       // 等待後重試

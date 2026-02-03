@@ -6,31 +6,44 @@ import { retryDatabaseOperation } from "../utils/db-retry";
 
 import cron from "node-cron";
 
+// 防止重複執行的鎖
+let isRunning = false;
+
 /**
  * 更新所有頻道的即時直播狀態
- * 頻率：每 1 分鐘由 cron 觸發
+ * 頻率：每 1 分鐘由 cron 觸發（優化後執行時間大幅縮短）
  */
 export const updateLiveStatusJob = cron.schedule("* * * * *", async () => {
   await updateLiveStatusFn();
 });
 
 export async function updateLiveStatusFn() {
+  // 防止重複執行：如果上一次執行還沒完成，跳過此次執行
+  if (isRunning) {
+    logger.debug("Jobs", "Update Live Status Job 正在執行中，跳過此次執行");
+    return;
+  }
+
+  isRunning = true;
+  const startTime = Date.now();
   logger.debug("Jobs", "🔄 開始執行 Update Live Status Job...");
 
   try {
     // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)，包含當前狀態
-    const channels = await prisma.channel.findMany({
-      where: {
-        twitchChannelId: { not: "" },
-        isMonitored: true,
-      },
-      select: {
-        id: true,
-        twitchChannelId: true,
-        channelName: true,
-        isLive: true, // 獲取當前狀態以便比較變更
-      },
-    });
+    const channels = await retryDatabaseOperation(() =>
+      prisma.channel.findMany({
+        where: {
+          twitchChannelId: { not: "" },
+          isMonitored: true,
+        },
+        select: {
+          id: true,
+          twitchChannelId: true,
+          channelName: true,
+          isLive: true, // 獲取當前狀態以便比較變更
+        },
+      })
+    );
 
     // 建立當前狀態 Map 用於比較
     const previousStatusMap = new Map(channels.map((c: { twitchChannelId: string; isLive: boolean }) => [c.twitchChannelId, c.isLive]));
@@ -118,9 +131,19 @@ export async function updateLiveStatusFn() {
       }
     }
 
-    // 4. 批量更新 DB (使用 Transaction 以提高效能)
-    // Turso Free Tier 優化：大幅減小批次大小以避免資料庫連線池耗盡
-    const TX_BATCH_SIZE = 5; // 從 10 降到 5
+    // 4. 過濾：只更新狀態有變化的頻道（大幅減少 DB 寫入）
+    const changedUpdates = updates.filter((update) => {
+      const channel = channels.find((c: { twitchChannelId: string }) => c.twitchChannelId === update.twitchId);
+      if (!channel) return true; // 找不到就更新
+
+      // 比較關鍵狀態是否有變化
+      const wasLive = previousStatusMap.get(update.twitchId);
+      return wasLive !== update.isLive; // 只在開播/下播狀態改變時更新
+    });
+
+    // 5. 批量更新 DB（只更新有變化的頻道）
+    // 優化：增加批次大小、減少延遲，因為只處理變化的頻道
+    const TX_BATCH_SIZE = 15; // 從 5 增加到 15（因為只處理變化的頻道，數量少很多）
     let updateSuccessCount = 0;
     let updateFailCount = 0;
 
@@ -131,52 +154,86 @@ export async function updateLiveStatusFn() {
       return;
     }
 
-    for (let i = 0; i < updates.length; i += TX_BATCH_SIZE) {
-      // 記憶體保護：如果記憶體過高，中止剩餘更新
-      const { memoryMonitor } = await import("../utils/memory-monitor");
-      if (memoryMonitor.isOverLimit()) {
-        logger.warn("Jobs", "記憶體不足，中止剩餘的狀態更新");
-        break;
-      }
+    // 如果沒有變化，跳過更新（但仍需更新 lastLiveCheckAt）
+    if (changedUpdates.length === 0) {
+      // 批量更新 lastLiveCheckAt（使用單一 updateMany 而非多個 update）
+      await retryDatabaseOperation(() =>
+        prisma.channel.updateMany({
+          where: {
+            twitchChannelId: { in: updates.map((u) => u.twitchId) },
+          },
+          data: {
+            lastLiveCheckAt: now,
+          },
+        })
+      );
+    } else {
+      // 有變化的頻道：完整更新
+      for (let i = 0; i < changedUpdates.length; i += TX_BATCH_SIZE) {
+        // 記憶體保護：如果記憶體過高，中止剩餘更新
+        const { memoryMonitor } = await import("../utils/memory-monitor");
+        if (memoryMonitor.isOverLimit()) {
+          logger.warn("Jobs", "記憶體不足，中止剩餘的狀態更新");
+          break;
+        }
 
-      const batch = updates.slice(i, i + TX_BATCH_SIZE);
-      const batchIndex = Math.floor(i / TX_BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(updates.length / TX_BATCH_SIZE);
+        const batch = changedUpdates.slice(i, i + TX_BATCH_SIZE);
+        const batchIndex = Math.floor(i / TX_BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(changedUpdates.length / TX_BATCH_SIZE);
 
-      try {
-        // 使用重試機制執行批次更新
-        await retryDatabaseOperation(async () => {
-          const updatePromises = batch.map((update) =>
-            prisma.channel.update({
-              where: { twitchChannelId: update.twitchId },
-              data: {
-                isLive: update.isLive,
-                currentViewerCount: update.viewerCount,
-                currentTitle: update.title || undefined,
-                currentGameName: update.gameName || undefined,
-                currentStreamStartedAt: update.startedAt,
-                lastLiveCheckAt: now,
-              },
-            })
+        try {
+          // 使用重試機制執行批次更新
+          await retryDatabaseOperation(async () => {
+            const updatePromises = batch.map((update) =>
+              prisma.channel.update({
+                where: { twitchChannelId: update.twitchId },
+                data: {
+                  isLive: update.isLive,
+                  currentViewerCount: update.viewerCount,
+                  currentTitle: update.title || undefined,
+                  currentGameName: update.gameName || undefined,
+                  currentStreamStartedAt: update.startedAt,
+                  lastLiveCheckAt: now,
+                },
+              })
+            );
+
+            await prisma.$transaction(updatePromises);
+          });
+
+          updateSuccessCount += batch.length;
+        } catch (error) {
+          updateFailCount += batch.length;
+          logger.error(
+            "Jobs",
+            `批次更新失敗 (${batchIndex}/${totalBatches}):`,
+            error instanceof Error ? error.message : String(error)
           );
+          // 繼續處理下一批，不中斷整個流程
+        }
 
-          await prisma.$transaction(updatePromises);
-        });
-
-        updateSuccessCount += batch.length;
-      } catch (error) {
-        updateFailCount += batch.length;
-        logger.error(
-          "Jobs",
-          `批次更新失敗 (${batchIndex}/${totalBatches}):`,
-          error instanceof Error ? error.message : String(error)
-        );
-        // 繼續處理下一批，不中斷整個流程
+        // 批次之間短暫延遲（從 1000ms 降到 150ms，因為批次數量大幅減少）
+        if (i + TX_BATCH_SIZE < changedUpdates.length) {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
       }
 
-      // 批次之間大幅延遲，避免壓垮 Turso 和 Render CPU
-      if (i + TX_BATCH_SIZE < updates.length) {
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // 從 300ms 增加到 1000ms
+      // 未變化的頻道：只更新 lastLiveCheckAt
+      const unchangedTwitchIds = updates
+        .filter((u) => !changedUpdates.includes(u))
+        .map((u) => u.twitchId);
+
+      if (unchangedTwitchIds.length > 0) {
+        await retryDatabaseOperation(() =>
+          prisma.channel.updateMany({
+            where: {
+              twitchChannelId: { in: unchangedTwitchIds },
+            },
+            data: {
+              lastLiveCheckAt: now,
+            },
+          })
+        );
       }
     }
 
@@ -184,7 +241,7 @@ export async function updateLiveStatusFn() {
     if (updateFailCount > 0) {
       logger.warn(
         "Jobs",
-        `批次更新完成: 成功 ${updateSuccessCount}/${updates.length}, 失敗 ${updateFailCount}`
+        `批次更新完成: 成功 ${updateSuccessCount}/${changedUpdates.length}, 失敗 ${updateFailCount}`
       );
     }
 
@@ -227,18 +284,22 @@ export async function updateLiveStatusFn() {
     const offlineCount = updates.filter((u) => !u.isLive).length;
 
     // 只在有狀態變更時輸出 info
+    const duration = Date.now() - startTime;
     if (onlineChanges > 0 || offlineChanges > 0) {
       logger.info(
         "Jobs",
-        `直播狀態更新: ${onlineChanges} 個上線, ${offlineChanges} 個下線 (${liveCount} 直播中, ${offlineCount} 離線)`
+        `直播狀態更新: ${onlineChanges} 個上線, ${offlineChanges} 個下線 (${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length}/${updates.length}) [${duration}ms]`
       );
     } else {
       logger.debug(
         "Jobs",
-        `✅ 直播狀態更新完成: 已檢查 ${updates.length} 個頻道, ${liveCount} 個直播中, ${offlineCount} 個離線`
+        `✅ 直播狀態更新完成: 已檢查 ${updates.length} 個頻道, ${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length} [${duration}ms]`
       );
     }
   } catch (error) {
     logger.error("Jobs", "Update Live Status Job 執行失敗", error);
+  } finally {
+    // 確保解鎖，即使發生錯誤
+    isRunning = false;
   }
 }

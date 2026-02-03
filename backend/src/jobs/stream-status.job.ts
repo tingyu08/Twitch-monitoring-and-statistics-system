@@ -17,8 +17,8 @@ const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
 
-// 超時時間（毫秒）- Render Free Tier 優化：縮短超時以避免長時間佔用資源
-const JOB_TIMEOUT_MS = 2 * 60 * 1000; // 從 5 分鐘縮短到 2 分鐘
+// 超時時間（毫秒）- 優化：增加到 4 分鐘以處理大量頻道（286+）
+const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
 
 // 避免循環依賴和類型錯誤，定義本地介面
 interface MonitoredChannel {
@@ -183,8 +183,8 @@ export class StreamStatusJob {
     const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
     // 5. 處理每個頻道的狀態變化（並行處理，限制並發數）
-    // Render Free Tier 優化：大幅降低並發以減少記憶體使用
-    const CONCURRENCY_LIMIT = process.env.NODE_ENV === "production" ? 2 : 5;
+    // 優化：提高並發以加快處理速度（平衡效能和記憶體）
+    const CONCURRENCY_LIMIT = process.env.NODE_ENV === "production" ? 8 : 10;
 
     // 將任務分組進行並行處理
     const tasks = channels.map(async (channel) => {
@@ -310,9 +310,9 @@ export class StreamStatusJob {
         logger.error("JOB", `批次查詢失敗 (${i}-${i + batch.length}):`, error);
       }
 
-      // 記憶體/CPU 優化：批次之間休息一下（Render Free Tier 優化：增加延遲）
+      // 記憶體/CPU 優化：批次之間短暫休息
       if (i + MAX_CHANNELS_PER_BATCH < twitchChannelIds.length) {
-        await new Promise((resolve) => setTimeout(resolve, 500)); // 從 100ms 增加到 500ms
+        await new Promise((resolve) => setTimeout(resolve, 200)); // 平衡速度和資源使用
       }
     }
 

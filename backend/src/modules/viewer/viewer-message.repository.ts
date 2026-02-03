@@ -13,31 +13,72 @@ function isRawChatMessage(msg: MessageInput): msg is RawChatMessage {
 }
 
 /**
- * 重試包裝器：針對 Turso 502 錯誤進行重試
+ * 判斷錯誤是否為可重試的 Turso 暫時性錯誤
+ * - 400/404/502/503: Turso 連線問題（已知的暫時性錯誤）
+ * - fetch failed: 網路層級錯誤
+ * - ECONNRESET/ETIMEDOUT: 網路連線問題
  */
-async function retryOnTurso502<T>(
+function isRetryableError(errorMessage: string): { retryable: boolean; errorType: string } {
+  const lowerMessage = errorMessage.toLowerCase();
+
+  if (lowerMessage.includes("502") || lowerMessage.includes("bad gateway")) {
+    return { retryable: true, errorType: "502" };
+  }
+  if (lowerMessage.includes("503") || lowerMessage.includes("service unavailable")) {
+    return { retryable: true, errorType: "503" };
+  }
+  if (lowerMessage.includes("http status 400") || lowerMessage.includes("server_error")) {
+    return { retryable: true, errorType: "400" };
+  }
+  if (lowerMessage.includes("http status 404") || lowerMessage.includes("404")) {
+    return { retryable: true, errorType: "404" };
+  }
+  if (lowerMessage.includes("fetch failed") || lowerMessage.includes("network")) {
+    return { retryable: true, errorType: "network" };
+  }
+  if (lowerMessage.includes("econnreset") || lowerMessage.includes("etimedout")) {
+    return { retryable: true, errorType: "connection" };
+  }
+  if (lowerMessage.includes("batch request")) {
+    return { retryable: true, errorType: "batch" };
+  }
+
+  return { retryable: false, errorType: "unknown" };
+}
+
+/**
+ * 重試包裝器：針對 Turso 暫時性錯誤進行重試
+ * 優化日誌：重試過程用 debug，只在最終失敗時才輸出 error
+ */
+async function retryOnTursoError<T>(
   operation: () => Promise<T>,
   context: string,
   maxRetries = 3
 ): Promise<T | null> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await operation();
+      const result = await operation();
+      // 如果是重試後成功，記錄一下
+      if (attempt > 1) {
+        logger.debug("ViewerMessage", `${context} succeeded on retry ${attempt}`);
+      }
+      return result;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const is502 = errorMessage.includes("502") || errorMessage.includes("bad gateway");
+      const { retryable, errorType } = isRetryableError(errorMessage);
 
-      if (is502 && attempt < maxRetries) {
+      if (retryable && attempt < maxRetries) {
         const delay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // 100ms, 200ms, 400ms
-        logger.warn(
+        // 使用 debug 級別，減少日誌噪音（生產環境通常不顯示 debug）
+        logger.debug(
           "ViewerMessage",
-          `${context} failed (502), retry ${attempt}/${maxRetries} after ${delay}ms`
+          `${context} failed (${errorType}), retry ${attempt}/${maxRetries} after ${delay}ms`
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
 
-      // 最後一次嘗試失敗，或非 502 錯誤，記錄並返回 null
+      // 最後一次嘗試失敗，或非可重試錯誤，記錄並返回 null
       logger.error("ViewerMessage", `${context} failed after ${attempt} attempts`, error);
       return null;
     }
@@ -65,8 +106,8 @@ export class ViewerMessageRepository {
       return cached;
     }
 
-    // Query database with retry on 502 errors
-    const result = await retryOnTurso502(
+    // Query database with retry on transient errors (400, 502, 503, network)
+    const result = await retryOnTursoError(
       () =>
         prisma.viewer.findUnique({
           where: { twitchUserId },
@@ -101,9 +142,9 @@ export class ViewerMessageRepository {
       return cached;
     }
 
-    // Query database with retry on 502 errors
+    // Query database with retry on transient errors (400, 502, 503, network)
     const normalizedName = channelName.toLowerCase();
-    const result = await retryOnTurso502(
+    const result = await retryOnTursoError(
       () =>
         prisma.channel.findFirst({
           where: { channelName: normalizedName },

@@ -80,10 +80,12 @@ export class ChannelStatsSyncJob {
       // Update daily stats
       result.dailyStatsUpdated = await this.updateDailyStats();
 
-      logger.info(
-        "ChannelStatsSync",
-        `Job done: ${result.synced} synced, ${result.failed} failed, ${result.dailyStatsUpdated} daily stats updated`
-      );
+      // 優化日誌：避免 "failed" 關鍵字導致日誌顯示為紅色
+      const summary = result.failed > 0
+        ? `Job completed: ${result.synced} synced, ${result.failed} errors, ${result.dailyStatsUpdated} daily stats updated`
+        : `Job completed: ${result.synced} synced, ${result.dailyStatsUpdated} daily stats updated`;
+
+      logger.info("ChannelStatsSync", summary);
 
       return result;
     } catch (error) {

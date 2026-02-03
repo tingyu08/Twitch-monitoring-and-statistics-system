@@ -135,121 +135,153 @@ export class TwurpleChatService {
   // ... (保留 initialize method)
 
   /**
-   * 初始化並連接到 Twitch 聊天
+   * 初始化並連接到 Twitch 聊天（帶重試機制）
+   * @param maxRetries 最大重試次數
+   * @param retryDelayMs 重試延遲（毫秒）
    */
-  public async initialize(): Promise<void> {
-    try {
-      const { ChatClient } = await new Function('return import("@twurple/chat")')();
+  public async initialize(maxRetries = 3, retryDelayMs = 5000): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.initializeInternal();
+        return; // 成功則直接返回
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isRetryable =
+          errorMessage.includes("timeout") ||
+          errorMessage.includes("ETIMEDOUT") ||
+          errorMessage.includes("ECONNRESET") ||
+          errorMessage.includes("Connect Timeout") ||
+          errorMessage.includes("UND_ERR");
 
-      // 從資料庫獲取第一個有 Token 的使用者（通常是您自己）
-      const tokenRecord = await prisma.twitchToken.findFirst({
-        where: {
-          refreshToken: { not: null },
-        },
-        include: {
-          streamer: {
-            include: {
-              channels: true, // 需要獲取頻道的英文 channelName
-            },
+        if (isRetryable && attempt < maxRetries) {
+          const delay = retryDelayMs * attempt; // 指數退避：5s, 10s, 15s
+          logger.warn(
+            "Twurple Chat",
+            `初始化失敗 (${errorMessage.substring(0, 50)}...)，重試 ${attempt}/${maxRetries}，等待 ${delay / 1000}s`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // 最後一次嘗試失敗或非可重試錯誤
+        logger.error("Twurple Chat", `連接 Twitch Chat 失敗 (嘗試 ${attempt} 次)`, error);
+        this.isConnected = false;
+        return;
+      }
+    }
+  }
+
+  /**
+   * 內部初始化邏輯（不帶重試）
+   */
+  private async initializeInternal(): Promise<void> {
+    const { ChatClient } = await new Function('return import("@twurple/chat")')();
+
+    // 從資料庫獲取第一個有 Token 的使用者（通常是您自己）
+    const tokenRecord = await prisma.twitchToken.findFirst({
+      where: {
+        refreshToken: { not: null },
+      },
+      include: {
+        streamer: {
+          include: {
+            channels: true, // 需要獲取頻道的英文 channelName
           },
         },
-      });
+      },
+    });
 
-      if (!tokenRecord || !tokenRecord.refreshToken) {
-        logger.warn(
-          "Twurple Chat",
-          "No user token found in database. Please login first. Chat listener disabled."
-        );
-        return;
-      }
-
-      const clientId = process.env.TWITCH_CLIENT_ID || "";
-      const clientSecret = process.env.TWITCH_CLIENT_SECRET || "";
-
-      if (!clientId || !clientSecret) {
-        logger.warn(
-          "Twurple Chat",
-          "Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET. Chat listener disabled."
-        );
-        return;
-      }
-
-      // 解密 Token
-      const accessToken = decryptToken(tokenRecord.accessToken);
-      const refreshToken = decryptToken(tokenRecord.refreshToken);
-
-      const { RefreshingAuthProvider } = await new Function('return import("@twurple/auth")')();
-
-      const authProvider = new RefreshingAuthProvider({
-        clientId,
-        clientSecret,
-      });
-
-      // 設定 Token 刷新回調（刷新後更新資料庫）
-      authProvider.onRefresh(
-        async (
-          userId: string,
-          newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData
-        ) => {
-          logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
-
-          // 更新資料庫中的 Token
-          await prisma.twitchToken.update({
-            where: { id: tokenRecord.id },
-            data: {
-              accessToken: encryptToken(newTokenData.accessToken),
-              refreshToken: newTokenData.refreshToken
-                ? encryptToken(newTokenData.refreshToken)
-                : tokenRecord.refreshToken,
-              expiresAt: newTokenData.expiresIn
-                ? new Date(Date.now() + newTokenData.expiresIn * 1000)
-                : null,
-            },
-          });
-        }
-      );
-
-      // 添加使用者的 Token
-      await authProvider.addUserForToken(
-        {
-          accessToken,
-          refreshToken,
-          expiresIn: tokenRecord.expiresAt
-            ? Math.floor((tokenRecord.expiresAt.getTime() - Date.now()) / 1000)
-            : null,
-          obtainmentTimestamp: tokenRecord.updatedAt.getTime(),
-        },
-        ["chat"]
-      );
-
-      // 建立 Chat Client
-      this.chatClient = new ChatClient({
-        authProvider,
-        channels: [], // 初始為空，稍後動態加入
-        logger: {
-          minLevel: "error", // Suppress "Unrecognized usernotice ID" warnings
-        },
-      });
-
-      this.setupEventHandlers();
-
-      await this.chatClient.connect();
-      this.isConnected = true;
-      this.notInitializedWarned = false; // 重設警告 flag
-      logger.info(
+    if (!tokenRecord || !tokenRecord.refreshToken) {
+      logger.warn(
         "Twurple Chat",
-        `已連接至 Twitch Chat: ${tokenRecord.streamer?.displayName} (自動刷新)`
+        "No user token found in database. Please login first. Chat listener disabled."
       );
+      return;
+    }
 
-      // 自動加入自己的頻道（即使未開台也能監聽）
-      // 注意：必須使用英文 channelName (login)，而非中文 displayName
-      const channelName = tokenRecord.streamer?.channels?.[0]?.channelName;
-      if (channelName) {
-        await this.joinChannel(channelName);
+    const clientId = process.env.TWITCH_CLIENT_ID || "";
+    const clientSecret = process.env.TWITCH_CLIENT_SECRET || "";
+
+    if (!clientId || !clientSecret) {
+      logger.warn(
+        "Twurple Chat",
+        "Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET. Chat listener disabled."
+      );
+      return;
+    }
+
+    // 解密 Token
+    const accessToken = decryptToken(tokenRecord.accessToken);
+    const refreshToken = decryptToken(tokenRecord.refreshToken);
+
+    const { RefreshingAuthProvider } = await new Function('return import("@twurple/auth")')();
+
+    const authProvider = new RefreshingAuthProvider({
+      clientId,
+      clientSecret,
+    });
+
+    // 設定 Token 刷新回調（刷新後更新資料庫）
+    authProvider.onRefresh(
+      async (
+        userId: string,
+        newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData
+      ) => {
+        logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
+
+        // 更新資料庫中的 Token
+        await prisma.twitchToken.update({
+          where: { id: tokenRecord.id },
+          data: {
+            accessToken: encryptToken(newTokenData.accessToken),
+            refreshToken: newTokenData.refreshToken
+              ? encryptToken(newTokenData.refreshToken)
+              : tokenRecord.refreshToken,
+            expiresAt: newTokenData.expiresIn
+              ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+              : null,
+          },
+        });
       }
-    } catch (error) {
-      logger.error("Twurple Chat", "連接 Twitch Chat 失敗", error);
-      this.isConnected = false;
+    );
+
+    // 添加使用者的 Token（這是可能超時的步驟）
+    await authProvider.addUserForToken(
+      {
+        accessToken,
+        refreshToken,
+        expiresIn: tokenRecord.expiresAt
+          ? Math.floor((tokenRecord.expiresAt.getTime() - Date.now()) / 1000)
+          : null,
+        obtainmentTimestamp: tokenRecord.updatedAt.getTime(),
+      },
+      ["chat"]
+    );
+
+    // 建立 Chat Client
+    this.chatClient = new ChatClient({
+      authProvider,
+      channels: [], // 初始為空，稍後動態加入
+      logger: {
+        minLevel: "error", // Suppress "Unrecognized usernotice ID" warnings
+      },
+    });
+
+    this.setupEventHandlers();
+
+    await this.chatClient.connect();
+    this.isConnected = true;
+    this.notInitializedWarned = false; // 重設警告 flag
+    logger.info(
+      "Twurple Chat",
+      `已連接至 Twitch Chat: ${tokenRecord.streamer?.displayName} (自動刷新)`
+    );
+
+    // 自動加入自己的頻道（即使未開台也能監聽）
+    // 注意：必須使用英文 channelName (login)，而非中文 displayName
+    const channelName = tokenRecord.streamer?.channels?.[0]?.channelName;
+    if (channelName) {
+      await this.joinChannel(channelName);
     }
   }
 
