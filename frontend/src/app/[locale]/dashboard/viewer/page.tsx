@@ -160,19 +160,18 @@ export default function ViewerDashboardPage() {
       filtered = [...channels];
     }
 
-    // 排序：1. 開台優先 2. 未開台按觀看時數由高到低
+    // 排序：1. 開台優先 2. 同狀態按觀看時數由高到低
     filtered.sort((a, b) => {
       // 開台的頻道排在未開台的前面
       if (a.isLive && !b.isLive) return -1;
       if (!a.isLive && b.isLive) return 1;
 
-      // 未開台的頻道按觀看時數排序（高到低）
-      if (!a.isLive && !b.isLive) {
-        return b.totalWatchMinutes - a.totalWatchMinutes;
-      }
+      // 同狀態的頻道按觀看時數排序（高到低）
+      const watchDiff = b.totalWatchMinutes - a.totalWatchMinutes;
+      if (watchDiff !== 0) return watchDiff;
 
-      // 開台的頻道保持原順序（或可以按其他邏輯排序）
-      return 0;
+      // 最後用名稱做穩定排序
+      return a.displayName.localeCompare(b.displayName, "zh-Hant");
     });
 
     setFilteredChannels(filtered);

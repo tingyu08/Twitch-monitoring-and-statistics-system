@@ -436,29 +436,6 @@ export default function ViewerChannelStatsPage() {
 
         {channelId && <ChannelVideosSection channelId={channelId} />}
 
-        {/* 未來功能預留區 */}
-
-        <div className="mt-8 p-6 theme-card border-2 border-dashed border-purple-200 dark:border-white/20 text-center">
-          <h3 className="theme-text-secondary font-medium mb-3">{t("channel.comingSoon")}</h3>
-
-          <div className="flex flex-wrap justify-center gap-4 text-sm theme-text-muted">
-            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              {t("channel.detailedHistory")}
-            </span>
-
-            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              {t("channel.wordCloud")}
-            </span>
-
-            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              {t("channel.milestone")}
-            </span>
-
-            <span className="px-3 py-1 bg-purple-50 dark:bg-white/10 rounded-full border border-purple-200 dark:border-white/10">
-              {t("channel.loyalty")}
-            </span>
-          </div>
-        </div>
       </div>
     </main>
   );
