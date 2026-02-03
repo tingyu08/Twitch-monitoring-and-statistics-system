@@ -17,7 +17,7 @@ const router = Router();
  * GET /api/admin/performance/stats
  * 取得 API 效能統計（含快取統計）
  */
-router.get("/stats", (req: Request, res: Response) => {
+router.get("/stats", (_req: Request, res: Response) => {
   try {
     const stats = performanceMonitor.getStats();
     const cacheStats = cacheManager.getStats();
@@ -60,7 +60,7 @@ router.get("/stats", (req: Request, res: Response) => {
  * GET /api/admin/performance/slow
  * 取得慢速請求列表
  */
-router.get("/slow", (req: Request, res: Response) => {
+router.get("/slow", (_req: Request, res: Response) => {
   try {
     const slowRequests = performanceMonitor.getSlowRequests();
     performanceLogger.info(`Slow requests requested: ${slowRequests.length} slow requests found`);
@@ -85,7 +85,7 @@ router.get("/slow", (req: Request, res: Response) => {
  * POST /api/admin/performance/reset
  * 重置效能指標 (僅限開發環境)
  */
-router.post("/reset", (req: Request, res: Response) => {
+router.post("/reset", (_req: Request, res: Response) => {
   if (process.env.NODE_ENV === "production") {
     res.status(403).json({
       success: false,
@@ -114,7 +114,7 @@ router.post("/reset", (req: Request, res: Response) => {
  * GET /api/admin/performance/health
  * 效能健康檢查
  */
-router.get("/health", (req: Request, res: Response) => {
+router.get("/health", (_req: Request, res: Response) => {
   try {
     const stats = performanceMonitor.getStats();
     const isHealthy = stats.averageResponseTime < 500 && stats.p95 < 1000;

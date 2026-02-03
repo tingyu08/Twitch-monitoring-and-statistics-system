@@ -35,8 +35,8 @@ interface ExistingStreamer {
   twitchUserId: string;
 }
 
-// 每小時執行一次
-const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "0 * * * *";
+// P1 Fix: 每小時第 30 分鐘執行（錯開 channelStatsSyncJob 的第 10 分鐘執行）
+const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "30 * * * *";
 
 // 並發控制：同時最多處理 5 個使用者
 const CONCURRENCY_LIMIT = 5;
@@ -771,6 +771,14 @@ export async function triggerFollowSyncForUser(
           }
 
           // 建立或更新頻道
+          // P0 Fix: 確保 streamerId 存在，避免 N+1 查詢
+          const resolvedStreamerId = streamerId || existingStreamerMap.get(follow.broadcasterId)?.id;
+          
+          if (!resolvedStreamerId) {
+            logger.warn("Jobs", `無法解析 streamerId for ${follow.broadcasterLogin}, 跳過此頻道`);
+            continue;
+          }
+
           const channel = await prisma.channel.upsert({
             where: { twitchChannelId: follow.broadcasterId },
             create: {
@@ -779,13 +787,7 @@ export async function triggerFollowSyncForUser(
               channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
               source: "external",
               isMonitored: true,
-              streamerId:
-                streamerId ||
-                (
-                  await prisma.streamer.findUniqueOrThrow({
-                    where: { twitchUserId: follow.broadcasterId },
-                  })
-                ).id,
+              streamerId: resolvedStreamerId,
             },
             update: {
               channelName: follow.broadcasterLogin,

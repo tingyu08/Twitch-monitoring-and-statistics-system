@@ -12,7 +12,8 @@ const CHECK_LIVE_CRON = process.env.CHECK_LIVE_CRON || "0 2-59/5 * * * *";
 
 export class AutoJoinLiveChannelsJob {
   private isRunning = false;
-  private timeoutHandle: NodeJS.Timeout | null = null;
+  // P2 Note: timeoutHandle 保留供未來超時功能使用
+  // private timeoutHandle: NodeJS.Timeout | null = null;
 
   start(): void {
     logger.info("Jobs", `📋 Auto Join Live Channels Job 已排程: ${CHECK_LIVE_CRON}`);
@@ -64,6 +65,21 @@ export class AutoJoinLiveChannelsJob {
           const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);
           const liveStreamMap = new Map(streams.map((s) => [s.userId, s]));
 
+          // P0 Fix: 批次查詢所有活躍的 StreamSession，避免 N+1 查詢
+          const batchChannelIds = batch.map((c) => c.id);
+          const activeSessions = await prisma.streamSession.findMany({
+            where: {
+              channelId: { in: batchChannelIds },
+              endedAt: null,
+            },
+            select: {
+              id: true,
+              channelId: true,
+              twitchStreamId: true,
+            },
+          });
+          const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
+
           // 3. 更新狀態並加入聊天室
           for (const channel of batch) {
             const stream = liveStreamMap.get(channel.twitchChannelId);
@@ -92,10 +108,8 @@ export class AutoJoinLiveChannelsJob {
                 });
               }
 
-              // 確保有進行中的 StreamSession
-              const activeSession = await prisma.streamSession.findFirst({
-                where: { channelId: channel.id, endedAt: null },
-              });
+              // P0 Fix: 使用預先查詢的 Map 取代迴圈內查詢
+              const activeSession = activeSessionMap.get(channel.id);
 
               if (!activeSession && stream) {
                 // 使用 upsert 避免唯一約束衝突
@@ -117,7 +131,7 @@ export class AutoJoinLiveChannelsJob {
               }
             } else {
               // 頻道離線
-              // 停止監聽 (可選，或讓 manager 自動清理)
+              // 停止監聯 (可選，或讓 manager 自動清理)
               // await chatListenerManager.stopListening(channel.channelName);
 
               // 更新 Channel Live 狀態

@@ -1,4 +1,4 @@
-﻿import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
@@ -143,7 +143,7 @@ class App {
     this.express.use("/eventsub", eventSubRoutes);
 
     // ?寡楝敺摨瑟炎??
-    this.express.get("/", (req, res) => {
+    this.express.get("/", (_req, res) => {
       res.send("Streamer Backend is running!");
     });
 

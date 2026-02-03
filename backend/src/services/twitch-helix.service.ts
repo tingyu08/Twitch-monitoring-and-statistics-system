@@ -309,8 +309,6 @@ class TwurpleHelixService {
     tokenInfo?: UserTokenInfo
   ): Promise<FollowedChannel[]> {
     // 記憶體優化：使用臨時變數追蹤需要釋放的資源
-    // RefreshingAuthProvider 透過動態導入，使用 unknown 類型
-    let _tempAuthProvider: unknown = null;
     let tempApiClient: ApiClient | null = null;
 
     try {
@@ -327,7 +325,6 @@ class TwurpleHelixService {
           clientId,
           clientSecret,
         });
-        _tempAuthProvider = authProvider;
 
         // 設定 Token 刷新回調（刷新後更新資料庫）
         authProvider.onRefresh(async (_userId: string, newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData) => {
@@ -385,7 +382,6 @@ class TwurpleHelixService {
         const { StaticAuthProvider } = await importTwurpleAuth();
         const clientId = twurpleAuthService.getClientId();
         const authProvider = new StaticAuthProvider(clientId, userAccessToken);
-        _tempAuthProvider = authProvider;
         tempApiClient = new ApiClient({
           authProvider: authProvider,
           logger: { minLevel: "error" },
@@ -431,7 +427,6 @@ class TwurpleHelixService {
     } finally {
       // 記憶體優化：確保臨時資源被釋放
       // 將引用設為 null，讓 GC 可以回收
-      _tempAuthProvider = null;
       tempApiClient = null;
     }
   }

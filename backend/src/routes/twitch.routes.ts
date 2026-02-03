@@ -11,6 +11,14 @@
 import { Router, Request, Response } from "express";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
+import { withTimeout, isTimeoutError, API_TIMEOUT_MS } from "../utils/timeout.utils";
+import {
+  BadRequestError,
+  NotFoundError,
+  GatewayTimeoutError,
+  isAppError,
+  formatErrorResponse,
+} from "../utils/errors";
 
 const router = Router();
 
@@ -31,6 +39,7 @@ function isValidTwitchId(id: unknown): id is string {
 /**
  * GET /api/twitch/channel/:login
  * 獲取頻道資訊
+ * P1 Fix: 加入 10 秒超時保護
  */
 router.get("/channel/:login", async (req: Request, res: Response) => {
   try {
@@ -38,19 +47,35 @@ router.get("/channel/:login", async (req: Request, res: Response) => {
 
     // P1 Fix: 驗證 login 參數格式
     if (!isValidTwitchLogin(login)) {
-      return res.status(400).json({ error: "無效的頻道名稱格式" });
+      throw new BadRequestError("無效的頻道名稱格式", "INVALID_CHANNEL_NAME");
     }
 
-    const channelInfo = await unifiedTwitchService.getChannelInfo(login);
+    // P1 Fix: 加入超時保護
+    const channelInfo = await withTimeout(
+      unifiedTwitchService.getChannelInfo(login),
+      API_TIMEOUT_MS.MEDIUM,
+      `Channel info request timed out for ${login}`
+    );
 
     if (!channelInfo) {
-      return res.status(404).json({ error: "頻道不存在" });
+      throw new NotFoundError("頻道不存在", "CHANNEL_NOT_FOUND");
     }
 
     return res.json(channelInfo);
   } catch (error) {
+    if (isTimeoutError(error)) {
+      logger.warn("Twitch API", `Timeout getting channel info: ${req.params.login}`);
+      const timeoutError = new GatewayTimeoutError("請求超時，請稍後再試");
+      const { status, body } = formatErrorResponse(timeoutError);
+      return res.status(status).json(body);
+    }
+    if (isAppError(error)) {
+      const { status, body } = formatErrorResponse(error);
+      return res.status(status).json(body);
+    }
     logger.error("Twitch API", "Failed to get channel info", error);
-    return res.status(500).json({ error: "伺服器錯誤" });
+    const { status, body } = formatErrorResponse(error);
+    return res.status(status).json(body);
   }
 });
 
@@ -58,30 +83,47 @@ router.get("/channel/:login", async (req: Request, res: Response) => {
  * POST /api/twitch/channels
  * 批量獲取頻道資訊
  * Body: { logins: string[] }
+ * P1 Fix: 加入 30 秒超時保護（批量操作）
  */
 router.post("/channels", async (req: Request, res: Response) => {
   try {
     const { logins } = req.body;
 
     if (!Array.isArray(logins) || logins.length === 0) {
-      return res.status(400).json({ error: "請提供頻道列表" });
+      throw new BadRequestError("請提供頻道列表", "MISSING_LOGINS");
     }
 
     if (logins.length > 100) {
-      return res.status(400).json({ error: "一次最多查詢 100 個頻道" });
+      throw new BadRequestError("一次最多查詢 100 個頻道", "TOO_MANY_LOGINS");
     }
 
     // P1 Fix: 驗證每個 login 都是有效字串
     const validLogins = logins.filter(isValidTwitchLogin);
     if (validLogins.length !== logins.length) {
-      return res.status(400).json({ error: "頻道名稱格式無效" });
+      throw new BadRequestError("頻道名稱格式無效", "INVALID_CHANNEL_NAME");
     }
 
-    const channels = await unifiedTwitchService.getChannelsInfo(validLogins);
+    // P1 Fix: 加入超時保護（批量操作使用較長超時）
+    const channels = await withTimeout(
+      unifiedTwitchService.getChannelsInfo(validLogins),
+      API_TIMEOUT_MS.LONG,
+      `Batch channels request timed out`
+    );
     return res.json({ channels });
   } catch (error) {
+    if (isTimeoutError(error)) {
+      logger.warn("Twitch API", "Timeout getting batch channels info");
+      const timeoutError = new GatewayTimeoutError("請求超時，請稍後再試");
+      const { status, body } = formatErrorResponse(timeoutError);
+      return res.status(status).json(body);
+    }
+    if (isAppError(error)) {
+      const { status, body } = formatErrorResponse(error);
+      return res.status(status).json(body);
+    }
     logger.error("Twitch API", "Failed to get channels info", error);
-    return res.status(500).json({ error: "伺服器錯誤" });
+    const { status, body } = formatErrorResponse(error);
+    return res.status(status).json(body);
   }
 });
 
@@ -97,21 +139,27 @@ router.get("/followage/:channel/:user", async (req: Request, res: Response) => {
 
     // P1 Fix: 驗證參數格式
     if (!isValidTwitchLogin(channel) || !isValidTwitchLogin(user)) {
-      return res.status(400).json({ error: "無效的頻道或用戶名稱格式" });
+      throw new BadRequestError("無效的頻道或用戶名稱格式", "INVALID_PARAMS");
     }
 
     const followInfo = await unifiedTwitchService.getUserFollowInfo(channel, user);
 
     return res.json(followInfo);
   } catch (error) {
+    if (isAppError(error)) {
+      const { status, body } = formatErrorResponse(error);
+      return res.status(status).json(body);
+    }
     logger.error("Twitch API", "Failed to get follow info", error);
-    return res.status(500).json({ error: "伺服器錯誤" });
+    const { status, body } = formatErrorResponse(error);
+    return res.status(status).json(body);
   }
 });
 
 /**
  * GET /api/twitch/relation/:channel/:viewer
  * 獲取觀眾與頻道的完整關係資訊
+ * P1 Fix: 加入 10 秒超時保護
  */
 router.get("/relation/:channel/:viewer", async (req: Request, res: Response) => {
   try {
@@ -119,19 +167,35 @@ router.get("/relation/:channel/:viewer", async (req: Request, res: Response) => 
 
     // P1 Fix: 驗證參數格式
     if (!isValidTwitchLogin(channel) || !isValidTwitchLogin(viewer)) {
-      return res.status(400).json({ error: "無效的頻道或用戶名稱格式" });
+      throw new BadRequestError("無效的頻道或用戶名稱格式", "INVALID_PARAMS");
     }
 
-    const relation = await unifiedTwitchService.getViewerChannelRelation(channel, viewer);
+    // P1 Fix: 加入超時保護
+    const relation = await withTimeout(
+      unifiedTwitchService.getViewerChannelRelation(channel, viewer),
+      API_TIMEOUT_MS.MEDIUM,
+      `Relation request timed out for ${channel}/${viewer}`
+    );
 
     if (!relation) {
-      return res.status(404).json({ error: "無法獲取關係資訊" });
+      throw new NotFoundError("無法獲取關係資訊", "RELATION_NOT_FOUND");
     }
 
     return res.json(relation);
   } catch (error) {
+    if (isTimeoutError(error)) {
+      logger.warn("Twitch API", `Timeout getting relation info: ${req.params.channel}/${req.params.viewer}`);
+      const timeoutError = new GatewayTimeoutError("請求超時，請稍後再試");
+      const { status, body } = formatErrorResponse(timeoutError);
+      return res.status(status).json(body);
+    }
+    if (isAppError(error)) {
+      const { status, body } = formatErrorResponse(error);
+      return res.status(status).json(body);
+    }
     logger.error("Twitch API", "Failed to get relation info", error);
-    return res.status(500).json({ error: "伺服器錯誤" });
+    const { status, body } = formatErrorResponse(error);
+    return res.status(status).json(body);
   }
 });
 
@@ -147,17 +211,17 @@ router.post("/live-status", async (req: Request, res: Response) => {
     const { channelIds } = req.body;
 
     if (!Array.isArray(channelIds) || channelIds.length === 0) {
-      return res.status(400).json({ error: "請提供頻道 ID 列表" });
+      throw new BadRequestError("請提供頻道 ID 列表", "MISSING_CHANNEL_IDS");
     }
 
     if (channelIds.length > 100) {
-      return res.status(400).json({ error: "一次最多查詢 100 個頻道" });
+      throw new BadRequestError("一次最多查詢 100 個頻道", "TOO_MANY_CHANNEL_IDS");
     }
 
     // P1 Fix: 驗證每個 channelId 都是有效的 Twitch ID
     const validIds = channelIds.filter(isValidTwitchId);
     if (validIds.length !== channelIds.length) {
-      return res.status(400).json({ error: "頻道 ID 格式無效" });
+      throw new BadRequestError("頻道 ID 格式無效", "INVALID_CHANNEL_ID");
     }
 
     const statusMap = await unifiedTwitchService.checkLiveStatus(validIds);
@@ -168,8 +232,13 @@ router.post("/live-status", async (req: Request, res: Response) => {
 
     return res.json({ status });
   } catch (error) {
+    if (isAppError(error)) {
+      const { status, body } = formatErrorResponse(error);
+      return res.status(status).json(body);
+    }
     logger.error("Twitch API", "Failed to check live status", error);
-    return res.status(500).json({ error: "伺服器錯誤" });
+    const { status, body } = formatErrorResponse(error);
+    return res.status(status).json(body);
   }
 });
 
@@ -185,7 +254,8 @@ router.get("/status", async (_req: Request, res: Response) => {
     return res.json(status);
   } catch (error) {
     logger.error("Twitch API", "Failed to get service status", error);
-    return res.status(500).json({ error: "伺服器錯誤" });
+    const { status, body } = formatErrorResponse(error);
+    return res.status(status).json(body);
   }
 });
 

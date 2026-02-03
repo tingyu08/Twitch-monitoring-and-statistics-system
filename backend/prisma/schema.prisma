@@ -87,6 +87,9 @@ model Channel {
   viewerVideos    ViewerChannelVideo[]     // 觀眾追蹤名單用的影片
   viewerClips     ViewerChannelClip[]      // 觀眾追蹤名單用的剪輯
 
+  @@index([isMonitored])           // P0: 優化 update-live-status.job 查詢
+  @@index([isLive])                // P0: 優化直播狀態篩選查詢
+  @@index([lastLiveCheckAt])       // P0: 優化最後檢查時間排序
   @@map("channels")
 }
 
@@ -108,6 +111,7 @@ model StreamSession {
 
   @@index([channelId, startedAt])
   @@index([channelId, endedAt])
+  @@index([endedAt])               // P0: 優化 WHERE endedAt IS NULL 查詢
   @@map("stream_sessions")
 }
 
@@ -229,6 +233,8 @@ model TwitchToken {
   @@index([status])
   @@index([streamerId])
   @@index([viewerId])
+  @@index([ownerType, status])     // P0: 優化組合查詢（Token 驗證任務）
+  @@index([expiresAt])             // P0: 優化過期 Token 查詢
   @@map("twitch_tokens")
 }
 

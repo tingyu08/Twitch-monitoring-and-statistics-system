@@ -17,6 +17,12 @@ const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
 
+// P0-6: Active session 查詢批次大小
+const SESSION_QUERY_BATCH_SIZE = 20;
+
+// P0-6: 批次間休息時間
+const BATCH_DELAY_MS = 1000;
+
 // 超時時間（毫秒）- 優化：增加到 4 分鐘以處理大量頻道（286+）
 const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
 
@@ -171,20 +177,15 @@ export class StreamStatusJob {
 
     logger.debug("JOB", `正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`);
 
-    // 4. 一次查詢所有 active sessions
+    // 4. 分批查詢所有 active sessions
     const channelIds = channels.map((c) => c.id);
-    const activeSessions = (await prisma.streamSession.findMany({
-      where: {
-        channelId: { in: channelIds },
-        endedAt: null,
-      },
-    })) as unknown as ActiveStreamSession[]; // 使用 unknown cast 避免與 prisma 生成類型衝突
+    const activeSessions = await this.fetchActiveSessions(channelIds);
     const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
     // 5. 處理每個頻道的狀態變化（並行處理，限制並發數）
     // 優化：並發上限可調，預設提升以降低排程延遲
     const envLimit = Number(process.env.STREAM_STATUS_CONCURRENCY_LIMIT);
-    const defaultLimit = process.env.NODE_ENV === "production" ? 16 : 12;
+    const defaultLimit = process.env.NODE_ENV === "production" ? 4 : 4;
     const CONCURRENCY_LIMIT = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : defaultLimit;
 
     // 將任務分組進行並行處理
@@ -317,6 +318,32 @@ export class StreamStatusJob {
     }
 
     return allStreams;
+  }
+
+  /**
+   * 分批查詢 active sessions（降低 DB 壓力）
+   */
+  private async fetchActiveSessions(channelIds: string[]): Promise<ActiveStreamSession[]> {
+    const sessions: ActiveStreamSession[] = [];
+
+    for (let i = 0; i < channelIds.length; i += SESSION_QUERY_BATCH_SIZE) {
+      const batch = channelIds.slice(i, i + SESSION_QUERY_BATCH_SIZE);
+
+      const batchSessions = (await prisma.streamSession.findMany({
+        where: {
+          channelId: { in: batch },
+          endedAt: null,
+        },
+      })) as unknown as ActiveStreamSession[];
+
+      sessions.push(...batchSessions);
+
+      if (i + SESSION_QUERY_BATCH_SIZE < channelIds.length) {
+        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+      }
+    }
+
+    return sessions;
   }
 
   /**

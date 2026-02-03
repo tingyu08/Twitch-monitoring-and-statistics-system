@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { twurpleVideoService } from "../services/twitch-video.service";
 import { logger } from "../utils/logger";
+import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
 
 /**
  * Sync Videos & Clips Job (記憶體優化版)
@@ -23,7 +24,8 @@ import { logger } from "../utils/logger";
 const BATCH_SIZE = 20;           // 每批處理 20 個實況主（平衡性能與記憶體）
 const BATCH_DELAY_MS = 1500;     // 批次之間休息 1.5 秒（讓 GC 有時間清理）
 const STREAMER_DELAY_MS = 300;   // 每個實況主之間休息 300ms
-const MAX_MEMORY_MB = 400;       // 記憶體警戒線 400MB（預留 112MB 緩衝）
+// P0 Fix: 使用統一的記憶體閾值常數
+const MAX_MEMORY_MB = MEMORY_THRESHOLDS.MAX_MB;
 
 export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
   logger.info("Jobs", "開始執行 Sync Videos Job (記憶體優化版)...");

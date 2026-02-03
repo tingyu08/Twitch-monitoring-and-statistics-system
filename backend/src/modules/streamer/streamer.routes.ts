@@ -20,7 +20,12 @@ import {
 } from "./streamer-stats.controller";
 import streamerSettingsRoutes from "./streamer-settings.routes";
 import revenueRoutes from "./revenue.routes";
-import { staticDataCache, dynamicCache } from "../../middlewares/cache-control.middleware";
+import {
+  staticDataCache,
+  dynamicCache,
+  privateDataCache,
+  privateStaticCache,
+} from "../../middlewares/cache-control.middleware";
 
 const router = Router();
 
@@ -31,17 +36,31 @@ router.use("/", streamerSettingsRoutes);
 router.use("/revenue", revenueRoutes);
 
 // GET /api/streamer/me/summary?range=30d - 查詢自己的統計
-router.get("/me/summary", (req, res, next) => requireAuth(req, res, next), getSummaryHandler);
+// P1 Fix: 加入 30 秒私有快取，減少重複查詢
+router.get(
+  "/me/summary",
+  (req, res, next) => requireAuth(req, res, next),
+  privateDataCache,
+  getSummaryHandler
+);
 
 // GET /api/streamer/me/time-series?range=30d&granularity=day - 查詢時間序列資料
+// P1 Fix: 加入 30 秒私有快取
 router.get(
   "/me/time-series",
   (req, res, next) => requireAuth(req, res, next),
+  privateDataCache,
   getTimeSeriesHandler
 );
 
 // GET /api/streamer/me/heatmap?range=30d - 查詢 Heatmap 資料
-router.get("/me/heatmap", (req, res, next) => requireAuth(req, res, next), getHeatmapHandler);
+// P1 Fix: 加入 2 分鐘私有快取（heatmap 計算較為密集，資料變化較慢）
+router.get(
+  "/me/heatmap",
+  (req, res, next) => requireAuth(req, res, next),
+  privateStaticCache,
+  getHeatmapHandler
+);
 
 // GET /api/streamer/me/subscription-trend?range=30d - 查詢訂閱趨勢資料
 router.get(

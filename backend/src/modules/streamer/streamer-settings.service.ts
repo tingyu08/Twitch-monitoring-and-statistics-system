@@ -27,17 +27,6 @@ export class StreamerSettingsService {
   }
 
   /**
-   * 內部方法：取得有效的 Access Token，若過期則嘗試刷新
-   */
-  private async getValidAccessToken(tokenRecord: {
-    id: string;
-    accessToken: string;
-    refreshToken: string | null;
-  }): Promise<string> {
-    return decryptToken(tokenRecord.accessToken);
-  }
-
-  /**
    * 內部方法：刷新 Token 並更新資料庫
    */
   private async refreshAndSaveToken(

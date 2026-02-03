@@ -30,6 +30,12 @@ const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
 const HEAT_CLEANUP_INTERVAL_MS = 30000; // Render Free Tier: 每 30 秒清理一次
 const HEAT_STALE_THRESHOLD_MS = 30000; // Render Free Tier: 超過 30 秒沒活動即清理
 
+// P1 Fix: channelIdCache 大小限制（避免無限增長）
+const MAX_CHANNEL_ID_CACHE_SIZE = 500;
+
+// P0 Memory Safety: 時間戳數組最大長度限制（避免高流量頻道記憶體洩漏）
+const MAX_TIMESTAMPS_PER_CHANNEL = 1000;
+
 export class TwurpleChatService {
   private chatClient: ChatClientInterface | null = null;
   private channels: Set<string> = new Set();
@@ -102,13 +108,17 @@ export class TwurpleChatService {
 
   /**
    * P1 Optimization: Get channelId from cache or database
+   * P1 Fix: Implements LRU-like eviction when cache exceeds MAX_CHANNEL_ID_CACHE_SIZE
    */
   private async getChannelId(channelName: string): Promise<string | null> {
     const normalizedName = channelName.toLowerCase();
 
-    // Check cache first
+    // Check cache first - if found, refresh by re-setting (LRU behavior)
     const cached = this.channelIdCache.get(normalizedName);
     if (cached) {
+      // Move to end (most recently used) by deleting and re-adding
+      this.channelIdCache.delete(normalizedName);
+      this.channelIdCache.set(normalizedName, cached);
       return cached;
     }
 
@@ -120,6 +130,14 @@ export class TwurpleChatService {
       });
 
       if (channel) {
+        // P1 Fix: Evict oldest entries if cache is full (LRU eviction)
+        if (this.channelIdCache.size >= MAX_CHANNEL_ID_CACHE_SIZE) {
+          // Map.keys().next() returns the oldest entry (first inserted)
+          const oldestKey = this.channelIdCache.keys().next().value;
+          if (oldestKey) {
+            this.channelIdCache.delete(oldestKey);
+          }
+        }
         this.channelIdCache.set(normalizedName, channel.id);
         return channel.id;
       }
@@ -464,6 +482,11 @@ export class TwurpleChatService {
 
     // 加入當前訊息時間
     timestamps.push(now);
+
+    // P0 Memory Safety: 限制數組大小，避免高流量頻道記憶體洩漏
+    if (timestamps.length > MAX_TIMESTAMPS_PER_CHANNEL) {
+      timestamps.shift(); // 移除最舊的時間戳
+    }
 
     // 移除視窗外的時間戳（例如只保留最近 5 秒）
     const validStart = now - HEAT_WINDOW_MS;

@@ -15,11 +15,12 @@ interface FollowResult {
   followedAt: Date;
 }
 
-interface GroupByStatResult {
-  channelId: string;
-  _sum: { watchSeconds: number | null; messageCount: number | null };
-  _max: { date: Date | null };
-}
+// P2 Note: GroupByStatResult 保留供未來 groupBy 查詢使用
+// interface GroupByStatResult {
+//   channelId: string;
+//   _sum: { watchSeconds: number | null; messageCount: number | null };
+//   _max: { date: Date | null };
+// }
 
 interface ChannelWithRelations {
   id: string;
@@ -233,33 +234,15 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
           },
         });
 
-        // Fallback: 如果 LifetimeStats 為空，使用 groupBy 查詢（新使用者或資料尚未聚合）
+        // P0 Optimization: 移除昂貴的 groupBy fallback
+        // 如果 LifetimeStats 為空，只返回追蹤的頻道（無統計資料）
+        // Lifetime Stats Job 會在背景定期更新，首次查詢可能為空屬於正常現象
         if (lifetimeStats.length === 0) {
-          logger.debug("ViewerService", "LifetimeStats empty, fallback to groupBy");
-          const stats = await prisma.viewerChannelDailyStat.groupBy({
-            by: ["channelId"],
-            where: { viewerId },
-            _sum: {
-              watchSeconds: true,
-              messageCount: true,
-            },
-            _max: {
-              date: true,
-            },
-            orderBy: {
-              _max: {
-                date: "desc",
-              },
-            },
-          });
-
-          // 轉換為 LifetimeStats 格式
-          lifetimeStats = stats.map((s: GroupByStatResult) => ({
-            channelId: s.channelId,
-            totalWatchTimeMinutes: Math.floor((s._sum.watchSeconds || 0) / 60),
-            totalMessages: s._sum.messageCount || 0,
-            lastWatchedAt: s._max.date,
-          }));
+          logger.debug(
+            "ViewerService",
+            "LifetimeStats empty for new viewer, will be populated by update-lifetime-stats job"
+          );
+          // 保持 lifetimeStats 為空陣列，後續只顯示追蹤的頻道
         }
 
         // 2. 獲取外部追蹤

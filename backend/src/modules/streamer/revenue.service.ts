@@ -265,12 +265,14 @@ export class RevenueService {
       throw new Error(`Days must be between ${QUERY_LIMITS.MIN_DAYS} and ${QUERY_LIMITS.MAX_DAYS}`);
     }
 
+    const effectiveDays = Math.min(days, 90);
+
     // 使用快取（5 分鐘 TTL）
     return cacheManager.getOrSet(
-      CacheKeys.revenueSubscriptions(streamerId, days),
+      CacheKeys.revenueSubscriptions(streamerId, effectiveDays),
       async () => {
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
+        startDate.setDate(startDate.getDate() - effectiveDays);
         startDate.setHours(0, 0, 0, 0);
 
         // Render Free Tier: 查詢超時保護（20 秒）
@@ -280,19 +282,34 @@ export class RevenueService {
 
         try {
           const snapshots = await Promise.race([
-            prisma.subscriptionSnapshot.findMany({
-              where: {
-                streamerId,
-                snapshotDate: { gte: startDate },
-              },
-              orderBy: { snapshotDate: "asc" },
-              take: 100, // 最多 100 筆（超過 100 天的數據不太可能）
-            }),
+            prisma.$queryRaw<
+              Array<{
+                snapshotDate: string;
+                tier1Count: number;
+                tier2Count: number;
+                tier3Count: number;
+                totalSubscribers: number;
+                estimatedRevenue: number | null;
+              }>
+            >`
+              SELECT
+                snapshotDate,
+                tier1Count,
+                tier2Count,
+                tier3Count,
+                totalSubscribers,
+                estimatedRevenue
+              FROM subscription_snapshots
+              WHERE streamerId = ${streamerId}
+                AND snapshotDate >= ${startDate.toISOString()}
+              ORDER BY snapshotDate ASC
+              LIMIT 90
+            `,
             timeoutPromise,
           ]);
 
           return snapshots.map((snap) => ({
-            date: snap.snapshotDate.toISOString().split("T")[0],
+            date: new Date(snap.snapshotDate).toISOString().split("T")[0],
             tier1Count: snap.tier1Count,
             tier2Count: snap.tier2Count,
             tier3Count: snap.tier3Count,
@@ -328,12 +345,14 @@ export class RevenueService {
       throw new Error(`Days must be between ${QUERY_LIMITS.MIN_DAYS} and ${QUERY_LIMITS.MAX_DAYS}`);
     }
 
+    const effectiveDays = Math.min(days, 90);
+
     // 使用快取（5 分鐘 TTL）
     return cacheManager.getOrSet(
-      CacheKeys.revenueBits(streamerId, days),
+      CacheKeys.revenueBits(streamerId, effectiveDays),
       async () => {
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
+        startDate.setDate(startDate.getDate() - effectiveDays);
         startDate.setHours(0, 0, 0, 0);
 
         // Render Free Tier: 查詢超時保護（20 秒）
@@ -361,7 +380,7 @@ export class RevenueService {
                 AND cheeredAt >= ${startDate.toISOString()}
               GROUP BY DATE(cheeredAt)
               ORDER BY date ASC
-              LIMIT 100
+              LIMIT 90
             `,
             timeoutPromise,
           ]);

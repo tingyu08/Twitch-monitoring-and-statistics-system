@@ -7,6 +7,11 @@ import { updateViewerWatchTime } from "../../services/watch-time.service";
 // 可以接受 ParsedMessage 或 RawChatMessage
 type MessageInput = ParsedMessage | RawChatMessage;
 
+// 批次寫入配置
+const MESSAGE_BATCH_SIZE = 50;
+const MESSAGE_BATCH_FLUSH_MS = 5000;
+const MESSAGE_BATCH_MAX_SIZE = 1000;
+
 // 類型守衛：檢查是否為 RawChatMessage
 function isRawChatMessage(msg: MessageInput): msg is RawChatMessage {
   return "viewerId" in msg && "bitsAmount" in msg;
@@ -93,6 +98,21 @@ const CacheKeys = {
 };
 
 export class ViewerMessageRepository {
+  private messageBuffer: Array<{
+    viewerId: string;
+    channelId: string;
+    messageText: string;
+    messageType: string;
+    timestamp: Date;
+    badges: string | null;
+    emotesUsed: string | null;
+    bitsAmount: number | null;
+    emoteCount: number;
+  }> = [];
+  private flushTimer: NodeJS.Timeout | null = null;
+  private flushInProgress = false;
+  private flushRequested = false;
+
   /**
    * P1 Memory: Use cacheManager instead of raw Map (with LRU eviction)
    * 使用快取獲取 Viewer ID（減少 DB 查詢）
@@ -193,85 +213,256 @@ export class ViewerMessageRepository {
         return;
       }
 
-      // 3. 寫入詳細記錄（只有註冊用戶的訊息才會到這裡）
-      await prisma.viewerChannelMessage.create({
-        data: {
-          viewerId,
-          channelId,
-          messageText: message.messageText,
-          messageType: message.messageType,
-          timestamp: message.timestamp,
-          badges: message.badges ? JSON.stringify(message.badges) : null,
-          emotesUsed: message.emotes ? JSON.stringify(message.emotes) : null,
-          bitsAmount: message.bits > 0 ? message.bits : null,
-        },
+      // 3. 批次寫入：將訊息加入緩衝，定期批次寫入 DB
+      this.enqueueMessage({
+        viewerId,
+        channelId,
+        messageText: message.messageText,
+        messageType: message.messageType,
+        timestamp: message.timestamp,
+        badges: message.badges ? JSON.stringify(message.badges) : null,
+        emotesUsed: message.emotes ? JSON.stringify(message.emotes) : null,
+        bitsAmount: message.bits > 0 ? message.bits : null,
+        emoteCount: message.emotes ? message.emotes.length : 0,
       });
-
-      // 4. 即時更新每日聚合 (Upsert)
-      const date = new Date(message.timestamp);
-      date.setHours(0, 0, 0, 0);
-
-      await prisma.viewerChannelMessageDailyAgg.upsert({
-        where: {
-          viewerId_channelId_date: {
-            viewerId,
-            channelId,
-            date,
-          },
-        },
-        create: {
-          viewerId,
-          channelId,
-          date,
-          totalMessages: 1,
-          chatMessages: message.messageType === "CHAT" ? 1 : 0,
-          subscriptions: message.messageType === "SUBSCRIPTION" ? 1 : 0,
-          cheers: message.messageType === "CHEER" ? 1 : 0,
-          raids: message.messageType === "RAID" ? 1 : 0,
-          totalBits: message.bits,
-        },
-        update: {
-          totalMessages: { increment: 1 },
-          chatMessages: message.messageType === "CHAT" ? { increment: 1 } : undefined,
-          subscriptions: message.messageType === "SUBSCRIPTION" ? { increment: 1 } : undefined,
-          cheers: message.messageType === "CHEER" ? { increment: 1 } : undefined,
-          raids: message.messageType === "RAID" ? { increment: 1 } : undefined,
-          totalBits: message.bits > 0 ? { increment: message.bits } : undefined,
-        },
-      });
-
-      // 同步更新 ViewerChannelDailyStat (Format that Dashboard uses)
-      await prisma.viewerChannelDailyStat.upsert({
-        where: {
-          viewerId_channelId_date: {
-            viewerId,
-            channelId,
-            date,
-          },
-        },
-        create: {
-          viewerId,
-          channelId,
-          date,
-          messageCount: 1,
-          emoteCount: message.emotes ? message.emotes.length : 0,
-          watchSeconds: 0, // Will be calculated by watch-time.service
-        },
-        update: {
-          messageCount: { increment: 1 },
-          emoteCount: message.emotes ? { increment: message.emotes.length } : undefined,
-        },
-      });
-
-      // 5. P2 Perf: Use static imports instead of dynamic imports on every message
-      updateViewerWatchTime(viewerId, channelId, message.timestamp).catch((err) =>
-        logger.error("ViewerMessage", "Failed to update watch time", err)
-      );
 
       // P1 Optimization: Removed real-time WebSocket stats-update broadcast
       // Message counts are now fetched via React Query refetchInterval instead
     } catch (error) {
       logger.error("ViewerMessage", "Error saving message", error);
+    }
+  }
+
+  private enqueueMessage(message: {
+    viewerId: string;
+    channelId: string;
+    messageText: string;
+    messageType: string;
+    timestamp: Date;
+    badges: string | null;
+    emotesUsed: string | null;
+    bitsAmount: number | null;
+    emoteCount: number;
+  }): void {
+    if (this.messageBuffer.length >= MESSAGE_BATCH_MAX_SIZE) {
+      this.messageBuffer.shift();
+      logger.warn("ViewerMessage", "Message buffer full, dropping oldest message");
+    }
+
+    this.messageBuffer.push(message);
+
+    if (this.messageBuffer.length >= MESSAGE_BATCH_SIZE) {
+      this.flushBuffers().catch((err) =>
+        logger.error("ViewerMessage", "Failed to flush message buffer", err)
+      );
+      return;
+    }
+
+    this.scheduleFlush();
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushBuffers().catch((err) =>
+        logger.error("ViewerMessage", "Failed to flush message buffer", err)
+      );
+    }, MESSAGE_BATCH_FLUSH_MS);
+  }
+
+  private async flushBuffers(): Promise<void> {
+    if (this.flushInProgress) {
+      this.flushRequested = true;
+      return;
+    }
+
+    this.flushInProgress = true;
+    this.flushRequested = false;
+
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+
+    try {
+      while (this.messageBuffer.length > 0) {
+        const batch = this.messageBuffer.splice(0, MESSAGE_BATCH_SIZE);
+        await this.flushBatch(batch);
+      }
+    } finally {
+      this.flushInProgress = false;
+      if (this.messageBuffer.length > 0 || this.flushRequested) {
+        this.flushRequested = false;
+        this.scheduleFlush();
+      }
+    }
+  }
+
+  private async flushBatch(
+    batch: Array<{
+      viewerId: string;
+      channelId: string;
+      messageText: string;
+      messageType: string;
+      timestamp: Date;
+      badges: string | null;
+      emotesUsed: string | null;
+      bitsAmount: number | null;
+      emoteCount: number;
+    }>
+  ): Promise<void> {
+    if (batch.length === 0) return;
+
+    const messageAggIncrements = new Map<
+      string,
+      {
+        viewerId: string;
+        channelId: string;
+        date: Date;
+        totalMessages: number;
+        chatMessages: number;
+        subscriptions: number;
+        cheers: number;
+        raids: number;
+        totalBits: number;
+      }
+    >();
+
+    const dailyStatIncrements = new Map<
+      string,
+      {
+        viewerId: string;
+        channelId: string;
+        date: Date;
+        messageCount: number;
+        emoteCount: number;
+      }
+    >();
+
+    const watchTimeTargets = new Map<string, { viewerId: string; channelId: string; date: Date }>();
+
+    for (const msg of batch) {
+      const date = new Date(msg.timestamp);
+      date.setHours(0, 0, 0, 0);
+      const key = `${msg.viewerId}:${msg.channelId}:${date.getTime()}`;
+
+      const agg = messageAggIncrements.get(key) || {
+        viewerId: msg.viewerId,
+        channelId: msg.channelId,
+        date,
+        totalMessages: 0,
+        chatMessages: 0,
+        subscriptions: 0,
+        cheers: 0,
+        raids: 0,
+        totalBits: 0,
+      };
+
+      agg.totalMessages += 1;
+      if (msg.messageType === "CHAT") agg.chatMessages += 1;
+      if (msg.messageType === "SUBSCRIPTION") agg.subscriptions += 1;
+      if (msg.messageType === "CHEER") agg.cheers += 1;
+      if (msg.messageType === "RAID") agg.raids += 1;
+      if (msg.bitsAmount) agg.totalBits += msg.bitsAmount;
+
+      messageAggIncrements.set(key, agg);
+
+      const daily = dailyStatIncrements.get(key) || {
+        viewerId: msg.viewerId,
+        channelId: msg.channelId,
+        date,
+        messageCount: 0,
+        emoteCount: 0,
+      };
+
+      daily.messageCount += 1;
+      daily.emoteCount += msg.emoteCount;
+      dailyStatIncrements.set(key, daily);
+
+      if (!watchTimeTargets.has(key)) {
+        watchTimeTargets.set(key, { viewerId: msg.viewerId, channelId: msg.channelId, date });
+      }
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        const messageRows = batch.map((msg) => ({
+          viewerId: msg.viewerId,
+          channelId: msg.channelId,
+          messageText: msg.messageText,
+          messageType: msg.messageType,
+          timestamp: msg.timestamp,
+          badges: msg.badges,
+          emotesUsed: msg.emotesUsed,
+          bitsAmount: msg.bitsAmount,
+        }));
+        await tx.viewerChannelMessage.createMany({ data: messageRows });
+
+        for (const agg of messageAggIncrements.values()) {
+          await tx.viewerChannelMessageDailyAgg.upsert({
+            where: {
+              viewerId_channelId_date: {
+                viewerId: agg.viewerId,
+                channelId: agg.channelId,
+                date: agg.date,
+              },
+            },
+            create: {
+              viewerId: agg.viewerId,
+              channelId: agg.channelId,
+              date: agg.date,
+              totalMessages: agg.totalMessages,
+              chatMessages: agg.chatMessages,
+              subscriptions: agg.subscriptions,
+              cheers: agg.cheers,
+              raids: agg.raids,
+              totalBits: agg.totalBits,
+            },
+            update: {
+              totalMessages: { increment: agg.totalMessages },
+              chatMessages: agg.chatMessages > 0 ? { increment: agg.chatMessages } : undefined,
+              subscriptions: agg.subscriptions > 0 ? { increment: agg.subscriptions } : undefined,
+              cheers: agg.cheers > 0 ? { increment: agg.cheers } : undefined,
+              raids: agg.raids > 0 ? { increment: agg.raids } : undefined,
+              totalBits: agg.totalBits > 0 ? { increment: agg.totalBits } : undefined,
+            },
+          });
+        }
+
+        for (const daily of dailyStatIncrements.values()) {
+          await tx.viewerChannelDailyStat.upsert({
+            where: {
+              viewerId_channelId_date: {
+                viewerId: daily.viewerId,
+                channelId: daily.channelId,
+                date: daily.date,
+              },
+            },
+            create: {
+              viewerId: daily.viewerId,
+              channelId: daily.channelId,
+              date: daily.date,
+              messageCount: daily.messageCount,
+              emoteCount: daily.emoteCount,
+              watchSeconds: 0,
+            },
+            update: {
+              messageCount: { increment: daily.messageCount },
+              emoteCount: daily.emoteCount > 0 ? { increment: daily.emoteCount } : undefined,
+            },
+          });
+        }
+      });
+
+      for (const target of watchTimeTargets.values()) {
+        updateViewerWatchTime(target.viewerId, target.channelId, target.date).catch((err) =>
+          logger.error("ViewerMessage", "Failed to update watch time", err)
+        );
+      }
+    } catch (error) {
+      logger.error("ViewerMessage", "Failed to flush message batch", error);
+      this.messageBuffer.unshift(...batch);
+      this.scheduleFlush();
     }
   }
 }

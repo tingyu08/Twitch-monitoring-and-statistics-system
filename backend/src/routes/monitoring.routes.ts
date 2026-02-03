@@ -101,7 +101,7 @@ router.get("/health", (_req, res) => {
  * POST /api/monitoring/reset
  * 重置效能統計（僅開發環境）
  */
-router.post("/reset", (req, res) => {
+router.post("/reset", (_req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(403).json({ error: "Not allowed in production" });
   }

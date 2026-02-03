@@ -83,7 +83,7 @@ export class StreamerSettingsController {
   }
 
   // 更新模板
-  async updateTemplate(req: AuthRequest, res: Response) {
+  async updateTemplate(_req: AuthRequest, res: Response) {
     return res.status(501).json({ error: "Not implemented" });
   }
 

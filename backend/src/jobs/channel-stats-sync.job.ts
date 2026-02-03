@@ -10,8 +10,12 @@ import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
 
-// 每小時同步一次 (作為 EventSub 的備援與數據補全)
-const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "0 * * * *";
+// P1 Fix: 每小時第 10 分鐘執行（錯開 syncUserFollowsJob 的整點執行）
+const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "10 * * * *";
+
+// P0 Fix: 加入批次處理配置
+const BATCH_SIZE = 20;
+const BATCH_DELAY_MS = 500; // 每批次間隔 500ms
 
 export interface ChannelStatsSyncResult {
   synced: number;
@@ -66,14 +70,40 @@ export class ChannelStatsSyncJob {
         return result;
       }
 
-      // Sync stats for each channel
-      for (const channel of channels) {
-        try {
-          await this.syncChannelStats(channel);
-          result.synced++;
-        } catch (error) {
-          logger.error("ChannelStatsSync", `Failed to sync channel ${channel.channelName}:`, error);
-          result.failed++;
+      // P0 Fix: 批次查詢所有活躍的 StreamSession，避免 N+1 查詢
+      const channelIds = channels.map((c) => c.id);
+      const activeSessions = await prisma.streamSession.findMany({
+        where: {
+          channelId: { in: channelIds },
+          endedAt: null,
+        },
+        orderBy: { startedAt: "desc" },
+        select: {
+          id: true,
+          channelId: true,
+          peakViewers: true,
+          avgViewers: true,
+        },
+      });
+      const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
+
+      // P0 Fix: 使用批次處理同步頻道統計
+      for (let i = 0; i < channels.length; i += BATCH_SIZE) {
+        const batch = channels.slice(i, i + BATCH_SIZE);
+        
+        for (const channel of batch) {
+          try {
+            await this.syncChannelStats(channel, activeSessionMap);
+            result.synced++;
+          } catch (error) {
+            logger.error("ChannelStatsSync", `Failed to sync channel ${channel.channelName}:`, error);
+            result.failed++;
+          }
+        }
+
+        // P0 Fix: 批次間延遲，避免壓垮資料庫和 API
+        if (i + BATCH_SIZE < channels.length) {
+          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
 
@@ -98,12 +128,21 @@ export class ChannelStatsSyncJob {
 
   /**
    * 同步單一頻道的統計
+   * P0 Fix: 加入 activeSessionMap 參數，避免 N+1 查詢
    */
-  private async syncChannelStats(channel: {
-    id: string;
-    channelName: string;
-    twitchChannelId: string;
-  }): Promise<void> {
+  private async syncChannelStats(
+    channel: {
+      id: string;
+      channelName: string;
+      twitchChannelId: string;
+    },
+    activeSessionMap: Map<string, {
+      id: string;
+      channelId: string;
+      peakViewers: number | null;
+      avgViewers: number | null;
+    }>
+  ): Promise<void> {
     // 使用 twitchChannelId 查詢（ID 永不改變，避免用戶改名後找不到）
     const channelInfo = await unifiedTwitchService.getChannelInfoById(channel.twitchChannelId);
 
@@ -123,13 +162,8 @@ export class ChannelStatsSyncJob {
 
     // If live, update active session
     if (channelInfo.isLive) {
-      const activeSession = await prisma.streamSession.findFirst({
-        where: {
-          channelId: channel.id,
-          endedAt: null,
-        },
-        orderBy: { startedAt: "desc" },
-      });
+      // P0 Fix: 使用預先查詢的 Map 取代迴圈內查詢
+      const activeSession = activeSessionMap.get(channel.id);
 
       if (activeSession && channelInfo.viewerCount !== undefined) {
         // Update peak viewers

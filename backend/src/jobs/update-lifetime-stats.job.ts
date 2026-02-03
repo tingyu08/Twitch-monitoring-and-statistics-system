@@ -1,10 +1,14 @@
 import cron from "node-cron";
+import pLimit from "p-limit";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { lifetimeStatsAggregator } from "../services/lifetime-stats-aggregator.service";
 
 // 批次處理大小
 const BATCH_SIZE = 50;
+
+// P0 Fix: 限制並行度，避免同時發送過多 DB 查詢
+const CONCURRENCY_LIMIT = 10;
 
 export const updateLifetimeStatsJob = () => {
   // 每天凌晨 2 點執行
@@ -58,6 +62,8 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     const affectedChannels = new Set<string>();
 
     // 批次並行處理 Stats（修復 N+1 問題）
+    // P0 Fix: 使用 p-limit 限制並行度
+    const limit = pLimit(CONCURRENCY_LIMIT);
     let processed = 0;
     const targetArray = Array.from(targets);
 
@@ -65,28 +71,43 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
       const batch = targetArray.slice(i, i + BATCH_SIZE);
 
       await Promise.all(
-        batch.map(async (target) => {
-          const [viewerId, channelId] = target.split("|");
-          await lifetimeStatsAggregator.aggregateStats(viewerId, channelId);
-          affectedChannels.add(channelId);
-        })
+        batch.map((target) =>
+          limit(async () => {
+            const [viewerId, channelId] = target.split("|");
+            await lifetimeStatsAggregator.aggregateStats(viewerId, channelId);
+            affectedChannels.add(channelId);
+          })
+        )
       );
 
       processed += batch.length;
       if (processed % 100 === 0 || processed === targetArray.length) {
         logger.info("CronJob", `已處理 ${processed}/${targets.size} 組配對...`);
       }
+
+      // P0 Fix: 批次間延遲，讓系統喘息
+      if (i + BATCH_SIZE < targetArray.length) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
     }
 
     // 批次更新受影響頻道的 Ranking
+    // P0 Fix: 使用 p-limit 限制並行度
     logger.info("CronJob", `正在更新 ${affectedChannels.size} 個頻道的排名...`);
     const channelArray = Array.from(affectedChannels);
 
     for (let i = 0; i < channelArray.length; i += BATCH_SIZE) {
       const batch = channelArray.slice(i, i + BATCH_SIZE);
       await Promise.all(
-        batch.map((channelId) => lifetimeStatsAggregator.updatePercentileRankings(channelId))
+        batch.map((channelId) =>
+          limit(() => lifetimeStatsAggregator.updatePercentileRankings(channelId))
+        )
       );
+
+      // P0 Fix: 批次間延遲
+      if (i + BATCH_SIZE < channelArray.length) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
     }
 
     const duration = Date.now() - startTime;

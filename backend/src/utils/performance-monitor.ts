@@ -10,6 +10,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import { logger } from "./logger";
+import { MEMORY_THRESHOLDS } from "./memory-thresholds";
 
 // 效能指標類型
 interface PerformanceMetric {
@@ -55,7 +56,7 @@ const DEFAULT_CONFIG = {
   slowThreshold: 1000, // 慢速請求閾值 (ms)
   maxMetricsHistory: 100, // Render Free Tier: 減少為 100 以節省記憶體
   enableLogging: false, // 關閉日誌輸出
-  memoryWarningThresholdMB: 350, // 0.5GB 環境下的警告閾值
+  memoryWarningThresholdMB: MEMORY_THRESHOLDS.WARNING_MB, // 使用統一的記憶體閾值
   memoryCheckIntervalMs: 30000, // 每 30 秒檢查記憶體
 };
 

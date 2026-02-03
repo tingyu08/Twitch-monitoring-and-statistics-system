@@ -8,6 +8,8 @@
  * - 自動觸發 GC（如果可用）
  */
 
+import { MEMORY_THRESHOLDS } from "./memory-thresholds";
+
 
 interface MemoryStats {
   heapUsed: number;
@@ -92,7 +94,7 @@ export class MemoryMonitor {
   /**
    * 處理記憶體警告
    */
-  private handleWarning(stats: MemoryStats): void {
+  private handleWarning(_stats: MemoryStats): void {
     const now = Date.now();
 
     // 冷卻時間內不重複警告
@@ -109,7 +111,7 @@ export class MemoryMonitor {
   /**
    * 處理記憶體危險
    */
-  private handleCritical(stats: MemoryStats): void {
+  private handleCritical(_stats: MemoryStats): void {
     // 強制觸發 GC（多次）
     this.tryGC();
 
@@ -166,10 +168,10 @@ export class MemoryMonitor {
 }
 
 // 導出單例（Render Free Tier: 512MB 限制）
-// 降低閾值以更早觸發 GC
+// 使用統一的記憶體閾值常數
 export const memoryMonitor = new MemoryMonitor(
-  parseInt(process.env.MEMORY_WARNING_MB || "250"), // 從 300 降至 250 (約 50% RAM)
-  parseInt(process.env.MEMORY_CRITICAL_MB || "350") // 從 380 降至 350 (約 70% RAM)
+  MEMORY_THRESHOLDS.WARNING_MB,
+  MEMORY_THRESHOLDS.CRITICAL_MB
 );
 
 // 自動啟動監控（生產環境）

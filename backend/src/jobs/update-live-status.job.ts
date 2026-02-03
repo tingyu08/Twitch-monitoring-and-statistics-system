@@ -9,6 +9,9 @@ import cron from "node-cron";
 // 防止重複執行的鎖
 let isRunning = false;
 
+// P0 Optimization: 只在必要時更新 lastLiveCheckAt，減少 80% 資料庫寫入
+const LAST_CHECK_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
+
 /**
  * 更新所有頻道的即時直播狀態
  * 頻率：每 1 分鐘由 cron 觸發（優化後執行時間大幅縮短）
@@ -41,6 +44,7 @@ export async function updateLiveStatusFn() {
           twitchChannelId: true,
           channelName: true,
           isLive: true, // 獲取當前狀態以便比較變更
+          lastLiveCheckAt: true, // P0: 用於判斷是否需要更新檢查時間
         },
       })
     );
@@ -153,20 +157,31 @@ export async function updateLiveStatusFn() {
       return;
     }
 
-    // 如果沒有變化，跳過更新（但仍需更新 lastLiveCheckAt）
-    if (changedUpdates.length === 0) {
-      // 批量更新 lastLiveCheckAt（使用單一 updateMany 而非多個 update）
+    // P0 Optimization: 只更新超過 5 分鐘未檢查的頻道，減少 80% 寫入
+    const channelsNeedingCheckUpdate = channels.filter(
+      (c) =>
+        !c.lastLiveCheckAt ||
+        now.getTime() - c.lastLiveCheckAt.getTime() > LAST_CHECK_UPDATE_INTERVAL_MS
+    );
+
+    // 如果沒有狀態變化，只更新需要更新檢查時間的頻道
+    if (changedUpdates.length === 0 && channelsNeedingCheckUpdate.length > 0) {
       await retryDatabaseOperation(() =>
         prisma.channel.updateMany({
           where: {
-            twitchChannelId: { in: updates.map((u) => u.twitchId) },
+            id: { in: channelsNeedingCheckUpdate.map((c) => c.id) },
           },
           data: {
             lastLiveCheckAt: now,
           },
         })
       );
-    } else {
+
+      logger.debug(
+        "Jobs",
+        `✅ 已更新 ${channelsNeedingCheckUpdate.length}/${channels.length} 個頻道的檢查時間`
+      );
+    } else if (changedUpdates.length > 0) {
       // 有變化的頻道：完整更新
       for (let i = 0; i < changedUpdates.length; i += TX_BATCH_SIZE) {
         // 記憶體保護：如果記憶體過高，中止剩餘更新
@@ -216,21 +231,27 @@ export async function updateLiveStatusFn() {
         }
       }
 
-      // 未變化的頻道：只更新 lastLiveCheckAt
-      const unchangedTwitchIds = updates
-        .filter((u) => !changedTwitchIds.has(u.twitchId))
-        .map((u) => u.twitchId);
+      // P0 Optimization: 只更新超過 5 分鐘未檢查的未變化頻道
+      const unchangedChannelsNeedingUpdate = channelsNeedingCheckUpdate.filter((c) => {
+        const update = updates.find((u) => u.twitchId === c.twitchChannelId);
+        return update && !changedTwitchIds.has(update.twitchId);
+      });
 
-      if (unchangedTwitchIds.length > 0) {
+      if (unchangedChannelsNeedingUpdate.length > 0) {
         await retryDatabaseOperation(() =>
           prisma.channel.updateMany({
             where: {
-              twitchChannelId: { in: unchangedTwitchIds },
+              id: { in: unchangedChannelsNeedingUpdate.map((c) => c.id) },
             },
             data: {
               lastLiveCheckAt: now,
             },
           })
+        );
+
+        logger.debug(
+          "Jobs",
+          `✅ 已更新 ${unchangedChannelsNeedingUpdate.length} 個未變化頻道的檢查時間`
         );
       }
     }

@@ -116,11 +116,12 @@ export interface ChannelCheerEvent {
  */
 export class EventSubService {
   private readonly callbackUrl: string;
-  private readonly secret: string;
+  // P2 Note: secret 保留供未來 webhook 驗證使用
+  // private readonly secret: string;
 
   constructor() {
     this.callbackUrl = process.env.EVENTSUB_CALLBACK_URL || "";
-    this.secret = process.env.EVENTSUB_SECRET || "";
+    // this.secret = process.env.EVENTSUB_SECRET || "";
 
     if (!this.callbackUrl) {
       logger.warn("EventSub", "EVENTSUB_CALLBACK_URL 未設定，EventSub 功能將無法使用");

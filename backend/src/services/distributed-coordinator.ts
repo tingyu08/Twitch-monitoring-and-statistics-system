@@ -164,7 +164,14 @@ export class DistributedListenerCoordinator {
    */
   public async getAllInstances(): Promise<InstanceInfo[]> {
     try {
-      const instances = await prisma.listenerInstance.findMany();
+      // P1 Fix: 只查詢需要的欄位
+      const instances = await prisma.listenerInstance.findMany({
+        select: {
+          instanceId: true,
+          channelCount: true,
+          lastHeartbeat: true,
+        },
+      });
       const now = new Date();
 
       return instances.map((inst) => ({
@@ -183,7 +190,15 @@ export class DistributedListenerCoordinator {
    */
   public async getChannelLocks(): Promise<ChannelLock[]> {
     try {
-      const locks = await prisma.channelListenerLock.findMany();
+      // P1 Fix: 只查詢需要的欄位
+      const locks = await prisma.channelListenerLock.findMany({
+        select: {
+          channelId: true,
+          instanceId: true,
+          lastHeartbeat: true,
+          acquiredAt: true,
+        },
+      });
       return locks.map((lock) => ({
         channelId: lock.channelId,
         instanceId: lock.instanceId,

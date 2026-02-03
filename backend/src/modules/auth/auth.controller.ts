@@ -66,7 +66,7 @@ export class AuthController {
   }
 
   // 登入：產生 State 並導向 Twitch
-  public login = async (req: Request, res: Response) => {
+  public login = async (_req: Request, res: Response) => {
     try {
       // 1. 產生隨機 State
       const state = crypto.randomBytes(16).toString("hex");

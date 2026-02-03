@@ -14,6 +14,7 @@ import { syncVideosJob } from "./sync-videos.job";
 import { syncSubscriptionsJob } from "./sync-subscriptions.job";
 import { updateLiveStatusJob } from "./update-live-status.job";
 import { logger } from "../utils/logger";
+import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
 
 /**
  * 啟動所有定時任務（Render Free Tier 優化版）
@@ -52,8 +53,9 @@ export function startAllJobs(): void {
       updateLifetimeStatsJob();
 
       // Story 3.3: 頻道統計同步任務 (耗資源)
-      // 再次檢查記憶體
-      if (!global.gc || process.memoryUsage().heapUsed < 350 * 1024 * 1024) {
+      // P0 Fix: 使用統一的記憶體閾值常數
+      const heapUsedMB = process.memoryUsage().heapUsed / 1024 / 1024;
+      if (!global.gc || heapUsedMB < MEMORY_THRESHOLDS.CRITICAL_MB) {
         channelStatsSyncJob.start();
       } else {
         logger.warn("Jobs", "記憶體偏高，暫緩啟動 Channel Stats Sync Job");
