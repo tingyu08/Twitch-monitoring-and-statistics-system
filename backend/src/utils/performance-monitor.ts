@@ -113,17 +113,18 @@ class PerformanceMonitor {
       this.metrics.shift();
     }
 
-    // 日誌輸出
-    if (this.config.enableLogging) {
-      const isSlow = metric.duration > this.config.slowThreshold;
-      const logLevel = isSlow ? "warn" : "debug";
-      const slowTag = isSlow ? " [SLOW]" : "";
-
-      logger[logLevel](
-        "PERFORMANCE",
-        `${metric.method} ${metric.path} - ${metric.duration}ms - ${metric.statusCode}${slowTag}`
-      );
+    if (!this.config.enableLogging) {
+      return;
     }
+
+    const isSlow = metric.duration > this.config.slowThreshold;
+    const logLevel = isSlow ? "warn" : "debug";
+    const slowTag = isSlow ? " [SLOW]" : "";
+
+    logger[logLevel](
+      "PERFORMANCE",
+      `${metric.method} ${metric.path} - ${metric.duration}ms - ${metric.statusCode}${slowTag}`
+    );
   }
 
   /**

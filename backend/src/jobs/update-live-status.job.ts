@@ -72,8 +72,8 @@ export async function updateLiveStatusFn() {
     const BATCH_SIZE = 100;
     const now = new Date();
 
-    // 用來儲存需要更新的數據
-    const updates: {
+    // 只儲存狀態有變化的頻道，避免累積全量更新資料
+    const changedUpdates: {
       channelId: string;
       channelName: string;
       twitchId: string;
@@ -83,6 +83,9 @@ export async function updateLiveStatusFn() {
       gameName: string;
       startedAt: Date | null;
     }[] = [];
+    const changedTwitchIds = new Set<string>();
+    let liveCount = 0;
+    let offlineCount = 0;
 
     for (let i = 0; i < channels.length; i += BATCH_SIZE) {
       const batch = channels.slice(i, i + BATCH_SIZE);
@@ -102,29 +105,26 @@ export async function updateLiveStatusFn() {
         for (const channel of batch) {
           const stream = streamMap.get(channel.twitchChannelId);
 
-          if (stream) {
-            updates.push({
-              channelId: channel.id,
-              channelName: channel.channelName,
-              twitchId: channel.twitchChannelId,
-              isLive: true,
-              viewerCount: stream.viewerCount, // 注意：TwurpleHelixService 返回的結構屬性名可能不同
-              title: stream.title,
-              gameName: stream.gameName,
-              startedAt: stream.startedAt,
-            });
+          const isLive = !!stream;
+          if (isLive) {
+            liveCount++;
           } else {
-            // 未開台
-            updates.push({
+            offlineCount++;
+          }
+
+          const wasLive = previousStatusMap.get(channel.twitchChannelId);
+          if (typeof wasLive === "undefined" || wasLive !== isLive) {
+            changedUpdates.push({
               channelId: channel.id,
               channelName: channel.channelName,
               twitchId: channel.twitchChannelId,
-              isLive: false,
-              viewerCount: 0,
-              title: "",
-              gameName: "",
-              startedAt: null,
+              isLive,
+              viewerCount: isLive ? stream.viewerCount : 0,
+              title: isLive ? stream.title : "",
+              gameName: isLive ? stream.gameName : "",
+              startedAt: isLive ? stream.startedAt : null,
             });
+            changedTwitchIds.add(channel.twitchChannelId);
           }
         }
       } catch (err) {
@@ -137,14 +137,7 @@ export async function updateLiveStatusFn() {
       }
     }
 
-    // 4. 過濾：只更新狀態有變化的頻道（大幅減少 DB 寫入）
-    const changedUpdates = updates.filter((update) => {
-      const wasLive = previousStatusMap.get(update.twitchId);
-      return typeof wasLive === "undefined" || wasLive !== update.isLive;
-    });
-    const changedTwitchIds = new Set(changedUpdates.map((update) => update.twitchId));
-
-    // 5. 批量更新 DB（只更新有變化的頻道）
+    // 4. 批量更新 DB（只更新有變化的頻道）
     // 優化：增加批次大小、減少延遲，因為只處理變化的頻道
     const TX_BATCH_SIZE = 15; // 從 5 增加到 15（因為只處理變化的頻道，數量少很多）
     let updateSuccessCount = 0;
@@ -232,10 +225,9 @@ export async function updateLiveStatusFn() {
       }
 
       // P0 Optimization: 只更新超過 5 分鐘未檢查的未變化頻道
-      const unchangedChannelsNeedingUpdate = channelsNeedingCheckUpdate.filter((c) => {
-        const update = updates.find((u) => u.twitchId === c.twitchChannelId);
-        return update && !changedTwitchIds.has(update.twitchId);
-      });
+      const unchangedChannelsNeedingUpdate = channelsNeedingCheckUpdate.filter(
+        (c) => !changedTwitchIds.has(c.twitchChannelId)
+      );
 
       if (unchangedChannelsNeedingUpdate.length > 0) {
         await retryDatabaseOperation(() =>
@@ -268,13 +260,26 @@ export async function updateLiveStatusFn() {
     // P1 Optimization: Removed channel.update broadcast - now handled by React Query refetchInterval
     let onlineChanges = 0;
     let offlineChanges = 0;
+    const onlineEvents: Array<{
+      channelId: string;
+      channelName: string;
+      twitchChannelId: string;
+      title: string;
+      gameName: string;
+      viewerCount: number;
+      startedAt: Date | null;
+    }> = [];
+    const offlineEvents: Array<{
+      channelId: string;
+      channelName: string;
+      twitchChannelId: string;
+    }> = [];
 
-    for (const update of updates) {
+    for (const update of changedUpdates) {
       const previousStatus = previousStatusMap.get(update.twitchId);
 
-      // 狀態從 offline -> online
       if (!previousStatus && update.isLive) {
-        webSocketGateway.broadcastStreamStatus("stream.online", {
+        onlineEvents.push({
           channelId: update.channelId,
           channelName: update.channelName,
           twitchChannelId: update.twitchId,
@@ -284,35 +289,38 @@ export async function updateLiveStatusFn() {
           startedAt: update.startedAt,
         });
         onlineChanges++;
-      }
-      // 狀態從 online -> offline
-      else if (previousStatus && !update.isLive) {
-        webSocketGateway.broadcastStreamStatus("stream.offline", {
+      } else if (previousStatus && !update.isLive) {
+        offlineEvents.push({
           channelId: update.channelId,
           channelName: update.channelName,
           twitchChannelId: update.twitchId,
         });
         offlineChanges++;
       }
-      // P1 Optimization: Removed channel.update for continuous live streams
-      // Viewer counts are now fetched via React Query refetchInterval (every 60s)
     }
 
-    // 統計開台與未開台頻道數量
-    const liveCount = updates.filter((u) => u.isLive).length;
-    const offlineCount = updates.filter((u) => !u.isLive).length;
+    if (onlineEvents.length > 0 || offlineEvents.length > 0) {
+      // 簡單防抖：批次收集後延遲廣播，避免密集推送
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      for (const payload of onlineEvents) {
+        webSocketGateway.broadcastStreamStatus("stream.online", payload);
+      }
+      for (const payload of offlineEvents) {
+        webSocketGateway.broadcastStreamStatus("stream.offline", payload);
+      }
+    }
 
     // 只在有狀態變更時輸出 info
     const duration = Date.now() - startTime;
     if (onlineChanges > 0 || offlineChanges > 0) {
       logger.info(
         "Jobs",
-        `直播狀態更新: ${onlineChanges} 個上線, ${offlineChanges} 個下線 (${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length}/${updates.length}) [${duration}ms]`
+        `直播狀態更新: ${onlineChanges} 個上線, ${offlineChanges} 個下線 (${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length}/${channels.length}) [${duration}ms]`
       );
     } else {
       logger.debug(
         "Jobs",
-        `✅ 直播狀態更新完成: 已檢查 ${updates.length} 個頻道, ${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length} [${duration}ms]`
+        `✅ 直播狀態更新完成: 已檢查 ${channels.length} 個頻道, ${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length} [${duration}ms]`
       );
     }
   } catch (error) {

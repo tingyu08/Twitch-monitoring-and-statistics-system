@@ -106,8 +106,8 @@ export class WatchTimeIncrementJob {
           return batch.length;
         },
         {
-          batchSize: 50,
-          delayBetweenBatchesMs: 50,
+          batchSize: 100,
+          delayBetweenBatchesMs: 100,
         }
       );
       const updatedCount = results.reduce((sum, count) => sum + count, 0);

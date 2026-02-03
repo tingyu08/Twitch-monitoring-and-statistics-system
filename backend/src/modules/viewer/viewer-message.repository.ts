@@ -143,8 +143,8 @@ export class ViewerMessageRepository {
 
     const viewerId = (result as { id: string }).id;
 
-    // Store in cache (5 min TTL)
-    cacheManager.set(cacheKey, viewerId, CacheTTL.MEDIUM);
+    // Store in cache (longer TTL for mostly static data)
+    cacheManager.set(cacheKey, viewerId, CacheTTL.LONG);
 
     return viewerId;
   }
@@ -180,8 +180,8 @@ export class ViewerMessageRepository {
 
     const channelId = (result as { id: string }).id;
 
-    // Store in cache (5 min TTL)
-    cacheManager.set(cacheKey, channelId, CacheTTL.MEDIUM);
+    // Store in cache (longer TTL for mostly static data)
+    cacheManager.set(cacheKey, channelId, CacheTTL.LONG);
 
     return channelId;
   }

@@ -47,8 +47,8 @@ export class CacheManager {
     this.maxMemoryBytes = maxMemoryMB * 1024 * 1024;
     this.currentMemoryUsage = 0;
 
-    // Render Free Tier 優化：更頻繁清理過期項目（每 30 秒）
-    const cleanupInterval = setInterval(() => this.cleanup(), 30 * 1000);
+    // Render Free Tier 優化：平衡 CPU 與記憶體（每 5 分鐘）
+    const cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
 
     // Don't prevent Node.js from exiting
     if (cleanupInterval.unref) {

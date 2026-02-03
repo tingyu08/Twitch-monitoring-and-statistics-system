@@ -27,6 +27,39 @@ const STREAMER_DELAY_MS = 300;   // 每個實況主之間休息 300ms
 // P0 Fix: 使用統一的記憶體閾值常數
 const MAX_MEMORY_MB = MEMORY_THRESHOLDS.MAX_MB;
 
+async function shouldSkipBatch(maxMemoryMB: number, context: string): Promise<boolean> {
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+
+  if (heapUsedMB <= maxMemoryMB) {
+    return false;
+  }
+
+  logger.warn(
+    "Jobs",
+    `⚠️ ${context} 記憶體使用超過警戒線 (${heapUsedMB}MB > ${maxMemoryMB}MB)，嘗試釋放後再繼續`
+  );
+
+  if (global.gc) {
+    global.gc();
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+
+  const retryUsage = process.memoryUsage();
+  const retryHeapMB = Math.round(retryUsage.heapUsed / 1024 / 1024);
+
+  if (retryHeapMB > maxMemoryMB) {
+    logger.warn(
+      "Jobs",
+      `⚠️ ${context} 記憶體仍偏高 (${retryHeapMB}MB)，跳過此批次`
+    );
+    return true;
+  }
+
+  return false;
+}
+
 export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
   logger.info("Jobs", "開始執行 Sync Videos Job (記憶體優化版)...");
 
@@ -57,17 +90,9 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
 
       logger.info("Jobs", `處理第 ${batchNum}/${totalBatches} 批 (${batch.length} 個實況主)...`);
 
-      // 記憶體檢查
-      const memUsage = process.memoryUsage();
-      const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-
-      if (heapUsedMB > MAX_MEMORY_MB) {
-        logger.warn(
-          "Jobs",
-          `⚠️ 記憶體使用超過警戒線 (${heapUsedMB}MB > ${MAX_MEMORY_MB}MB)，提前結束同步`
-        );
-        totalSkipped = streamers.length - totalProcessed;
-        break;
+      if (await shouldSkipBatch(MAX_MEMORY_MB, "實況主同步")) {
+        totalSkipped += batch.length;
+        continue;
       }
 
       // 處理此批次
@@ -134,16 +159,8 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
 
       logger.info("Jobs", `[觀眾內容] 處理第 ${batchNum}/${totalBatches} 批 (${batch.length} 個 Channel)...`);
 
-      // 記憶體檢查
-      const memUsage = process.memoryUsage();
-      const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-
-      if (heapUsedMB > MAX_MEMORY_MB) {
-        logger.warn(
-          "Jobs",
-          `⚠️ 記憶體使用超過警戒線 (${heapUsedMB}MB > ${MAX_MEMORY_MB}MB)，提前結束觀眾內容同步`
-        );
-        break;
+      if (await shouldSkipBatch(MAX_MEMORY_MB, "觀眾內容同步")) {
+        continue;
       }
 
       // 處理此批次

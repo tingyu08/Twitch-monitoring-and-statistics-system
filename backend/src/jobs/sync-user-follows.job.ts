@@ -7,12 +7,13 @@
 
 import cron from "node-cron";
 import pLimit from "p-limit";
+import { randomUUID } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { twurpleHelixService } from "../services/twitch-helix.service";
 import { logger } from "../utils/logger";
 import { decryptToken } from "../utils/crypto.utils";
 import { cacheManager } from "../utils/cache-manager";
-import type { Prisma } from "@prisma/client";
 
 // 類型定義
 type TransactionClient = Prisma.TransactionClient;
@@ -497,39 +498,37 @@ export class SyncUserFollowsJob {
       }
     }
 
-    // 使用 upsert 批次處理，避免 SQLite 的 UNIQUE 約束錯誤
-    // (SQLite 不支援 Prisma 的 skipDuplicates 選項)
-    // 記憶體優化：每 50 筆為一批，讓 GC 有機會回收
-    const UPSERT_BATCH_SIZE = 50;
+    // 使用原生 SQL 批次 upsert，降低 DB 寫入成本
+    // 記憶體優化：每 100 筆為一批，讓 GC 有機會回收
+    const UPSERT_BATCH_SIZE = 100;
     for (let i = 0; i < followsToCreate.length; i += UPSERT_BATCH_SIZE) {
       const batch = followsToCreate.slice(i, i + UPSERT_BATCH_SIZE);
 
-      // 使用 Promise.allSettled 避免單筆失敗影響整批
-      const results = await Promise.allSettled(
-        batch.map((followData) =>
-          prisma.userFollow.upsert({
-            where: {
-              userId_channelId: {
-                userId: followData.userId,
-                channelId: followData.channelId,
-              },
-            },
-            create: followData,
-            update: { followedAt: followData.followedAt },
-          })
-        )
-      );
+      try {
+        const rows = batch.map((followData) =>
+          Prisma.sql`(${randomUUID()}, ${followData.userId}, ${followData.userType}, ${
+            followData.channelId
+          }, ${followData.followedAt})`
+        );
 
-      // 統計成功數量
-      result.followsCreated += results.filter((r) => r.status === "fulfilled").length;
+        await prisma.$executeRaw(
+          Prisma.sql`
+            INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
+            VALUES ${Prisma.join(rows)}
+            ON CONFLICT(userId, channelId) DO UPDATE SET followedAt=excluded.followedAt
+          `
+        );
 
-      // 記錄失敗的項目（但不中斷流程）
-      const failures = results.filter((r) => r.status === "rejected");
-      if (failures.length > 0) {
-        logger.warn("Jobs", `批次 upsert 有 ${failures.length} 筆失敗`);
+        // followsToCreate 已排除 existingFollowMap，因此可視為新增
+        result.followsCreated += batch.length;
+      } catch (error) {
+        logger.warn(
+          "Jobs",
+          `批次 upsert 失敗 (${i}/${followsToCreate.length}):`,
+          error instanceof Error ? error.message : String(error)
+        );
       }
 
-      // 讓系統喘息一下
       if (i + UPSERT_BATCH_SIZE < followsToCreate.length) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }

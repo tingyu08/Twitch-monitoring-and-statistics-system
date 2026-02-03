@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import * as path from "path";
+import { setupSlowQueryLogger } from "./slow-query-logger";
 
 // 使用單例模式確保只有一個 Prisma Client 實例
 declare global {
@@ -62,6 +63,8 @@ const prismaOptions = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const prisma = global.prisma || new PrismaClient(prismaOptions as any);
+
+setupSlowQueryLogger(prisma);
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;
