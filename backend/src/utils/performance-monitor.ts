@@ -241,21 +241,10 @@ class PerformanceMonitor {
       rssMB > this.config.memoryWarningThresholdMB &&
       Date.now() - this.lastMemoryWarning > this.MEMORY_WARNING_COOLDOWN
     ) {
-      logger.warn(
-        "PERFORMANCE",
-        `⚠️ High memory usage: ${rssMB.toFixed(0)}MB / 512MB (${((rssMB / 512) * 100).toFixed(1)}%)`
-      );
       this.lastMemoryWarning = Date.now();
 
-      // 建議觸發 GC（如果可用）
       if (global.gc) {
-        logger.info("PERFORMANCE", "🧹 Triggering manual garbage collection");
         global.gc();
-      } else {
-        logger.info(
-          "PERFORMANCE",
-          "💡 Tip: Run with --expose-gc to enable manual GC"
-        );
       }
     }
   }

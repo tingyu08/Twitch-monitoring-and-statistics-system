@@ -75,7 +75,6 @@ export class StreamStatusJob {
 
     // 記憶體檢查：如果記憶體不足，跳過此次執行
     if (memoryMonitor.isOverLimit()) {
-      logger.warn("JOB", "記憶體不足，跳過 Stream Status Job");
       return {
         checked: 0,
         online: 0,
@@ -229,10 +228,9 @@ export class StreamStatusJob {
     activeSessionMap.clear();
 
     // 7. 執行後觸發 GC（如果記憶體使用較高）
-    if (memoryMonitor.isNearLimit() && global.gc) {
-      global.gc();
-      logger.debug("JOB", "Job 執行後觸發 GC");
-    }
+      if (memoryMonitor.isNearLimit() && global.gc) {
+        global.gc();
+      }
   }
 
   /**

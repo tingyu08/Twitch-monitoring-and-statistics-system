@@ -172,7 +172,6 @@ export async function updateLiveStatusFn() {
         // 記憶體保護：如果記憶體過高，中止剩餘更新
         const { memoryMonitor } = await import("../utils/memory-monitor");
         if (memoryMonitor.isOverLimit()) {
-          logger.warn("Jobs", "記憶體不足，中止剩餘的狀態更新");
           break;
         }
 

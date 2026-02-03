@@ -101,11 +101,6 @@ process.on("unhandledRejection", (reason) => {
 httpServer.listen(PORT, '0.0.0.0', async () => {
   console.log(`伺服器運行於 http://0.0.0.0:${PORT}`);
   console.log(`🚀 環境: ${process.env.NODE_ENV || "development"}`);
-  console.log(`⚡ 記憶體優化: ${process.env.NODE_ENV === "production" ? "啟用" : "關閉"}`);
-
-  // 優化：記錄啟動時記憶體使用
-  const initialMemory = process.memoryUsage();
-  console.log(`📊 初始記憶體: ${(initialMemory.heapUsed / 1024 / 1024).toFixed(2)}MB`);
 
   // 啟動記憶體監控（生產環境自動啟動，開發環境手動啟動）
   if (process.env.NODE_ENV !== "production") {
@@ -132,8 +127,6 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
           if (!memoryMonitor.isOverLimit()) {
             startAllJobs();
             logger.info("Server", "定時任務已啟動（延遲啟動）");
-          } else {
-            logger.warn("Server", "記憶體不足，跳過定時任務啟動");
           }
         }, 60000); // 從 30 秒增加到 60 秒
       } else {
@@ -162,12 +155,6 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
           await chatListenerManager.start();
           logger.info("Server", "Twitch 服務初始化完成");
 
-          // 記錄初始化後的記憶體使用
-          const afterInitMemory = process.memoryUsage();
-          logger.info(
-            "Server",
-            `📊 初始化後記憶體: ${(afterInitMemory.heapUsed / 1024 / 1024).toFixed(2)}MB`
-          );
         } catch (error) {
           logger.error("Server", "Twitch 服務初始化失敗", error);
         }

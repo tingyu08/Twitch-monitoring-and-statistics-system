@@ -8,7 +8,6 @@
  * - 自動觸發 GC（如果可用）
  */
 
-import { logger } from "./logger";
 
 interface MemoryStats {
   heapUsed: number;
@@ -34,14 +33,8 @@ export class MemoryMonitor {
    */
   start(intervalMs: number = 30000): void {
     if (this.monitorInterval) {
-      logger.warn("MemoryMonitor", "Monitor already started");
       return;
     }
-
-    logger.info(
-      "MemoryMonitor",
-      `啟動記憶體監控 (警戒: ${this.warningThresholdMB}MB, 危險: ${this.criticalThresholdMB}MB)`
-    );
 
     this.monitorInterval = setInterval(() => {
       this.check();
@@ -60,7 +53,6 @@ export class MemoryMonitor {
     if (this.monitorInterval) {
       clearInterval(this.monitorInterval);
       this.monitorInterval = null;
-      logger.info("MemoryMonitor", "記憶體監控已停止");
     }
   }
 
@@ -108,11 +100,6 @@ export class MemoryMonitor {
       return;
     }
 
-    logger.warn(
-      "MemoryMonitor",
-      `⚠️ 記憶體使用接近警戒線: ${stats.heapUsed}MB / ${this.warningThresholdMB}MB`
-    );
-
     this.lastWarningTime = now;
 
     // 嘗試觸發 GC
@@ -123,12 +110,6 @@ export class MemoryMonitor {
    * 處理記憶體危險
    */
   private handleCritical(stats: MemoryStats): void {
-    const percentage = ((stats.heapUsed / 512) * 100).toFixed(1);
-    logger.error(
-      "MemoryMonitor",
-      `🚨 記憶體使用超過危險線: ${stats.heapUsed}MB / 512MB (${percentage}%)`
-    );
-
     // 強制觸發 GC（多次）
     this.tryGC();
 
@@ -145,10 +126,8 @@ export class MemoryMonitor {
       const { cacheManager } = await import("./cache-manager");
       if (cacheManager && typeof cacheManager.clear === "function") {
         cacheManager.clear();
-        logger.info("MemoryMonitor", "已清空所有快取");
       }
     } catch (error) {
-      logger.error("MemoryMonitor", "清空快取失敗", error);
     }
   }
 
@@ -159,18 +138,13 @@ export class MemoryMonitor {
     if (global.gc) {
       try {
         global.gc();
-        logger.debug("MemoryMonitor", "已觸發 GC");
 
         // GC 後再次檢查
         setTimeout(() => {
-          const afterGC = this.check();
-          logger.debug("MemoryMonitor", `GC 後記憶體: ${afterGC.heapUsed}MB`);
+          this.check();
         }, 1000);
       } catch (error) {
-        logger.error("MemoryMonitor", "GC 觸發失敗", error);
       }
-    } else {
-      logger.warn("MemoryMonitor", "GC 不可用。請使用 --expose-gc 啟動 Node.js");
     }
   }
 
