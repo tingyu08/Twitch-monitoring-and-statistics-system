@@ -17,19 +17,19 @@ describe('DisplayPreferences', () => {
 
     render(<DisplayPreferences preferences={defaultPrefs} onToggle={onToggle} />);
 
-    const headerButton = screen.getByRole('button', { name: /顯示設定/i });
+    const headerButton = screen.getByRole('button', { name: /displaySettings/i });
     await user.click(headerButton);
 
-    const summaryToggle = screen.getByLabelText('開台統計總覽');
+    const summaryToggle = screen.getByLabelText('summaryCards');
     await user.click(summaryToggle);
 
     expect(onToggle).toHaveBeenCalledWith('showSummaryCards');
-    expect(screen.getByText(/4\/4 區塊/)).toBeInTheDocument();
+    expect(screen.getByText('count')).toBeInTheDocument();
   });
 
   it('should show compact trigger with current visible count', () => {
     render(<DisplayPreferences preferences={defaultPrefs} compact />);
-    expect(screen.getByText(/4\/4/)).toBeInTheDocument();
+    expect(screen.getByText(/\(4\/4\)/)).toBeInTheDocument();
   });
 
   it('should call quick action buttons for missing items', async () => {
@@ -44,10 +44,10 @@ describe('DisplayPreferences', () => {
 
     render(<DisplayPreferences preferences={partialPrefs} onToggle={onToggle} />);
 
-    const headerButton = screen.getByRole('button', { name: /顯示設定/i });
+    const headerButton = screen.getByRole('button', { name: /displaySettings/i });
     await user.click(headerButton);
 
-    const showAllBtn = screen.getByRole('button', { name: /全部顯示/ });
+    const showAllBtn = screen.getByRole('button', { name: /showAll/ });
     await user.click(showAllBtn);
 
     expect(onToggle).toHaveBeenCalledWith('showSummaryCards');

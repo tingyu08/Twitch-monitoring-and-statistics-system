@@ -53,7 +53,7 @@ describe("ViewerSettingsPage (Privacy)", () => {
 
     // Default mocks for httpClient
     (httpClient as jest.Mock).mockImplementation((url) => {
-      if (url === "/api/viewer/privacy/consent") {
+      if (url === "/api/viewer/pref/status") {
         return Promise.resolve({
           success: true,
           settings: {
@@ -75,20 +75,20 @@ describe("ViewerSettingsPage (Privacy)", () => {
   it("should render privacy settings", async () => {
     render(<ViewerSettingsPage />);
 
-    expect(screen.getByText("載入中...")).toBeInTheDocument();
+    expect(screen.getByText("common.loading")).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.queryByText("載入中...")).not.toBeInTheDocument();
+      expect(screen.queryByText("common.loading")).not.toBeInTheDocument();
     });
 
-    expect(screen.getByText("隱私設定 (GDPR)")).toBeInTheDocument();
+    expect(screen.getByText("settings.privacy.title")).toBeInTheDocument();
   });
 
   it("should toggle a privacy setting", async () => {
     render(<ViewerSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.queryByText("載入中...")).not.toBeInTheDocument();
+      expect(screen.queryByText("common.loading")).not.toBeInTheDocument();
     });
 
     // Find the button associated with "每日觀看時數統計"
@@ -111,7 +111,7 @@ describe("ViewerSettingsPage (Privacy)", () => {
 
   it("should handle export data", async () => {
     (httpClient as jest.Mock).mockImplementation((url) => {
-      if (url === "/api/viewer/privacy/consent")
+      if (url === "/api/viewer/pref/status")
         return Promise.resolve({ settings: {}, hasConsent: true });
       if (url === "/api/viewer/privacy/deletion-status")
         return Promise.resolve({ hasPendingDeletion: false });
@@ -127,13 +127,10 @@ describe("ViewerSettingsPage (Privacy)", () => {
     render(<ViewerSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.queryByText("載入中...")).not.toBeInTheDocument();
+      expect(screen.queryByText("common.loading")).not.toBeInTheDocument();
     });
 
-    const exportBtn = screen.getByText("匯出我的資料").closest("div")
-      ?.nextElementSibling as HTMLElement;
-    // Or just find button with text "匯出資料"
-    const btn = screen.getByText("📤 匯出資料");
+    const btn = screen.getByText("📤 settings.dataManagement.exportButton");
     fireEvent.click(btn);
 
     await waitFor(() => {
@@ -145,7 +142,7 @@ describe("ViewerSettingsPage (Privacy)", () => {
 
   it("should show deletion pending status and allow cancel", async () => {
     (httpClient as jest.Mock).mockImplementation((url) => {
-      if (url === "/api/viewer/privacy/consent")
+      if (url === "/api/viewer/pref/status")
         return Promise.resolve({ settings: {}, hasConsent: true });
       if (url === "/api/viewer/privacy/deletion-status")
         return Promise.resolve({
@@ -160,7 +157,7 @@ describe("ViewerSettingsPage (Privacy)", () => {
     render(<ViewerSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/帳號刪除請求進行中/)).toBeInTheDocument();
+      expect(screen.getByText("⚠️ 帳號刪除請求進行中")).toBeInTheDocument();
     });
 
     expect(screen.getByText("撤銷刪除")).toBeInTheDocument();

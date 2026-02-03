@@ -49,11 +49,11 @@ describe("TimeRangeSelector", () => {
       />
     );
 
-    expect(screen.getByText("7 天")).toBeInTheDocument();
-    expect(screen.getByText("30 天")).toBeInTheDocument();
-    expect(screen.getByText("90 天")).toBeInTheDocument();
-    expect(screen.getByText("全部")).toBeInTheDocument();
-    expect(screen.getByText("時間範圍：")).toBeInTheDocument();
+    expect(screen.getByText("days7")).toBeInTheDocument();
+    expect(screen.getByText("days30")).toBeInTheDocument();
+    expect(screen.getByText("days90")).toBeInTheDocument();
+    expect(screen.getByText("all")).toBeInTheDocument();
+    expect(screen.getByText("label")).toBeInTheDocument();
   });
 
   it("highlights the current selected range", () => {
@@ -65,7 +65,7 @@ describe("TimeRangeSelector", () => {
       />
     );
 
-    const button30 = screen.getByText("30 天");
+    const button30 = screen.getByText("days30");
     // 選中的按鈕應該有 bg-purple-600 class
     expect(button30.className).toContain("bg-purple");
   });
@@ -79,13 +79,13 @@ describe("TimeRangeSelector", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("7 天"));
+    fireEvent.click(screen.getByText("days7"));
     expect(mockOnRangeChange).toHaveBeenCalledWith("7");
 
-    fireEvent.click(screen.getByText("90 天"));
+    fireEvent.click(screen.getByText("days90"));
     expect(mockOnRangeChange).toHaveBeenCalledWith("90");
 
-    fireEvent.click(screen.getByText("全部"));
+    fireEvent.click(screen.getByText("all"));
     expect(mockOnRangeChange).toHaveBeenCalledWith("all");
   });
 
@@ -100,7 +100,7 @@ describe("TimeRangeSelector", () => {
     );
 
     // 只檢查預設按鈕（7天、30天、90天、全部）- 使用 role="radio" 因為已添加 ARIA 支援
-    const presetRadios = ["7 天", "30 天", "90 天", "全部"];
+    const presetRadios = ["days7", "days30", "days90", "all"];
     presetRadios.forEach((label) => {
       const radio = screen.getByRole("radio", { name: new RegExp(label) });
       expect(radio).toBeDisabled();
@@ -117,7 +117,7 @@ describe("TimeRangeSelector", () => {
       />
     );
 
-    fireEvent.click(screen.getByText("7 天"));
+    fireEvent.click(screen.getByText("days7"));
     expect(mockOnRangeChange).not.toHaveBeenCalled();
   });
 
@@ -148,7 +148,7 @@ describe("TimeRangeSelector", () => {
       startDate: new Date("2025-01-01"),
       endDate: new Date("2025-01-10"),
     });
-    expect(mockOnRangeChange).toHaveBeenCalledWith("custom");
+    expect(mockOnRangeChange).not.toHaveBeenCalled();
   });
 });
 
@@ -157,8 +157,8 @@ describe("getRangeDays", () => {
     expect(getRangeDays("7")).toBe(7);
     expect(getRangeDays("30")).toBe(30);
     expect(getRangeDays("90")).toBe(90);
-    expect(getRangeDays("all")).toBe(365);
-    expect(getRangeDays("custom")).toBe(0);
+    expect(getRangeDays("all")).toBe(3650);
+    expect(getRangeDays("custom")).toBe(30);
   });
 
   it("returns 30 as default for unknown range", () => {

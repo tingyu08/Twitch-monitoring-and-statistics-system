@@ -56,12 +56,9 @@ describe("ConsentBanner", () => {
     fireEvent.click(acceptBtn);
 
     await waitFor(() => {
-      expect(httpClient).toHaveBeenCalledWith(
-        "/api/viewer/privacy/consent/accept-all",
-        {
-          method: "POST",
-        }
-      );
+      expect(httpClient).toHaveBeenCalledWith("/api/viewer/pref/opt-all", {
+        method: "POST",
+      });
     });
   });
 

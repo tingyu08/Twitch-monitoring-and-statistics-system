@@ -183,11 +183,13 @@ export class StreamStatusJob {
     const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
     // 5. 處理每個頻道的狀態變化（並行處理，限制並發數）
-    // 優化：提高並發以加快處理速度（平衡效能和記憶體）
-    const CONCURRENCY_LIMIT = process.env.NODE_ENV === "production" ? 8 : 10;
+    // 優化：並發上限可調，預設提升以降低排程延遲
+    const envLimit = Number(process.env.STREAM_STATUS_CONCURRENCY_LIMIT);
+    const defaultLimit = process.env.NODE_ENV === "production" ? 16 : 12;
+    const CONCURRENCY_LIMIT = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : defaultLimit;
 
     // 將任務分組進行並行處理
-    const tasks = channels.map(async (channel) => {
+    const tasks = channels.map((channel) => async () => {
       // 檢查是否已超時
       if (isTimedOut()) return;
 
@@ -236,12 +238,12 @@ export class StreamStatusJob {
   /**
    * 簡單的並發控制器
    */
-  private async runWithConcurrency<T>(tasks: Promise<T>[], limit: number): Promise<void> {
+  private async runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<void> {
     const results: Promise<T>[] = [];
     const executing = new Set<Promise<void>>();
 
     for (const task of tasks) {
-      const p = Promise.resolve().then(() => task);
+      const p = Promise.resolve().then(task);
       results.push(p);
 
       if (limit <= tasks.length) {
@@ -310,9 +312,9 @@ export class StreamStatusJob {
         logger.error("JOB", `批次查詢失敗 (${i}-${i + batch.length}):`, error);
       }
 
-      // 記憶體/CPU 優化：批次之間短暫休息
-      if (i + MAX_CHANNELS_PER_BATCH < twitchChannelIds.length) {
-        await new Promise((resolve) => setTimeout(resolve, 200)); // 平衡速度和資源使用
+      // 記憶體/CPU 優化：僅在記憶體壓力高時短暫休息
+      if (i + MAX_CHANNELS_PER_BATCH < twitchChannelIds.length && memoryMonitor.isNearLimit()) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
       }
     }
 

@@ -62,9 +62,9 @@ describe('StreamSummaryCards', () => {
     });
 
     // 驗證標題
-    expect(screen.getByText('總開台時數')).toBeInTheDocument();
-    expect(screen.getByText('總開台場數')).toBeInTheDocument();
-    expect(screen.getByText('平均單場時長')).toBeInTheDocument();
+    expect(screen.getByText('summary.totalHours')).toBeInTheDocument();
+    expect(screen.getByText('summary.totalSessions')).toBeInTheDocument();
+    expect(screen.getByText('summary.avgDuration')).toBeInTheDocument();
   });
 
   it('應該在無資料時顯示空狀態', async () => {
@@ -79,7 +79,7 @@ describe('StreamSummaryCards', () => {
     render(<StreamSummaryCards />);
 
     await waitFor(() => {
-      expect(screen.getByText('暫無統計資料')).toBeInTheDocument();
+      expect(screen.getByText('noStreamData')).toBeInTheDocument();
     });
   });
 
@@ -97,7 +97,7 @@ describe('StreamSummaryCards', () => {
 
     // Ensure all state updates have settled
     await waitFor(() => {
-      expect(screen.queryByText('總開台時數')).not.toBeInTheDocument();
+      expect(screen.queryByText('summary.totalHours')).not.toBeInTheDocument();
     });
   });
 
@@ -113,7 +113,7 @@ describe('StreamSummaryCards', () => {
     });
 
     // 點擊 7 天選項（實際按鈕文字是 "最近 7 天"）
-    const button7d = screen.getByText('最近 7 天');
+    const button7d = screen.getByText('recent7');
     await user.click(button7d);
 
     // 驗證 API 被呼叫兩次：一次是初始 30d，一次是切換到 7d

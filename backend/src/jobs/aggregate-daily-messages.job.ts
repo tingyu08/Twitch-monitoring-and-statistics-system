@@ -9,21 +9,9 @@
  */
 
 import cron from "node-cron";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
-
-interface AggregationResult {
-  viewerId: string;
-  channelId: string;
-  date: Date;
-  totalMessages: number;
-  chatMessages: number;
-  subscriptions: number;
-  cheers: number;
-  giftSubs: number;
-  raids: number;
-  totalBits: number;
-}
 
 /**
  * 執行訊息聚合
@@ -37,110 +25,64 @@ export async function aggregateDailyMessages(): Promise<void> {
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // 一次查詢所有資料，包含 messageType（修復 N+1 問題）
-    const allMessages = await prisma.viewerChannelMessage.groupBy({
-      by: ["viewerId", "channelId", "messageType"],
-      where: {
-        timestamp: {
-          gte: yesterday,
-          lt: now,
-        },
-      },
-      _count: {
-        id: true,
-      },
-      _sum: {
-        bitsAmount: true,
-      },
-    });
+    const todayDate = new Date(now.toISOString().split("T")[0]);
 
-    if (allMessages.length === 0) {
+    const rows = await prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
+      SELECT COUNT(*) AS count
+      FROM (
+        SELECT viewerId, channelId
+        FROM viewer_channel_messages
+        WHERE timestamp >= ${yesterday} AND timestamp < ${now}
+        GROUP BY viewerId, channelId
+      )
+    `);
+
+    const upsertCount = rows[0]?.count ?? 0;
+
+    if (upsertCount === 0) {
       logger.info("Cron", "沒有需要聚合的資料");
       return;
     }
 
-    // 在記憶體中聚合資料
-    const aggregatedMap = new Map<string, AggregationResult>();
-    const todayDate = new Date(now.toISOString().split("T")[0]);
-
-    for (const msg of allMessages) {
-      const key = `${msg.viewerId}|${msg.channelId}`;
-      let stats = aggregatedMap.get(key);
-
-      if (!stats) {
-        stats = {
-          viewerId: msg.viewerId,
-          channelId: msg.channelId,
-          date: todayDate,
-          totalMessages: 0,
-          chatMessages: 0,
-          subscriptions: 0,
-          cheers: 0,
-          giftSubs: 0,
-          raids: 0,
-          totalBits: 0,
-        };
-        aggregatedMap.set(key, stats);
-      }
-
-      const count = msg._count.id;
-      stats.totalMessages += count;
-
-      switch (msg.messageType) {
-        case "CHAT":
-          stats.chatMessages += count;
-          break;
-        case "SUBSCRIPTION":
-          stats.subscriptions += count;
-          break;
-        case "CHEER":
-          stats.cheers += count;
-          stats.totalBits += msg._sum.bitsAmount || 0;
-          break;
-        case "GIFT_SUBSCRIPTION":
-          stats.giftSubs += count;
-          break;
-        case "RAID":
-          stats.raids += count;
-          break;
-      }
-    }
-
-    // 批次 Upsert 到聚合表
-    let upsertCount = 0;
-    const statsArray = Array.from(aggregatedMap.values());
-
-    // 使用 transaction 批次處理，每批 50 筆
-    const BATCH_SIZE = 50;
-    for (let i = 0; i < statsArray.length; i += BATCH_SIZE) {
-      const batch = statsArray.slice(i, i + BATCH_SIZE);
-
-      await prisma.$transaction(
-        batch.map((stats) =>
-          prisma.viewerChannelMessageDailyAgg.upsert({
-            where: {
-              viewerId_channelId_date: {
-                viewerId: stats.viewerId,
-                channelId: stats.channelId,
-                date: stats.date,
-              },
-            },
-            update: {
-              totalMessages: stats.totalMessages,
-              chatMessages: stats.chatMessages,
-              subscriptions: stats.subscriptions,
-              cheers: stats.cheers,
-              giftSubs: stats.giftSubs,
-              raids: stats.raids,
-              totalBits: stats.totalBits,
-            },
-            create: stats,
-          })
-        )
-      );
-
-      upsertCount += batch.length;
-    }
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO viewer_channel_message_daily_aggs (
+        viewerId,
+        channelId,
+        date,
+        totalMessages,
+        chatMessages,
+        subscriptions,
+        cheers,
+        giftSubs,
+        raids,
+        totalBits,
+        updatedAt
+      )
+      SELECT
+        viewerId,
+        channelId,
+        ${todayDate} AS date,
+        COUNT(*) AS totalMessages,
+        SUM(CASE WHEN messageType = 'CHAT' THEN 1 ELSE 0 END) AS chatMessages,
+        SUM(CASE WHEN messageType = 'SUBSCRIPTION' THEN 1 ELSE 0 END) AS subscriptions,
+        SUM(CASE WHEN messageType = 'CHEER' THEN 1 ELSE 0 END) AS cheers,
+        SUM(CASE WHEN messageType = 'GIFT_SUBSCRIPTION' THEN 1 ELSE 0 END) AS giftSubs,
+        SUM(CASE WHEN messageType = 'RAID' THEN 1 ELSE 0 END) AS raids,
+        SUM(CASE WHEN messageType = 'CHEER' THEN COALESCE(bitsAmount, 0) ELSE 0 END) AS totalBits,
+        CURRENT_TIMESTAMP AS updatedAt
+      FROM viewer_channel_messages
+      WHERE timestamp >= ${yesterday} AND timestamp < ${now}
+      GROUP BY viewerId, channelId
+      ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+        totalMessages = excluded.totalMessages,
+        chatMessages = excluded.chatMessages,
+        subscriptions = excluded.subscriptions,
+        cheers = excluded.cheers,
+        giftSubs = excluded.giftSubs,
+        raids = excluded.raids,
+        totalBits = excluded.totalBits,
+        updatedAt = CURRENT_TIMESTAMP
+    `);
 
     const duration = Date.now() - startTime;
     logger.info("Cron", `訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`);

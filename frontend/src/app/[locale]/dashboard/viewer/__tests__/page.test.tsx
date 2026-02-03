@@ -1,5 +1,6 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ViewerDashboardPage from "../page";
 import { viewerApi } from "@/lib/api/viewer";
 import { useAuthSession } from "@/features/auth/AuthContext";
@@ -48,6 +49,16 @@ const createMockUser = () => ({
 });
 
 describe("ViewerDashboardPage", () => {
+  const renderWithQueryClient = (ui: React.ReactElement) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+    return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  };
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -58,7 +69,7 @@ describe("ViewerDashboardPage", () => {
       loading: false,
     });
 
-    const { container } = render(<ViewerDashboardPage />);
+    const { container } = renderWithQueryClient(<ViewerDashboardPage />);
     
     // When user is null, loadChannels is not called, so 'loading' state stays true
     const spinner = container.querySelector('.animate-spin');
@@ -74,11 +85,11 @@ describe("ViewerDashboardPage", () => {
       loading: false,
     });
 
-    render(<ViewerDashboardPage />);
+    renderWithQueryClient(<ViewerDashboardPage />);
 
     await waitFor(
       () => {
-        expect(screen.getByText("您尚未追蹤任何頻道")).toBeInTheDocument();
+        expect(screen.getByText("viewer.noFollowedChannels")).toBeInTheDocument();
       },
       { timeout: 3000 }
     );

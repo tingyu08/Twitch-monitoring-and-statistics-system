@@ -722,6 +722,12 @@ export async function triggerFollowSyncForUser(
     let created = 0;
     let removed = 0;
     let processed = 0;
+    const followsToUpsert: Array<{
+      userId: string;
+      userType: "viewer";
+      channelId: string;
+      followedAt: Date;
+    }> = [];
 
     // 收集所有新建立的 streamers，稍後批次抓取資料
     const newStreamerIds: string[] = [];
@@ -804,25 +810,13 @@ export async function triggerFollowSyncForUser(
           // 已存在的追蹤，從 map 中移除（避免被刪除）
           existingFollowMap.delete(follow.broadcasterId);
         } else {
-          // 新追蹤：建立追蹤記錄
-          await prisma.userFollow.upsert({
-            where: {
-              userId_channelId: {
-                userId: viewerId,
-                channelId: channelId,
-              },
-            },
-            create: {
-              userId: viewerId,
-              userType: "viewer",
-              channelId: channelId,
-              followedAt: follow.followedAt,
-            },
-            update: {
-              followedAt: follow.followedAt,
-            },
+          // 新追蹤：先收集，稍後批次 upsert
+          followsToUpsert.push({
+            userId: viewerId,
+            userType: "viewer",
+            channelId: channelId,
+            followedAt: follow.followedAt,
           });
-          created++;
         }
       } catch (err) {
         logger.warn("Jobs", `同步頻道 ${follow.broadcasterLogin} 失敗`, err);
@@ -834,6 +828,37 @@ export async function triggerFollowSyncForUser(
       // 每處理 BATCH_SIZE 個頻道，等待一下讓系統喘息
       if (processed % BATCH_SIZE === 0) {
         await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    // 批次建立追蹤記錄（避免逐筆寫入）
+    const UPSERT_BATCH_SIZE = 50;
+    for (let i = 0; i < followsToUpsert.length; i += UPSERT_BATCH_SIZE) {
+      const batch = followsToUpsert.slice(i, i + UPSERT_BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((followData) =>
+          prisma.userFollow.upsert({
+            where: {
+              userId_channelId: {
+                userId: followData.userId,
+                channelId: followData.channelId,
+              },
+            },
+            create: followData,
+            update: { followedAt: followData.followedAt },
+          })
+        )
+      );
+
+      created += results.filter((r) => r.status === "fulfilled").length;
+
+      const failures = results.filter((r) => r.status === "rejected");
+      if (failures.length > 0) {
+        logger.warn("Jobs", `批次 upsert 有 ${failures.length} 筆失敗`);
+      }
+
+      if (i + UPSERT_BATCH_SIZE < followsToUpsert.length) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
 

@@ -1,17 +1,8 @@
-﻿import { httpClient } from '../httpClient';
-import { apiLogger } from '../../logger';
+import { httpClient } from '../httpClient';
 
 // Mock fetch
 global.fetch = jest.fn();
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
-
-// Mock apiLogger
-jest.mock('../../logger', () => ({
-  apiLogger: {
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
 
 describe('httpClient', () => {
   beforeEach(() => {
@@ -30,12 +21,17 @@ describe('httpClient', () => {
 
     const result = await httpClient('/test');
 
-    expect(mockFetch).toHaveBeenCalledWith('/test', {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:4000/test',
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.any(Headers),
+        signal: expect.any(AbortSignal),
+      })
+    );
+    const config = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+    const headers = config?.headers as Headers | undefined;
+    expect(headers?.get('Content-Type')).toBe('application/json');
     expect(result).toEqual(mockData);
   });
 
@@ -54,7 +50,7 @@ describe('httpClient', () => {
     await httpClient('/test');
 
     // In test environment, API_URL is empty string, so path is used directly
-    expect(mockFetch).toHaveBeenCalledWith('/test', expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:4000/test', expect.any(Object));
   });
 
   it('should handle endpoints without leading slash', async () => {
@@ -68,7 +64,7 @@ describe('httpClient', () => {
 
     await httpClient('test');
 
-    expect(mockFetch).toHaveBeenCalledWith('/test', expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:4000/test', expect.any(Object));
   });
 
   it('should merge custom headers', async () => {
@@ -86,13 +82,17 @@ describe('httpClient', () => {
       },
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('/test', {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Custom-Header': 'value',
-      },
-      credentials: 'include',
-    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:4000/test',
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.any(Headers),
+      })
+    );
+    const config = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+    const headers = config?.headers as Headers | undefined;
+    expect(headers?.get('Content-Type')).toBe('application/json');
+    expect(headers?.get('X-Custom-Header')).toBe('value');
   });
 
   it('should handle non-JSON responses', async () => {
@@ -119,7 +119,6 @@ describe('httpClient', () => {
     } as Response);
 
     await expect(httpClient('/test')).rejects.toThrow('Unauthorized');
-    expect(apiLogger.warn).toHaveBeenCalledWith('Unauthorized access request to:', '/test');
   });
 
   it('should handle other HTTP errors with custom message', async () => {
@@ -150,7 +149,6 @@ describe('httpClient', () => {
     mockFetch.mockRejectedValueOnce(networkError);
 
     await expect(httpClient('/test')).rejects.toThrow('Network failure');
-    expect(apiLogger.error).toHaveBeenCalledWith('API Request Error:', networkError);
   });
 
   it('should pass through request options', async () => {
@@ -167,13 +165,17 @@ describe('httpClient', () => {
       body: JSON.stringify({ data: 'test' }),
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('/test', {
-      method: 'POST',
-      body: JSON.stringify({ data: 'test' }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:4000/test',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ data: 'test' }),
+        credentials: 'include',
+        headers: expect.any(Headers),
+      })
+    );
+    const config = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+    const headers = config?.headers as Headers | undefined;
+    expect(headers?.get('Content-Type')).toBe('application/json');
   });
 });

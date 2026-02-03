@@ -7,6 +7,7 @@ jest.mock("../../services/unified-twitch.service", () => ({
   unifiedTwitchService: {
     getStreamsByUserIds: jest.fn(),
     getChannelInfo: jest.fn(),
+    getChannelInfoById: jest.fn(),
   },
 }));
 
@@ -47,6 +48,7 @@ describe("Story 3.3: Jobs Integration", () => {
       ]);
       (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([]); // Mock active sessions
+      (prisma.streamSession.upsert as jest.Mock).mockResolvedValue({ id: "s1" });
       (unifiedTwitchService.getStreamsByUserIds as jest.Mock).mockResolvedValue([
         {
           id: "s1",
@@ -81,6 +83,7 @@ describe("Story 3.3: Jobs Integration", () => {
       (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
         { id: "s1", channelId: "c1" },
       ]); // Mock active sessions
+      (prisma.streamSession.upsert as jest.Mock).mockResolvedValue({ id: "s1" });
       (unifiedTwitchService.getStreamsByUserIds as jest.Mock).mockResolvedValue([
         {
           id: "s1",
@@ -102,7 +105,8 @@ describe("Story 3.3: Jobs Integration", () => {
       (prisma.channel.findMany as jest.Mock).mockResolvedValue([
         { id: "c1", channelName: "User", twitchChannelId: "t1" },
       ]);
-      (unifiedTwitchService.getChannelInfo as jest.Mock).mockResolvedValue({
+      (unifiedTwitchService.getChannelInfoById as jest.Mock).mockResolvedValue({
+        login: "User",
         isLive: true,
         viewerCount: 50,
         streamTitle: "Hi",

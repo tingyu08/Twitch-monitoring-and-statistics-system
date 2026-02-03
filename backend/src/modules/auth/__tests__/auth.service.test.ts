@@ -14,9 +14,22 @@ jest.mock("../../../db/prisma", () => {
     streamer: { upsert: jest.fn(), findUnique: jest.fn() },
     channel: { upsert: jest.fn() },
     viewer: { upsert: jest.fn(), findUnique: jest.fn() },
-    twitchToken: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
+    twitchToken: {
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      create: jest.fn(),
+      deleteMany: jest.fn(),
+    },
   };
-  mockPrisma.$transaction.mockImplementation((cb: (arg: unknown) => unknown) => cb(mockPrisma));
+  mockPrisma.$transaction.mockImplementation((arg: unknown) => {
+    if (Array.isArray(arg)) {
+      return Promise.all(arg);
+    }
+    if (typeof arg === "function") {
+      return arg(mockPrisma);
+    }
+    return Promise.resolve(arg);
+  });
   return { prisma: mockPrisma };
 });
 
@@ -69,7 +82,8 @@ describe("Auth Service", () => {
       });
 
       await handleStreamerTwitchCallback("code");
-      expect(prisma.twitchToken.update).toHaveBeenCalled();
+      expect(prisma.twitchToken.deleteMany).toHaveBeenCalled();
+      expect(prisma.twitchToken.create).toHaveBeenCalled();
     });
   });
 

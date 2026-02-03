@@ -23,6 +23,8 @@ export function useStatsWorker() {
   const callbacksRef = useRef<Map<string, (response: unknown) => void>>(
     new Map()
   );
+  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const REQUEST_TIMEOUT_MS = 15000;
 
   // 初始化 Worker
   useEffect(() => {
@@ -39,12 +41,19 @@ export function useStatsWorker() {
       const callback = callbacksRef.current.get(requestId);
 
       if (callback) {
+        const timeout = timeoutsRef.current.get(requestId);
+        if (timeout) {
+          clearTimeout(timeout);
+          timeoutsRef.current.delete(requestId);
+        }
         callback({ success, result, error });
         callbacksRef.current.delete(requestId);
       }
     };
 
     return () => {
+      timeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      timeoutsRef.current.clear();
       workerRef.current?.terminate();
       workerRef.current = null;
     };
@@ -75,6 +84,15 @@ export function useStatsWorker() {
             reject(new Error(res.error));
           }
         });
+
+        const timeout = setTimeout(() => {
+          if (callbacksRef.current.has(requestId)) {
+            callbacksRef.current.delete(requestId);
+            timeoutsRef.current.delete(requestId);
+            reject(new Error("Worker request timed out"));
+          }
+        }, REQUEST_TIMEOUT_MS);
+        timeoutsRef.current.set(requestId, timeout);
 
         workerRef.current.postMessage({ type, payload, requestId });
       });

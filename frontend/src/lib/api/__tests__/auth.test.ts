@@ -13,6 +13,7 @@ describe('auth.ts', () => {
   describe('getMe', () => {
     it('should call httpClient with correct endpoint', async () => {
       const mockUser = {
+        role: 'streamer',
         streamerId: '123',
         twitchUserId: 'tw123',
         displayName: 'TestUser',
@@ -39,21 +40,30 @@ describe('auth.ts', () => {
   describe('logout', () => {
     it('should call httpClient with correct endpoint and method', async () => {
       const mockResponse = { message: 'Logged out successfully' };
-      mockHttpClient.mockResolvedValueOnce(mockResponse);
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse,
+      } as Response);
 
       const result = await logout();
 
-      expect(mockHttpClient).toHaveBeenCalledWith('/api/auth/logout', {
+      expect(global.fetch).toHaveBeenCalledWith('/api/auth/logout', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
       expect(result).toEqual(mockResponse);
     });
 
     it('should propagate errors from httpClient', async () => {
-      const error = new Error('Logout failed');
-      mockHttpClient.mockRejectedValueOnce(error);
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      } as Response);
 
-      await expect(logout()).rejects.toThrow('Logout failed');
+      await expect(logout()).rejects.toThrow('Request failed with status 500');
     });
   });
 });

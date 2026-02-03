@@ -46,7 +46,9 @@ export async function updateLiveStatusFn() {
     );
 
     // 建立當前狀態 Map 用於比較
-    const previousStatusMap = new Map(channels.map((c: { twitchChannelId: string; isLive: boolean }) => [c.twitchChannelId, c.isLive]));
+    const previousStatusMap = new Map(
+      channels.map((c: { twitchChannelId: string; isLive: boolean }) => [c.twitchChannelId, c.isLive])
+    );
 
     if (channels.length === 0) {
       logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
@@ -133,13 +135,10 @@ export async function updateLiveStatusFn() {
 
     // 4. 過濾：只更新狀態有變化的頻道（大幅減少 DB 寫入）
     const changedUpdates = updates.filter((update) => {
-      const channel = channels.find((c: { twitchChannelId: string }) => c.twitchChannelId === update.twitchId);
-      if (!channel) return true; // 找不到就更新
-
-      // 比較關鍵狀態是否有變化
       const wasLive = previousStatusMap.get(update.twitchId);
-      return wasLive !== update.isLive; // 只在開播/下播狀態改變時更新
+      return typeof wasLive === "undefined" || wasLive !== update.isLive;
     });
+    const changedTwitchIds = new Set(changedUpdates.map((update) => update.twitchId));
 
     // 5. 批量更新 DB（只更新有變化的頻道）
     // 優化：增加批次大小、減少延遲，因為只處理變化的頻道
@@ -220,7 +219,7 @@ export async function updateLiveStatusFn() {
 
       // 未變化的頻道：只更新 lastLiveCheckAt
       const unchangedTwitchIds = updates
-        .filter((u) => !changedUpdates.includes(u))
+        .filter((u) => !changedTwitchIds.has(u.twitchId))
         .map((u) => u.twitchId);
 
       if (unchangedTwitchIds.length > 0) {

@@ -11,7 +11,7 @@ describe('ChartStates', () => {
 
     it('應該顯示預設載入訊息', () => {
       render(<ChartLoading />);
-      expect(screen.getByText('載入圖表資料中...')).toBeInTheDocument();
+      expect(screen.getByText('loading')).toBeInTheDocument();
     });
 
     it('應該顯示旋轉載入動畫', () => {
@@ -25,7 +25,7 @@ describe('ChartStates', () => {
   describe('ChartError', () => {
     it('應該顯示錯誤訊息', () => {
       render(<ChartError error='API 連線失敗' />);
-      expect(screen.getByText('無法載入圖表')).toBeInTheDocument();
+      expect(screen.getByText('errorTitle')).toBeInTheDocument();
       expect(screen.getByText('API 連線失敗')).toBeInTheDocument();
     });
 
@@ -38,12 +38,12 @@ describe('ChartStates', () => {
     it('有 onRetry 時應該顯示重試按鈕', () => {
       const onRetry = jest.fn();
       render(<ChartError error='測試錯誤' onRetry={onRetry} />);
-      expect(screen.getByRole('button', { name: /重試/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     });
 
     it('沒有 onRetry 時不應該顯示重試按鈕', () => {
       render(<ChartError error='測試錯誤' />);
-      expect(screen.queryByRole('button', { name: /重試/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
     });
 
     it('點擊重試按鈕時應該呼叫 onRetry', async () => {
@@ -51,7 +51,7 @@ describe('ChartStates', () => {
       const user = userEvent.setup();
       
       render(<ChartError error='測試錯誤' onRetry={onRetry} />);
-      const retryButton = screen.getByRole('button', { name: /重試/i });
+      const retryButton = screen.getByRole('button', { name: /retry/i });
       
       await user.click(retryButton);
       expect(onRetry).toHaveBeenCalledTimes(1);
@@ -80,7 +80,7 @@ describe('ChartStates', () => {
       const { container } = render(<ChartEmpty description='無資料' />);
       const emojiDiv = container.querySelector('.text-5xl');
       expect(emojiDiv).toHaveTextContent('📊');
-      expect(screen.getByText('暫無資料')).toBeInTheDocument();
+      expect(screen.getByText('emptyTitle')).toBeInTheDocument();
     });
 
     it('沒有 hint 時不應該顯示提示文字', () => {

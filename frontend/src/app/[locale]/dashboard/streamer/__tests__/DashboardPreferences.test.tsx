@@ -3,6 +3,8 @@ import React from 'react';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
+  usePathname: () => '/en/dashboard/streamer',
+  useParams: () => ({ locale: 'en' }),
 }));
 
 jest.mock('@/lib/api/auth', () => ({
@@ -39,6 +41,7 @@ jest.mock('@/features/streamer-dashboard/charts', () => ({
   TimeSeriesChart: () => <div data-testid="mock-timeseries" />,
   HeatmapChart: () => <div data-testid="mock-heatmap" />,
   SubscriptionTrendChart: () => <div data-testid="mock-subscription" />,
+  GameStatsChart: () => <div data-testid="mock-game-stats" />,
   ChartLoading: () => <div>loading</div>,
   ChartError: () => <div>error</div>,
   ChartEmpty: () => <div>empty</div>,
@@ -49,6 +52,12 @@ jest.mock('@/features/streamer-dashboard/charts', () => ({
 const mockUseUiPreferences = jest.fn();
 jest.mock('@/features/streamer-dashboard/hooks/useUiPreferences', () => ({
   useUiPreferences: () => mockUseUiPreferences(),
+  PREFERENCE_ITEMS: [
+    { key: 'showSummaryCards', icon: '📊' },
+    { key: 'showTimeSeriesChart', icon: '📈' },
+    { key: 'showHeatmapChart', icon: '🔥' },
+    { key: 'showSubscriptionChart', icon: '⭐' },
+  ],
 }));
 
 jest.mock('@/lib/logger', () => ({
@@ -85,6 +94,6 @@ describe('StreamerDashboard - preferences gating', () => {
     expect(screen.queryByTestId('timeseries-section')).not.toBeInTheDocument();
     expect(screen.queryByTestId('heatmap-section')).not.toBeInTheDocument();
     expect(screen.queryByTestId('subscription-section')).not.toBeInTheDocument();
-    expect(screen.getByText(/所有圖表都被隱藏/)).toBeInTheDocument();
+    expect(screen.getByText('allHidden')).toBeInTheDocument();
   });
 });

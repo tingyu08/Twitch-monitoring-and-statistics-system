@@ -26,6 +26,7 @@ export function useChannels() {
     gcTime: 5 * 60 * 1000, // 5 分鐘後清除快取
     refetchInterval: 60 * 1000, // P1: 每 60 秒自動重新取得（取代 WebSocket 推送）
     refetchIntervalInBackground: false, // 背景時不輪詢，節省資源
+    refetchOnWindowFocus: false, // 避免與可見性手動刷新重複
   });
 }
 

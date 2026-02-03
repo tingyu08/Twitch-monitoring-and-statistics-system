@@ -44,6 +44,7 @@ export class DistributedListenerCoordinator {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private acquiredChannels: Set<string> = new Set();
   private isStarted = false;
+  private lastCleanupAt = 0;
 
   constructor() {
     this.instanceId = INSTANCE_ID;
@@ -368,8 +369,11 @@ export class DistributedListenerCoordinator {
         });
       }
 
-      // 清理過期的實例和鎖
-      await this.cleanupExpiredLocks();
+      const nowMs = now.getTime();
+      if (nowMs - this.lastCleanupAt >= LOCK_TIMEOUT_MS) {
+        await this.cleanupExpiredLocks();
+        this.lastCleanupAt = nowMs;
+      }
     } catch (error) {
       logger.error("DistributedCoordinator", "Heartbeat failed", error);
     }

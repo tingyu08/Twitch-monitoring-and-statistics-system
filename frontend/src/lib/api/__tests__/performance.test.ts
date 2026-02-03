@@ -32,7 +32,7 @@ describe('API Performance Benchmarks', () => {
 
   describe('Auth API Performance', () => {
     it('getMe() should complete within 100ms (fast threshold)', async () => {
-      const mockUser = { id: '1', name: 'Test', email: 'test@example.com' };
+      const mockUser = { id: '1', name: 'Test', email: 'test@example.com', role: 'viewer' };
       mockHttpClient.mockResolvedValueOnce(mockUser);
 
       const { duration } = await measureExecutionTime(() => getMe());
@@ -42,7 +42,11 @@ describe('API Performance Benchmarks', () => {
     });
 
     it('logout() should complete within 100ms (fast threshold)', async () => {
-      mockHttpClient.mockResolvedValueOnce(undefined);
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ message: 'Logged out' }),
+      } as Response);
 
       const { duration } = await measureExecutionTime(() => logout());
 
@@ -94,7 +98,7 @@ describe('API Performance Benchmarks', () => {
 
   describe('Batch Operation Performance', () => {
     it('10 consecutive API calls should complete in reasonable time', async () => {
-      const mockData = { id: '1', name: 'Test' };
+      const mockData = { id: '1', name: 'Test', role: 'viewer' };
       mockHttpClient.mockResolvedValue(mockData);
 
       const startTime = performance.now();
@@ -112,7 +116,7 @@ describe('API Performance Benchmarks', () => {
     });
 
     it('API call stability test (standard deviation)', async () => {
-      const mockData = { id: '1', name: 'Test' };
+      const mockData = { id: '1', name: 'Test', role: 'viewer' };
       mockHttpClient.mockResolvedValue(mockData);
 
       const durations: number[] = [];
@@ -140,13 +144,17 @@ describe('API Performance Benchmarks', () => {
 
   describe('Performance Report Summary', () => {
     it('generate complete performance benchmark report', async () => {
-      const mockUser = { id: '1', name: 'Test' };
+      const mockUser = { id: '1', name: 'Test', role: 'viewer' };
       const mockSummary = { totalSessions: 10, totalHours: 50, avgViewers: 100, peakViewers: 500 };
       const mockTimeSeries = [{ date: '2025-01-01', totalHours: 8, sessionCount: 2, avgViewers: 100, peakViewers: 200 }];
       const mockHeatmap = [{ dayOfWeek: 1, hour: 14, value: 2.5 }];
 
       mockHttpClient.mockResolvedValueOnce(mockUser);
-      mockHttpClient.mockResolvedValueOnce(undefined);
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ message: 'Logged out' }),
+      } as Response);
       mockHttpClient.mockResolvedValueOnce(mockSummary);
       mockHttpClient.mockResolvedValueOnce(mockTimeSeries);
       mockHttpClient.mockResolvedValueOnce(mockHeatmap);

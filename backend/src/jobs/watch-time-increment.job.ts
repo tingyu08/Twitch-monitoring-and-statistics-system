@@ -8,6 +8,7 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { batchOperation } from "../utils/db-retry";
 
 // 每 6 分鐘執行，在第 4 分鐘觸發（錯開其他 Jobs）
 const WATCH_TIME_INCREMENT_CRON = "0 4-59/6 * * * *";
@@ -73,37 +74,43 @@ export class WatchTimeIncrementJob {
       }
 
       // 3. 為每個活躍的 viewer-channel 組合增加觀看時間
-      let updatedCount = 0;
-
-      for (const { viewerId, channelId } of activeViewerChannels) {
-        try {
-          await prisma.viewerChannelDailyStat.upsert({
-            where: {
-              viewerId_channelId_date: {
-                viewerId,
-                channelId,
-                date: today,
-              },
-            },
-            create: {
-              viewerId,
-              channelId,
-              date: today,
-              watchSeconds: INCREMENT_SECONDS,
-              messageCount: 0,
-              emoteCount: 0,
-            },
-            update: {
-              watchSeconds: {
-                increment: INCREMENT_SECONDS,
-              },
-            },
-          });
-          updatedCount++;
-        } catch (error) {
-          logger.error("Jobs", `更新觀看時間失敗: viewer=${viewerId}, channel=${channelId}`, error);
+      const results = await batchOperation(
+        activeViewerChannels,
+        async (batch) => {
+          await prisma.$transaction(
+            batch.map(({ viewerId, channelId }) =>
+              prisma.viewerChannelDailyStat.upsert({
+                where: {
+                  viewerId_channelId_date: {
+                    viewerId,
+                    channelId,
+                    date: today,
+                  },
+                },
+                create: {
+                  viewerId,
+                  channelId,
+                  date: today,
+                  watchSeconds: INCREMENT_SECONDS,
+                  messageCount: 0,
+                  emoteCount: 0,
+                },
+                update: {
+                  watchSeconds: {
+                    increment: INCREMENT_SECONDS,
+                  },
+                },
+              })
+            )
+          );
+          return batch.length;
+        },
+        {
+          batchSize: 50,
+          delayBetweenBatchesMs: 50,
         }
-      }
+      );
+      const updatedCount = results.reduce((sum, count) => sum + count, 0);
 
       // 只在有實際更新時輸出 info，否則輸出 debug
       if (updatedCount > 0) {

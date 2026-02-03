@@ -13,19 +13,19 @@ describe('HeatmapChart', () => {
   it('should render without crashing', () => {
     render(<HeatmapChart data={mockData} />);
 
-    expect(screen.getByText('開台時段熱力圖 (小時數)')).toBeInTheDocument();
+    expect(screen.getByText('title')).toBeInTheDocument();
   });
 
   it('should render all day labels', () => {
     render(<HeatmapChart data={mockData} />);
 
-    expect(screen.getByText('週一')).toBeInTheDocument();
-    expect(screen.getByText('週二')).toBeInTheDocument();
-    expect(screen.getByText('週三')).toBeInTheDocument();
-    expect(screen.getByText('週四')).toBeInTheDocument();
-    expect(screen.getByText('週五')).toBeInTheDocument();
-    expect(screen.getByText('週六')).toBeInTheDocument();
-    expect(screen.getByText('週日')).toBeInTheDocument();
+    expect(screen.getByText('days.mon')).toBeInTheDocument();
+    expect(screen.getByText('days.tue')).toBeInTheDocument();
+    expect(screen.getByText('days.wed')).toBeInTheDocument();
+    expect(screen.getByText('days.thu')).toBeInTheDocument();
+    expect(screen.getByText('days.fri')).toBeInTheDocument();
+    expect(screen.getByText('days.sat')).toBeInTheDocument();
+    expect(screen.getByText('days.sun')).toBeInTheDocument();
   });
 
   it('should render hour labels (0-23)', () => {
@@ -60,7 +60,7 @@ describe('HeatmapChart', () => {
   it('should render with empty data', () => {
     render(<HeatmapChart data={[]} />);
 
-    expect(screen.getByText('開台時段熱力圖 (小時數)')).toBeInTheDocument();
+    expect(screen.getByText('title')).toBeInTheDocument();
     // Should still render all 168 cells (with 0 values)
     const cells = document.querySelectorAll('[title]');
     expect(cells.length).toBe(168);
@@ -70,7 +70,7 @@ describe('HeatmapChart', () => {
     render(<HeatmapChart data={mockData} />);
 
     // Check that cells have correct title attributes
-    const cellWithData = document.querySelector('[title*="3.5 小時"]');
+    const cellWithData = document.querySelector('[title="cellTooltip"]');
     expect(cellWithData).toBeInTheDocument();
   });
 

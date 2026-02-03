@@ -111,7 +111,7 @@ describe("FootprintDashboard", () => {
   it("handles reset layout", async () => {
     render(<FootprintDashboard stats={mockStats} channelId="c1" />);
 
-    const resetButton = screen.getByText("重置佈局");
+    const resetButton = screen.getByText("footprint.resetLayout");
     fireEvent.click(resetButton);
 
     expect(window.confirm).toHaveBeenCalled();

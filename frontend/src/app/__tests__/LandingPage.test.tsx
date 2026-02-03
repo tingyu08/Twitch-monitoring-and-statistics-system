@@ -21,10 +21,12 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => ({
     get: mockGet,
   }),
+  usePathname: () => "/en",
+  useParams: () => ({ locale: "en" }),
 }));
 
 // 在測試前需要 import，這樣 mock 才會生效
-import LandingPage from "../page";
+import LandingPage from "../[locale]/page";
 
 describe("LandingPage", () => {
   beforeEach(() => {
@@ -49,7 +51,7 @@ describe("LandingPage", () => {
       render(<LandingPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: "前往登入" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "home.loginButton" })).toBeInTheDocument();
       });
     });
 
@@ -57,8 +59,8 @@ describe("LandingPage", () => {
       render(<LandingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Twitch 實況監控與統計平台/)).toBeInTheDocument();
-        expect(screen.getByText(/無論您是實況主或觀眾/)).toBeInTheDocument();
+        expect(screen.getByText("home.title")).toBeInTheDocument();
+        expect(screen.getByText("home.description")).toBeInTheDocument();
       });
     });
   });
@@ -80,7 +82,7 @@ describe("LandingPage", () => {
       render(<LandingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("載入中...")).toBeInTheDocument();
+        expect(screen.getByText("common.loading")).toBeInTheDocument();
       });
     });
   });
@@ -104,8 +106,8 @@ describe("LandingPage", () => {
       render(<LandingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText("登入失敗")).toBeInTheDocument();
-        expect(screen.getByText(/您取消了 Twitch 授權/)).toBeInTheDocument();
+        expect(screen.getByText("home.loginFailed")).toBeInTheDocument();
+        expect(screen.getByText("home.authErrors.authorizationFailed")).toBeInTheDocument();
       });
     });
   });
@@ -134,7 +136,7 @@ describe("LandingPage", () => {
       render(<LandingPage />);
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/dashboard/viewer");
+        expect(mockPush).toHaveBeenCalledWith("/en/dashboard/viewer");
       });
     });
   });

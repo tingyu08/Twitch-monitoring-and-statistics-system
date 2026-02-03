@@ -108,12 +108,12 @@ describe("Viewer Privacy Routes", () => {
     (mockPrismaClient.viewer.findUnique as jest.Mock).mockResolvedValue(mockViewer);
   });
 
-  describe("GET /privacy/consent", () => {
+  describe("GET /pref/status", () => {
     it("should return consent settings", async () => {
       const mockSettings = { collectDailyWatchTime: true };
       (privacyConsentService.getAllConsentStatus as jest.Mock).mockResolvedValue(mockSettings);
 
-      const res = await request(app).get("/api/viewer/privacy/consent");
+      const res = await request(app).get("/api/viewer/pref/status");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -121,20 +121,20 @@ describe("Viewer Privacy Routes", () => {
     });
   });
 
-  describe("PATCH /privacy/consent", () => {
+  describe("PATCH /pref/status", () => {
     it("should update consent settings", async () => {
       const updatePayload = { collectDailyWatchTime: false };
       (privacyConsentService.updateConsent as jest.Mock).mockResolvedValue(updatePayload);
       (mockPrismaClient.privacyAuditLog.create as jest.Mock).mockResolvedValue({});
 
-      const res = await request(app).patch("/api/viewer/privacy/consent").send(updatePayload);
+      const res = await request(app).patch("/api/viewer/pref/status").send(updatePayload);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
   });
 
-  describe("POST /privacy/consent/accept-all", () => {
+  describe("POST /pref/opt-all", () => {
     it("should accept all consents", async () => {
       (privacyConsentService.createDefaultConsent as jest.Mock).mockResolvedValue({
         consentVersion: 1,
@@ -142,7 +142,7 @@ describe("Viewer Privacy Routes", () => {
       (mockPrismaClient.viewer.update as jest.Mock).mockResolvedValue({});
       (mockPrismaClient.privacyAuditLog.create as jest.Mock).mockResolvedValue({});
 
-      const res = await request(app).post("/api/viewer/privacy/consent/accept-all");
+      const res = await request(app).post("/api/viewer/pref/opt-all");
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
