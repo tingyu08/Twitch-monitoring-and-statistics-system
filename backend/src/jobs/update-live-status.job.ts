@@ -12,6 +12,19 @@ let isRunning = false;
 // P0 Optimization: 只在必要時更新 lastLiveCheckAt，減少 80% 資料庫寫入
 const LAST_CHECK_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
 
+// 活躍頻道判斷窗口（超過此時間未開台則進入低頻輪詢）
+const ACTIVE_CHANNEL_WINDOW_DAYS = 7;
+const SLOW_POLL_GROUPS = 5;
+let slowPollIndex = 0;
+
+function getPollGroup(channelId: string): number {
+  let sum = 0;
+  for (let i = 0; i < channelId.length; i++) {
+    sum += channelId.charCodeAt(i);
+  }
+  return Math.abs(sum) % SLOW_POLL_GROUPS;
+}
+
 /**
  * 更新所有頻道的即時直播狀態
  * 頻率：每 1 分鐘由 cron 觸發（優化後執行時間大幅縮短）
@@ -33,7 +46,7 @@ export async function updateLiveStatusFn() {
 
   try {
     // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)，包含當前狀態
-    const channels = await retryDatabaseOperation(() =>
+    const allChannels = await retryDatabaseOperation(() =>
       prisma.channel.findMany({
         where: {
           twitchChannelId: { not: "" },
@@ -51,15 +64,15 @@ export async function updateLiveStatusFn() {
 
     // 建立當前狀態 Map 用於比較
     const previousStatusMap = new Map(
-      channels.map((c: { twitchChannelId: string; isLive: boolean }) => [c.twitchChannelId, c.isLive])
+      allChannels.map((c: { twitchChannelId: string; isLive: boolean }) => [c.twitchChannelId, c.isLive])
     );
 
-    if (channels.length === 0) {
+    if (allChannels.length === 0) {
       logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
       return;
     }
 
-    logger.debug("Jobs", `📊 找到 ${channels.length} 個受監控的頻道需要檢查`);
+    logger.debug("Jobs", `📊 找到 ${allChannels.length} 個受監控的頻道需要檢查`);
 
     // 2. 初始化 API Client (使用單例模式或確保釋放)
     // 這裡我們直接使用 twurpleHelixService 封裝好的方法，它已經處理了 ApiClient 的生命週期
@@ -71,6 +84,44 @@ export async function updateLiveStatusFn() {
     // 3. 分批處理 (減少 Batch Size 讓系統有機會喘息)
     const BATCH_SIZE = 100;
     const now = new Date();
+
+    // 3.1 依「上次開台時間」分組，活躍頻道每次都檢查，冷門頻道分組輪詢
+    const windowStart = new Date(now);
+    windowStart.setDate(windowStart.getDate() - ACTIVE_CHANNEL_WINDOW_DAYS);
+
+    const channelIds = allChannels.map((c) => c.id);
+    const lastStreamStarts = await prisma.streamSession.groupBy({
+      by: ["channelId"],
+      where: { channelId: { in: channelIds } },
+      _max: { startedAt: true },
+    });
+    const lastStreamMap = new Map(
+      lastStreamStarts.map((s) => [s.channelId, s._max.startedAt ?? null])
+    );
+
+    const activeChannels: typeof allChannels = [];
+    const slowChannels: typeof allChannels = [];
+
+    for (const channel of allChannels) {
+      const lastStart = lastStreamMap.get(channel.id) ?? null;
+      if (channel.isLive || (lastStart && lastStart >= windowStart)) {
+        activeChannels.push(channel);
+      } else {
+        slowChannels.push(channel);
+      }
+    }
+
+    slowPollIndex = (slowPollIndex + 1) % SLOW_POLL_GROUPS;
+    const slowPollBatch = slowChannels.filter(
+      (channel) => getPollGroup(channel.twitchChannelId) === slowPollIndex
+    );
+
+    const channels = [...activeChannels, ...slowPollBatch];
+
+    if (channels.length === 0) {
+      logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
+      return;
+    }
 
     // 只儲存狀態有變化的頻道，避免累積全量更新資料
     const changedUpdates: {
