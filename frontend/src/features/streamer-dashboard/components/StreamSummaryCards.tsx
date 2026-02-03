@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { getStreamerSummary, type StreamerSummary } from "@/lib/api/streamer";
 import { StatCard } from "./StatCard";
@@ -9,15 +9,30 @@ import { apiLogger } from "@/lib/logger";
 
 type DateRange = "7d" | "30d" | "90d";
 
-export function StreamSummaryCards() {
+interface StreamSummaryCardsProps {
+  initialSummary?: StreamerSummary | null;
+  initialRange?: DateRange;
+}
+
+export function StreamSummaryCards({
+  initialSummary = null,
+  initialRange = "30d",
+}: StreamSummaryCardsProps) {
   const t = useTranslations("streamer");
-  const [range, setRange] = useState<DateRange>("30d");
-  const [summary, setSummary] = useState<StreamerSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<DateRange>(initialRange);
+  const [summary, setSummary] = useState<StreamerSummary | null>(initialSummary);
+  const [loading, setLoading] = useState(!initialSummary);
+  const appliedInitialRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSummary = async () => {
+      if (initialSummary && range === initialRange && appliedInitialRef.current !== initialRange) {
+        appliedInitialRef.current = initialRange;
+        setSummary(initialSummary);
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         setError(null);
@@ -33,7 +48,7 @@ export function StreamSummaryCards() {
     };
 
     fetchSummary();
-  }, [range]);
+  }, [range, initialSummary, initialRange]);
 
   const getDays = (r: DateRange) => (r === "7d" ? "7" : r === "30d" ? "30" : "90");
 

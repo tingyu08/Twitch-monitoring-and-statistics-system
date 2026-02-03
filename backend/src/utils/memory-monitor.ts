@@ -129,7 +129,7 @@ export class MemoryMonitor {
       if (cacheManager && typeof cacheManager.clear === "function") {
         cacheManager.clear();
       }
-    } catch (error) {
+    } catch {
     }
   }
 
@@ -145,7 +145,7 @@ export class MemoryMonitor {
         setTimeout(() => {
           this.check();
         }, 1000);
-      } catch (error) {
+      } catch {
       }
     }
   }

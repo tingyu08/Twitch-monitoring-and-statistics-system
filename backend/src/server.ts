@@ -31,6 +31,7 @@ import { startAllJobs } from "./jobs";
 import { twurpleEventSubService } from "./services/twurple-eventsub.service";
 import { logger } from "./utils/logger";
 import { memoryMonitor } from "./utils/memory-monitor";
+import { viewerMessageRepository } from "./modules/viewer/viewer-message.repository";
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
@@ -60,6 +61,13 @@ function gracefulShutdown(signal: string) {
   httpServer.close(async () => {
     console.log("✅ HTTP 伺服器已關閉");
     
+    try {
+      await viewerMessageRepository.flushPendingMessages();
+      console.log("✅ 已刷新訊息緩衝區");
+    } catch (error) {
+      console.error("❌ 刷新訊息緩衝區失敗", error);
+    }
+
     try {
       // 停止聊天監聽器
       await chatListenerManager.stop();

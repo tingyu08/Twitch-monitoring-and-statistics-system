@@ -14,6 +14,7 @@ import { twurpleHelixService } from "../services/twitch-helix.service";
 import { logger } from "../utils/logger";
 import { decryptToken } from "../utils/crypto.utils";
 import { cacheManager } from "../utils/cache-manager";
+import { retryDatabaseOperation } from "../utils/db-retry";
 
 // 類型定義
 type TransactionClient = Prisma.TransactionClient;
@@ -511,12 +512,14 @@ export class SyncUserFollowsJob {
           }, ${followData.followedAt})`
         );
 
-        await prisma.$executeRaw(
-          Prisma.sql`
-            INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
-            VALUES ${Prisma.join(rows)}
-            ON CONFLICT(userId, channelId) DO UPDATE SET followedAt=excluded.followedAt
-          `
+        await retryDatabaseOperation(() =>
+          prisma.$executeRaw(
+            Prisma.sql`
+              INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
+              VALUES ${Prisma.join(rows)}
+              ON CONFLICT(userId, channelId) DO UPDATE SET followedAt=excluded.followedAt
+            `
+          )
         );
 
         // followsToCreate 已排除 existingFollowMap，因此可視為新增

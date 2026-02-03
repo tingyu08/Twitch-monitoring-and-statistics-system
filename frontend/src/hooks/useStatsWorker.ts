@@ -51,10 +51,13 @@ export function useStatsWorker() {
       }
     };
 
+    const timeouts = timeoutsRef.current;
+    const worker = workerRef.current;
+
     return () => {
-      timeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
-      timeoutsRef.current.clear();
-      workerRef.current?.terminate();
+      timeouts.forEach((timeout) => clearTimeout(timeout));
+      timeouts.clear();
+      worker?.terminate();
       workerRef.current = null;
     };
   }, []);

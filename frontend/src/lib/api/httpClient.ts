@@ -41,7 +41,7 @@ export async function httpClient<T = any>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { timeout = 60000, skipAuth = false, ...fetchOptions } = options;
+  const { timeout = 15000, skipAuth = false, ...fetchOptions } = options;
 
   // 確保 endpoint 以 / 開頭（如果不是完整的 URL）
   const url = endpoint.startsWith("http")

@@ -25,6 +25,7 @@ export function useTimeSeriesData(range: ChartRange, granularity: ChartGranulari
     },
     {
       revalidateOnFocus: false,
+      revalidateOnMount: false,
       revalidateOnReconnect: true,
       dedupingInterval: 30000, // 30秒內不重複請求
     }
@@ -51,6 +52,7 @@ export function useHeatmapData(range: ChartRange, enabled = true) {
     },
     {
       revalidateOnFocus: false,
+      revalidateOnMount: false,
       revalidateOnReconnect: true,
       dedupingInterval: 30000,
     }
@@ -79,6 +81,7 @@ export function useSubscriptionTrendData(range: ChartRange, enabled = true) {
     },
     {
       revalidateOnFocus: false,
+      revalidateOnMount: false,
       revalidateOnReconnect: true,
       dedupingInterval: 30000,
     }

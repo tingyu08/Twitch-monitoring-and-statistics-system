@@ -1,5 +1,6 @@
 import type { PrismaClient} from "@prisma/client";
 import { logger } from "../utils/logger";
+import { recordQueryDuration } from "./query-metrics";
 
 declare global {
   // Avoid duplicate middleware in dev
@@ -32,6 +33,8 @@ export function setupSlowQueryLogger(prisma: PrismaClient, thresholdMs = 1000): 
     const before = Date.now();
     const result = await next(params);
     const duration = Date.now() - before;
+
+    recordQueryDuration(duration);
 
     if (duration >= thresholdMs) {
       logger.warn(

@@ -11,6 +11,7 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "./logger";
 import { MEMORY_THRESHOLDS } from "./memory-thresholds";
+import { getQueryStats } from "../db/query-metrics";
 
 // 效能指標類型
 interface PerformanceMetric {
@@ -40,6 +41,12 @@ interface PerformanceStats {
     }
   >;
   memory?: MemorySnapshot; // 記憶體使用情況
+  dbQueries?: {
+    count: number;
+    averageMs: number;
+    p95Ms: number;
+    maxMs: number;
+  };
 }
 
 // 記憶體快照類型
@@ -51,10 +58,10 @@ interface MemorySnapshot {
   timestamp: Date;
 }
 
-// 預設配置
+// 預設配置（依環境調整）
 const DEFAULT_CONFIG = {
-  slowThreshold: 1000, // 慢速請求閾值 (ms)
-  maxMetricsHistory: 100, // Render Free Tier: 減少為 100 以節省記憶體
+  slowThreshold: process.env.NODE_ENV === "production" ? 2000 : 1000, // 慢速請求閾值 (ms)
+  maxMetricsHistory: process.env.NODE_ENV === "production" ? 100 : 200, // 生產環境較省記憶體
   enableLogging: false, // 關閉日誌輸出
   memoryWarningThresholdMB: MEMORY_THRESHOLDS.WARNING_MB, // 使用統一的記憶體閾值
   memoryCheckIntervalMs: 30000, // 每 30 秒檢查記憶體
@@ -193,6 +200,7 @@ class PerformanceMonitor {
       p99: getPercentile(99),
       requestsByPath,
       memory: this.getMemorySnapshot(), // 加入記憶體資訊
+      dbQueries: getQueryStats() || undefined,
     };
   }
 

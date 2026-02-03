@@ -30,6 +30,13 @@ import { authLogger } from "@/lib/logger";
 import { DashboardHeader } from "@/components";
 import { QuickActionsPanel } from "@/features/streamer-dashboard/components/QuickActionsPanel";
 import { StreamSettingsEditor } from "@/features/streamer-dashboard/components/StreamSettingsEditor";
+import { useSWRConfig } from "swr";
+import type {
+  HeatmapResponse,
+  SubscriptionTrendResponse,
+  TimeSeriesResponse,
+  StreamerSummary,
+} from "@/lib/api/streamer";
 
 export default function StreamerDashboard() {
   const t = useTranslations("streamer");
@@ -38,6 +45,7 @@ export default function StreamerDashboard() {
   const [error, setError] = useState("");
   const router = useRouter();
   const { logout } = useAuthSession();
+  const { mutate } = useSWRConfig();
 
   const [chartRange, setChartRange] = useState<ChartRange>("30d");
   const [granularity, setGranularity] = useState<ChartGranularity>("day");
@@ -46,7 +54,9 @@ export default function StreamerDashboard() {
   // Epic 4 state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const canFetch = !!user;
+  const [bootstrapLoaded, setBootstrapLoaded] = useState(false);
+  const [bootstrapSummary, setBootstrapSummary] = useState<StreamerSummary | null>(null);
+  const canFetch = !!user && bootstrapLoaded;
 
   const timeSeries = useTimeSeriesData(chartRange, granularity, canFetch);
   const heatmap = useHeatmapData(chartRange, canFetch);
@@ -119,6 +129,56 @@ export default function StreamerDashboard() {
 
     fetchData();
   }, [router]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+    const fetchBootstrap = async () => {
+      setBootstrapLoaded(false);
+      try {
+        const response = await fetch(
+          `/api/streamer/dashboard?range=${chartRange}&granularity=${granularity}&subsRange=${subsChartRange}`,
+          { credentials: "include" }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Dashboard bootstrap failed: ${response.status}`);
+        }
+
+        const data: {
+          summary: StreamerSummary;
+          timeSeries: TimeSeriesResponse;
+          heatmap: HeatmapResponse;
+          subscriptionTrend: SubscriptionTrendResponse;
+        } = await response.json();
+
+        if (cancelled) return;
+
+        setBootstrapSummary(data.summary ?? null);
+        mutate(`/api/streamer/time-series/${chartRange}/${granularity}`, data.timeSeries.data, false);
+        mutate(`/api/streamer/heatmap/${chartRange}`, data.heatmap, false);
+        mutate(`/api/streamer/subscription-trend/${subsChartRange}`, data.subscriptionTrend, false);
+        if (!cancelled) {
+          setBootstrapLoaded(true);
+        }
+      } catch (err) {
+        authLogger.warn("Dashboard bootstrap failed", err);
+        if (!cancelled) {
+          setBootstrapLoaded(true);
+          mutate(`/api/streamer/time-series/${chartRange}/${granularity}`);
+          mutate(`/api/streamer/heatmap/${chartRange}`);
+          mutate(`/api/streamer/subscription-trend/${subsChartRange}`);
+        }
+      }
+    };
+
+    fetchBootstrap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, chartRange, granularity, subsChartRange, mutate]);
 
   if (loading) {
     return (
@@ -214,7 +274,7 @@ export default function StreamerDashboard() {
         {/* Story 1.2: 開台統計總覽 */}
         {uiPrefs.showSummaryCards && (
           <div className="mb-8" data-testid="summary-section">
-            <StreamSummaryCards />
+            <StreamSummaryCards initialSummary={bootstrapSummary} initialRange={chartRange} />
           </div>
         )}
 

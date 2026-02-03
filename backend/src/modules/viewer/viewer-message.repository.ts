@@ -233,6 +233,13 @@ export class ViewerMessageRepository {
     }
   }
 
+  async flushPendingMessages(): Promise<void> {
+    if (this.messageBuffer.length === 0) {
+      return;
+    }
+    await this.flushBuffers();
+  }
+
   private enqueueMessage(message: {
     viewerId: string;
     channelId: string;
