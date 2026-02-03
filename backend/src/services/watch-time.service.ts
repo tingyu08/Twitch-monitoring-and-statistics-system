@@ -11,11 +11,18 @@ import { logger } from "../utils/logger";
 // 配置常數
 const PRE_MESSAGE_BUFFER_MIN = 10; // 第一則訊息前假設看了 10 分鐘
 const POST_MESSAGE_BUFFER_MIN = 30; // 最後一則訊息後假設繼續看 30 分鐘
+const MESSAGE_PAGE_SIZE = 1000; // 分段查詢訊息（降低記憶體峰值）
 
 interface WatchSession {
   startTime: Date;
   endTime: Date;
   durationSeconds: number;
+}
+
+interface WatchTimeAccumulator {
+  currentStart: Date | null;
+  lastMessage: Date | null;
+  totalSeconds: number;
 }
 
 /**
@@ -118,6 +125,57 @@ export function calculateTotalWatchSeconds(sessions: WatchSession[]): number {
   return sessions.reduce((sum, s) => sum + s.durationSeconds, 0);
 }
 
+function accumulateWatchTime(
+  accumulator: WatchTimeAccumulator,
+  msgTime: Date,
+  streamStartTime?: Date,
+  streamEndTime?: Date
+): WatchTimeAccumulator {
+  if (!accumulator.currentStart || !accumulator.lastMessage) {
+    let startTime = new Date(msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000);
+
+    if (streamStartTime && startTime < streamStartTime) {
+      startTime = streamStartTime;
+    }
+
+    return {
+      currentStart: startTime,
+      lastMessage: msgTime,
+      totalSeconds: accumulator.totalSeconds,
+    };
+  }
+
+  const previousSessionEnd = new Date(
+    accumulator.lastMessage.getTime() + POST_MESSAGE_BUFFER_MIN * 60 * 1000
+  );
+
+  if (msgTime > previousSessionEnd) {
+    let endTime = previousSessionEnd;
+    if (streamEndTime && endTime > streamEndTime) {
+      endTime = streamEndTime;
+    }
+
+    const durationSeconds = Math.max(0, (endTime.getTime() - accumulator.currentStart.getTime()) / 1000);
+
+    let nextStart = new Date(msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000);
+    if (streamStartTime && nextStart < streamStartTime) {
+      nextStart = streamStartTime;
+    }
+
+    return {
+      currentStart: nextStart,
+      lastMessage: msgTime,
+      totalSeconds: accumulator.totalSeconds + durationSeconds,
+    };
+  }
+
+  return {
+    currentStart: accumulator.currentStart,
+    lastMessage: msgTime,
+    totalSeconds: accumulator.totalSeconds,
+  };
+}
+
 /**
  * 更新使用者在特定頻道特定日期的觀看時間
  * @param viewerId - 觀眾 ID
@@ -136,28 +194,6 @@ export async function updateViewerWatchTime(
 
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);
-
-    // 獲取該日該頻道的所有訊息時間戳
-    const messages = await prisma.viewerChannelMessage.findMany({
-      where: {
-        viewerId,
-        channelId,
-        timestamp: {
-          gte: dayStart,
-          lt: dayEnd,
-        },
-      },
-      select: {
-        timestamp: true,
-      },
-      orderBy: {
-        timestamp: "asc",
-      },
-    });
-
-    if (messages.length === 0) {
-      return;
-    }
 
     // 嘗試獲取該頻道當天的直播 Session（如果有的話）
     let streamStartTime: Date | undefined;
@@ -181,10 +217,78 @@ export async function updateViewerWatchTime(
       streamEndTime = streamSession.endedAt || undefined;
     }
 
-    // 計算觀看區段
-    const timestamps = messages.map((m) => m.timestamp);
-    const sessions = calculateWatchSessions(timestamps, streamStartTime, streamEndTime);
-    const totalWatchSeconds = calculateTotalWatchSeconds(sessions);
+    let accumulator: WatchTimeAccumulator = {
+      currentStart: null,
+      lastMessage: null,
+      totalSeconds: 0,
+    };
+    let totalMessages = 0;
+    let lastTimestamp: Date | null = null;
+    let lastId: string | null = null;
+
+    while (true) {
+      const messages = await prisma.viewerChannelMessage.findMany({
+        where: {
+          viewerId,
+          channelId,
+          timestamp: {
+            gte: dayStart,
+            lt: dayEnd,
+          },
+          ...(lastTimestamp && lastId
+            ? {
+                OR: [
+                  { timestamp: { gt: lastTimestamp } },
+                  { timestamp: lastTimestamp, id: { gt: lastId } },
+                ],
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+          timestamp: true,
+        },
+        orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+        take: MESSAGE_PAGE_SIZE,
+      });
+
+      if (messages.length === 0) {
+        break;
+      }
+
+      for (const message of messages) {
+        totalMessages++;
+        accumulator = accumulateWatchTime(
+          accumulator,
+          message.timestamp,
+          streamStartTime,
+          streamEndTime
+        );
+        lastTimestamp = message.timestamp;
+        lastId = message.id;
+      }
+    }
+
+    if (totalMessages === 0) {
+      return;
+    }
+
+    if (accumulator.currentStart && accumulator.lastMessage) {
+      let endTime = new Date(
+        accumulator.lastMessage.getTime() + POST_MESSAGE_BUFFER_MIN * 60 * 1000
+      );
+
+      if (streamEndTime && endTime > streamEndTime) {
+        endTime = streamEndTime;
+      }
+
+      accumulator.totalSeconds += Math.max(
+        0,
+        (endTime.getTime() - accumulator.currentStart.getTime()) / 1000
+      );
+    }
+
+    const totalWatchSeconds = accumulator.totalSeconds;
 
     // 更新資料庫
     await prisma.viewerChannelDailyStat.upsert({
@@ -200,7 +304,7 @@ export async function updateViewerWatchTime(
         channelId,
         date: dayStart,
         watchSeconds: Math.round(totalWatchSeconds),
-        messageCount: messages.length,
+        messageCount: totalMessages,
         emoteCount: 0,
       },
       update: {
@@ -212,7 +316,7 @@ export async function updateViewerWatchTime(
       "WatchTime",
       `Updated watch time for viewer ${viewerId} in channel ${channelId}: ${Math.round(
         totalWatchSeconds / 60
-      )} min (${sessions.length} sessions)`
+      )} min`
     );
   } catch (error) {
     logger.error("WatchTime", "Failed to update watch time", error);
