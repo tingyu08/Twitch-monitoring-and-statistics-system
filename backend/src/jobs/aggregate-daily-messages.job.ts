@@ -46,6 +46,7 @@ export async function aggregateDailyMessages(): Promise<void> {
 
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO viewer_channel_message_daily_aggs (
+        id,
         viewerId,
         channelId,
         date,
@@ -59,6 +60,7 @@ export async function aggregateDailyMessages(): Promise<void> {
         updatedAt
       )
       SELECT
+        lower(hex(randomblob(16))) AS id,
         viewerId,
         channelId,
         ${todayDate} AS date,
