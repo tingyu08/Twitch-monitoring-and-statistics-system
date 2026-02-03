@@ -1,0 +1,34 @@
+# Ignore dependencies and build outputs
+**/node_modules
+**/dist
+**/.next
+**/coverage
+
+# Logs
+**/*.log
+npm-debug.log
+
+# Env files
+.env
+.env.*
+.env.local
+.env.*.local
+
+# VCS and tooling
+.git
+.gitignore
+.vscode
+.cursor
+
+# Docs and backups
+**/*.md
+!README.md
+backup
+backups
+
+# Frontend/extension source not needed for backend image
+frontend
+extension
+
+# OS files
+.DS_Store
