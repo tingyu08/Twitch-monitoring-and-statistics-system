@@ -1,6 +1,7 @@
 import { prisma } from "../../db/prisma";
 import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/message-parser";
 import { logger } from "../../utils/logger";
+import { webSocketGateway } from "../../services/websocket.gateway";
 import { cacheManager, CacheTTL } from "../../utils/cache-manager";
 import { updateViewerWatchTime } from "../../services/watch-time.service";
 
@@ -346,6 +347,20 @@ export class ViewerMessageRepository {
       }
     >();
 
+    const lifetimeIncrements = new Map<
+      string,
+      {
+        viewerId: string;
+        channelId: string;
+        totalMessages: number;
+        totalChatMessages: number;
+        totalSubscriptions: number;
+        totalCheers: number;
+        totalBits: number;
+        lastWatchedAt: Date;
+      }
+    >();
+
     const watchTimeTargets = new Map<string, { viewerId: string; channelId: string; date: Date }>();
 
     for (const msg of batch) {
@@ -385,6 +400,28 @@ export class ViewerMessageRepository {
       daily.messageCount += 1;
       daily.emoteCount += msg.emoteCount;
       dailyStatIncrements.set(key, daily);
+
+      const lifetimeKey = `${msg.viewerId}:${msg.channelId}`;
+      const lifetime = lifetimeIncrements.get(lifetimeKey) || {
+        viewerId: msg.viewerId,
+        channelId: msg.channelId,
+        totalMessages: 0,
+        totalChatMessages: 0,
+        totalSubscriptions: 0,
+        totalCheers: 0,
+        totalBits: 0,
+        lastWatchedAt: msg.timestamp,
+      };
+
+      lifetime.totalMessages += 1;
+      if (msg.messageType === "CHAT") lifetime.totalChatMessages += 1;
+      if (msg.messageType === "SUBSCRIPTION") lifetime.totalSubscriptions += 1;
+      if (msg.messageType === "CHEER") lifetime.totalCheers += 1;
+      if (msg.bitsAmount) lifetime.totalBits += msg.bitsAmount;
+      if (msg.timestamp > lifetime.lastWatchedAt) {
+        lifetime.lastWatchedAt = msg.timestamp;
+      }
+      lifetimeIncrements.set(lifetimeKey, lifetime);
 
       if (!watchTimeTargets.has(key)) {
         watchTimeTargets.set(key, { viewerId: msg.viewerId, channelId: msg.channelId, date });
@@ -459,12 +496,59 @@ export class ViewerMessageRepository {
             },
           });
         }
+
+        for (const lifetime of lifetimeIncrements.values()) {
+          await tx.viewerChannelLifetimeStats.upsert({
+            where: {
+              viewerId_channelId: {
+                viewerId: lifetime.viewerId,
+                channelId: lifetime.channelId,
+              },
+            },
+            create: {
+              viewerId: lifetime.viewerId,
+              channelId: lifetime.channelId,
+              totalMessages: lifetime.totalMessages,
+              totalChatMessages: lifetime.totalChatMessages,
+              totalSubscriptions: lifetime.totalSubscriptions,
+              totalCheers: lifetime.totalCheers,
+              totalBits: lifetime.totalBits,
+              firstWatchedAt: lifetime.lastWatchedAt,
+              lastWatchedAt: lifetime.lastWatchedAt,
+            },
+            update: {
+              totalMessages: { increment: lifetime.totalMessages },
+              totalChatMessages:
+                lifetime.totalChatMessages > 0
+                  ? { increment: lifetime.totalChatMessages }
+                  : undefined,
+              totalSubscriptions:
+                lifetime.totalSubscriptions > 0
+                  ? { increment: lifetime.totalSubscriptions }
+                  : undefined,
+              totalCheers:
+                lifetime.totalCheers > 0 ? { increment: lifetime.totalCheers } : undefined,
+              totalBits: lifetime.totalBits > 0 ? { increment: lifetime.totalBits } : undefined,
+              lastWatchedAt: lifetime.lastWatchedAt,
+            },
+          });
+        }
       });
 
       for (const target of watchTimeTargets.values()) {
         updateViewerWatchTime(target.viewerId, target.channelId, target.date).catch((err) =>
           logger.error("ViewerMessage", "Failed to update watch time", err)
         );
+      }
+
+      for (const daily of dailyStatIncrements.values()) {
+        if (daily.messageCount > 0) {
+          webSocketGateway.emitViewerStats(daily.viewerId, {
+            channelId: daily.channelId,
+            messageCountDelta: daily.messageCount,
+          });
+          cacheManager.delete(`viewer:${daily.viewerId}:channels_list`);
+        }
       }
     } catch (error) {
       logger.error("ViewerMessage", "Failed to flush message batch", error);

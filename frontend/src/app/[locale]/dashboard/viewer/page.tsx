@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
@@ -11,7 +11,9 @@ import { useSocket } from "@/lib/socket";
 import { DashboardHeader } from "@/components";
 import { useChannels } from "@/hooks/useViewer";
 import { useQueryClient } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
+
+// 每頁顯示的頻道數量
+const CHANNELS_PER_PAGE = 24;
 
 
 // 計算並格式化開台時長
@@ -46,9 +48,8 @@ export default function ViewerDashboardPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredChannels, setFilteredChannels] = useState<FollowedChannel[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const lastNotifiedChannelsRef = useRef<string>("");
-  const parentRef = useRef<HTMLDivElement | null>(null);
-  const [columns, setColumns] = useState(1);
 
   const { socket, connected: socketConnected, joinChannel, leaveChannel } = useSocket();
 
@@ -82,6 +83,7 @@ export default function ViewerDashboardPage() {
             return {
               ...ch,
               isLive: true,
+              viewerCount: data.viewerCount ?? ch.viewerCount,
               currentTitle: data.title || ch.currentTitle,
               currentGameName: data.gameName || ch.currentGameName,
               currentViewerCount: data.viewerCount || 0,
@@ -103,6 +105,7 @@ export default function ViewerDashboardPage() {
             return {
               ...ch,
               isLive: false,
+              viewerCount: 0,
               currentViewerCount: 0,
               currentStreamStartedAt: undefined,
             };
@@ -112,15 +115,62 @@ export default function ViewerDashboardPage() {
       });
     };
 
-    // P1 Optimization: stats-update and channel.update removed
-    // Now handled by React Query refetchInterval (60s)
+    const handleChannelUpdate = (data: {
+      channelId?: string;
+      channelName?: string;
+      twitchChannelId?: string;
+      title?: string;
+      gameName?: string;
+      viewerCount?: number;
+      startedAt?: string;
+    }) => {
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+        return prev.map((ch) => {
+          if (
+            ch.id === data.channelId ||
+            ch.channelName === data.channelName ||
+            ch.channelName === data.twitchChannelId
+          ) {
+            return {
+              ...ch,
+              viewerCount: data.viewerCount ?? ch.viewerCount,
+              currentViewerCount: data.viewerCount ?? ch.currentViewerCount,
+              currentTitle: data.title || ch.currentTitle,
+              currentGameName: data.gameName || ch.currentGameName,
+              currentStreamStartedAt: data.startedAt || ch.currentStreamStartedAt,
+            };
+          }
+          return ch;
+        });
+      });
+    };
+
+    const handleStatsUpdate = (data: { channelId: string; messageCountDelta: number }) => {
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+        return prev.map((ch) => {
+          if (ch.id === data.channelId) {
+            return {
+              ...ch,
+              messageCount: ch.messageCount + data.messageCountDelta,
+            };
+          }
+          return ch;
+        });
+      });
+    };
 
     socket.on("stream.online", handleStreamOnline);
     socket.on("stream.offline", handleStreamOffline);
+    socket.on("channel.update", handleChannelUpdate);
+    socket.on("stats-update", handleStatsUpdate);
 
     return () => {
       socket.off("stream.online", handleStreamOnline);
       socket.off("stream.offline", handleStreamOffline);
+      socket.off("channel.update", handleChannelUpdate);
+      socket.off("stats-update", handleStatsUpdate);
     };
   }, [socket, socketConnected, queryClient]);
 
@@ -154,6 +204,8 @@ export default function ViewerDashboardPage() {
           ch.channelName.toLowerCase().includes(lowerQuery) ||
           ch.displayName.toLowerCase().includes(lowerQuery)
       );
+      // 搜尋時重置到第一頁
+      setCurrentPage(1);
     } else {
       filtered = [...channels];
     }
@@ -175,39 +227,11 @@ export default function ViewerDashboardPage() {
     setFilteredChannels(filtered);
   }, [searchQuery, channels]);
 
-  useEffect(() => {
-    const updateColumns = () => {
-      const width = window.innerWidth;
-      if (width >= 1024) {
-        setColumns(3);
-      } else if (width >= 768) {
-        setColumns(2);
-      } else {
-        setColumns(1);
-      }
-    };
-
-    updateColumns();
-    window.addEventListener("resize", updateColumns);
-    return () => window.removeEventListener("resize", updateColumns);
-  }, []);
-
-  const rows = useMemo(() => {
-    const result: FollowedChannel[][] = [];
-    for (let i = 0; i < filteredChannels.length; i += columns) {
-      result.push(filteredChannels.slice(i, i + columns));
-    }
-    return result;
-  }, [filteredChannels, columns]);
-
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 340,
-    overscan: 6,
-  });
-
-  const virtualRows = rowVirtualizer.getVirtualItems();
+  // 計算分頁
+  const totalPages = Math.ceil(filteredChannels.length / CHANNELS_PER_PAGE);
+  const startIndex = (currentPage - 1) * CHANNELS_PER_PAGE;
+  const endIndex = startIndex + CHANNELS_PER_PAGE;
+  const currentPageChannels = filteredChannels.slice(startIndex, endIndex);
 
   // 通知後端監聽當前頁面的開台頻道
   const notifyListenChannels = useCallback(async (channelsToListen: FollowedChannel[]) => {
@@ -230,13 +254,13 @@ export default function ViewerDashboardPage() {
     }
   }, []);
 
+  // 當頁面變更時通知後端（只在頁碼變化時執行）
   useEffect(() => {
-    if (virtualRows.length === 0) return;
-    const visibleChannels = virtualRows.flatMap((row) => rows[row.index] ?? []);
-    if (visibleChannels.length > 0) {
-      notifyListenChannels(visibleChannels);
+    if (currentPageChannels.length > 0) {
+      notifyListenChannels(currentPageChannels);
     }
-  }, [virtualRows, rows, notifyListenChannels]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   // P1 Fix: Subscribe to all followed channels for WebSocket updates
   // This ensures we get "Stream Online" toasts
@@ -263,6 +287,12 @@ export default function ViewerDashboardPage() {
 
   const handleChannelClick = (channelId: string) => {
     router.push(`/dashboard/viewer/${channelId}`);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // 滾動到頂部
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   if (authLoading || loading) {
@@ -353,7 +383,14 @@ export default function ViewerDashboardPage() {
               {t("viewer.followedChannels")}
             </h2>
             <span className="text-sm text-purple-600/60 dark:text-purple-500">
-              ({t("viewer.channelCount", { count: filteredChannels.length })})
+              ({t("viewer.channelCount", { count: filteredChannels.length })}
+              {totalPages > 1
+                ? ` · ${t("viewer.pageInfo", {
+                    current: currentPage,
+                    total: totalPages,
+                  })}`
+                : ""}
+              )
             </span>
           </div>
           <div className="relative">
@@ -404,42 +441,21 @@ export default function ViewerDashboardPage() {
             )}
           </div>
         ) : (
-          <div ref={parentRef} className="h-[70vh] overflow-auto">
-            <div
-              style={{
-                height: rowVirtualizer.getTotalSize(),
-                position: "relative",
-              }}
-            >
-              {virtualRows.map((virtualRow) => {
-                const row = rows[virtualRow.index] ?? [];
-                return (
-                  <div
-                    key={virtualRow.key}
-                    ref={rowVirtualizer.measureElement}
-                    data-index={virtualRow.index}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                      {row.map((channel) => (
-                        <div
-                          key={channel.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleChannelClick(channel.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              handleChannelClick(channel.id);
-                            }
-                          }}
-                          className="group cursor-pointer bg-white/40 dark:bg-white/10 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/10 hover:-translate-y-1 hover:bg-white/50 dark:hover:bg-white/15"
-                        >
+          <>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {currentPageChannels.map((channel) => (
+                <div
+                  key={channel.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleChannelClick(channel.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      handleChannelClick(channel.id);
+                    }
+                  }}
+                  className="group cursor-pointer bg-white/40 dark:bg-white/10 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/10 hover:-translate-y-1 hover:bg-white/50 dark:hover:bg-white/15"
+                >
                   <div className="flex items-center gap-4 mb-4">
                     <div className="relative">
                       <Image
@@ -560,14 +576,62 @@ export default function ViewerDashboardPage() {
                       </div>
                     )}
                   </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
-          </div>
+
+            {/* 分頁導航 */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-purple-300 transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← {t("viewer.prevPage")}
+                </button>
+
+                <div className="flex gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      // 顯示前3頁、後3頁、當前頁附近3頁
+                      if (page <= 3) return true;
+                      if (page >= totalPages - 2) return true;
+                      if (Math.abs(page - currentPage) <= 1) return true;
+                      return false;
+                    })
+                    .map((page, index, arr) => (
+                      <React.Fragment key={page}>
+                        {index > 0 && arr[index - 1] !== page - 1 && (
+                          <span className="px-2 text-purple-300/50">...</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handlePageChange(page)}
+                          className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
+                            currentPage === page
+                              ? "bg-purple-600 text-white shadow-lg shadow-purple-900/30"
+                              : "bg-white/10 text-purple-300 hover:bg-white/20 border border-white/10"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-purple-300 transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {t("viewer.nextPage")} →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>

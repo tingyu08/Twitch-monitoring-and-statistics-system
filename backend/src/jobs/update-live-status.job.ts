@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
+import { cacheManager } from "../utils/cache-manager";
 
 import cron from "node-cron";
 
@@ -58,6 +59,10 @@ export async function updateLiveStatusFn() {
           channelName: true,
           isLive: true, // 獲取當前狀態以便比較變更
           lastLiveCheckAt: true, // P0: 用於判斷是否需要更新檢查時間
+          currentViewerCount: true,
+          currentTitle: true,
+          currentGameName: true,
+          currentStreamStartedAt: true,
         },
       })
     );
@@ -134,6 +139,14 @@ export async function updateLiveStatusFn() {
       gameName: string;
       startedAt: Date | null;
     }[] = [];
+    const liveUpdates: {
+      channelId: string;
+      twitchId: string;
+      viewerCount: number;
+      title: string;
+      gameName: string;
+      startedAt: Date | null;
+    }[] = [];
     const changedTwitchIds = new Set<string>();
     let liveCount = 0;
     let offlineCount = 0;
@@ -159,6 +172,15 @@ export async function updateLiveStatusFn() {
           const isLive = !!stream;
           if (isLive) {
             liveCount++;
+            webSocketGateway.broadcastStreamStatus("channel.update", {
+              channelId: channel.id,
+              channelName: channel.channelName,
+              twitchChannelId: channel.twitchChannelId,
+              title: stream.title,
+              gameName: stream.gameName,
+              viewerCount: stream.viewerCount,
+              startedAt: stream.startedAt,
+            });
           } else {
             offlineCount++;
           }
@@ -176,6 +198,29 @@ export async function updateLiveStatusFn() {
               startedAt: isLive ? stream.startedAt : null,
             });
             changedTwitchIds.add(channel.twitchChannelId);
+          }
+
+          if (isLive) {
+            const viewerCount = stream.viewerCount;
+            const title = stream.title;
+            const gameName = stream.gameName;
+            const startedAt = stream.startedAt ?? null;
+
+            if (
+              channel.currentViewerCount !== viewerCount ||
+              channel.currentTitle !== title ||
+              channel.currentGameName !== gameName ||
+              channel.currentStreamStartedAt?.getTime() !== startedAt?.getTime()
+            ) {
+              liveUpdates.push({
+                channelId: channel.id,
+                twitchId: channel.twitchChannelId,
+                viewerCount,
+                title,
+                gameName,
+                startedAt,
+              });
+            }
           }
         }
       } catch (err) {
@@ -225,18 +270,19 @@ export async function updateLiveStatusFn() {
         "Jobs",
         `✅ 已更新 ${channelsNeedingCheckUpdate.length}/${channels.length} 個頻道的檢查時間`
       );
-    } else if (changedUpdates.length > 0) {
+    } else if (changedUpdates.length > 0 || liveUpdates.length > 0) {
       // 有變化的頻道：完整更新
-      for (let i = 0; i < changedUpdates.length; i += TX_BATCH_SIZE) {
+      const combinedUpdates = [...changedUpdates, ...liveUpdates];
+      for (let i = 0; i < combinedUpdates.length; i += TX_BATCH_SIZE) {
         // 記憶體保護：如果記憶體過高，中止剩餘更新
         const { memoryMonitor } = await import("../utils/memory-monitor");
         if (memoryMonitor.isOverLimit()) {
           break;
         }
 
-        const batch = changedUpdates.slice(i, i + TX_BATCH_SIZE);
+        const batch = combinedUpdates.slice(i, i + TX_BATCH_SIZE);
         const batchIndex = Math.floor(i / TX_BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(changedUpdates.length / TX_BATCH_SIZE);
+        const totalBatches = Math.ceil(combinedUpdates.length / TX_BATCH_SIZE);
 
         try {
           // 使用重試機制執行批次更新
@@ -245,7 +291,11 @@ export async function updateLiveStatusFn() {
               prisma.channel.update({
                 where: { twitchChannelId: update.twitchId },
                 data: {
-                  isLive: update.isLive,
+                  ...("isLive" in update
+                    ? {
+                        isLive: update.isLive,
+                      }
+                    : {}),
                   currentViewerCount: update.viewerCount,
                   currentTitle: update.title || undefined,
                   currentGameName: update.gameName || undefined,
@@ -273,6 +323,10 @@ export async function updateLiveStatusFn() {
         if (i + TX_BATCH_SIZE < changedUpdates.length) {
           await new Promise((resolve) => setTimeout(resolve, 150));
         }
+      }
+
+      if (liveUpdates.length > 0) {
+        cacheManager.deleteSuffix(":channels_list");
       }
 
       // P0 Optimization: 只更新超過 5 分鐘未檢查的未變化頻道

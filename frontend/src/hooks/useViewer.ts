@@ -3,7 +3,7 @@
  * P1 優化：統一管理 Viewer 相關的資料請求，自動處理快取和去重
  */
 
-import { useQuery, UseQueryResult } from "@tanstack/react-query";
+import { useQuery, UseQueryResult, useQueryClient } from "@tanstack/react-query";
 import { viewerApi } from "@/lib/api/viewer";
 import type {
   FollowedChannel,
@@ -19,6 +19,33 @@ import type {
  * 取代原本的 WebSocket channel.update 和 stats-update 事件
  */
 export function useChannels() {
+  const queryClient = useQueryClient();
+
+  const mergeChannels = (fresh: FollowedChannel[], prev?: FollowedChannel[]) => {
+    if (!prev || prev.length === 0) return fresh;
+    const prevMap = new Map(prev.map((ch) => [ch.id, ch]));
+
+    return fresh.map((channel) => {
+      const previous = prevMap.get(channel.id);
+      if (!previous) return channel;
+
+      const prevViewer = previous.viewerCount ?? previous.currentViewerCount ?? 0;
+      const freshViewer = channel.viewerCount ?? channel.currentViewerCount ?? 0;
+      const mergedViewer =
+        channel.isLive && previous.isLive ? Math.max(freshViewer, prevViewer) : freshViewer;
+
+      return {
+        ...channel,
+        viewerCount: mergedViewer || channel.viewerCount,
+        currentViewerCount: mergedViewer || channel.currentViewerCount,
+        currentTitle: channel.currentTitle || previous.currentTitle,
+        currentGameName: channel.currentGameName || previous.currentGameName,
+        currentStreamStartedAt: channel.currentStreamStartedAt || previous.currentStreamStartedAt,
+        messageCount: Math.max(channel.messageCount ?? 0, previous.messageCount ?? 0),
+      };
+    });
+  };
+
   return useQuery<FollowedChannel[], Error>({
     queryKey: ["viewer", "channels"],
     queryFn: () => viewerApi.getFollowedChannels(),
@@ -27,6 +54,7 @@ export function useChannels() {
     refetchInterval: 60 * 1000, // P1: 每 60 秒自動重新取得（取代 WebSocket 推送）
     refetchIntervalInBackground: false, // 背景時不輪詢，節省資源
     refetchOnWindowFocus: false, // 避免與可見性手動刷新重複
+    select: (data) => mergeChannels(data, queryClient.getQueryData(["viewer", "channels"]) as FollowedChannel[] | undefined),
   });
 }
 

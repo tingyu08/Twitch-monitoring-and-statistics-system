@@ -40,7 +40,8 @@ export class WebSocketGateway {
     logger.debug("WebSocket", `Client connected: ${socket.id}`);
 
     // P1 Memory: Join channel-specific rooms for targeted broadcasting
-    socket.on("join-channel", (channelId: string) => {
+    socket.on("join-channel", (payload: string | { channelId?: string }) => {
+      const channelId = typeof payload === "string" ? payload : payload?.channelId;
       if (channelId && typeof channelId === "string") {
         socket.join(`channel:${channelId}`);
         // logger.debug("WebSocket", `Client ${socket.id} joined room: channel:${channelId}`);
@@ -48,7 +49,8 @@ export class WebSocketGateway {
     });
 
     // P1 Memory: Leave channel room when no longer needed
-    socket.on("leave-channel", (channelId: string) => {
+    socket.on("leave-channel", (payload: string | { channelId?: string }) => {
+      const channelId = typeof payload === "string" ? payload : payload?.channelId;
       if (channelId && typeof channelId === "string") {
         socket.leave(`channel:${channelId}`);
         // logger.debug("WebSocket", `Client ${socket.id} left room: channel:${channelId}`);
@@ -56,7 +58,8 @@ export class WebSocketGateway {
     });
 
     // P1 Memory: Join viewer-specific room for personal updates
-    socket.on("join-viewer", (viewerId: string) => {
+    socket.on("join-viewer", (payload: string | { viewerId?: string }) => {
+      const viewerId = typeof payload === "string" ? payload : payload?.viewerId;
       if (viewerId && typeof viewerId === "string") {
         socket.join(`viewer:${viewerId}`);
         // logger.debug("WebSocket", `Client ${socket.id} joined room: viewer:${viewerId}`);
@@ -72,12 +75,19 @@ export class WebSocketGateway {
   }
 
   /**
-   * @deprecated P1 Optimization: stats-update is no longer used
-   * Message counts are now fetched via React Query refetchInterval
-   * This method is kept for backwards compatibility but does nothing
+   * Channel stats update (room-based)
    */
-  public broadcastChannelStats(_channelId: string, _stats: Partial<ViewerChannelStats>) {
-    // No-op: stats-update removed in favor of React Query polling
+  public broadcastChannelStats(channelId: string, stats: Partial<ViewerChannelStats>) {
+    if (!this.io) return;
+    this.io.to(`channel:${channelId}`).emit("stats-update", { channelId, ...stats });
+  }
+
+  /**
+   * Send stats update to a specific viewer
+   */
+  public emitViewerStats(viewerId: string, stats: { channelId: string; messageCountDelta: number }) {
+    if (!this.io) return;
+    this.io.to(`viewer:${viewerId}`).emit("stats-update", stats);
   }
 
   /**

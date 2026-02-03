@@ -30,7 +30,7 @@ export const socketRooms = {
    */
   joinChannel: (socket: Socket | null, channelId: string) => {
     if (socket?.connected) {
-      socket.emit("join-channel", { channelId });
+      socket.emit("join-channel", channelId);
       console.log(`[Socket] Joined channel room: ${channelId}`);
     }
   },
@@ -40,7 +40,7 @@ export const socketRooms = {
    */
   leaveChannel: (socket: Socket | null, channelId: string) => {
     if (socket?.connected) {
-      socket.emit("leave-channel", { channelId });
+      socket.emit("leave-channel", channelId);
       console.log(`[Socket] Left channel room: ${channelId}`);
     }
   },
@@ -50,7 +50,7 @@ export const socketRooms = {
    */
   joinViewer: (socket: Socket | null, viewerId: string) => {
     if (socket?.connected) {
-      socket.emit("join-viewer", { viewerId });
+      socket.emit("join-viewer", viewerId);
       console.log(`[Socket] Joined viewer room: ${viewerId}`);
     }
   },

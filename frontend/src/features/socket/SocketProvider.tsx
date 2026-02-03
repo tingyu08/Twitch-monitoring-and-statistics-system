@@ -22,7 +22,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       // Re-join rooms on reconnect
       if (user?.viewerId) {
-        socket.emit("join-viewer", { viewerId: user.viewerId });
+        socket.emit("join-viewer", user.viewerId);
         joinedViewerRef.current = user.viewerId;
       }
 
@@ -181,7 +181,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   // Join viewer room when user changes
   useEffect(() => {
     if (socket && connected && user?.viewerId && joinedViewerRef.current !== user.viewerId) {
-      socket.emit("join-viewer", { viewerId: user.viewerId });
+      socket.emit("join-viewer", user.viewerId);
       joinedViewerRef.current = user.viewerId;
     }
   }, [socket, connected, user?.viewerId]);

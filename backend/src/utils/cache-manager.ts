@@ -159,6 +159,22 @@ export class CacheManager {
   }
 
   /**
+   * 依據後綴模式刪除多個快取項目
+   * @param suffix 後綴模式（例如 ":channels_list"）
+   * @returns 刪除的項目數量
+   */
+  deleteSuffix(suffix: string): number {
+    let count = 0;
+    for (const key of this.cache.keys()) {
+      if (key.endsWith(suffix)) {
+        this.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
    * 刪除特定實況主的所有收益相關快取
    * @param streamerId 實況主 ID
    */
