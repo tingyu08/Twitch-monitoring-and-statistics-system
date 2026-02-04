@@ -23,28 +23,58 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/?error=no_code", request.url));
   }
 
+  const storedState = request.cookies.get("twitch_auth_state")?.value;
+  if (!state || !storedState || state !== storedState) {
+    console.error("[Auth Callback] CSRF State Mismatch");
+    return NextResponse.redirect(new URL("/?error=state_mismatch", request.url));
+  }
+
   try {
-    // 建構後端 Callback URL
-    // P1 Fix: 確保使用正確的環境變數，與 getApiUrl 邏輯一致，避免 origin 不匹配
     const backendDataUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL ||
       process.env.BACKEND_URL ||
       process.env.NEXT_PUBLIC_API_BASE_URL ||
       "http://127.0.0.1:4000";
 
-    const backendCallbackUrl = new URL(`${backendDataUrl}/auth/twitch/callback`);
-    backendCallbackUrl.searchParams.set("code", code);
-    if (state) {
-      backendCallbackUrl.searchParams.set("state", state);
-    }
-    // 轉發所有可能的錯誤參數
-    if (error) backendCallbackUrl.searchParams.set("error", error);
-    if (errorDescription)
-      backendCallbackUrl.searchParams.set("error_description", errorDescription);
+    const exchangeResponse = await fetch(`${backendDataUrl}/auth/twitch/exchange`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code }),
+    });
 
-    // 3. 直接重導向到後端，讓瀏覽器帶著 Cookies (State) 訪問後端
-    // 後端驗證成功後會寫入 Auth Cookies 並重導回前端 Dashboard
-    return NextResponse.redirect(backendCallbackUrl.toString());
+    if (!exchangeResponse.ok) {
+      console.error("[Auth Callback] Token exchange failed", exchangeResponse.status);
+      return NextResponse.redirect(new URL("/?error=exchange_failed", request.url));
+    }
+
+    const { accessToken, refreshToken } = (await exchangeResponse.json()) as {
+      accessToken: string;
+      refreshToken: string;
+    };
+
+    const isProd = process.env.NODE_ENV === "production";
+    const response = NextResponse.redirect(new URL("/dashboard/viewer", request.url));
+
+    response.cookies.set("auth_token", accessToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+      maxAge: 60 * 60,
+    });
+
+    response.cookies.set("refresh_token", refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+    });
+
+    response.cookies.delete("twitch_auth_state");
+    return response;
   } catch (err) {
     console.error("[Auth Callback] Error building redirect URL:", err);
     return NextResponse.redirect(new URL("/?error=server_error", request.url));

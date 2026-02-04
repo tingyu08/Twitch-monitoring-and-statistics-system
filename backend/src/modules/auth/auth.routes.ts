@@ -22,6 +22,7 @@ const authController = new AuthController();
 const oauthRouter = Router();
 oauthRouter.get("/login", authController.login);
 oauthRouter.get("/callback", authController.twitchCallback);
+oauthRouter.post("/exchange", authController.exchange);
 
 // API 路由（需要認證）
 const apiRouter = Router();

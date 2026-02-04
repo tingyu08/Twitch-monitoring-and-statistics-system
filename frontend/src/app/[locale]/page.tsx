@@ -33,7 +33,7 @@ function LandingPageContent() {
       localStorage.removeItem("logout_pending");
     }
     // 統一登入：一次授權即可同時存取實況主與觀眾功能
-    window.location.href = `${API_BASE_URL}/auth/twitch/login`;
+    window.location.href = "/api/auth/login";
   };
 
   if (loading) {

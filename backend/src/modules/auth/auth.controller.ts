@@ -167,6 +167,23 @@ export class AuthController {
     }
   };
 
+  // Exchange code for tokens (BFF callback)
+  public exchange = async (req: Request, res: Response) => {
+    try {
+      const code = req.body?.code as string | undefined;
+      if (!code) {
+        return res.status(400).json({ message: "Authorization code missing" });
+      }
+
+      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(code);
+      return res.json({ accessToken, refreshToken });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      authLogger.error("Twitch Exchange Error", { errorMessage });
+      return res.status(500).json({ message: "Token exchange failed" });
+    }
+  };
+
   public me = async (req: AuthenticatedRequest, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
