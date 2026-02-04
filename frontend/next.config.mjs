@@ -33,9 +33,27 @@ const nextConfig = {
       allowedOrigins: ["localhost:3000", "app.localhost:3000"],
     },
   },
-  // E2E Test Configuration - rewrites to mock server on port 4001
-  // rewrites removed to force direct backend connection
-  // async rewrites() { ... }
+  async rewrites() {
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      process.env.BACKEND_URL ||
+      (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
+
+    if (!backendUrl) {
+      return [];
+    }
+
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
+      },
+      {
+        source: "/auth/:path*",
+        destination: `${backendUrl}/auth/:path*`,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

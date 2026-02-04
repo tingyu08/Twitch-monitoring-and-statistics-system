@@ -3,12 +3,14 @@
  * 處理認證標頭、錯誤處理和請求日誌
  */
 
-// 移除 rewrites 後，必須使用完整 URL
-// 優先支援 NEXT_PUBLIC_BACKEND_URL，與 getApiUrl.ts 保持一致
+// 瀏覽器端使用同網域 /api，由 Next.js rewrite 轉發
+// 伺服器端才使用完整後端 URL
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
+  typeof window === "undefined"
+    ? process.env.NEXT_PUBLIC_BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000")
+    : "";
 
 // 開發環境日誌記錄器
 const apiLogger = {
