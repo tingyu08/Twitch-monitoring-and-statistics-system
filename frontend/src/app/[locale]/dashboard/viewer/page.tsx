@@ -55,6 +55,18 @@ export default function ViewerDashboardPage() {
 
   const error = queryError ? queryError.message : null;
 
+  const syncSessionCache = (channelsData: FollowedChannel[]) => {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.setItem(
+        "viewer_followed_channels",
+        JSON.stringify({ data: channelsData, timestamp: Date.now() })
+      );
+    } catch {
+      // ignore cache write errors
+    }
+  };
+
   // 重定向未登入使用者
   useEffect(() => {
     if (!authLoading && !user) {
@@ -78,7 +90,7 @@ export default function ViewerDashboardPage() {
       console.log("[WebSocket] Stream online:", data);
       queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
         if (!prev) return prev;
-        return prev.map((ch) => {
+        const next = prev.map((ch) => {
           if (ch.id === data.channelId || ch.channelName === data.channelName) {
             return {
               ...ch,
@@ -92,6 +104,8 @@ export default function ViewerDashboardPage() {
           }
           return ch;
         });
+        syncSessionCache(next);
+        return next;
       });
     };
 
@@ -100,7 +114,7 @@ export default function ViewerDashboardPage() {
       console.log("[WebSocket] Stream offline:", data);
       queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
         if (!prev) return prev;
-        return prev.map((ch) => {
+        const next = prev.map((ch) => {
           if (ch.id === data.channelId || ch.channelName === data.channelName) {
             return {
               ...ch,
@@ -112,6 +126,8 @@ export default function ViewerDashboardPage() {
           }
           return ch;
         });
+        syncSessionCache(next);
+        return next;
       });
     };
 
@@ -126,7 +142,7 @@ export default function ViewerDashboardPage() {
     }) => {
       queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
         if (!prev) return prev;
-        return prev.map((ch) => {
+        const next = prev.map((ch) => {
           if (
             ch.id === data.channelId ||
             ch.channelName === data.channelName ||
@@ -143,13 +159,15 @@ export default function ViewerDashboardPage() {
           }
           return ch;
         });
+        syncSessionCache(next);
+        return next;
       });
     };
 
     const handleStatsUpdate = (data: { channelId: string; messageCountDelta: number }) => {
       queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
         if (!prev) return prev;
-        return prev.map((ch) => {
+        const next = prev.map((ch) => {
           if (ch.id === data.channelId) {
             return {
               ...ch,
@@ -158,6 +176,8 @@ export default function ViewerDashboardPage() {
           }
           return ch;
         });
+        syncSessionCache(next);
+        return next;
       });
     };
 
