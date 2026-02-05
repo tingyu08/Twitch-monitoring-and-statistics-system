@@ -236,7 +236,7 @@ MEMORY_CRITICAL_MB=480
 
 ---
 
-## � 權限需求 (Pending Epics)
+## 🛠️ 權限需求 (Pending Epics)
 
 未來開發將需要以下 Twitch OAuth Scopes：
 

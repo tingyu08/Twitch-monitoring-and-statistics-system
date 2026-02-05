@@ -22,54 +22,88 @@ export class TwurpleVideoService {
 
   /**
    * 同步實況主的 VOD (Videos)
-   * 預設同步最新的 20 筆封存影片 (Archive)
+   * 預設同步所有可取得的封存影片 (Archive)
    */
   async syncVideos(userId: string, streamerId: string) {
     try {
       const client = await this.getClient();
-      // 獲取前 20 筆 Archive (過往實況)
-      const videos = await client.videos.getVideosByUser(userId, {
-        limit: 20,
-        type: "archive",
-      });
-
+      const MAX_PAGES = 20;
+      const PAGE_SIZE = 100;
+      let cursor: string | undefined;
+      let page = 0;
       let syncedCount = 0;
 
-      for (const video of videos.data) {
-        // Twurple video.duration is a string like "3h30m20s"
-        await prisma.video.upsert({
-          where: { twitchVideoId: video.id },
-          create: {
-            twitchVideoId: video.id,
-            streamerId: streamerId,
-            title: video.title,
-            description: video.description,
-            url: video.url,
-            // Replace {width}x{height} placeholders
-            thumbnailUrl: video.thumbnailUrl
-              .replace("%{width}", "320")
-              .replace("%{height}", "180")
-              .replace("{width}", "320")
-              .replace("{height}", "180"),
-            viewCount: video.views,
-            duration: video.duration,
-            language: video.language,
-            type: video.type,
-            createdAt: video.creationDate,
-            publishedAt: video.publishDate,
-          },
-          update: {
-            title: video.title,
-            description: video.description,
-            thumbnailUrl: video.thumbnailUrl
-              .replace("%{width}", "320")
-              .replace("%{height}", "180")
-              .replace("{width}", "320")
-              .replace("{height}", "180"),
-            viewCount: video.views,
+      const normalizeThumbnail = (url?: string | null) => {
+        if (!url) return null;
+        return url
+          .replace("%{width}", "320")
+          .replace("%{height}", "180")
+          .replace("{width}", "320")
+          .replace("{height}", "180");
+      };
+
+      while (page < MAX_PAGES) {
+        const response = await client.callApi({
+          type: "helix",
+          url: "videos",
+          query: {
+            user_id: userId,
+            type: "archive",
+            first: String(PAGE_SIZE),
+            ...(cursor ? { after: cursor } : {}),
           },
         });
-        syncedCount++;
+
+        const data = (response?.data || []) as Array<{
+          id: string;
+          title: string;
+          description: string | null;
+          url: string;
+          thumbnail_url: string | null;
+          view_count: number;
+          duration: string;
+          language: string | null;
+          type: string;
+          created_at: string;
+          published_at: string;
+        }>;
+
+        if (data.length === 0) {
+          break;
+        }
+
+        for (const video of data) {
+          await prisma.video.upsert({
+            where: { twitchVideoId: video.id },
+            create: {
+              twitchVideoId: video.id,
+              streamerId: streamerId,
+              title: video.title,
+              description: video.description,
+              url: video.url,
+              thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
+              viewCount: video.view_count,
+              duration: video.duration,
+              language: video.language,
+              type: video.type,
+              createdAt: new Date(video.created_at),
+              publishedAt: new Date(video.published_at),
+            },
+            update: {
+              title: video.title,
+              description: video.description,
+              thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
+              viewCount: video.view_count,
+            },
+          });
+          syncedCount++;
+        }
+
+        cursor = response?.pagination?.cursor;
+        if (!cursor) {
+          break;
+        }
+        page++;
       }
 
       // 清理超過 90 天的影片（實況主用表格）
@@ -161,123 +195,93 @@ export class TwurpleVideoService {
 
   /**
    * 同步實況主的 Clips (精華)
-   * 預設同步最新的 50 筆
+   * 透過分頁同步所有可取得的剪輯
    */
   async syncClips(userId: string, streamerId: string) {
     try {
       const client = await this.getClient();
-
-      // 策略更新：分開抓取以滿足兩種需求
-      // 1. 觀眾追蹤名單：需要歷史觀看數最高的 6 部 (Top 6 All-time)
-      const topClipsPromise = client.clips.getClipsForBroadcaster(userId, {
-        limit: 6,
-      });
-
-      // 2. 實況主後台：需要顯示最近生成的剪輯 (Recent 50)
-      // Twitch API Clips 預設按熱門排序，要抓「最新」只能透過 startDate 限制範圍
-      // 注意：Twurple 有 bug，startDate 的 Date 物件會被錯誤序列化為 toString() 格式
-      // 而非 ISO 8601 格式，因此這裡使用底層 API 調用來繞過此問題
-      const recentStart = new Date();
-      recentStart.setDate(recentStart.getDate() - 60); // 抓過去 60 天
-      const recentClipsPromise = client.callApi({
-        type: "helix",
-        url: "clips",
-        query: {
-          broadcaster_id: userId,
-          started_at: recentStart.toISOString(), // 手動轉換為 ISO 8601 格式
-          first: "50",
-        },
-      });
-
-      const [topClips, recentClipsResponse] = await Promise.all([
-        topClipsPromise,
-        recentClipsPromise,
-      ]);
-
-      // 將原始 API 回應轉換為與 Twurple 相同的格式
-      interface RawClipData {
-        id: string;
-        url: string;
-        embed_url: string;
-        broadcaster_id: string;
-        broadcaster_name: string;
-        creator_id: string;
-        creator_name: string;
-        video_id: string;
-        game_id: string;
-        language: string;
-        title: string;
-        view_count: number;
-        created_at: string;
-        thumbnail_url: string;
-        duration: number;
-      }
-      const recentClips = {
-        data: (recentClipsResponse.data || []).map((clip: RawClipData) => ({
-          id: clip.id,
-          url: clip.url,
-          embedUrl: clip.embed_url,
-          broadcasterId: clip.broadcaster_id,
-          broadcasterDisplayName: clip.broadcaster_name,
-          creatorId: clip.creator_id,
-          creatorDisplayName: clip.creator_name,
-          videoId: clip.video_id,
-          gameId: clip.game_id,
-          language: clip.language,
-          title: clip.title,
-          views: clip.view_count,
-          creationDate: new Date(clip.created_at),
-          thumbnailUrl: clip.thumbnail_url,
-          duration: clip.duration,
-        })),
-      };
-
-      // 合併結果並去重
-      const uniqueClips = new Map();
-      [...topClips.data, ...recentClips.data].forEach((clip) => {
-        uniqueClips.set(clip.id, clip);
-      });
-
+      const MAX_PAGES = 50;
+      const PAGE_SIZE = 100;
+      const startDate = new Date("2016-01-01T00:00:00Z");
+      let cursor: string | undefined;
+      let page = 0;
       let syncedCount = 0;
 
-      for (const clip of uniqueClips.values()) {
-        await prisma.clip.upsert({
-          where: { twitchClipId: clip.id },
-          create: {
-            twitchClipId: clip.id,
-            streamerId: streamerId,
-            creatorId: clip.creatorId,
-            creatorName: clip.creatorDisplayName,
-            videoId: clip.videoId,
-            gameId: clip.gameId,
-            title: clip.title,
-            url: clip.url,
-            embedUrl: clip.embedUrl,
-            thumbnailUrl: clip.thumbnailUrl
-              .replace("%{width}", "320")
-              .replace("%{height}", "180")
-              .replace("{width}", "320")
-              .replace("{height}", "180"),
-            viewCount: clip.views,
-            duration: clip.duration,
-            createdAt: clip.creationDate,
-          },
-          update: {
-            title: clip.title,
-            viewCount: clip.views,
-            thumbnailUrl: clip.thumbnailUrl
-              .replace("%{width}", "320")
-              .replace("%{height}", "180")
-              .replace("{width}", "320")
-              .replace("{height}", "180"),
+      const normalizeThumbnail = (url?: string | null) => {
+        if (!url) return null;
+        return url
+          .replace("%{width}", "320")
+          .replace("%{height}", "180")
+          .replace("{width}", "320")
+          .replace("{height}", "180");
+      };
+
+      while (page < MAX_PAGES) {
+        const response = await client.callApi({
+          type: "helix",
+          url: "clips",
+          query: {
+            broadcaster_id: userId,
+            started_at: startDate.toISOString(),
+            first: String(PAGE_SIZE),
+            ...(cursor ? { after: cursor } : {}),
           },
         });
-        syncedCount++;
+
+        const data = (response?.data || []) as Array<{
+          id: string;
+          url: string;
+          embed_url: string | null;
+          creator_id: string | null;
+          creator_name: string | null;
+          video_id: string | null;
+          game_id: string | null;
+          title: string;
+          view_count: number;
+          created_at: string;
+          thumbnail_url: string | null;
+          duration: number;
+        }>;
+
+        if (data.length === 0) {
+          break;
+        }
+
+        for (const clip of data) {
+          await prisma.clip.upsert({
+            where: { twitchClipId: clip.id },
+            create: {
+              twitchClipId: clip.id,
+              streamerId: streamerId,
+              creatorId: clip.creator_id,
+              creatorName: clip.creator_name,
+              videoId: clip.video_id,
+              gameId: clip.game_id,
+              title: clip.title,
+              url: clip.url,
+              embedUrl: clip.embed_url,
+              thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
+              viewCount: clip.view_count,
+              duration: clip.duration,
+              createdAt: new Date(clip.created_at),
+            },
+            update: {
+              title: clip.title,
+              viewCount: clip.view_count,
+              thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
+            },
+          });
+          syncedCount++;
+        }
+
+        cursor = response?.pagination?.cursor;
+        if (!cursor) {
+          break;
+        }
+        page++;
       }
-      logger.debug(
-        "TwitchVideo",
-        `Synced ${syncedCount} clips (Top 6 + Recent) for user ${userId}`
-      );
+
+      logger.debug("TwitchVideo", `Synced ${syncedCount} clips for user ${userId}`);
     } catch (error) {
       logger.error("TwitchVideo", `Failed to sync clips for user ${userId}`, error);
     }
