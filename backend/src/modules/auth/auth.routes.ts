@@ -7,11 +7,14 @@ import { env } from "../../config/env";
 import { getFollowedChannels } from "../viewer/viewer.service";
 import { logger } from "../../utils/logger";
 
-// P1 Fix: 統一 Cookie 設定，避免 sameSite 不一致導致清除失敗
+// P1 Fix: 統一 Cookie 設定
+// 使用 "lax" 而非 "none"，因為：
+// 1. OAuth callback 是 top-level navigation，"lax" 完全支援
+// 2. "none" 會被某些瀏覽器的 third-party cookie 阻擋政策影響
 const getCookieOptions = () => ({
   httpOnly: true,
   secure: env.nodeEnv === "production",
-  sameSite: (env.nodeEnv === "production" ? "none" : "lax") as "none" | "lax",
+  sameSite: "lax" as const,
   path: "/",
 });
 

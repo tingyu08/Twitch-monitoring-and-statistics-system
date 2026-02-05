@@ -36,12 +36,17 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_PUBLIC_API_BASE_URL ||
       "http://127.0.0.1:4000";
 
+    // 必須傳遞 redirect_uri，因為 Twitch 要求交換 token 時的 redirect_uri
+    // 必須與授權請求時完全相同
+    const origin = request.nextUrl.origin;
+    const redirectUri = `${origin}/auth/twitch/callback`;
+
     const exchangeResponse = await fetch(`${backendDataUrl}/auth/twitch/exchange`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, redirectUri }),
     });
 
     if (!exchangeResponse.ok) {
@@ -57,10 +62,12 @@ export async function GET(request: NextRequest) {
     const isProd = process.env.NODE_ENV === "production";
     const response = NextResponse.redirect(new URL("/dashboard/viewer", request.url));
 
+    // 使用 "lax" 而非 "none" 以避免 third-party cookie 阻擋問題
+    // 因為前端和 API routes 在同一個域名下，不需要 cross-site cookie
     response.cookies.set("auth_token", accessToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? "none" : "lax",
+      sameSite: "lax",
       path: "/",
       maxAge: 60 * 60,
     });
@@ -68,7 +75,7 @@ export async function GET(request: NextRequest) {
     response.cookies.set("refresh_token", refreshToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? "none" : "lax",
+      sameSite: "lax",
       path: "/",
       maxAge: 7 * 24 * 60 * 60,
     });

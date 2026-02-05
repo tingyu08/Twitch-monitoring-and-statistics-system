@@ -45,22 +45,22 @@ export async function POST(request: NextRequest) {
     { status: 200 }
   );
 
-  // 清除 auth_token
+  // 清除 auth_token（使用 "lax" 以匹配設定時的 sameSite）
   response.cookies.set("auth_token", "", {
     expires: new Date(0),
     path: "/",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    sameSite: "lax",
   });
 
-  // 清除 refresh_token
+  // 清除 refresh_token（使用 "lax" 以匹配設定時的 sameSite）
   response.cookies.set("refresh_token", "", {
     expires: new Date(0),
     path: "/",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    sameSite: "lax",
   });
 
   return response;

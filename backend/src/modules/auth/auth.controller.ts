@@ -22,8 +22,10 @@ const STREAMER_STATE_COOKIE = "twitch_auth_state";
 
 const DEFAULT_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: env.nodeEnv === "production", // HTTPS required for sameSite=none
-  sameSite: (env.nodeEnv === "production" ? "none" : "lax") as "none" | "lax",
+  secure: env.nodeEnv === "production",
+  // 使用 "lax" 而非 "none"，避免 third-party cookie 阻擋問題
+  // OAuth callback 是 top-level navigation，"lax" 完全支援
+  sameSite: "lax" as const,
   path: "/",
 };
 
@@ -171,11 +173,15 @@ export class AuthController {
   public exchange = async (req: Request, res: Response) => {
     try {
       const code = req.body?.code as string | undefined;
+      const redirectUri = req.body?.redirectUri as string | undefined;
+
       if (!code) {
         return res.status(400).json({ message: "Authorization code missing" });
       }
 
-      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(code);
+      // 使用前端傳來的 redirectUri（因為 Twitch 要求必須與授權時相同）
+      // 如果沒傳則使用後端預設值（向後相容）
+      const { accessToken, refreshToken } = await handleStreamerTwitchCallback(code, redirectUri);
       return res.json({ accessToken, refreshToken });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";

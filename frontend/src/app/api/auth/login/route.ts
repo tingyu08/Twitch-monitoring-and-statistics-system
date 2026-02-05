@@ -22,7 +22,9 @@ function getCookieOptions() {
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: (isProd ? "none" : "lax") as "none" | "lax",
+    // OAuth callback 是 top-level navigation，使用 "lax" 即可
+    // "none" 會被某些瀏覽器的 third-party cookie 阻擋政策影響
+    sameSite: "lax" as const,
     path: "/",
     maxAge: 5 * 60,
   };

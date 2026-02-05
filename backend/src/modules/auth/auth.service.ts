@@ -23,7 +23,10 @@ export interface Streamer {
  * - 儲存 access token
  * - 回傳 JWT token
  */
-export async function handleStreamerTwitchCallback(code: string): Promise<{
+export async function handleStreamerTwitchCallback(
+  code: string,
+  redirectUri?: string
+): Promise<{
   streamer: Streamer;
   accessToken: string;
   refreshToken: string;
@@ -31,8 +34,10 @@ export async function handleStreamerTwitchCallback(code: string): Promise<{
   const startTime = Date.now();
 
   // 1. 交換 code 為 access token
+  // 使用前端傳來的 redirectUri（Twitch 要求必須與授權時相同）
+  // 如果沒傳則使用後端預設值（向後相容直接後端 callback 的流程）
   const tokenData = await exchangeCodeForToken(code, {
-    redirectUri: env.twitchRedirectUri,
+    redirectUri: redirectUri || env.twitchRedirectUri,
   });
 
   // 2. 取得 Twitch 使用者資訊
