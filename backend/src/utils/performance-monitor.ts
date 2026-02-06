@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API Performance Monitoring Middleware
  *
  * 提供以下功能：
@@ -59,8 +59,10 @@ interface MemorySnapshot {
 }
 
 // 預設配置（依環境調整）
+export const API_SLOW_THRESHOLD_MS = process.env.NODE_ENV === "production" ? 2000 : 1000;
+
 const DEFAULT_CONFIG = {
-  slowThreshold: process.env.NODE_ENV === "production" ? 2000 : 1000, // 慢速請求閾值 (ms)
+  slowThreshold: API_SLOW_THRESHOLD_MS, // 慢速請求閾值 (ms)
   maxMetricsHistory: process.env.NODE_ENV === "production" ? 100 : 200, // 生產環境較省記憶體
   enableLogging: false, // 關閉日誌輸出
   memoryWarningThresholdMB: MEMORY_THRESHOLDS.WARNING_MB, // 使用統一的記憶體閾值
@@ -299,3 +301,4 @@ export type { PerformanceMetric, PerformanceStats, MemorySnapshot };
 
 // 導出類別本身 (用於測試或自訂配置)
 export { PerformanceMonitor };
+

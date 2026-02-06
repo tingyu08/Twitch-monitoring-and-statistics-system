@@ -1,14 +1,18 @@
-/**
+﻿/**
  * API Performance Monitoring Routes
  *
- * 提供效能統計端點：
+ * 提供以下功能：
  * - GET /api/admin/performance/stats - 取得效能統計
- * - GET /api/admin/performance/slow - 取得慢速請求列表
+ * - GET /api/admin/performance/slow - 取得慢速請求
  * - POST /api/admin/performance/reset - 重置效能指標
  */
 
 import { Router, Request, Response } from "express";
-import { performanceMonitor, performanceLogger } from "../../utils/performance-monitor";
+import {
+  performanceMonitor,
+  performanceLogger,
+  API_SLOW_THRESHOLD_MS,
+} from "../../utils/performance-monitor";
 import { cacheManager } from "../../utils/cache-manager";
 
 const router = Router();
@@ -29,7 +33,7 @@ router.get("/stats", (_req: Request, res: Response) => {
       data: {
         api: {
           ...stats,
-          slowThreshold: 1000, // ms (調整為 1 秒)
+          slowThreshold: API_SLOW_THRESHOLD_MS,
         },
         cache: cacheStats,
         memory: {
@@ -68,7 +72,7 @@ router.get("/slow", (_req: Request, res: Response) => {
       success: true,
       data: {
         count: slowRequests.length,
-        threshold: 200, // ms
+        threshold: API_SLOW_THRESHOLD_MS,
         requests: slowRequests.slice(-50), // 最近 50 個慢速請求
       },
     });

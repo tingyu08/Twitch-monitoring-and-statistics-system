@@ -484,6 +484,15 @@ interface GameStatsRow {
   streamCount: number | bigint | string | null;
 }
 
+interface SessionAnalyticsRow {
+  startedAt: Date;
+  durationSeconds: number | null;
+  avgViewers: number | null;
+  peakViewers: number | null;
+  title: string | null;
+  category: string | null;
+}
+
 function toNumber(value: number | bigint | string | null | undefined): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "bigint") return Number(value);
@@ -536,9 +545,61 @@ async function getGameStatsByChannelId(channelId: string, cutoffDate: Date): Pro
     .sort((a, b) => b.totalHours - a.totalHours);
 }
 
-/**
- * ���o��p�D�U�C��/�������έp�ƾ�
- */
+function buildGameStatsFromSessions(sessions: SessionAnalyticsRow[]): GameStats[] {
+  if (sessions.length === 0) {
+    return [];
+  }
+
+  const buckets = new Map<
+    string,
+    { totalSeconds: number; weightedViewersSum: number; peakViewers: number; streamCount: number }
+  >();
+
+  for (const session of sessions) {
+    const gameName = session.category || "Uncategorized";
+    const durationSeconds = session.durationSeconds || 0;
+    const avgViewers = session.avgViewers || 0;
+    const peakViewers = session.peakViewers || 0;
+
+    const existing = buckets.get(gameName) || {
+      totalSeconds: 0,
+      weightedViewersSum: 0,
+      peakViewers: 0,
+      streamCount: 0,
+    };
+
+    existing.totalSeconds += durationSeconds;
+    existing.weightedViewersSum += avgViewers * durationSeconds;
+    existing.peakViewers = Math.max(existing.peakViewers, peakViewers);
+    existing.streamCount += 1;
+    buckets.set(gameName, existing);
+  }
+
+  const totalAllSeconds = Array.from(buckets.values()).reduce((sum, row) => sum + row.totalSeconds, 0);
+
+  return Array.from(buckets.entries())
+    .map(([gameName, row]) => ({
+      gameName,
+      totalHours: Math.round((row.totalSeconds / 3600) * 10) / 10,
+      avgViewers: row.totalSeconds > 0 ? Math.round(row.weightedViewersSum / row.totalSeconds) : 0,
+      peakViewers: row.peakViewers,
+      streamCount: row.streamCount,
+      percentage: totalAllSeconds > 0 ? Math.round((row.totalSeconds / totalAllSeconds) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.totalHours - a.totalHours);
+}
+
+function buildViewerTrendsFromSessions(sessions: SessionAnalyticsRow[]): ViewerTrendPoint[] {
+  return sessions.map((session) => ({
+    date: session.startedAt.toISOString(),
+    title: session.title || "Untitled",
+    avgViewers: session.avgViewers || 0,
+    peakViewers: session.peakViewers || 0,
+    durationHours: Math.round(((session.durationSeconds || 0) / 3600) * 10) / 10,
+    category: session.category || "Uncategorized",
+  }));
+}
+
 export async function getStreamerGameStats(
   streamerId: string,
   range: "7d" | "30d" | "90d" = "30d"
@@ -598,17 +659,50 @@ export async function getChannelViewerTrends(
       channelId: channelId,
       startedAt: { gte: cutoffDate },
     },
+    select: {
+      startedAt: true,
+      title: true,
+      avgViewers: true,
+      peakViewers: true,
+      durationSeconds: true,
+      category: true,
+    },
     orderBy: { startedAt: "asc" },
   });
 
-  return sessions.map((session) => ({
-    date: session.startedAt.toISOString(),
-    title: session.title || "Untitled",
-    avgViewers: session.avgViewers || 0,
-    peakViewers: session.peakViewers || 0,
-    durationHours: Math.round(((session.durationSeconds || 0) / 3600) * 10) / 10,
-    category: session.category || "Uncategorized",
-  }));
+  return buildViewerTrendsFromSessions(sessions);
+}
+
+export async function getChannelGameStatsAndViewerTrends(
+  channelId: string,
+  range: "7d" | "30d" | "90d" = "30d"
+): Promise<{ gameStats: GameStats[]; viewerTrends: ViewerTrendPoint[] }> {
+  const now = new Date();
+  let days = 30;
+  if (range === "7d") days = 7;
+  if (range === "90d") days = 90;
+  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+  const sessions = await prisma.streamSession.findMany({
+    where: {
+      channelId,
+      startedAt: { gte: cutoffDate },
+    },
+    select: {
+      startedAt: true,
+      title: true,
+      avgViewers: true,
+      peakViewers: true,
+      durationSeconds: true,
+      category: true,
+    },
+    orderBy: { startedAt: "asc" },
+  });
+
+  return {
+    gameStats: buildGameStatsFromSessions(sessions),
+    viewerTrends: buildViewerTrendsFromSessions(sessions),
+  };
 }
 
 // ========== Story 6.4 Helpers ==========

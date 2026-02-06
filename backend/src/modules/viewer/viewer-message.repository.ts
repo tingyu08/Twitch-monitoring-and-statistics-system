@@ -3,7 +3,6 @@ import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/messag
 import { logger } from "../../utils/logger";
 import { webSocketGateway } from "../../services/websocket.gateway";
 import { cacheManager, CacheTTL } from "../../utils/cache-manager";
-import { updateViewerWatchTime } from "../../services/watch-time.service";
 
 // 可以接受 ParsedMessage 或 RawChatMessage
 type MessageInput = ParsedMessage | RawChatMessage;
@@ -361,8 +360,6 @@ export class ViewerMessageRepository {
       }
     >();
 
-    const watchTimeTargets = new Map<string, { viewerId: string; channelId: string; date: Date }>();
-
     for (const msg of batch) {
       const date = new Date(msg.timestamp);
       date.setHours(0, 0, 0, 0);
@@ -423,9 +420,6 @@ export class ViewerMessageRepository {
       }
       lifetimeIncrements.set(lifetimeKey, lifetime);
 
-      if (!watchTimeTargets.has(key)) {
-        watchTimeTargets.set(key, { viewerId: msg.viewerId, channelId: msg.channelId, date });
-      }
     }
 
     try {
@@ -534,12 +528,6 @@ export class ViewerMessageRepository {
           });
         }
       });
-
-      for (const target of watchTimeTargets.values()) {
-        updateViewerWatchTime(target.viewerId, target.channelId, target.date).catch((err) =>
-          logger.error("ViewerMessage", "Failed to update watch time", err)
-        );
-      }
 
       for (const daily of dailyStatIncrements.values()) {
         if (daily.messageCount > 0) {

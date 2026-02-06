@@ -4,7 +4,7 @@ import type { AuthRequest } from "../auth/auth.middleware";
 import { logger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 import { ViewerMessageStatsController } from "./viewer-message-stats.controller";
-import { getChannelGameStats, getChannelViewerTrends } from "../streamer/streamer.service";
+import { getChannelGameStatsAndViewerTrends } from "../streamer/streamer.service";
 
 export class ViewerController {
   public consent = async (req: AuthRequest, res: Response) => {
@@ -137,7 +137,7 @@ export class ViewerController {
           startDate.setDate(endDate.getDate() - days);
 
           // 並行查詢所有資料源，使用 Promise.allSettled 避免單點失敗
-          const [channelStatsResult, messageStatsResult, gameStatsResult, viewerTrendsResult] =
+          const [channelStatsResult, messageStatsResult, analyticsResult] =
             await Promise.allSettled([
               getChannelStats(viewerId, channelId, days),
               this.getMessageStatsInternal(
@@ -146,8 +146,7 @@ export class ViewerController {
                 startDate.toISOString(),
                 endDate.toISOString()
               ),
-              getChannelGameStats(channelId, rangeKey),
-              getChannelViewerTrends(channelId, rangeKey),
+              getChannelGameStatsAndViewerTrends(channelId, rangeKey),
             ]);
 
           // 提取成功的結果
@@ -155,9 +154,10 @@ export class ViewerController {
             channelStatsResult.status === "fulfilled" ? channelStatsResult.value : null;
           const messageStats =
             messageStatsResult.status === "fulfilled" ? messageStatsResult.value : null;
-          const gameStats = gameStatsResult.status === "fulfilled" ? gameStatsResult.value : null;
+          const gameStats =
+            analyticsResult.status === "fulfilled" ? analyticsResult.value.gameStats : null;
           const viewerTrends =
-            viewerTrendsResult.status === "fulfilled" ? viewerTrendsResult.value : null;
+            analyticsResult.status === "fulfilled" ? analyticsResult.value.viewerTrends : null;
 
           // 記錄失敗的請求
           if (channelStatsResult.status === "rejected") {
@@ -166,11 +166,8 @@ export class ViewerController {
           if (messageStatsResult.status === "rejected") {
             logger.warn("BFF", "messageStats failed:", messageStatsResult.reason);
           }
-          if (gameStatsResult.status === "rejected") {
-            logger.warn("BFF", "gameStats failed:", gameStatsResult.reason);
-          }
-          if (viewerTrendsResult.status === "rejected") {
-            logger.warn("BFF", "viewerTrends failed:", viewerTrendsResult.reason);
+          if (analyticsResult.status === "rejected") {
+            logger.warn("BFF", "channel analytics failed:", analyticsResult.reason);
           }
 
           return {

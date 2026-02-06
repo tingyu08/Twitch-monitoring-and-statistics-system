@@ -50,6 +50,9 @@ export default function ViewerDashboardPage() {
   const [filteredChannels, setFilteredChannels] = useState<FollowedChannel[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const lastNotifiedChannelsRef = useRef<string>("");
+  const joinedChannelIdsRef = useRef<Set<string>>(new Set());
+  const cacheWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCachePayloadRef = useRef<FollowedChannel[] | null>(null);
 
   const { socket, connected: socketConnected, joinChannel, leaveChannel } = useSocket();
 
@@ -57,15 +60,33 @@ export default function ViewerDashboardPage() {
 
   const syncSessionCache = (channelsData: FollowedChannel[]) => {
     if (typeof window === "undefined") return;
-    try {
-      sessionStorage.setItem(
-        "viewer_followed_channels",
-        JSON.stringify({ data: channelsData, timestamp: Date.now() })
-      );
-    } catch {
-      // ignore cache write errors
-    }
+
+    pendingCachePayloadRef.current = channelsData;
+    if (cacheWriteTimerRef.current) return;
+
+    cacheWriteTimerRef.current = setTimeout(() => {
+      cacheWriteTimerRef.current = null;
+      const latest = pendingCachePayloadRef.current;
+      if (!latest) return;
+
+      try {
+        sessionStorage.setItem(
+          "viewer_followed_channels",
+          JSON.stringify({ data: latest, timestamp: Date.now() })
+        );
+      } catch {
+        // ignore cache write errors
+      }
+    }, 400);
   };
+
+  useEffect(() => {
+    return () => {
+      if (cacheWriteTimerRef.current) {
+        clearTimeout(cacheWriteTimerRef.current);
+      }
+    };
+  }, []);
 
   // 重定向未登入使用者
   useEffect(() => {
@@ -282,28 +303,34 @@ export default function ViewerDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
-  // P1 Fix: Subscribe to all followed channels for WebSocket updates
-  // This ensures we get "Stream Online" toasts
+  // Subscribe/unsubscribe by diff to avoid full reconnect storms on every channels update.
   useEffect(() => {
-    if (!channels || channels.length === 0) return;
+    const nextChannelIds = new Set((channels || []).map((ch) => ch.id));
+    const prevChannelIds = joinedChannelIdsRef.current;
 
-    // Join all channels
-    channels.forEach((ch) => {
-      joinChannel(ch.id);
+    nextChannelIds.forEach((channelId) => {
+      if (!prevChannelIds.has(channelId)) {
+        joinChannel(channelId);
+      }
     });
 
-    return () => {
-      // Optional: Leave channels on unmount?
-      // Or keep them joined if we want background notifications while on other pages?
-      // For now, let's leave them to be clean, logic in SocketProvider handles re-joins if needed (e.g. if we kept the list).
-      // However, SocketProvider Ref is manual.
-      // If we want notifications across the app, we should probably move this logic to a higher level or not leave on unmount.
-      // But since this is the "Followed Channels" page, it makes sense to listen here.
-      channels.forEach((ch) => {
-        leaveChannel(ch.id);
-      });
-    };
+    prevChannelIds.forEach((channelId) => {
+      if (!nextChannelIds.has(channelId)) {
+        leaveChannel(channelId);
+      }
+    });
+
+    joinedChannelIdsRef.current = nextChannelIds;
   }, [channels, joinChannel, leaveChannel]);
+
+  useEffect(() => {
+    return () => {
+      joinedChannelIdsRef.current.forEach((channelId) => {
+        leaveChannel(channelId);
+      });
+      joinedChannelIdsRef.current.clear();
+    };
+  }, [leaveChannel]);
 
   const handleChannelClick = (channelId: string) => {
     router.push(`/dashboard/viewer/${channelId}`);

@@ -1,4 +1,4 @@
-import { prisma } from "../db/prisma";
+﻿import { prisma } from "../db/prisma";
 
 import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
@@ -15,7 +15,6 @@ let isRunning = false;
 const LAST_CHECK_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
 
 // 活躍頻道判斷窗口（超過此時間未開台則進入低頻輪詢）
-const ACTIVE_CHANNEL_WINDOW_DAYS = 7;
 const SLOW_POLL_GROUPS = 5;
 let slowPollIndex = 0;
 
@@ -90,27 +89,12 @@ export async function updateLiveStatusFn() {
     // 3. 分批處理 (減少 Batch Size 讓系統有機會喘息)
     const BATCH_SIZE = 100;
     const now = new Date();
-
-    // 3.1 依「上次開台時間」分組，活躍頻道每次都檢查，冷門頻道分組輪詢
-    const windowStart = new Date(now);
-    windowStart.setDate(windowStart.getDate() - ACTIVE_CHANNEL_WINDOW_DAYS);
-
-    const channelIds = allChannels.map((c) => c.id);
-    const lastStreamStarts = await prisma.streamSession.groupBy({
-      by: ["channelId"],
-      where: { channelId: { in: channelIds } },
-      _max: { startedAt: true },
-    });
-    const lastStreamMap = new Map(
-      lastStreamStarts.map((s) => [s.channelId, s._max.startedAt ?? null])
-    );
-
+    // 3.1 Reduce per-minute DB pressure by avoiding streamSession groupBy in hot loop.
     const activeChannels: typeof allChannels = [];
     const slowChannels: typeof allChannels = [];
 
     for (const channel of allChannels) {
-      const lastStart = lastStreamMap.get(channel.id) ?? null;
-      if (channel.isLive || (lastStart && lastStart >= windowStart)) {
+      if (channel.isLive) {
         activeChannels.push(channel);
       } else {
         slowChannels.push(channel);
@@ -464,3 +448,4 @@ export async function updateLiveStatusFn() {
     isRunning = false;
   }
 }
+
