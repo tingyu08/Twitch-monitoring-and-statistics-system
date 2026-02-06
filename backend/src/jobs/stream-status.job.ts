@@ -12,7 +12,7 @@ import { logger } from "../utils/logger";
 import { memoryMonitor } from "../utils/memory-monitor";
 
 // 每 5 分鐘執行（第 0 秒觸發）
-const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "0 */5 * * * *";
+const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
 
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;

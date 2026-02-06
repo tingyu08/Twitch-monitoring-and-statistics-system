@@ -9,6 +9,7 @@ import { prisma } from "../db/prisma";
 import type { ExportJob } from "@prisma/client";
 import * as fs from "fs";
 import * as path from "path";
+import { once } from "events";
 import archiver from "archiver";
 import { logger } from "../utils/logger";
 
@@ -27,10 +28,6 @@ export interface ExportJobResult {
 // 匯出資料類型定義 (使用寬鬆類型以兼容 Prisma 返回值)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExportViewerData = Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ExportDailyStat = Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ExportMessageAgg = Record<string, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExportLifetimeStat = Record<string, any>;
 
@@ -170,18 +167,6 @@ export class DataExportService {
         throw new Error("找不到觀眾記錄");
       }
 
-      const dailyStats = await prisma.viewerChannelDailyStat.findMany({
-        where: { viewerId },
-        include: { channel: true },
-        orderBy: { date: "desc" },
-      });
-
-      const messageAggs = await prisma.viewerChannelMessageDailyAgg.findMany({
-        where: { viewerId },
-        include: { channel: true },
-        orderBy: { date: "desc" },
-      });
-
       const lifetimeStats = await prisma.viewerChannelLifetimeStats.findMany({
         where: { viewerId },
         include: { channel: true },
@@ -190,16 +175,11 @@ export class DataExportService {
       // 生成 JSON 檔案
       await this.generateJsonFiles(exportDir, {
         viewer,
-        dailyStats,
-        messageAggs,
         lifetimeStats,
       });
 
-      // 生成 CSV 檔案
-      await this.generateCsvFiles(exportDir, {
-        dailyStats,
-        messageAggs,
-      });
+      await this.generateDailyStatsFiles(exportDir, viewerId);
+      await this.generateMessageAggFiles(exportDir, viewerId);
 
       // 生成 README
       await this.generateReadme(exportDir);
@@ -228,8 +208,6 @@ export class DataExportService {
     exportDir: string,
     data: {
       viewer: ExportViewerData;
-      dailyStats: ExportDailyStat[];
-      messageAggs: ExportMessageAgg[];
       lifetimeStats: ExportLifetimeStat[];
     }
   ): Promise<void> {
@@ -246,36 +224,6 @@ export class DataExportService {
     await fs.promises.writeFile(
       path.join(jsonDir, "profile.json"),
       JSON.stringify(profile, null, 2)
-    );
-
-    // watch-time-stats.json - 觀看時數記錄
-    const watchTimeStats = data.dailyStats.map((stat) => ({
-      date: stat.date,
-      channelName: stat.channel?.channelName,
-      watchSeconds: stat.watchSeconds,
-      messageCount: stat.messageCount,
-      emoteCount: stat.emoteCount,
-    }));
-    await fs.promises.writeFile(
-      path.join(jsonDir, "watch-time-stats.json"),
-      JSON.stringify(watchTimeStats, null, 2)
-    );
-
-    // message-stats.json - 留言統計
-    const messageStats = data.messageAggs.map((agg) => ({
-      date: agg.date,
-      channelName: agg.channel?.channelName,
-      totalMessages: agg.totalMessages,
-      chatMessages: agg.chatMessages,
-      subscriptions: agg.subscriptions,
-      cheers: agg.cheers,
-      giftSubs: agg.giftSubs,
-      raids: agg.raids,
-      totalBits: agg.totalBits,
-    }));
-    await fs.promises.writeFile(
-      path.join(jsonDir, "message-stats.json"),
-      JSON.stringify(messageStats, null, 2)
     );
 
     // lifetime-stats.json - 全時段統計
@@ -322,48 +270,125 @@ export class DataExportService {
     }
   }
 
-  /**
-   * 生成 CSV 檔案
-   */
-  private async generateCsvFiles(
-    exportDir: string,
-    data: {
-      dailyStats: ExportDailyStat[];
-      messageAggs: ExportMessageAgg[];
+  private async writeLine(stream: fs.WriteStream, content: string): Promise<void> {
+    if (stream.write(content)) {
+      return;
     }
-  ): Promise<void> {
-    const csvDir = path.join(exportDir, "csv");
+    await once(stream, "drain");
+  }
 
-    // watch-time-daily.csv
-    const watchTimeCsv = [
-      "日期,頻道,觀看秒數,觀看分鐘,留言數,表情數",
-      ...data.dailyStats.map(
-        (stat) =>
-          `${stat.date.toISOString().split("T")[0]},${
-            stat.channel?.channelName || ""
-          },${stat.watchSeconds},${Math.round(stat.watchSeconds / 60)},${
-            stat.messageCount
-          },${stat.emoteCount}`
-      ),
-    ].join("\n");
-    await fs.promises.writeFile(
-      path.join(csvDir, "watch-time-daily.csv"),
-      "\ufeff" + watchTimeCsv
-    ); // BOM for Excel
+  private async generateDailyStatsFiles(exportDir: string, viewerId: string): Promise<void> {
+    const jsonPath = path.join(exportDir, "json", "watch-time-stats.json");
+    const csvPath = path.join(exportDir, "csv", "watch-time-daily.csv");
+    const jsonStream = fs.createWriteStream(jsonPath, { encoding: "utf8" });
+    const csvStream = fs.createWriteStream(csvPath, { encoding: "utf8" });
 
-    // messages-daily.csv
-    const messagesCsv = [
-      "日期,頻道,總留言數,聊天訊息,訂閱,Cheer,禮物訂閱,Raid,Bits數",
-      ...data.messageAggs.map(
-        (agg) =>
-          `${agg.date.toISOString().split("T")[0]},${
-            agg.channel?.channelName || ""
-          },${agg.totalMessages},${agg.chatMessages},${agg.subscriptions},${
-            agg.cheers
-          },${agg.giftSubs},${agg.raids},${agg.totalBits || 0}`
-      ),
-    ].join("\n");
-    await fs.promises.writeFile(path.join(csvDir, "messages-daily.csv"), "\ufeff" + messagesCsv);
+    await this.writeLine(jsonStream, "[\n");
+    await this.writeLine(csvStream, "\ufeff日期,頻道,觀看秒數,觀看分鐘,留言數,表情數\n");
+
+    let isFirst = true;
+    let cursorId: string | undefined;
+
+    while (true) {
+      const batch = await prisma.viewerChannelDailyStat.findMany({
+        where: { viewerId },
+        include: { channel: true },
+        orderBy: { id: "asc" },
+        take: 200,
+        ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      });
+
+      if (batch.length === 0) break;
+
+      for (const stat of batch) {
+        const jsonRow = {
+          date: stat.date,
+          channelName: stat.channel?.channelName,
+          watchSeconds: stat.watchSeconds,
+          messageCount: stat.messageCount,
+          emoteCount: stat.emoteCount,
+        };
+
+        await this.writeLine(
+          jsonStream,
+          `${isFirst ? "" : ",\n"}${JSON.stringify(jsonRow, null, 2)}`
+        );
+        isFirst = false;
+
+        await this.writeLine(
+          csvStream,
+          `${stat.date.toISOString().split("T")[0]},${stat.channel?.channelName || ""},${
+            stat.watchSeconds
+          },${Math.round(stat.watchSeconds / 60)},${stat.messageCount},${stat.emoteCount}\n`
+        );
+      }
+
+      cursorId = batch[batch.length - 1].id;
+    }
+
+    await this.writeLine(jsonStream, "\n]");
+    await new Promise<void>((resolve) => jsonStream.end(resolve));
+    await new Promise<void>((resolve) => csvStream.end(resolve));
+  }
+
+  private async generateMessageAggFiles(exportDir: string, viewerId: string): Promise<void> {
+    const jsonPath = path.join(exportDir, "json", "message-stats.json");
+    const csvPath = path.join(exportDir, "csv", "messages-daily.csv");
+    const jsonStream = fs.createWriteStream(jsonPath, { encoding: "utf8" });
+    const csvStream = fs.createWriteStream(csvPath, { encoding: "utf8" });
+
+    await this.writeLine(jsonStream, "[\n");
+    await this.writeLine(csvStream, "\ufeff日期,頻道,總留言數,聊天訊息,訂閱,Cheer,禮物訂閱,Raid,Bits數\n");
+
+    let isFirst = true;
+    let cursorId: string | undefined;
+
+    while (true) {
+      const batch = await prisma.viewerChannelMessageDailyAgg.findMany({
+        where: { viewerId },
+        include: { channel: true },
+        orderBy: { id: "asc" },
+        take: 200,
+        ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      });
+
+      if (batch.length === 0) break;
+
+      for (const agg of batch) {
+        const jsonRow = {
+          date: agg.date,
+          channelName: agg.channel?.channelName,
+          totalMessages: agg.totalMessages,
+          chatMessages: agg.chatMessages,
+          subscriptions: agg.subscriptions,
+          cheers: agg.cheers,
+          giftSubs: agg.giftSubs,
+          raids: agg.raids,
+          totalBits: agg.totalBits,
+        };
+
+        await this.writeLine(
+          jsonStream,
+          `${isFirst ? "" : ",\n"}${JSON.stringify(jsonRow, null, 2)}`
+        );
+        isFirst = false;
+
+        await this.writeLine(
+          csvStream,
+          `${agg.date.toISOString().split("T")[0]},${agg.channel?.channelName || ""},${
+            agg.totalMessages
+          },${agg.chatMessages},${agg.subscriptions},${agg.cheers},${agg.giftSubs},${agg.raids},${
+            agg.totalBits || 0
+          }\n`
+        );
+      }
+
+      cursorId = batch[batch.length - 1].id;
+    }
+
+    await this.writeLine(jsonStream, "\n]");
+    await new Promise<void>((resolve) => jsonStream.end(resolve));
+    await new Promise<void>((resolve) => csvStream.end(resolve));
   }
 
   /**

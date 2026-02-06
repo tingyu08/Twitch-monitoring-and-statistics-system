@@ -271,13 +271,17 @@ export class CacheManager {
    * 估算物件大小（bytes）
    */
   private estimateSize(value: unknown): number {
-    // 簡化的大小估算
+    // 保守估算：JSON 字串長度 + V8 物件額外開銷
     try {
       const json = JSON.stringify(value);
-      return json.length * 2; // UTF-16 characters = 2 bytes each
+      return json.length * 4;
     } catch {
-      return 1024; // Fallback
+      return 2048;
     }
+  }
+
+  getMaxMemoryBytes(): number {
+    return this.maxMemoryBytes;
   }
 
   /**
@@ -332,7 +336,7 @@ export const CacheTTL = {
  */
 export function getAdaptiveTTL(baseTTL: number, cacheManager: CacheManager): number {
   const stats = cacheManager.getStats();
-  const memoryUsagePercent = (stats.memoryUsage / (15 * 1024 * 1024)) * 100; // 15MB 上限
+  const memoryUsagePercent = (stats.memoryUsage / cacheManager.getMaxMemoryBytes()) * 100;
 
   // 高記憶體壓力：縮短 TTL 50%
   if (memoryUsagePercent > 80) {

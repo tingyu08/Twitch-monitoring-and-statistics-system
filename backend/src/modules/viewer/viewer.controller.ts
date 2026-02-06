@@ -3,10 +3,11 @@ import { recordConsent, getChannelStats, getFollowedChannels } from "./viewer.se
 import type { AuthRequest } from "../auth/auth.middleware";
 import { logger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
-import { ViewerMessageStatsController } from "./viewer-message-stats.controller";
 import { getChannelGameStatsAndViewerTrends } from "../streamer/streamer.service";
+import { getViewerMessageStats } from "./viewer-message-stats.service";
 
 export class ViewerController {
+  private readonly BFF_TIMEOUT_MS = 10000;
   public consent = async (req: AuthRequest, res: Response) => {
     if (!req.user || req.user.role !== "viewer" || !req.user.viewerId) {
       return res.status(403).json({ error: "Forbidden" });
@@ -137,17 +138,25 @@ export class ViewerController {
           startDate.setDate(endDate.getDate() - days);
 
           // 並行查詢所有資料源，使用 Promise.allSettled 避免單點失敗
-          const [channelStatsResult, messageStatsResult, analyticsResult] =
-            await Promise.allSettled([
-              getChannelStats(viewerId, channelId, days),
-              this.getMessageStatsInternal(
-                viewerId,
-                channelId,
-                startDate.toISOString(),
-                endDate.toISOString()
-              ),
-              getChannelGameStatsAndViewerTrends(channelId, rangeKey),
-            ]);
+          const queryPromise = Promise.allSettled([
+            getChannelStats(viewerId, channelId, days),
+            this.getMessageStatsInternal(
+              viewerId,
+              channelId,
+              startDate.toISOString(),
+              endDate.toISOString()
+            ),
+            getChannelGameStatsAndViewerTrends(channelId, rangeKey),
+          ]);
+
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("BFF_TIMEOUT")), this.BFF_TIMEOUT_MS);
+          });
+
+          const [channelStatsResult, messageStatsResult, analyticsResult] = await Promise.race([
+            queryPromise,
+            timeoutPromise,
+          ]);
 
           // 提取成功的結果
           const channelStats =
@@ -187,6 +196,10 @@ export class ViewerController {
 
       return res.json(result);
     } catch (err) {
+      if (err instanceof Error && err.message === "BFF_TIMEOUT") {
+        logger.error("BFF", `BFF timeout (${this.BFF_TIMEOUT_MS}ms): channel ${channelId}`);
+        return res.status(504).json({ error: "Gateway Timeout" });
+      }
       logger.error("BFF", "Error in getChannelDetailAll:", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
@@ -201,26 +214,6 @@ export class ViewerController {
     startDate: string,
     endDate: string
   ) {
-    const messageStatsController = new ViewerMessageStatsController();
-    // 創建模擬的 req 和 res 對象
-    const mockReq = {
-      params: { viewerId, channelId },
-      query: { startDate, endDate },
-      // Mock AuthRequest parts if needed by getMessageStats
-      user: { viewerId },
-    } as unknown as AuthRequest;
-
-    let result: unknown = null;
-    const mockRes = {
-      json: (data: unknown) => {
-        result = data;
-        return mockRes;
-      },
-      status: () => mockRes,
-      // Add other methods if needed
-    } as unknown as Response;
-
-    await messageStatsController.getMessageStats(mockReq, mockRes);
-    return result;
+    return getViewerMessageStats(viewerId, channelId, startDate, endDate);
   }
 }

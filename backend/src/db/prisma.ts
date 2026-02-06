@@ -73,6 +73,8 @@ if (process.env.NODE_ENV !== "production") {
 // 連線狀態追蹤
 let isConnectionWarmed = false;
 let sqlitePragmasApplied = false;
+let keepAliveStarted = false;
+let shutdownHooksRegistered = false;
 
 async function applyLocalSqlitePragmas(): Promise<void> {
   if (isTurso || sqlitePragmasApplied) {
@@ -116,6 +118,8 @@ export async function warmupConnection(maxRetries = 3, timeoutMs = 15000): Promi
 
       if (result) {
         isConnectionWarmed = true;
+        startConnectionKeepAlive();
+        registerShutdownHooks();
         console.log(`[INFO] ✅ Prisma 連線預熱成功 (第 ${attempt} 次嘗試)`);
         return true;
       }
@@ -136,6 +140,49 @@ export async function warmupConnection(maxRetries = 3, timeoutMs = 15000): Promi
 
   console.error("[ERROR] ❌ Prisma 連線預熱失敗，已重試 " + maxRetries + " 次");
   return false;
+}
+
+function startConnectionKeepAlive(): void {
+  if (!isTurso || keepAliveStarted) {
+    return;
+  }
+
+  const keepAliveMinutes = Number(process.env.PRISMA_KEEP_ALIVE_MINUTES || 5);
+  const intervalMs = Math.max(1, keepAliveMinutes) * 60 * 1000;
+
+  const timer = setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1 as ping`;
+    } catch (error) {
+      isConnectionWarmed = false;
+      console.warn("[WARN] Prisma keep-alive ping failed:", error);
+    }
+  }, intervalMs);
+
+  if (timer.unref) {
+    timer.unref();
+  }
+
+  keepAliveStarted = true;
+}
+
+function registerShutdownHooks(): void {
+  if (shutdownHooksRegistered) {
+    return;
+  }
+
+  const gracefulDisconnect = async () => {
+    try {
+      await prisma.$disconnect();
+    } catch (error) {
+      console.warn("[WARN] Prisma disconnect failed:", error);
+    }
+  };
+
+  process.once("beforeExit", gracefulDisconnect);
+  process.once("SIGINT", gracefulDisconnect);
+  process.once("SIGTERM", gracefulDisconnect);
+  shutdownHooksRegistered = true;
 }
 
 /**

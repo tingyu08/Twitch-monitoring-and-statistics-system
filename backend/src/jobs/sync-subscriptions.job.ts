@@ -25,6 +25,8 @@ revenueSyncQueue.process(async (data: RevenueSyncJobData) => {
     ),
   ]);
 
+  await revenueService.prewarmRevenueCache(streamerId);
+
   logger.debug("Jobs", `已同步 ${streamerName || streamerId} 的訂閱快照`);
 });
 
@@ -38,7 +40,9 @@ revenueSyncQueue.process(async (data: RevenueSyncJobData) => {
  * - 重試機制（預設最多重試 2 次）
  * - 優先級排序
  */
-export const syncSubscriptionsJob = cron.schedule("0 0 * * *", async () => {
+const SYNC_SUBSCRIPTIONS_CRON = process.env.SYNC_SUBSCRIPTIONS_CRON || "20 0 * * *";
+
+export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async () => {
   logger.info("Jobs", "開始執行 Sync Subscriptions Job...");
 
   try {

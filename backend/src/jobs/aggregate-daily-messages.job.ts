@@ -14,6 +14,7 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 
 const LAST_AGGREGATED_AT_KEY = "message_agg_last_aggregated_at";
+const AGGREGATE_DAILY_MESSAGES_CRON = process.env.AGGREGATE_DAILY_MESSAGES_CRON || "15 * * * *";
 
 /**
  * 執行訊息聚合
@@ -122,8 +123,8 @@ export async function aggregateDailyMessages(): Promise<void> {
  * 啟動定時任務
  */
 export function startMessageAggregationJob(): void {
-  // 每小時執行一次（在每小時的第 5 分鐘執行）
-  cron.schedule("5 * * * *", async () => {
+  // 每小時執行一次（預設每小時第 15 分鐘）
+  cron.schedule(AGGREGATE_DAILY_MESSAGES_CRON, async () => {
     try {
       await aggregateDailyMessages();
     } catch (error) {

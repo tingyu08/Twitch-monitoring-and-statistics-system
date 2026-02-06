@@ -14,6 +14,8 @@ let isRunning = false;
 // P0 Optimization: 只在必要時更新 lastLiveCheckAt，減少 80% 資料庫寫入
 const LAST_CHECK_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
 
+const UPDATE_LIVE_STATUS_CRON = process.env.UPDATE_LIVE_STATUS_CRON || "* * * * *";
+
 // 活躍頻道判斷窗口（超過此時間未開台則進入低頻輪詢）
 const SLOW_POLL_GROUPS = 5;
 const MAX_SLOW_POLL_GROUPS = 12;
@@ -55,7 +57,7 @@ function selectChannelsForCheckUpdate(
  * 更新所有頻道的即時直播狀態
  * 頻率：每 1 分鐘由 cron 觸發（優化後執行時間大幅縮短）
  */
-export const updateLiveStatusJob = cron.schedule("* * * * *", async () => {
+export const updateLiveStatusJob = cron.schedule(UPDATE_LIVE_STATUS_CRON, async () => {
   await updateLiveStatusFn();
 });
 

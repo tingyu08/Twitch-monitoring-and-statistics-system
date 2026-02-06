@@ -65,9 +65,17 @@ export class DataRetentionJob {
       const deletedClips = await prisma.clip.deleteMany({
         where: { createdAt: { lt: sevenDaysAgo } },
       });
+
+      // 4. 清理過期聊天室訊息（保留 90 天）
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const deletedViewerMessages = await prisma.viewerChannelMessage.deleteMany({
+        where: { timestamp: { lt: ninetyDaysAgo } },
+      });
+
       logger.info(
         "DataRetention",
-        `清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯`
+        `清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯, ${deletedViewerMessages.count} 則訊息`
       );
 
       logger.info("DataRetention", "Job 執行完成");

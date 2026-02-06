@@ -186,6 +186,7 @@ export class RevenueController {
 
       // 同步成功後清除所有相關快取（包含 overview、subscriptions、bits）
       cacheManager.deleteRevenueCache(streamerId);
+      void revenueService.prewarmRevenueCache(streamerId);
 
       return res.json({ success: true, message: "Subscription data synced" });
     } catch (error) {

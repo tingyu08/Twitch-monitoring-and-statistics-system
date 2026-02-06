@@ -39,7 +39,7 @@ interface ExistingStreamer {
 }
 
 // P1 Fix: 每小時第 30 分鐘執行（錯開 channelStatsSyncJob 的第 10 分鐘執行）
-const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "30 * * * *";
+const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "50 * * * *";
 
 // 並發控制：同時最多處理 5 個使用者
 const CONCURRENCY_LIMIT = 5;

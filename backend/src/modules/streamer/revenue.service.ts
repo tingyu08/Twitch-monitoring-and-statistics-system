@@ -43,6 +43,14 @@ export interface RevenueOverview {
 }
 
 export class RevenueService {
+  async prewarmRevenueCache(streamerId: string): Promise<void> {
+    await Promise.allSettled([
+      this.getRevenueOverview(streamerId),
+      this.getSubscriptionStats(streamerId, 30),
+      this.getBitsStats(streamerId, 30),
+    ]);
+  }
+
   /**
    * 同步訂閱快照到資料庫
    */
@@ -210,33 +218,55 @@ export class RevenueService {
         return result;
       }
 
-      // 訂閱者較多時，使用分頁遍歷
       const paginator = apiClient.subscriptions.getSubscriptionsPaginated(broadcasterId);
 
-      for await (const sub of paginator) {
-        result.total++;
-        if (sub.tier === "1000") result.tier1++;
-        else if (sub.tier === "2000") result.tier2++;
-        else if (sub.tier === "3000") result.tier3++;
-
-        // 超過上限或時間過長則停止
-        if (result.total >= SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS) {
-          logger.error("RevenueService", `訂閱者數量超過 ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS}`);
-          throw new Error(
-            `SUBSCRIPTION_LIMIT_EXCEEDED: Channel has more than ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS} subscribers. Please contact support for enterprise solutions.`
-          );
-        }
-
-        if (Date.now() - startTime > SUBSCRIPTION_SYNC.MAX_TIME_MS) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
           logger.error(
             "RevenueService",
             `同步超時 (${SUBSCRIPTION_SYNC.MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`
           );
-          throw new Error(
-            `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
+          reject(
+            new Error(
+              `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
+            )
           );
-        }
-      }
+        }, SUBSCRIPTION_SYNC.MAX_TIME_MS);
+
+        (async () => {
+          try {
+            for await (const sub of paginator) {
+              result.total++;
+              if (sub.tier === "1000") result.tier1++;
+              else if (sub.tier === "2000") result.tier2++;
+              else if (sub.tier === "3000") result.tier3++;
+
+              if (result.total >= SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS) {
+                logger.error("RevenueService", `訂閱者數量超過 ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS}`);
+                throw new Error(
+                  `SUBSCRIPTION_LIMIT_EXCEEDED: Channel has more than ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS} subscribers. Please contact support for enterprise solutions.`
+                );
+              }
+
+              if (Date.now() - startTime > SUBSCRIPTION_SYNC.MAX_TIME_MS) {
+                throw new Error(
+                  `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
+                );
+              }
+            }
+
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        })()
+          .finally(() => {
+            clearTimeout(timer);
+          })
+          .catch(() => {
+            // 錯誤已由 reject 傳遞
+          });
+      });
     } catch (error: unknown) {
       // 處理權限不足或 Token 無效的情況
       const apiError = error as import("../../types/twitch.types").TwitchApiError;
@@ -419,8 +449,11 @@ export class RevenueService {
     }
 
     // 使用快取（1 分鐘 TTL，因為是總覽資料需要較即時）
+    const cacheKey = CacheKeys.revenueOverview(streamerId);
+    const staleKey = `${cacheKey}:stale`;
+
     return cacheManager.getOrSet(
-      CacheKeys.revenueOverview(streamerId),
+      cacheKey,
       async () => {
         // 獲取本月 Bits 統計的起始時間
         const startOfMonth = new Date();
@@ -459,7 +492,7 @@ export class RevenueService {
 
           const subRevenue = latestSnapshot?.estimatedRevenue || 0;
 
-          return {
+          const payload = {
             subscriptions: {
               current: latestSnapshot?.totalSubscribers || 0,
               estimatedMonthlyRevenue: subRevenue,
@@ -474,6 +507,9 @@ export class RevenueService {
             },
             totalEstimatedRevenue: subRevenue + bitsRevenue,
           };
+
+          cacheManager.set(staleKey, payload, CacheTTL.MEDIUM);
+          return payload;
         } catch (error) {
           const err = error as Error;
           if (err.message === "DB_QUERY_TIMEOUT") {
@@ -482,7 +518,12 @@ export class RevenueService {
               `getRevenueOverview query timeout for streamer ${streamerId}`
             );
             // 超時時返回空數據
-            return {
+            const stale = cacheManager.get<RevenueOverview>(staleKey);
+            if (stale) {
+              return stale;
+            }
+
+            const fallback = {
               subscriptions: {
                 current: 0,
                 estimatedMonthlyRevenue: 0,
@@ -493,6 +534,9 @@ export class RevenueService {
               bits: { totalBits: 0, estimatedRevenue: 0, eventCount: 0 },
               totalEstimatedRevenue: 0,
             };
+
+            cacheManager.set(staleKey, fallback, CacheTTL.MEDIUM);
+            return fallback;
           }
           throw error;
         }

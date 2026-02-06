@@ -11,7 +11,7 @@ import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
 
 // P1 Fix: 每小時第 10 分鐘執行（錯開 syncUserFollowsJob 的整點執行）
-const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "10 * * * *";
+const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "35 * * * *";
 
 // P0 Fix: 加入批次處理配置
 const BATCH_SIZE = 20;
@@ -92,15 +92,20 @@ export class ChannelStatsSyncJob {
       for (let i = 0; i < channels.length; i += BATCH_SIZE) {
         const batch = channels.slice(i, i + BATCH_SIZE);
         
-        for (const channel of batch) {
-          try {
-            await this.syncChannelStats(channel, activeSessionMap);
-            result.synced++;
-          } catch (error) {
-            logger.error("ChannelStatsSync", `Failed to sync channel ${channel.channelName}:`, error);
-            result.failed++;
-          }
-        }
+        const batchResults = await Promise.all(
+          batch.map(async (channel) => {
+            try {
+              await this.syncChannelStats(channel, activeSessionMap);
+              return { ok: true as const };
+            } catch (error) {
+              logger.error("ChannelStatsSync", `Failed to sync channel ${channel.channelName}:`, error);
+              return { ok: false as const };
+            }
+          })
+        );
+
+        result.synced += batchResults.filter((r) => r.ok).length;
+        result.failed += batchResults.filter((r) => !r.ok).length;
 
         // P0 Fix: 批次間延遲，避免壓垮資料庫和 API
         if (i + BATCH_SIZE < channels.length) {
