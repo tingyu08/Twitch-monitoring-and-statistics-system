@@ -47,11 +47,7 @@ function AuthErrorContent() {
           </Link>
           <button
             onClick={() => {
-              const baseUrl =
-                process.env.NEXT_PUBLIC_BACKEND_URL ||
-                process.env.NEXT_PUBLIC_API_BASE_URL ||
-                "http://127.0.0.1:4000";
-              window.location.href = `${baseUrl}/auth/twitch/login`;
+              window.location.href = "/api/auth/login";
             }}
             className="px-6 py-3 rounded-lg border border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
           >

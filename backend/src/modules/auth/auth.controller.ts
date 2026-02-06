@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
+import axios from "axios";
 import { handleStreamerTwitchCallback } from "./auth.service";
 import { TwitchOAuthClient } from "./twitch-oauth.client";
 import {
@@ -171,10 +172,10 @@ export class AuthController {
 
   // Exchange code for tokens (BFF callback)
   public exchange = async (req: Request, res: Response) => {
-    try {
-      const code = req.body?.code as string | undefined;
-      const redirectUri = req.body?.redirectUri as string | undefined;
+    const code = req.body?.code as string | undefined;
+    const redirectUri = req.body?.redirectUri as string | undefined;
 
+    try {
       if (!code) {
         return res.status(400).json({ message: "Authorization code missing" });
       }
@@ -185,7 +186,17 @@ export class AuthController {
       return res.json({ accessToken, refreshToken });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      authLogger.error("Twitch Exchange Error", { errorMessage });
+      const statusCode = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const twitchResponse = axios.isAxiosError(error) ? error.response?.data : undefined;
+
+      authLogger.error("Twitch Exchange Error", {
+        errorMessage,
+        statusCode,
+        requestRedirectUri: redirectUri || env.twitchRedirectUri,
+        codeLength: code?.length,
+        twitchResponse,
+      });
+
       return res.status(500).json({ message: "Token exchange failed" });
     }
   };
