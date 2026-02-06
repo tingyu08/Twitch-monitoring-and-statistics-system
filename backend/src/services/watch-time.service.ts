@@ -184,7 +184,8 @@ function accumulateWatchTime(
 export async function updateViewerWatchTime(
   viewerId: string,
   channelId: string,
-  date: Date
+  date: Date,
+  options?: { allowOverwrite?: boolean }
 ): Promise<void> {
   try {
     // 正規化日期到當天開始
@@ -269,6 +270,17 @@ export async function updateViewerWatchTime(
     }
 
     const totalWatchSeconds = accumulator.totalSeconds;
+
+    // Single-writer strategy:
+    // - Primary writer: watch-time-increment.job (incremental updates)
+    // - Recalculation overwrite: opt-in only (manual/nightly reconciliation)
+    if (!options?.allowOverwrite) {
+      logger.debug(
+        "WatchTime",
+        `Skip overwrite recalculation for viewer ${viewerId} channel ${channelId} (single writer mode)`
+      );
+      return;
+    }
 
     // 更新資料庫
     await prisma.viewerChannelDailyStat.upsert({

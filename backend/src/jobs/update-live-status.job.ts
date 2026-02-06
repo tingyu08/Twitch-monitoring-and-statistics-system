@@ -16,14 +16,39 @@ const LAST_CHECK_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
 
 // 活躍頻道判斷窗口（超過此時間未開台則進入低頻輪詢）
 const SLOW_POLL_GROUPS = 5;
+const MAX_SLOW_POLL_GROUPS = 12;
+const TARGET_SLOW_CHANNELS_PER_CYCLE = 250;
+const MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE = 300;
+const BASE_API_BATCH_SIZE = 100;
 let slowPollIndex = 0;
 
-function getPollGroup(channelId: string): number {
+function getPollGroup(channelId: string, groups: number): number {
   let sum = 0;
   for (let i = 0; i < channelId.length; i++) {
     sum += channelId.charCodeAt(i);
   }
-  return Math.abs(sum) % SLOW_POLL_GROUPS;
+  return Math.abs(sum) % groups;
+}
+
+function getAdaptiveSlowPollGroups(slowChannelCount: number): number {
+  const dynamicGroups = Math.ceil(slowChannelCount / TARGET_SLOW_CHANNELS_PER_CYCLE);
+  return Math.max(SLOW_POLL_GROUPS, Math.min(MAX_SLOW_POLL_GROUPS, dynamicGroups || SLOW_POLL_GROUPS));
+}
+
+function selectChannelsForCheckUpdate(
+  channels: Array<{ id: string; twitchChannelId: string }>,
+  groups: number,
+  currentIndex: number
+) {
+  const filtered = channels.filter(
+    (channel) => getPollGroup(channel.twitchChannelId, groups) === currentIndex
+  );
+
+  if (filtered.length <= MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE) {
+    return filtered;
+  }
+
+  return filtered.slice(0, MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE);
 }
 
 /**
@@ -86,8 +111,13 @@ export async function updateLiveStatusFn() {
 
     const { twurpleHelixService } = await import("../services/twitch-helix.service");
 
-    // 3. 分批處理 (減少 Batch Size 讓系統有機會喘息)
-    const BATCH_SIZE = 100;
+    // 3. 分批處理
+    const BATCH_SIZE =
+      allChannels.length > 2000
+        ? 60
+        : allChannels.length > 1000
+          ? 80
+          : BASE_API_BATCH_SIZE;
     const now = new Date();
     // 3.1 Reduce per-minute DB pressure by avoiding streamSession groupBy in hot loop.
     const activeChannels: typeof allChannels = [];
@@ -101,9 +131,10 @@ export async function updateLiveStatusFn() {
       }
     }
 
-    slowPollIndex = (slowPollIndex + 1) % SLOW_POLL_GROUPS;
+    const adaptiveSlowPollGroups = getAdaptiveSlowPollGroups(slowChannels.length);
+    slowPollIndex = (slowPollIndex + 1) % adaptiveSlowPollGroups;
     const slowPollBatch = slowChannels.filter(
-      (channel) => getPollGroup(channel.twitchChannelId) === slowPollIndex
+      (channel) => getPollGroup(channel.twitchChannelId, adaptiveSlowPollGroups) === slowPollIndex
     );
 
     const channels = [...activeChannels, ...slowPollBatch];
@@ -248,7 +279,9 @@ export async function updateLiveStatusFn() {
 
     // 4. 批量更新 DB（只更新有變化的頻道）
     // 優化：增加批次大小、減少延遲，因為只處理變化的頻道
-    const TX_BATCH_SIZE = 15; // 從 5 增加到 15（因為只處理變化的頻道，數量少很多）
+    const totalDbWritesEstimate = changedUpdates.length + liveUpdates.length;
+    const TX_BATCH_SIZE =
+      totalDbWritesEstimate > 800 ? 10 : totalDbWritesEstimate > 300 ? 12 : 15;
     let updateSuccessCount = 0;
     let updateFailCount = 0;
 
@@ -267,11 +300,17 @@ export async function updateLiveStatusFn() {
     );
 
     // 如果沒有狀態變化，只更新需要更新檢查時間的頻道
-    if (changedUpdates.length === 0 && channelsNeedingCheckUpdate.length > 0) {
+    const checkUpdateCandidates = selectChannelsForCheckUpdate(
+      channelsNeedingCheckUpdate,
+      adaptiveSlowPollGroups,
+      slowPollIndex
+    );
+
+    if (changedUpdates.length === 0 && checkUpdateCandidates.length > 0) {
       await retryDatabaseOperation(() =>
         prisma.channel.updateMany({
           where: {
-            id: { in: channelsNeedingCheckUpdate.map((c) => c.id) },
+            id: { in: checkUpdateCandidates.map((c) => c.id) },
           },
           data: {
             lastLiveCheckAt: now,
@@ -281,7 +320,7 @@ export async function updateLiveStatusFn() {
 
       logger.debug(
         "Jobs",
-        `✅ 已更新 ${channelsNeedingCheckUpdate.length}/${channels.length} 個頻道的檢查時間`
+        `✅ 已更新 ${checkUpdateCandidates.length}/${channels.length} 個頻道的檢查時間`
       );
     } else if (changedUpdates.length > 0 || liveUpdates.length > 0) {
       // 有變化的頻道：完整更新
@@ -333,7 +372,7 @@ export async function updateLiveStatusFn() {
         }
 
         // 批次之間短暫延遲（從 1000ms 降到 150ms，因為批次數量大幅減少）
-        if (i + TX_BATCH_SIZE < changedUpdates.length) {
+        if (i + TX_BATCH_SIZE < combinedUpdates.length) {
           await new Promise((resolve) => setTimeout(resolve, 150));
         }
       }
@@ -343,7 +382,7 @@ export async function updateLiveStatusFn() {
       }
 
       // P0 Optimization: 只更新超過 5 分鐘未檢查的未變化頻道
-      const unchangedChannelsNeedingUpdate = channelsNeedingCheckUpdate.filter(
+      const unchangedChannelsNeedingUpdate = checkUpdateCandidates.filter(
         (c) => !changedTwitchIds.has(c.twitchChannelId)
       );
 
