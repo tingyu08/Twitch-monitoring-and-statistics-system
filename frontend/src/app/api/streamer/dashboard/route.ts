@@ -5,6 +5,8 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
 
+const DASHBOARD_REVALIDATE_SECONDS = 30;
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -18,7 +20,7 @@ export async function GET(request: Request) {
     const fetchJson = async (path: string) => {
       const response = await fetch(`${API_BASE_URL}${path}`, {
         headers,
-        cache: "no-store",
+        next: { revalidate: DASHBOARD_REVALIDATE_SECONDS },
       });
 
       if (!response.ok) {

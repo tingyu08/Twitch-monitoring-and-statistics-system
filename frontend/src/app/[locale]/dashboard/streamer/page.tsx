@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
@@ -9,10 +10,6 @@ import { useAuthSession } from "@/features/auth/AuthContext";
 import { StreamSummaryCards } from "@/features/streamer-dashboard/components/StreamSummaryCards";
 import { DisplayPreferences } from "@/features/streamer-dashboard/components/DisplayPreferences";
 import {
-  TimeSeriesChart,
-  HeatmapChart,
-  SubscriptionTrendChart,
-  GameStatsChart,
   ChartLoading,
   ChartError,
   ChartEmpty,
@@ -37,6 +34,29 @@ import type {
   TimeSeriesResponse,
   StreamerSummary,
 } from "@/lib/api/streamer";
+
+const TimeSeriesChart = dynamic(
+  () => import("@/features/streamer-dashboard/charts/TimeSeriesChart").then((mod) => mod.TimeSeriesChart),
+  { ssr: false }
+);
+
+const HeatmapChart = dynamic(
+  () => import("@/features/streamer-dashboard/charts/HeatmapChart").then((mod) => mod.HeatmapChart),
+  { ssr: false }
+);
+
+const SubscriptionTrendChart = dynamic(
+  () =>
+    import("@/features/streamer-dashboard/charts/SubscriptionTrendChart").then(
+      (mod) => mod.SubscriptionTrendChart
+    ),
+  { ssr: false }
+);
+
+const GameStatsChart = dynamic(
+  () => import("@/features/streamer-dashboard/charts/GameStatsChart").then((mod) => mod.GameStatsChart),
+  { ssr: false }
+);
 
 export default function StreamerDashboard() {
   const t = useTranslations("streamer");
@@ -231,7 +251,6 @@ export default function StreamerDashboard() {
                   height={80}
                   className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 sm:border-4 border-purple-500/50 object-cover ring-2 sm:ring-4 ring-purple-500/20"
                   data-testid="user-avatar"
-                  unoptimized
                 />
               )}
               <div>

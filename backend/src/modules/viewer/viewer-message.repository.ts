@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/message-parser";
 import { logger } from "../../utils/logger";
@@ -330,6 +331,7 @@ export class ViewerMessageRepository {
         chatMessages: number;
         subscriptions: number;
         cheers: number;
+        giftSubs: number;
         raids: number;
         totalBits: number;
       }
@@ -373,6 +375,7 @@ export class ViewerMessageRepository {
         chatMessages: 0,
         subscriptions: 0,
         cheers: 0,
+        giftSubs: 0,
         raids: 0,
         totalBits: 0,
       };
@@ -381,6 +384,7 @@ export class ViewerMessageRepository {
       if (msg.messageType === "CHAT") agg.chatMessages += 1;
       if (msg.messageType === "SUBSCRIPTION") agg.subscriptions += 1;
       if (msg.messageType === "CHEER") agg.cheers += 1;
+      if (msg.messageType === "GIFT_SUBSCRIPTION") agg.giftSubs += 1;
       if (msg.messageType === "RAID") agg.raids += 1;
       if (msg.bitsAmount) agg.totalBits += msg.bitsAmount;
 
@@ -436,96 +440,189 @@ export class ViewerMessageRepository {
         }));
         await tx.viewerChannelMessage.createMany({ data: messageRows });
 
-        for (const agg of messageAggIncrements.values()) {
-          await tx.viewerChannelMessageDailyAgg.upsert({
-            where: {
-              viewerId_channelId_date: {
-                viewerId: agg.viewerId,
-                channelId: agg.channelId,
-                date: agg.date,
-              },
-            },
-            create: {
-              viewerId: agg.viewerId,
-              channelId: agg.channelId,
-              date: agg.date,
-              totalMessages: agg.totalMessages,
-              chatMessages: agg.chatMessages,
-              subscriptions: agg.subscriptions,
-              cheers: agg.cheers,
-              raids: agg.raids,
-              totalBits: agg.totalBits,
-            },
-            update: {
-              totalMessages: { increment: agg.totalMessages },
-              chatMessages: agg.chatMessages > 0 ? { increment: agg.chatMessages } : undefined,
-              subscriptions: agg.subscriptions > 0 ? { increment: agg.subscriptions } : undefined,
-              cheers: agg.cheers > 0 ? { increment: agg.cheers } : undefined,
-              raids: agg.raids > 0 ? { increment: agg.raids } : undefined,
-              totalBits: agg.totalBits > 0 ? { increment: agg.totalBits } : undefined,
-            },
-          });
+        const messageAggRows = Array.from(messageAggIncrements.values());
+        if (messageAggRows.length > 0) {
+          const aggValues = messageAggRows.map((agg) =>
+            Prisma.sql`(${agg.viewerId}, ${agg.channelId}, ${agg.date}, ${agg.totalMessages}, ${
+              agg.chatMessages
+            }, ${agg.subscriptions}, ${agg.cheers}, ${agg.giftSubs}, ${agg.raids}, ${agg.totalBits})`
+          );
+
+          await tx.$executeRaw(Prisma.sql`
+            INSERT INTO viewer_channel_message_daily_aggs (
+              id,
+              viewerId,
+              channelId,
+              date,
+              totalMessages,
+              chatMessages,
+              subscriptions,
+              cheers,
+              giftSubs,
+              raids,
+              totalBits,
+              updatedAt
+            )
+            SELECT
+              lower(hex(randomblob(16))) AS id,
+              src.viewerId,
+              src.channelId,
+              src.date,
+              src.totalMessages,
+              src.chatMessages,
+              src.subscriptions,
+              src.cheers,
+              src.giftSubs,
+              src.raids,
+              src.totalBits,
+              CURRENT_TIMESTAMP
+            FROM (VALUES ${Prisma.join(aggValues)}) AS src(
+              viewerId,
+              channelId,
+              date,
+              totalMessages,
+              chatMessages,
+              subscriptions,
+              cheers,
+              giftSubs,
+              raids,
+              totalBits
+            )
+            ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+              totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
+              chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
+              subscriptions = viewer_channel_message_daily_aggs.subscriptions + excluded.subscriptions,
+              cheers = viewer_channel_message_daily_aggs.cheers + excluded.cheers,
+              giftSubs = viewer_channel_message_daily_aggs.giftSubs + excluded.giftSubs,
+              raids = viewer_channel_message_daily_aggs.raids + excluded.raids,
+              totalBits = COALESCE(viewer_channel_message_daily_aggs.totalBits, 0) + COALESCE(excluded.totalBits, 0),
+              updatedAt = CURRENT_TIMESTAMP
+          `);
         }
 
-        for (const daily of dailyStatIncrements.values()) {
-          await tx.viewerChannelDailyStat.upsert({
-            where: {
-              viewerId_channelId_date: {
-                viewerId: daily.viewerId,
-                channelId: daily.channelId,
-                date: daily.date,
-              },
-            },
-            create: {
-              viewerId: daily.viewerId,
-              channelId: daily.channelId,
-              date: daily.date,
-              messageCount: daily.messageCount,
-              emoteCount: daily.emoteCount,
-              watchSeconds: 0,
-            },
-            update: {
-              messageCount: { increment: daily.messageCount },
-              emoteCount: daily.emoteCount > 0 ? { increment: daily.emoteCount } : undefined,
-            },
-          });
+        const dailyRows = Array.from(dailyStatIncrements.values());
+        if (dailyRows.length > 0) {
+          const dailyValues = dailyRows.map((daily) =>
+            Prisma.sql`(${daily.viewerId}, ${daily.channelId}, ${daily.date}, ${daily.messageCount}, ${daily.emoteCount})`
+          );
+
+          await tx.$executeRaw(Prisma.sql`
+            INSERT INTO viewer_channel_daily_stats (
+              id,
+              viewerId,
+              channelId,
+              date,
+              watchSeconds,
+              messageCount,
+              emoteCount,
+              createdAt,
+              updatedAt
+            )
+            SELECT
+              lower(hex(randomblob(16))) AS id,
+              src.viewerId,
+              src.channelId,
+              src.date,
+              0,
+              src.messageCount,
+              src.emoteCount,
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            FROM (VALUES ${Prisma.join(dailyValues)}) AS src(
+              viewerId,
+              channelId,
+              date,
+              messageCount,
+              emoteCount
+            )
+            ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+              messageCount = viewer_channel_daily_stats.messageCount + excluded.messageCount,
+              emoteCount = viewer_channel_daily_stats.emoteCount + excluded.emoteCount,
+              updatedAt = CURRENT_TIMESTAMP
+          `);
         }
 
-        for (const lifetime of lifetimeIncrements.values()) {
-          await tx.viewerChannelLifetimeStats.upsert({
-            where: {
-              viewerId_channelId: {
-                viewerId: lifetime.viewerId,
-                channelId: lifetime.channelId,
-              },
-            },
-            create: {
-              viewerId: lifetime.viewerId,
-              channelId: lifetime.channelId,
-              totalMessages: lifetime.totalMessages,
-              totalChatMessages: lifetime.totalChatMessages,
-              totalSubscriptions: lifetime.totalSubscriptions,
-              totalCheers: lifetime.totalCheers,
-              totalBits: lifetime.totalBits,
-              firstWatchedAt: lifetime.lastWatchedAt,
-              lastWatchedAt: lifetime.lastWatchedAt,
-            },
-            update: {
-              totalMessages: { increment: lifetime.totalMessages },
-              totalChatMessages:
-                lifetime.totalChatMessages > 0
-                  ? { increment: lifetime.totalChatMessages }
-                  : undefined,
-              totalSubscriptions:
-                lifetime.totalSubscriptions > 0
-                  ? { increment: lifetime.totalSubscriptions }
-                  : undefined,
-              totalCheers:
-                lifetime.totalCheers > 0 ? { increment: lifetime.totalCheers } : undefined,
-              totalBits: lifetime.totalBits > 0 ? { increment: lifetime.totalBits } : undefined,
-              lastWatchedAt: lifetime.lastWatchedAt,
-            },
-          });
+        const lifetimeRows = Array.from(lifetimeIncrements.values());
+        if (lifetimeRows.length > 0) {
+          const lifetimeValues = lifetimeRows.map((lifetime) =>
+            Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}, ${
+              lifetime.totalChatMessages
+            }, ${lifetime.totalSubscriptions}, ${lifetime.totalCheers}, ${lifetime.totalBits}, ${
+              lifetime.lastWatchedAt
+            })`
+          );
+
+          await tx.$executeRaw(Prisma.sql`
+            INSERT INTO viewer_channel_lifetime_stats (
+              id,
+              viewerId,
+              channelId,
+              totalWatchTimeMinutes,
+              totalSessions,
+              avgSessionMinutes,
+              firstWatchedAt,
+              lastWatchedAt,
+              totalMessages,
+              totalChatMessages,
+              totalSubscriptions,
+              totalCheers,
+              totalBits,
+              trackingStartedAt,
+              trackingDays,
+              longestStreakDays,
+              currentStreakDays,
+              activeDaysLast30,
+              activeDaysLast90,
+              mostActiveMonthCount,
+              createdAt,
+              updatedAt
+            )
+            SELECT
+              lower(hex(randomblob(16))) AS id,
+              src.viewerId,
+              src.channelId,
+              0,
+              0,
+              0,
+              src.lastWatchedAt,
+              src.lastWatchedAt,
+              src.totalMessages,
+              src.totalChatMessages,
+              src.totalSubscriptions,
+              src.totalCheers,
+              src.totalBits,
+              CURRENT_TIMESTAMP,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            FROM (VALUES ${Prisma.join(lifetimeValues)}) AS src(
+              viewerId,
+              channelId,
+              totalMessages,
+              totalChatMessages,
+              totalSubscriptions,
+              totalCheers,
+              totalBits,
+              lastWatchedAt
+            )
+            ON CONFLICT(viewerId, channelId) DO UPDATE SET
+              totalMessages = viewer_channel_lifetime_stats.totalMessages + excluded.totalMessages,
+              totalChatMessages = viewer_channel_lifetime_stats.totalChatMessages + excluded.totalChatMessages,
+              totalSubscriptions = viewer_channel_lifetime_stats.totalSubscriptions + excluded.totalSubscriptions,
+              totalCheers = viewer_channel_lifetime_stats.totalCheers + excluded.totalCheers,
+              totalBits = viewer_channel_lifetime_stats.totalBits + excluded.totalBits,
+              lastWatchedAt = CASE
+                WHEN viewer_channel_lifetime_stats.lastWatchedAt IS NULL THEN excluded.lastWatchedAt
+                WHEN excluded.lastWatchedAt > viewer_channel_lifetime_stats.lastWatchedAt THEN excluded.lastWatchedAt
+                ELSE viewer_channel_lifetime_stats.lastWatchedAt
+              END,
+              updatedAt = CURRENT_TIMESTAMP
+          `);
         }
       });
 

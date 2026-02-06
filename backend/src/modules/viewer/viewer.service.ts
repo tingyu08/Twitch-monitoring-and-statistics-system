@@ -541,16 +541,31 @@ export async function refreshViewerChannelSummaryForChannels(
   }
 
   try {
-    for (const snapshot of snapshots) {
+    const deduped = Array.from(
+      snapshots.reduce((map, snapshot) => map.set(snapshot.channelId, snapshot), new Map<string, SummaryChannelSnapshot>()).values()
+    );
+
+    const CHUNK_SIZE = 120;
+    for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
+      const chunk = deduped.slice(i, i + CHUNK_SIZE);
+      const values = chunk.map((snapshot) =>
+        Prisma.sql`(${snapshot.channelId}, ${snapshot.isLive ? 1 : 0}, ${snapshot.viewerCount}, ${
+          snapshot.streamStartedAt
+        }, ${snapshot.category})`
+      );
+
       await prisma.$executeRaw(Prisma.sql`
+        WITH updates(channelId, isLive, viewerCount, streamStartedAt, category) AS (
+          VALUES ${Prisma.join(values)}
+        )
         UPDATE viewer_channel_summary
         SET
-          isLive = ${snapshot.isLive ? 1 : 0},
-          viewerCount = ${snapshot.viewerCount},
-          streamStartedAt = ${snapshot.streamStartedAt},
-          category = ${snapshot.category},
+          isLive = (SELECT updates.isLive FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          viewerCount = (SELECT updates.viewerCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          streamStartedAt = (SELECT updates.streamStartedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          category = (SELECT updates.category FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
           updatedAt = CURRENT_TIMESTAMP
-        WHERE channelId = ${snapshot.channelId}
+        WHERE channelId IN (SELECT channelId FROM updates)
       `);
     }
   } catch (error) {

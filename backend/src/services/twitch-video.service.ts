@@ -147,34 +147,105 @@ export class TwurpleVideoService {
         type: "archive",
       });
 
-      // 優化：使用重試機制包裝 transaction，並使用批量插入
+      const incomingVideos = videos.data.map(
+        (video: {
+          id: string;
+          title: string;
+          url: string;
+          thumbnailUrl: string;
+          views: number;
+          duration: string;
+          publishDate: Date;
+        }) => ({
+          twitchVideoId: video.id,
+          title: video.title,
+          url: video.url,
+          thumbnailUrl: video.thumbnailUrl
+            .replace("%{width}", "320")
+            .replace("%{height}", "180")
+            .replace("{width}", "320")
+            .replace("{height}", "180"),
+          viewCount: video.views,
+          duration: video.duration,
+          publishedAt: video.publishDate,
+        })
+      );
+
+      // 優化：差異化更新，避免每次全刪全建
       await retryDatabaseOperation(async () => {
         await prisma.$transaction(
           async (tx) => {
-            // 1. 刪除該 Channel 的所有舊影片
-            await tx.viewerChannelVideo.deleteMany({
+            const existing = await tx.viewerChannelVideo.findMany({
               where: { channelId },
+              select: {
+                id: true,
+                twitchVideoId: true,
+                title: true,
+                url: true,
+                thumbnailUrl: true,
+                viewCount: true,
+                duration: true,
+                publishedAt: true,
+              },
             });
 
-            // 2. 批量插入新的影片（而非循環插入，避免超時）
-            if (videos.data.length > 0) {
-              await tx.viewerChannelVideo.createMany({
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                data: videos.data.map((video: any) => ({
-                  twitchVideoId: video.id,
-                  channelId: channelId,
-                  title: video.title,
-                  url: video.url,
-                  thumbnailUrl: video.thumbnailUrl
-                    .replace("%{width}", "320")
-                    .replace("%{height}", "180")
-                    .replace("{width}", "320")
-                    .replace("{height}", "180"),
-                  viewCount: video.views,
-                  duration: video.duration,
-                  publishedAt: video.publishDate,
-                })),
-              });
+            const incomingIds = incomingVideos.map((video: { twitchVideoId: string }) => video.twitchVideoId);
+
+            if (incomingIds.length === 0) {
+              await tx.viewerChannelVideo.deleteMany({ where: { channelId } });
+              return;
+            }
+
+            await tx.viewerChannelVideo.deleteMany({
+              where: {
+                channelId,
+                twitchVideoId: { notIn: incomingIds },
+              },
+            });
+
+            const existingByTwitchId = new Map(existing.map((row) => [row.twitchVideoId, row]));
+
+            for (const incoming of incomingVideos) {
+              const prev = existingByTwitchId.get(incoming.twitchVideoId);
+
+              if (!prev) {
+                await tx.viewerChannelVideo.create({
+                  data: {
+                    channelId,
+                    twitchVideoId: incoming.twitchVideoId,
+                    title: incoming.title,
+                    url: incoming.url,
+                    thumbnailUrl: incoming.thumbnailUrl,
+                    viewCount: incoming.viewCount,
+                    duration: incoming.duration,
+                    publishedAt: incoming.publishedAt,
+                  },
+                });
+                continue;
+              }
+
+              const changed =
+                prev.title !== incoming.title ||
+                prev.url !== incoming.url ||
+                (prev.thumbnailUrl || "") !== incoming.thumbnailUrl ||
+                prev.viewCount !== incoming.viewCount ||
+                prev.duration !== incoming.duration ||
+                prev.publishedAt.getTime() !== incoming.publishedAt.getTime();
+
+              if (changed) {
+                await tx.viewerChannelVideo.update({
+                  where: { id: prev.id },
+                  data: {
+                    title: incoming.title,
+                    url: incoming.url,
+                    thumbnailUrl: incoming.thumbnailUrl,
+                    viewCount: incoming.viewCount,
+                    duration: incoming.duration,
+                    publishedAt: incoming.publishedAt,
+                    syncedAt: new Date(),
+                  },
+                });
+              }
             }
           },
           {
@@ -308,35 +379,111 @@ export class TwurpleVideoService {
         limit: 6,
       });
 
-      // 優化：使用重試機制 + 批量操作（避免循環 upsert 超時）
+      const incomingClips = topClips.data.map(
+        (clip: {
+          id: string;
+          creatorDisplayName: string | null;
+          title: string;
+          url: string;
+          thumbnailUrl: string;
+          views: number;
+          duration: number;
+          creationDate: Date;
+        }) => ({
+          twitchClipId: clip.id,
+          creatorName: clip.creatorDisplayName,
+          title: clip.title,
+          url: clip.url,
+          thumbnailUrl: clip.thumbnailUrl
+            .replace("%{width}", "320")
+            .replace("%{height}", "180")
+            .replace("{width}", "320")
+            .replace("{height}", "180"),
+          viewCount: clip.views,
+          duration: clip.duration,
+          createdAt: clip.creationDate,
+        })
+      );
+
+      // 優化：差異化更新，避免每次全刪全建
       await retryDatabaseOperation(async () => {
         await prisma.$transaction(
           async (tx) => {
-            // 1. 刪除該 Channel 的所有舊剪輯（簡化策略：全部刪除再重建）
-            await tx.viewerChannelClip.deleteMany({
+            const existing = await tx.viewerChannelClip.findMany({
               where: { channelId },
+              select: {
+                id: true,
+                twitchClipId: true,
+                creatorName: true,
+                title: true,
+                url: true,
+                thumbnailUrl: true,
+                viewCount: true,
+                duration: true,
+                createdAt: true,
+              },
             });
 
-            // 2. 批量插入新的 Top 6 剪輯（避免循環 upsert 導致超時）
-            if (topClips.data.length > 0) {
-              await tx.viewerChannelClip.createMany({
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                data: topClips.data.map((clip: any) => ({
-                  twitchClipId: clip.id,
-                  channelId: channelId,
-                  creatorName: clip.creatorDisplayName,
-                  title: clip.title,
-                  url: clip.url,
-                  thumbnailUrl: clip.thumbnailUrl
-                    .replace("%{width}", "320")
-                    .replace("%{height}", "180")
-                    .replace("{width}", "320")
-                    .replace("{height}", "180"),
-                  viewCount: clip.views,
-                  duration: clip.duration,
-                  createdAt: clip.creationDate,
-                })),
-              });
+            const incomingIds = incomingClips.map((clip: { twitchClipId: string }) => clip.twitchClipId);
+
+            if (incomingIds.length === 0) {
+              await tx.viewerChannelClip.deleteMany({ where: { channelId } });
+              return;
+            }
+
+            await tx.viewerChannelClip.deleteMany({
+              where: {
+                channelId,
+                twitchClipId: { notIn: incomingIds },
+              },
+            });
+
+            const existingByTwitchId = new Map(existing.map((row) => [row.twitchClipId, row]));
+
+            for (const incoming of incomingClips) {
+              const prev = existingByTwitchId.get(incoming.twitchClipId);
+
+              if (!prev) {
+                await tx.viewerChannelClip.create({
+                  data: {
+                    channelId,
+                    twitchClipId: incoming.twitchClipId,
+                    creatorName: incoming.creatorName,
+                    title: incoming.title,
+                    url: incoming.url,
+                    thumbnailUrl: incoming.thumbnailUrl,
+                    viewCount: incoming.viewCount,
+                    duration: incoming.duration,
+                    createdAt: incoming.createdAt,
+                  },
+                });
+                continue;
+              }
+
+              const changed =
+                (prev.creatorName || "") !== (incoming.creatorName || "") ||
+                prev.title !== incoming.title ||
+                prev.url !== incoming.url ||
+                (prev.thumbnailUrl || "") !== incoming.thumbnailUrl ||
+                prev.viewCount !== incoming.viewCount ||
+                prev.duration !== incoming.duration ||
+                prev.createdAt.getTime() !== incoming.createdAt.getTime();
+
+              if (changed) {
+                await tx.viewerChannelClip.update({
+                  where: { id: prev.id },
+                  data: {
+                    creatorName: incoming.creatorName,
+                    title: incoming.title,
+                    url: incoming.url,
+                    thumbnailUrl: incoming.thumbnailUrl,
+                    viewCount: incoming.viewCount,
+                    duration: incoming.duration,
+                    createdAt: incoming.createdAt,
+                    syncedAt: new Date(),
+                  },
+                });
+              }
             }
           },
           {

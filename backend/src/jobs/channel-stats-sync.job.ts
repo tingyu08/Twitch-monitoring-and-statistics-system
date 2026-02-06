@@ -58,6 +58,7 @@ export class ChannelStatsSyncJob {
     try {
       // Get all channels
       const channels = await prisma.channel.findMany({
+        where: { isMonitored: true },
         select: {
           id: true,
           channelName: true,

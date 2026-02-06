@@ -26,6 +26,9 @@ const BATCH_DELAY_MS = 1000;
 // 超時時間（毫秒）- 優化：增加到 4 分鐘以處理大量頻道（286+）
 const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
 
+// 降低 stream_metrics 寫入頻率（預設每 10 分鐘採樣一次）
+const METRIC_SAMPLE_MINUTES = Number(process.env.STREAM_METRIC_SAMPLE_MINUTES || 10);
+
 // 避免循環依賴和類型錯誤，定義本地介面
 interface MonitoredChannel {
   id: string;
@@ -417,14 +420,19 @@ export class StreamStatusJob {
       },
     });
 
-    // 記錄 Metric
-    await prisma.streamMetric.create({
-      data: {
-        streamSessionId: activeSession.id,
-        viewerCount: stream.viewerCount,
-        timestamp: new Date(),
-      },
-    });
+    const now = new Date();
+    const shouldSampleMetric =
+      METRIC_SAMPLE_MINUTES <= 1 || now.getMinutes() % METRIC_SAMPLE_MINUTES === 0;
+
+    if (shouldSampleMetric) {
+      await prisma.streamMetric.create({
+        data: {
+          streamSessionId: activeSession.id,
+          viewerCount: stream.viewerCount,
+          timestamp: now,
+        },
+      });
+    }
   }
 
   /**

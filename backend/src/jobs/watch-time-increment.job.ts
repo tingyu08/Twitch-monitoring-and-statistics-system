@@ -6,9 +6,9 @@
  */
 
 import cron from "node-cron";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
-import { batchOperation } from "../utils/db-retry";
 
 // 每 6 分鐘執行，在第 4 分鐘觸發（錯開其他 Jobs）
 const WATCH_TIME_INCREMENT_CRON = "0 4-59/6 * * * *";
@@ -59,58 +59,60 @@ export class WatchTimeIncrementJob {
 
       const liveChannelIds = liveChannels.map((c: { id: string }) => c.id);
 
-      // 2. 找出在活躍窗口內有訊息的 viewer-channel 組合
-      const activeViewerChannels = await prisma.viewerChannelMessage.groupBy({
-        by: ["viewerId", "channelId"],
-        where: {
-          channelId: { in: liveChannelIds },
-          timestamp: { gte: activeWindowStart },
-        },
-      });
+      // 2. 計算活躍的 viewer-channel 組合數量
+      const rows = await prisma.$queryRaw<Array<{ count: number | string }>>(Prisma.sql`
+        SELECT COUNT(*) AS count
+        FROM (
+          SELECT viewerId, channelId
+          FROM viewer_channel_messages
+          WHERE channelId IN (${Prisma.join(liveChannelIds)})
+            AND timestamp >= ${activeWindowStart}
+          GROUP BY viewerId, channelId
+        )
+      `);
 
-      if (activeViewerChannels.length === 0) {
+      const activeCount = Number(rows[0]?.count ?? 0);
+      if (activeCount === 0) {
         logger.debug("Jobs", "沒有活躍的觀眾，跳過觀看時間更新");
         return;
       }
 
-      // 3. 為每個活躍的 viewer-channel 組合增加觀看時間
-      const results = await batchOperation(
-        activeViewerChannels,
-        async (batch) => {
-          await prisma.$transaction(
-            batch.map(({ viewerId, channelId }) =>
-              prisma.viewerChannelDailyStat.upsert({
-                where: {
-                  viewerId_channelId_date: {
-                    viewerId,
-                    channelId,
-                    date: today,
-                  },
-                },
-                create: {
-                  viewerId,
-                  channelId,
-                  date: today,
-                  watchSeconds: INCREMENT_SECONDS,
-                  messageCount: 0,
-                  emoteCount: 0,
-                },
-                update: {
-                  watchSeconds: {
-                    increment: INCREMENT_SECONDS,
-                  },
-                },
-              })
-            )
-          );
-          return batch.length;
-        },
-        {
-          batchSize: 100,
-          delayBetweenBatchesMs: 100,
-        }
-      );
-      const updatedCount = results.reduce((sum, count) => sum + count, 0);
+      // 3. 使用 set-based SQL 一次性 upsert，降低大量逐筆寫入成本
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO viewer_channel_daily_stats (
+          id,
+          viewerId,
+          channelId,
+          date,
+          watchSeconds,
+          messageCount,
+          emoteCount,
+          createdAt,
+          updatedAt
+        )
+        SELECT
+          lower(hex(randomblob(16))) AS id,
+          active.viewerId,
+          active.channelId,
+          ${today} AS date,
+          ${INCREMENT_SECONDS} AS watchSeconds,
+          0,
+          0,
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        FROM (
+          SELECT viewerId, channelId
+          FROM viewer_channel_messages
+          WHERE channelId IN (${Prisma.join(liveChannelIds)})
+            AND timestamp >= ${activeWindowStart}
+          GROUP BY viewerId, channelId
+        ) AS active
+        ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+          watchSeconds = viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds,
+          updatedAt = CURRENT_TIMESTAMP
+      `);
+
+      const updatedCount = activeCount;
 
       // 只在有實際更新時輸出 info，否則輸出 debug
       if (updatedCount > 0) {

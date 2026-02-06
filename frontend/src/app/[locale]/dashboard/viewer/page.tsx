@@ -373,7 +373,6 @@ export default function ViewerDashboardPage() {
                   width={80}
                   height={80}
                   className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full border-2 sm:border-4 border-purple-500/50 object-cover ring-2 sm:ring-4 ring-purple-500/20"
-                  unoptimized
                 />
               )}
               <div>
@@ -514,7 +513,6 @@ export default function ViewerDashboardPage() {
                         width={60}
                         height={60}
                         className="w-14 h-14 rounded-full object-cover border-2 border-white/20 group-hover:border-purple-500 transition-colors"
-                        unoptimized
                       />
                       {channel.isLive && (
                         <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-slate-800 animate-pulse" />

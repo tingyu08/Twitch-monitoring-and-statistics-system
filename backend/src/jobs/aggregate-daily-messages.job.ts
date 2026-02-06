@@ -13,6 +13,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 
+const LAST_AGGREGATED_AT_KEY = "message_agg_last_aggregated_at";
+
 /**
  * 執行訊息聚合
  */
@@ -21,70 +23,92 @@ export async function aggregateDailyMessages(): Promise<void> {
   logger.info("Cron", "開始執行每日訊息聚合任務...");
 
   try {
-    // 計算聚合時間範圍（過去 24 小時）
     const now = new Date();
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const defaultFrom = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: LAST_AGGREGATED_AT_KEY },
+      select: { value: true },
+    });
 
-    const todayDate = new Date(now.toISOString().split("T")[0]);
+    const parsed = setting ? new Date(setting.value) : null;
+    const fromDate = parsed && !Number.isNaN(parsed.getTime()) && parsed < now ? parsed : defaultFrom;
+
+    if (fromDate >= now) {
+      logger.info("Cron", "聚合時間區間為空，跳過");
+      return;
+    }
 
     const rows = await prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
       SELECT COUNT(*) AS count
       FROM (
         SELECT viewerId, channelId
         FROM viewer_channel_messages
-        WHERE timestamp >= ${yesterday} AND timestamp < ${now}
-        GROUP BY viewerId, channelId
+        WHERE timestamp >= ${fromDate} AND timestamp < ${now}
+        GROUP BY viewerId, channelId, datetime(date(timestamp))
       )
     `);
 
     const upsertCount = rows[0]?.count ?? 0;
 
     if (upsertCount === 0) {
+      await prisma.systemSetting.upsert({
+        where: { key: LAST_AGGREGATED_AT_KEY },
+        create: { key: LAST_AGGREGATED_AT_KEY, value: now.toISOString() },
+        update: { value: now.toISOString() },
+      });
       logger.info("Cron", "沒有需要聚合的資料");
       return;
     }
 
-    await prisma.$executeRaw(Prisma.sql`
-      INSERT INTO viewer_channel_message_daily_aggs (
-        id,
-        viewerId,
-        channelId,
-        date,
-        totalMessages,
-        chatMessages,
-        subscriptions,
-        cheers,
-        giftSubs,
-        raids,
-        totalBits,
-        updatedAt
-      )
-      SELECT
-        lower(hex(randomblob(16))) AS id,
-        viewerId,
-        channelId,
-        ${todayDate} AS date,
-        COUNT(*) AS totalMessages,
-        SUM(CASE WHEN messageType = 'CHAT' THEN 1 ELSE 0 END) AS chatMessages,
-        SUM(CASE WHEN messageType = 'SUBSCRIPTION' THEN 1 ELSE 0 END) AS subscriptions,
-        SUM(CASE WHEN messageType = 'CHEER' THEN 1 ELSE 0 END) AS cheers,
-        SUM(CASE WHEN messageType = 'GIFT_SUBSCRIPTION' THEN 1 ELSE 0 END) AS giftSubs,
-        SUM(CASE WHEN messageType = 'RAID' THEN 1 ELSE 0 END) AS raids,
-        SUM(CASE WHEN messageType = 'CHEER' THEN COALESCE(bitsAmount, 0) ELSE 0 END) AS totalBits,
-        CURRENT_TIMESTAMP AS updatedAt
-      FROM viewer_channel_messages
-      WHERE timestamp >= ${yesterday} AND timestamp < ${now}
-      GROUP BY viewerId, channelId
-      ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-        totalMessages = excluded.totalMessages,
-        chatMessages = excluded.chatMessages,
-        subscriptions = excluded.subscriptions,
-        cheers = excluded.cheers,
-        giftSubs = excluded.giftSubs,
-        raids = excluded.raids,
-        totalBits = excluded.totalBits,
-        updatedAt = CURRENT_TIMESTAMP
-    `);
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO viewer_channel_message_daily_aggs (
+          id,
+          viewerId,
+          channelId,
+          date,
+          totalMessages,
+          chatMessages,
+          subscriptions,
+          cheers,
+          giftSubs,
+          raids,
+          totalBits,
+          updatedAt
+        )
+        SELECT
+          lower(hex(randomblob(16))) AS id,
+          viewerId,
+          channelId,
+          datetime(date(timestamp)) AS date,
+          COUNT(*) AS totalMessages,
+          SUM(CASE WHEN messageType = 'CHAT' THEN 1 ELSE 0 END) AS chatMessages,
+          SUM(CASE WHEN messageType = 'SUBSCRIPTION' THEN 1 ELSE 0 END) AS subscriptions,
+          SUM(CASE WHEN messageType = 'CHEER' THEN 1 ELSE 0 END) AS cheers,
+          SUM(CASE WHEN messageType = 'GIFT_SUBSCRIPTION' THEN 1 ELSE 0 END) AS giftSubs,
+          SUM(CASE WHEN messageType = 'RAID' THEN 1 ELSE 0 END) AS raids,
+          SUM(CASE WHEN messageType = 'CHEER' THEN COALESCE(bitsAmount, 0) ELSE 0 END) AS totalBits,
+          CURRENT_TIMESTAMP AS updatedAt
+        FROM viewer_channel_messages
+        WHERE timestamp >= ${fromDate} AND timestamp < ${now}
+        GROUP BY viewerId, channelId, datetime(date(timestamp))
+        ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+          totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
+          chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
+          subscriptions = viewer_channel_message_daily_aggs.subscriptions + excluded.subscriptions,
+          cheers = viewer_channel_message_daily_aggs.cheers + excluded.cheers,
+          giftSubs = viewer_channel_message_daily_aggs.giftSubs + excluded.giftSubs,
+          raids = viewer_channel_message_daily_aggs.raids + excluded.raids,
+          totalBits = COALESCE(viewer_channel_message_daily_aggs.totalBits, 0) + COALESCE(excluded.totalBits, 0),
+          updatedAt = CURRENT_TIMESTAMP
+      `);
+
+      await tx.systemSetting.upsert({
+        where: { key: LAST_AGGREGATED_AT_KEY },
+        create: { key: LAST_AGGREGATED_AT_KEY, value: now.toISOString() },
+        update: { value: now.toISOString() },
+      });
+    });
 
     const duration = Date.now() - startTime;
     logger.info("Cron", `訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`);

@@ -43,7 +43,33 @@ interface HeatmapAggregateRow {
   updatedAt: string | Date;
 }
 
+interface StreamerSummaryRow {
+  totalSeconds: number | bigint | string | null;
+  sessionCount: number | bigint | string | null;
+}
+
+interface TimeSeriesAggregateRow {
+  bucketDate: string;
+  totalSeconds: number | bigint | string | null;
+  sessionCount: number | bigint | string | null;
+}
+
 const HEATMAP_AGGREGATE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function resolveRangeDays(range: string): number {
+  if (range === "7d") return 7;
+  if (range === "90d") return 90;
+  return 30;
+}
+
+async function getChannelIdByStreamerId(streamerId: string): Promise<string | null> {
+  const channel = await prisma.channel.findFirst({
+    where: { streamerId },
+    select: { id: true },
+  });
+
+  return channel?.id ?? null;
+}
 
 function buildHeatmapResponseFromCells(range: string, cells: HeatmapCell[]): HeatmapResponse {
   let maxValue = 0;
@@ -196,21 +222,14 @@ export async function getStreamerSummary(
   streamerId: string,
   range: string = "30d"
 ): Promise<StreamerSummary> {
-  // 1. 解析時間範圍
   const now = new Date();
-  let days = 30;
-  if (range === "7d") days = 7;
-  if (range === "90d") days = 90;
+  const days = resolveRangeDays(range);
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  // 2. 取得實況主的頻道 ID
-  const channel = await prisma.channel.findFirst({
-    where: { streamerId },
-  });
+  const channelId = await getChannelIdByStreamerId(streamerId);
 
-  if (!channel) {
-    // 如果找不到頻道，回傳空統計
+  if (!channelId) {
     return {
       range,
       totalStreamHours: 0,
@@ -220,24 +239,18 @@ export async function getStreamerSummary(
     };
   }
 
-  // 3. 查詢指定期間的開台紀錄
-  const sessions = await prisma.streamSession.findMany({
-    where: {
-      channelId: channel.id,
-      startedAt: {
-        gte: cutoffDate,
-      },
-    },
-    select: {
-      durationSeconds: true,
-      startedAt: true,
-    },
-  });
+  const rows = await prisma.$queryRaw<StreamerSummaryRow[]>(Prisma.sql`
+    SELECT
+      SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+      COUNT(*) AS sessionCount
+    FROM stream_sessions
+    WHERE channelId = ${channelId}
+      AND startedAt >= ${cutoffDate}
+  `);
 
-  // 4. 計算統計數據
-  const totalStreamSessions = sessions.length;
-  const totalSeconds = sessions.reduce((sum, s) => sum + (s.durationSeconds || 0), 0);
-  const totalStreamHours = Math.round((totalSeconds / 3600) * 10) / 10; // 取小數點後一位
+  const totalSeconds = toNumber(rows[0]?.totalSeconds);
+  const totalStreamSessions = toNumber(rows[0]?.sessionCount);
+  const totalStreamHours = Math.round((totalSeconds / 3600) * 10) / 10;
   const avgStreamDurationMinutes =
     totalStreamSessions > 0 ? Math.round(totalSeconds / 60 / totalStreamSessions) : 0;
 
@@ -262,20 +275,14 @@ export async function getStreamerTimeSeries(
   range: string = "30d",
   granularity: "day" | "week" = "day"
 ): Promise<TimeSeriesResponse> {
-  // 1. 解析時間範圍
   const now = new Date();
-  let days = 30;
-  if (range === "7d") days = 7;
-  if (range === "90d") days = 90;
+  const days = resolveRangeDays(range);
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  // 2. 取得實況主的頻道 ID
-  const channel = await prisma.channel.findFirst({
-    where: { streamerId },
-  });
+  const channelId = await getChannelIdByStreamerId(streamerId);
 
-  if (!channel) {
+  if (!channelId) {
     return {
       range,
       granularity,
@@ -284,43 +291,45 @@ export async function getStreamerTimeSeries(
     };
   }
 
-  // 3. 查詢指定期間的開台紀錄
-  const sessions = await prisma.streamSession.findMany({
-    where: {
-      channelId: channel.id,
-      startedAt: {
-        gte: cutoffDate,
-      },
-    },
-    select: {
-      durationSeconds: true,
-      startedAt: true,
-    },
-    orderBy: {
-      startedAt: "asc",
-    },
-  });
-
-  // 4. 根據 granularity 彙整資料
   if (granularity === "day") {
-    return aggregateByDay(sessions, range, cutoffDate, now);
-  } else {
-    return aggregateByWeek(sessions, range, cutoffDate, now);
+    const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
+      SELECT
+        date(startedAt) AS bucketDate,
+        SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+        COUNT(*) AS sessionCount
+      FROM stream_sessions
+      WHERE channelId = ${channelId}
+        AND startedAt >= ${cutoffDate}
+      GROUP BY date(startedAt)
+      ORDER BY bucketDate ASC
+    `);
+
+    return buildDailyTimeSeries(rows, range, cutoffDate, now);
   }
+
+  const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
+    SELECT
+      date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days') AS bucketDate,
+      SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+      COUNT(*) AS sessionCount
+    FROM stream_sessions
+    WHERE channelId = ${channelId}
+      AND startedAt >= ${cutoffDate}
+    GROUP BY date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days')
+    ORDER BY bucketDate ASC
+  `);
+
+  return buildWeeklyTimeSeries(rows, range, cutoffDate, now);
 }
 
-/**
- * 按日彙整開台資料
- */
-function aggregateByDay(
-  sessions: Array<{ startedAt: Date; durationSeconds: number | null }>,
+function buildDailyTimeSeries(
+  rows: TimeSeriesAggregateRow[],
   range: string,
   startDate: Date,
   endDate: Date
 ): TimeSeriesResponse {
   const dataMap = new Map<string, { totalSeconds: number; count: number }>();
 
-  // 初始化所有日期為 0
   const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
   for (let i = 0; i < dayCount; i++) {
     const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
@@ -328,16 +337,15 @@ function aggregateByDay(
     dataMap.set(dateKey, { totalSeconds: 0, count: 0 });
   }
 
-  // 彙整實際資料
-  sessions.forEach((session) => {
-    const dateKey = session.startedAt.toISOString().split("T")[0];
-    const existing = dataMap.get(dateKey) || { totalSeconds: 0, count: 0 };
-    existing.totalSeconds += session.durationSeconds || 0;
-    existing.count += 1;
-    dataMap.set(dateKey, existing);
-  });
+  for (const row of rows) {
+    const dateKey = row.bucketDate;
+    if (!dataMap.has(dateKey)) continue;
+    dataMap.set(dateKey, {
+      totalSeconds: toNumber(row.totalSeconds),
+      count: toNumber(row.sessionCount),
+    });
+  }
 
-  // 轉換為陣列並排序
   const data: TimeSeriesDataPoint[] = Array.from(dataMap.entries())
     .map(([date, stats]) => ({
       date,
@@ -354,48 +362,42 @@ function aggregateByDay(
   };
 }
 
-/**
- * 按週彙整開台資料
- */
-function aggregateByWeek(
-  sessions: Array<{ startedAt: Date; durationSeconds: number | null }>,
+function getWeekStartIso(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().split("T")[0];
+}
+
+function buildWeeklyTimeSeries(
+  rows: TimeSeriesAggregateRow[],
   range: string,
   startDate: Date,
   endDate: Date
 ): TimeSeriesResponse {
   const dataMap = new Map<string, { totalSeconds: number; count: number }>();
 
-  // 取得週的起始日（週一）
-  function getWeekStart(date: Date): string {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 調整至週一
-    d.setDate(diff);
-    return d.toISOString().split("T")[0];
-  }
-
-  // 初始化所有週為 0
   const weekCount = Math.ceil(
     (endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
   );
   for (let i = 0; i < weekCount; i++) {
     const date = new Date(startDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
-    const weekKey = getWeekStart(date);
+    const weekKey = getWeekStartIso(date);
     if (!dataMap.has(weekKey)) {
       dataMap.set(weekKey, { totalSeconds: 0, count: 0 });
     }
   }
 
-  // 彙整實際資料
-  sessions.forEach((session) => {
-    const weekKey = getWeekStart(session.startedAt);
-    const existing = dataMap.get(weekKey) || { totalSeconds: 0, count: 0 };
-    existing.totalSeconds += session.durationSeconds || 0;
-    existing.count += 1;
+  for (const row of rows) {
+    const weekKey = row.bucketDate;
+    const existing = dataMap.get(weekKey);
+    if (!existing) continue;
+    existing.totalSeconds = toNumber(row.totalSeconds);
+    existing.count = toNumber(row.sessionCount);
     dataMap.set(weekKey, existing);
-  });
+  }
 
-  // 轉換為陣列並排序
   const data: TimeSeriesDataPoint[] = Array.from(dataMap.entries())
     .map(([date, stats]) => ({
       date,
@@ -545,50 +547,6 @@ async function getGameStatsByChannelId(channelId: string, cutoffDate: Date): Pro
     .sort((a, b) => b.totalHours - a.totalHours);
 }
 
-function buildGameStatsFromSessions(sessions: SessionAnalyticsRow[]): GameStats[] {
-  if (sessions.length === 0) {
-    return [];
-  }
-
-  const buckets = new Map<
-    string,
-    { totalSeconds: number; weightedViewersSum: number; peakViewers: number; streamCount: number }
-  >();
-
-  for (const session of sessions) {
-    const gameName = session.category || "Uncategorized";
-    const durationSeconds = session.durationSeconds || 0;
-    const avgViewers = session.avgViewers || 0;
-    const peakViewers = session.peakViewers || 0;
-
-    const existing = buckets.get(gameName) || {
-      totalSeconds: 0,
-      weightedViewersSum: 0,
-      peakViewers: 0,
-      streamCount: 0,
-    };
-
-    existing.totalSeconds += durationSeconds;
-    existing.weightedViewersSum += avgViewers * durationSeconds;
-    existing.peakViewers = Math.max(existing.peakViewers, peakViewers);
-    existing.streamCount += 1;
-    buckets.set(gameName, existing);
-  }
-
-  const totalAllSeconds = Array.from(buckets.values()).reduce((sum, row) => sum + row.totalSeconds, 0);
-
-  return Array.from(buckets.entries())
-    .map(([gameName, row]) => ({
-      gameName,
-      totalHours: Math.round((row.totalSeconds / 3600) * 10) / 10,
-      avgViewers: row.totalSeconds > 0 ? Math.round(row.weightedViewersSum / row.totalSeconds) : 0,
-      peakViewers: row.peakViewers,
-      streamCount: row.streamCount,
-      percentage: totalAllSeconds > 0 ? Math.round((row.totalSeconds / totalAllSeconds) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.totalHours - a.totalHours);
-}
-
 function buildViewerTrendsFromSessions(sessions: SessionAnalyticsRow[]): ViewerTrendPoint[] {
   return sessions.map((session) => ({
     date: session.startedAt.toISOString(),
@@ -678,29 +636,30 @@ export async function getChannelGameStatsAndViewerTrends(
   range: "7d" | "30d" | "90d" = "30d"
 ): Promise<{ gameStats: GameStats[]; viewerTrends: ViewerTrendPoint[] }> {
   const now = new Date();
-  let days = 30;
-  if (range === "7d") days = 7;
-  if (range === "90d") days = 90;
+  const days = resolveRangeDays(range);
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const sessions = await prisma.streamSession.findMany({
-    where: {
-      channelId,
-      startedAt: { gte: cutoffDate },
-    },
-    select: {
-      startedAt: true,
-      title: true,
-      avgViewers: true,
-      peakViewers: true,
-      durationSeconds: true,
-      category: true,
-    },
-    orderBy: { startedAt: "asc" },
-  });
+  const [gameStats, sessions] = await Promise.all([
+    getGameStatsByChannelId(channelId, cutoffDate),
+    prisma.streamSession.findMany({
+      where: {
+        channelId,
+        startedAt: { gte: cutoffDate },
+      },
+      select: {
+        startedAt: true,
+        title: true,
+        avgViewers: true,
+        peakViewers: true,
+        durationSeconds: true,
+        category: true,
+      },
+      orderBy: { startedAt: "asc" },
+    }),
+  ]);
 
   return {
-    gameStats: buildGameStatsFromSessions(sessions),
+    gameStats,
     viewerTrends: buildViewerTrendsFromSessions(sessions),
   };
 }
