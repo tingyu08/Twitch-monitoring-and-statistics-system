@@ -49,8 +49,8 @@ class App {
   constructor() {
     this.express = express();
 
-    // ??Render/Heroku 蝑蝡臬像?唬?嚗??函?撘??隞??敺??
-    // ?閬縑隞颱誨?誑甇?Ⅱ?脣?摰Ｘ蝡?IP嚗??Rate Limiting嚗?
+    // Zeabur 反向代理環境：啟用 trust proxy 以正確取得客戶端 IP
+    // 否則 rate limiting 可能把所有請求視為同一來源
     if (process.env.NODE_ENV === "production") {
       this.express.set("trust proxy", 1);
     }

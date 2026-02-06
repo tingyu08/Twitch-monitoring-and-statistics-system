@@ -275,7 +275,7 @@ export class RevenueService {
         startDate.setDate(startDate.getDate() - effectiveDays);
         startDate.setHours(0, 0, 0, 0);
 
-        // Render Free Tier: 查詢超時保護（20 秒）
+        // Zeabur 免費層: 查詢超時保護（20 秒）
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
         });
@@ -355,7 +355,7 @@ export class RevenueService {
         startDate.setDate(startDate.getDate() - effectiveDays);
         startDate.setHours(0, 0, 0, 0);
 
-        // Render Free Tier: 查詢超時保護（20 秒）
+        // Zeabur 免費層: 查詢超時保護（20 秒）
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
         });
@@ -424,7 +424,7 @@ export class RevenueService {
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
 
-        // Render Free Tier: 查詢超時保護（20 秒）
+        // Zeabur 免費層: 查詢超時保護（20 秒）
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
         });

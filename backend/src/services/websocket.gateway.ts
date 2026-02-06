@@ -24,7 +24,7 @@ export class WebSocketGateway {
         credentials: true,
       },
       path: "/socket.io", // 默認路徑
-      // P1 Memory: Optimize for Render Free Tier
+      // P1 Memory: Optimize for Zeabur free tier
       pingTimeout: 60000,
       pingInterval: 25000,
     });

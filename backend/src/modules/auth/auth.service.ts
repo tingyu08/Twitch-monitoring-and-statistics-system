@@ -186,8 +186,8 @@ export async function handleStreamerTwitchCallback(
       });
     }
 
-  // 延遲執行後台任務（避免阻塞登入回應，防止 Render 502 超時）
-  // 在 Render 免費版資源受限的環境下，立即啟動這些任務可能導致回應超時
+  // 延遲執行後台任務（避免阻塞登入回應，防止 Zeabur 502 超時）
+  // 在 Zeabur 免費層資源受限的環境下，立即啟動這些任務可能導致回應超時
   setTimeout(() => {
     // 非同步觸發追蹤名單同步（不阻塞登入流程）
     triggerFollowSyncForUser(result.viewerRecord.id, tokenData.access_token).catch((err: unknown) =>

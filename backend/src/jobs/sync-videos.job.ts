@@ -20,7 +20,7 @@ import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
  * - 記憶體超限時提前中斷
  */
 
-// Render Free Tier 優化：平衡性能與記憶體
+// Zeabur 免費層優化：平衡性能與記憶體
 const BATCH_SIZE = 20;           // 每批處理 20 個實況主（平衡性能與記憶體）
 const BATCH_DELAY_MS = 1500;     // 批次之間休息 1.5 秒（讓 GC 有時間清理）
 const STREAMER_DELAY_MS = 300;   // 每個實況主之間休息 300ms

@@ -27,8 +27,8 @@ import { webSocketGateway } from "./websocket.gateway";
 const HEAT_WINDOW_MS = 5000; // 5秒視窗
 const HEAT_THRESHOLD_MSG = 50; // 5秒內超過50則訊息視為有熱度
 const HEAT_COOLDOWN_MS = 30000; // 冷卻時間 30秒
-const HEAT_CLEANUP_INTERVAL_MS = 30000; // Render Free Tier: 每 30 秒清理一次
-const HEAT_STALE_THRESHOLD_MS = 30000; // Render Free Tier: 超過 30 秒沒活動即清理
+const HEAT_CLEANUP_INTERVAL_MS = 30000; // Zeabur 免費層: 每 30 秒清理一次
+const HEAT_STALE_THRESHOLD_MS = 30000; // Zeabur 免費層: 超過 30 秒沒活動即清理
 
 // P1 Fix: channelIdCache 大小限制（避免無限增長）
 const MAX_CHANNEL_ID_CACHE_SIZE = 500;

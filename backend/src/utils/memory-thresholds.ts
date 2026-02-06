@@ -1,7 +1,7 @@
 /**
  * Memory Thresholds Configuration
  *
- * 統一的記憶體閾值常數，針對 Render Free Tier 的 512MB RAM 限制進行優化。
+ * 統一的記憶體閾值常數，針對 Zeabur 免費層的 512MB RAM 限制進行優化。
  * 所有記憶體相關的監控和保護機制應使用這些統一的閾值，確保一致性。
  *
  * @module memory-thresholds

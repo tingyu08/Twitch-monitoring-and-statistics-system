@@ -51,9 +51,9 @@
 
 ### 🔧 關鍵變更
 
-1.  **移除 Render 部署**
-    - **原因**: Render 作為健康檢查中介層無法有效防止 Zeabur 冷啟動
-    - **移除**: 刪除 `render-proxy` 目錄和 `backend/render.yaml`
+1.  **移除舊中介部署**
+    - **原因**: 舊健康檢查中介層無法有效防止 Zeabur 冷啟動
+    - **移除**: 刪除舊 proxy 目錄與對應設定檔
     - **簡化**: 單一後端平台，降低維護複雜度
 
 2.  **UptimeRobot 直連 Zeabur**
@@ -61,7 +61,7 @@
     - **效果**: 真正防止 Zeabur 冷啟動
 
 3.  **Extension API URL 更新**
-    - **變更**: 從 Render URL 改為 Zeabur URL
+    - **變更**: 從舊 URL 改為 Zeabur URL
     - **影響**: Chrome Extension 需要重新安裝
 
 ---

@@ -32,7 +32,7 @@ export class RevenueController {
     try {
       const streamerId = getStreamerId(req);
 
-      // Render Free Tier 超時保護（25 秒）
+      // Zeabur 免費層超時保護（25 秒）
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
       });
@@ -78,7 +78,7 @@ export class RevenueController {
         QUERY_LIMITS.MAX_DAYS
       );
 
-      // Render Free Tier 超時保護（25 秒）
+      // Zeabur 免費層超時保護（25 秒）
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
       });
@@ -118,7 +118,7 @@ export class RevenueController {
         QUERY_LIMITS.MAX_DAYS
       );
 
-      // Render Free Tier 超時保護（25 秒）
+      // Zeabur 免費層超時保護（25 秒）
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
       });
@@ -172,7 +172,7 @@ export class RevenueController {
     try {
       const streamerId = getStreamerId(req);
 
-      // 使用 Promise.race 設定超時（Render 免費版有 30 秒限制）
+      // 使用 Promise.race 設定超時（Zeabur 免費層有 30 秒限制）
       let timeoutId: NodeJS.Timeout | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error("SYNC_TIMEOUT")), SYNC_TIMEOUT_MS);
@@ -253,7 +253,7 @@ export class RevenueController {
         return res.status(400).json({ error: "Only CSV and PDF formats are supported" });
       }
 
-      // 在 Render free tier 上，PDF 生成較消耗記憶體
+      // 在 Zeabur 免費層上，PDF 生成較消耗記憶體
       // 如果資料量過大，建議使用 CSV 格式
       if (format === "pdf" && days > PDF_EXPORT.MAX_DAYS) {
         return res.status(400).json({

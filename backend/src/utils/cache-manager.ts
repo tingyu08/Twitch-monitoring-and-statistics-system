@@ -1,7 +1,7 @@
 /**
  * 記憶體快取管理器
  *
- * 為 Render Free Tier 優化的輕量級快取系統
+ * 為 Zeabur 免費層優化的輕量級快取系統
  * - 使用 LRU 策略自動清除舊資料
  * - 記憶體限制保護（預設 50MB）
  * - TTL 支援
@@ -47,7 +47,7 @@ export class CacheManager {
     this.maxMemoryBytes = maxMemoryMB * 1024 * 1024;
     this.currentMemoryUsage = 0;
 
-    // Render Free Tier 優化：平衡 CPU 與記憶體（每 5 分鐘）
+    // Zeabur 免費層優化：平衡 CPU 與記憶體（每 5 分鐘）
     const cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000);
 
     // Don't prevent Node.js from exiting
@@ -64,7 +64,7 @@ export class CacheManager {
   set<T>(key: string, value: T, ttlSeconds: number = 300): void {
     const size = this.estimateSize(value);
 
-    // 如果單個項目超過最大記憶體限制的 25%，拒絕快取 (Render Free Tier 優化)
+    // 如果單個項目超過最大記憶體限制的 25%，拒絕快取 (Zeabur 免費層優化)
     if (size > this.maxMemoryBytes * 0.25) {
       logger.warn(
         "Cache",

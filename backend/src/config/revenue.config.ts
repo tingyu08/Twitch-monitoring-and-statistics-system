@@ -22,7 +22,7 @@ export const BITS_TO_USD_RATE = 0.01 as const;
 
 /**
  * 同步超時設定（毫秒）
- * Render Free Tier 有 30 秒請求限制，設定 25 秒超時以保留緩衝
+ * Zeabur 免費層有 30 秒請求限制，設定 25 秒超時以保留緩衝
  */
 export const SYNC_TIMEOUT_MS = parseInt(
   process.env.REVENUE_SYNC_TIMEOUT || '25000'
@@ -38,7 +38,7 @@ export const SUBSCRIPTION_SYNC = {
 
 /**
  * PDF 匯出限制
- * 在 Render Free Tier 上，PDF 生成消耗較多記憶體
+ * 在 Zeabur 免費層上，PDF 生成消耗較多記憶體
  */
 export const PDF_EXPORT = {
   MAX_DAYS: 90,             // 最多匯出 90 天的資料
@@ -59,7 +59,7 @@ export const QUERY_LIMITS = {
 
 /**
  * API 速率限制配置
- * 針對 Render Free Tier 的資源限制設計
+ * 針對 Zeabur 免費層的資源限制設計
  */
 export const RATE_LIMITS = {
   SYNC: {

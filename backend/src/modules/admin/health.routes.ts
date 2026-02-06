@@ -22,7 +22,7 @@ const DB_CHECK_CACHE_MS = 30 * 1000; // 30 秒快取
  * GET /api/health/ping
  *
  * 這個端點不做任何資料庫查詢，只回傳基本狀態
- * 用於 Render Free Tier 的冷啟動監控
+ * 用於 Zeabur 免費層的冷啟動監控
  */
 healthRoutes.get("/ping", (_req: Request, res: Response) => {
   res.json({
@@ -114,7 +114,7 @@ healthRoutes.get("/detailed", async (_req: Request, res: Response) => {
     // 5. 快取統計
     const cacheStats = cacheManager.getStats();
 
-    // 記憶體警告檢查（Render Free Tier: 512MB）
+    // 記憶體警告檢查（Zeabur 免費層: 512MB）
     const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
     const memoryWarning = heapUsedMB > 400 ? "high" : heapUsedMB > 300 ? "medium" : "normal";
 

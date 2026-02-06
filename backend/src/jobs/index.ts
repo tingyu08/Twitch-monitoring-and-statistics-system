@@ -17,7 +17,7 @@ import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
 
 /**
- * 啟動所有定時任務（Render Free Tier 優化版）
+ * 啟動所有定時任務（Zeabur 免費層優化版）
  */
 export function startAllJobs(): void {
   logger.info("Jobs", "正在啟動定時任務（分階段啟動以減少記憶體壓力）...");

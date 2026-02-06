@@ -1,7 +1,7 @@
 /**
  * 記憶體監控器
  *
- * Render Free Tier 有 512MB RAM 限制
+ * Zeabur 免費層有 512MB RAM 限制
  * 此工具提供：
  * - 定期記憶體監控
  * - 記憶體超限警告
@@ -167,7 +167,7 @@ export class MemoryMonitor {
   }
 }
 
-// 導出單例（Render Free Tier: 512MB 限制）
+// 導出單例（Zeabur 免費層: 512MB 限制）
 // 使用統一的記憶體閾值常數
 export const memoryMonitor = new MemoryMonitor(
   MEMORY_THRESHOLDS.WARNING_MB,

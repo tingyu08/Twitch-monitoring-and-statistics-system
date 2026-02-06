@@ -65,7 +65,7 @@ DATABASE_URL=postgres://user:password@localhost:5432/twitch_analytics
 實際專案建立後，請：
 
 1. 在 root 目錄放置 `.env.example`，以便新成員複製為 `.env`。
-2. 於 CI / 部署平台（如 Vercel、Railway、Render 等）透過 UI 設定機密，而非硬編碼在 repo。
+2. 於 CI / 部署平台（如 Vercel、Railway、Zeabur 等）透過 UI 設定機密，而非硬編碼在 repo。
 
 ---
 
