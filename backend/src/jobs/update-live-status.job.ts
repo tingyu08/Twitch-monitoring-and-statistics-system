@@ -4,6 +4,7 @@ import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { cacheManager } from "../utils/cache-manager";
+import { refreshViewerChannelSummaryForChannels } from "../modules/viewer/viewer.service";
 
 import cron from "node-cron";
 
@@ -148,6 +149,16 @@ export async function updateLiveStatusFn() {
       startedAt: Date | null;
     }[] = [];
     const changedTwitchIds = new Set<string>();
+    const summarySnapshots = new Map<
+      string,
+      {
+        channelId: string;
+        isLive: boolean;
+        viewerCount: number;
+        streamStartedAt: Date | null;
+        category: string;
+      }
+    >();
     let liveCount = 0;
     let offlineCount = 0;
 
@@ -198,6 +209,13 @@ export async function updateLiveStatusFn() {
               startedAt: isLive ? stream.startedAt : null,
             });
             changedTwitchIds.add(channel.twitchChannelId);
+            summarySnapshots.set(channel.id, {
+              channelId: channel.id,
+              isLive,
+              viewerCount: isLive ? stream.viewerCount : 0,
+              streamStartedAt: isLive ? stream.startedAt ?? null : null,
+              category: isLive ? stream.gameName || "Just Chatting" : "Just Chatting",
+            });
           }
 
           if (isLive) {
@@ -220,6 +238,13 @@ export async function updateLiveStatusFn() {
                 gameName,
                 startedAt,
               });
+              summarySnapshots.set(channel.id, {
+                channelId: channel.id,
+                isLive,
+                viewerCount,
+                streamStartedAt: startedAt,
+                category: gameName || "Just Chatting",
+              });
             }
           }
         }
@@ -231,6 +256,10 @@ export async function updateLiveStatusFn() {
       if (i + BATCH_SIZE < channels.length) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
+    }
+
+    if (summarySnapshots.size > 0) {
+      await refreshViewerChannelSummaryForChannels(Array.from(summarySnapshots.values()));
     }
 
     // 4. 批量更新 DB（只更新有變化的頻道）

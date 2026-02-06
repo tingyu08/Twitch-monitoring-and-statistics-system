@@ -49,6 +49,7 @@ model Viewer {
   messages     ViewerChannelMessage[]
   messageAggs  ViewerChannelMessageDailyAgg[]
   lifetimeStats ViewerChannelLifetimeStats[]
+  channelSummaries ViewerChannelSummary[]
   dashboardLayouts ViewerDashboardLayout[]
 
   // Story 2.5: Privacy Control Relations
@@ -82,6 +83,8 @@ model Channel {
   viewerMessages  ViewerChannelMessage[]
   viewerMessageAggs ViewerChannelMessageDailyAgg[]
   viewerLifetimeStats ViewerChannelLifetimeStats[]
+  viewerChannelSummaries ViewerChannelSummary[]
+  channelHourlyStats ChannelHourlyStat[]
   viewerDashboardLayouts ViewerDashboardLayout[]
   userFollows     UserFollow[]             // Story 3.6: 追蹤此頻道的用戶
   viewerVideos    ViewerChannelVideo[]     // 觀眾追蹤名單用的影片
@@ -345,6 +348,47 @@ model ViewerChannelLifetimeStats {
   @@map("viewer_channel_lifetime_stats")
 }
 
+model ViewerChannelSummary {
+  viewerId       String
+  channelId      String
+  channelName    String
+  displayName    String
+  avatarUrl      String
+  category       String?
+  isLive         Boolean
+  viewerCount    Int?
+  streamStartedAt DateTime?
+  lastWatched    DateTime?
+  totalWatchMin  Int      @default(0)
+  messageCount   Int      @default(0)
+  isExternal     Boolean  @default(false)
+  followedAt     DateTime?
+  updatedAt      DateTime @updatedAt
+
+  viewer Viewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([viewerId, channelId])
+  @@index([viewerId, isLive])
+  @@index([channelId])
+  @@map("viewer_channel_summary")
+}
+
+model ChannelHourlyStat {
+  channelId  String
+  dayOfWeek  Int
+  hour       Int
+  totalHours Float
+  range      String
+  updatedAt  DateTime @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, dayOfWeek, hour, range])
+  @@index([channelId, range])
+  @@map("channel_hourly_stats")
+}
+
 model ViewerDashboardLayout {
   id        String   @id @default(uuid())
   viewerId  String
@@ -588,11 +632,13 @@ model CheerEvent {
   message      String?
   isAnonymous  Boolean  @default(false)
   cheeredAt    DateTime
+  cheeredDate  DateTime?
   createdAt    DateTime @default(now())
 
   streamer     Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([streamerId, cheeredAt])
+  @@index([streamerId, cheeredDate])
   @@index([streamerId, userName, isAnonymous])
   @@map("cheer_events")
 }

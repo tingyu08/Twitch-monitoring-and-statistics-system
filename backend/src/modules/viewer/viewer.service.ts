@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
@@ -30,8 +31,7 @@ interface ChannelWithRelations {
   currentStreamStartedAt: Date | null;
   currentGameName: string | null;
   source: string;
-  streamer: { displayName: string; avatarUrl: string } | null;
-  streamSessions: unknown[];
+  streamer: { displayName: string; avatarUrl: string | null } | null;
 }
 
 interface FollowedChannelResult {
@@ -49,6 +49,32 @@ interface FollowedChannelResult {
   totalWatchMinutes: number;
   messageCount: number;
   isExternal: boolean;
+}
+
+interface ViewerChannelSummaryRow {
+  viewerId: string;
+  channelId: string;
+  channelName: string;
+  displayName: string;
+  avatarUrl: string;
+  category: string | null;
+  isLive: number | boolean;
+  viewerCount: number | null;
+  streamStartedAt: string | Date | null;
+  lastWatched: string | Date | null;
+  totalWatchMin: number;
+  messageCount: number;
+  isExternal: number | boolean;
+  followedAt: string | Date | null;
+  updatedAt: string | Date;
+}
+
+interface SummaryChannelSnapshot {
+  channelId: string;
+  isLive: boolean;
+  viewerCount: number;
+  streamStartedAt: Date | null;
+  category: string;
 }
 
 export interface ViewerDailyStat {
@@ -211,7 +237,7 @@ export async function getChannelStats(
 export async function getFollowedChannels(viewerId: string): Promise<FollowedChannel[]> {
   const cacheKey = `viewer:${viewerId}:channels_list`;
 
-  // P1 Fix: 使用後端快取避免昂貴的查詢（適應性 TTL，根據記憶體壓力調整）
+  // P1 Fix: 使用後端快取 + 物化摘要表避免昂貴查詢
   const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
   return cacheManager.getOrSet(
     cacheKey,
@@ -219,121 +245,29 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
       const startTime = Date.now();
 
       try {
-        // 1. 優先使用預先聚合的 LifetimeStats 表（快速），如果為空則 fallback 到 groupBy（慢但完整）
+        const summaryRows = await fetchSummaryRows(viewerId);
 
-        let lifetimeStats = await prisma.viewerChannelLifetimeStats.findMany({
-          where: { viewerId },
-          select: {
-            channelId: true,
-            totalWatchTimeMinutes: true,
-            totalMessages: true,
-            lastWatchedAt: true,
-          },
-          orderBy: {
-            lastWatchedAt: "desc",
-          },
-        });
+        if (summaryRows.length > 0) {
+          const mapped = mapSummaryRowsToFollowedChannels(summaryRows);
+          const sorted = sortFollowedChannels(mapped);
 
-        // P0 Optimization: 移除昂貴的 groupBy fallback
-        // 如果 LifetimeStats 為空，只返回追蹤的頻道（無統計資料）
-        // Lifetime Stats Job 會在背景定期更新，首次查詢可能為空屬於正常現象
-        if (lifetimeStats.length === 0) {
+          const totalTime = Date.now() - startTime;
           logger.debug(
             "ViewerService",
-            "LifetimeStats empty for new viewer, will be populated by update-lifetime-stats job"
+            `getFollowedChannels served from summary in ${totalTime}ms (${sorted.length} channels)`
           );
-          // 保持 lifetimeStats 為空陣列，後續只顯示追蹤的頻道
+          return sorted;
         }
 
-        // 2. 獲取外部追蹤
-        const follows = await prisma.userFollow.findMany({
-          where: {
-            userId: viewerId,
-            userType: "viewer",
-          },
-          select: {
-            channelId: true,
-            followedAt: true,
-          },
-        });
+        const computed = await buildFollowedChannelsFromSource(viewerId);
+        await persistSummaryRows(viewerId, computed);
 
-        // 3. 合併頻道 ID 列表
-        const statsChannelIds = new Set(lifetimeStats.map((s: LifetimeStatResult) => s.channelId));
-        const followChannelIds = new Set(follows.map((f: FollowResult) => f.channelId));
-        const allChannelIds = Array.from(new Set([...statsChannelIds, ...followChannelIds]));
-
-        if (allChannelIds.length === 0) {
-          return [];
-        }
-
-        // 4. 批量查詢頻道詳細資訊
-
-        const channels = await prisma.channel.findMany({
-          where: {
-            id: { in: allChannelIds },
-          },
-          include: {
-            streamer: true,
-            streamSessions: {
-              where: { endedAt: null },
-              take: 1,
-            },
-          },
-        });
-
-        // 建立 Stats Map 以便快速查找
-        const statsMap = new Map<string, LifetimeStatResult>(lifetimeStats.map((s: LifetimeStatResult) => [s.channelId, s]));
-        const followsMap = new Map<string, Date>(follows.map((f: FollowResult) => [f.channelId, f.followedAt]));
-
-        // 6. 轉換為前端格式
-        const results: FollowedChannelResult[] = channels.map((channel: ChannelWithRelations) => {
-          const stat = statsMap.get(channel.id);
-          const followedAt = followsMap.get(channel.id);
-
-          const hasActiveSession = channel.streamSessions && channel.streamSessions.length > 0;
-          const isLive = channel.isLive || hasActiveSession;
-
-          const displayName = channel.streamer?.displayName || channel.channelName;
-          const avatarUrl =
-            channel.streamer?.avatarUrl ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff&size=150`;
-
-          return {
-            id: channel.id,
-            channelName: channel.channelName,
-            displayName,
-            avatarUrl,
-            category: channel.currentGameName || "Just Chatting",
-            isLive,
-            viewerCount: channel.currentViewerCount ?? null,
-            streamStartedAt: channel.currentStreamStartedAt?.toISOString() ?? null,
-            followedAt: followedAt?.toISOString() ?? null,
-            tags: ["中文", "遊戲"],
-            lastWatched: stat?.lastWatchedAt?.toISOString() ?? null,
-            totalWatchMinutes: stat?.totalWatchTimeMinutes ?? 0,
-            messageCount: stat?.totalMessages ?? 0,
-            isExternal: channel.source === "external",
-          };
-        });
-
-        // 排序
-          const sorted = results.sort((a: FollowedChannelResult, b: FollowedChannelResult) => {
-            // 1. Live first
-            if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
-
-            // 2. Last Watched desc (treat missing lastWatched as older)
-            const aLast = a.lastWatched ? new Date(a.lastWatched).getTime() : null;
-            const bLast = b.lastWatched ? new Date(b.lastWatched).getTime() : null;
-
-            if (aLast !== null && bLast !== null) return bLast - aLast;
-            if (aLast !== null && bLast === null) return -1;
-            if (aLast === null && bLast !== null) return 1;
-
-            return 0;
-          });
-
+        const sorted = sortFollowedChannels(computed);
         const totalTime = Date.now() - startTime;
-        logger.debug("ViewerService", `getFollowedChannels completed in ${totalTime}ms (${sorted.length} channels)`);
+        logger.debug(
+          "ViewerService",
+          `getFollowedChannels rebuilt summary in ${totalTime}ms (${sorted.length} channels)`
+        );
         return sorted;
       } catch (error) {
         logger.error("ViewerService", "getFollowedChannels failed", error);
@@ -342,4 +276,314 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
     },
     ttl // 適應性 TTL（根據記憶體壓力從 30 秒到 3 分鐘）
   );
+}
+
+function sortFollowedChannels(channels: FollowedChannel[]): FollowedChannel[] {
+  return [...channels].sort((a, b) => {
+    if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+
+    const aLast = a.lastWatched ? new Date(a.lastWatched).getTime() : null;
+    const bLast = b.lastWatched ? new Date(b.lastWatched).getTime() : null;
+
+    if (aLast !== null && bLast !== null) return bLast - aLast;
+    if (aLast !== null && bLast === null) return -1;
+    if (aLast === null && bLast !== null) return 1;
+
+    return 0;
+  });
+}
+
+function mapSummaryRowsToFollowedChannels(rows: ViewerChannelSummaryRow[]): FollowedChannel[] {
+  return rows.map((row) => ({
+    id: row.channelId,
+    channelName: row.channelName,
+    displayName: row.displayName,
+    avatarUrl: row.avatarUrl,
+    category: row.category || "Just Chatting",
+    isLive: Boolean(row.isLive),
+    viewerCount: row.viewerCount,
+    streamStartedAt:
+      row.streamStartedAt instanceof Date
+        ? row.streamStartedAt.toISOString()
+        : row.streamStartedAt || null,
+    followedAt:
+      row.followedAt instanceof Date ? row.followedAt.toISOString() : row.followedAt || null,
+    tags: ["中文", "遊戲"],
+    lastWatched:
+      row.lastWatched instanceof Date ? row.lastWatched.toISOString() : row.lastWatched || null,
+    totalWatchMinutes: row.totalWatchMin,
+    messageCount: row.messageCount,
+    isExternal: Boolean(row.isExternal),
+  }));
+}
+
+async function fetchSummaryRows(viewerId: string): Promise<ViewerChannelSummaryRow[]> {
+  try {
+    return await prisma.$queryRaw<ViewerChannelSummaryRow[]>(Prisma.sql`
+      SELECT
+        viewerId,
+        channelId,
+        channelName,
+        displayName,
+        avatarUrl,
+        category,
+        isLive,
+        viewerCount,
+        streamStartedAt,
+        lastWatched,
+        totalWatchMin,
+        messageCount,
+        isExternal,
+        followedAt,
+        updatedAt
+      FROM viewer_channel_summary
+      WHERE viewerId = ${viewerId}
+    `);
+  } catch (error) {
+    logger.debug("ViewerService", "viewer_channel_summary table not ready, fallback to source queries", error);
+    return [];
+  }
+}
+
+async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[]): Promise<void> {
+  try {
+    if (rows.length === 0) {
+      await prisma.$executeRaw(Prisma.sql`
+        DELETE FROM viewer_channel_summary
+        WHERE viewerId = ${viewerId}
+      `);
+      return;
+    }
+
+    const channelIds = rows.map((row) => row.id);
+
+    await prisma.$executeRaw(Prisma.sql`
+      DELETE FROM viewer_channel_summary
+      WHERE viewerId = ${viewerId}
+        AND channelId NOT IN (${Prisma.join(channelIds)})
+    `);
+
+    const values = rows.map((row) =>
+      Prisma.sql`(
+        ${viewerId},
+        ${row.id},
+        ${row.channelName},
+        ${row.displayName},
+        ${row.avatarUrl},
+        ${row.category},
+        ${row.isLive ? 1 : 0},
+        ${row.viewerCount},
+        ${row.streamStartedAt},
+        ${row.lastWatched},
+        ${row.totalWatchMinutes},
+        ${row.messageCount},
+        ${row.isExternal ? 1 : 0},
+        ${row.followedAt},
+        CURRENT_TIMESTAMP
+      )`
+    );
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO viewer_channel_summary (
+        viewerId,
+        channelId,
+        channelName,
+        displayName,
+        avatarUrl,
+        category,
+        isLive,
+        viewerCount,
+        streamStartedAt,
+        lastWatched,
+        totalWatchMin,
+        messageCount,
+        isExternal,
+        followedAt,
+        updatedAt
+      )
+      VALUES ${Prisma.join(values)}
+      ON CONFLICT(viewerId, channelId) DO UPDATE SET
+        channelName = excluded.channelName,
+        displayName = excluded.displayName,
+        avatarUrl = excluded.avatarUrl,
+        category = excluded.category,
+        isLive = excluded.isLive,
+        viewerCount = excluded.viewerCount,
+        streamStartedAt = excluded.streamStartedAt,
+        lastWatched = excluded.lastWatched,
+        totalWatchMin = excluded.totalWatchMin,
+        messageCount = excluded.messageCount,
+        isExternal = excluded.isExternal,
+        followedAt = excluded.followedAt,
+        updatedAt = CURRENT_TIMESTAMP
+    `);
+  } catch (error) {
+    logger.warn("ViewerService", "Failed to persist viewer_channel_summary", error);
+  }
+}
+
+async function buildFollowedChannelsFromSource(viewerId: string): Promise<FollowedChannelResult[]> {
+  const lifetimeStats = await prisma.viewerChannelLifetimeStats.findMany({
+    where: { viewerId },
+    select: {
+      channelId: true,
+      totalWatchTimeMinutes: true,
+      totalMessages: true,
+      lastWatchedAt: true,
+    },
+    orderBy: {
+      lastWatchedAt: "desc",
+    },
+  });
+
+  const follows = await prisma.userFollow.findMany({
+    where: {
+      userId: viewerId,
+      userType: "viewer",
+    },
+    select: {
+      channelId: true,
+      followedAt: true,
+    },
+  });
+
+  const statsChannelIds = new Set(lifetimeStats.map((s: LifetimeStatResult) => s.channelId));
+  const followChannelIds = new Set(follows.map((f: FollowResult) => f.channelId));
+  const allChannelIds = Array.from(new Set([...statsChannelIds, ...followChannelIds]));
+
+  if (allChannelIds.length === 0) {
+    return [];
+  }
+
+  const [channels, activeSessions] = await Promise.all([
+    prisma.channel.findMany({
+      where: {
+        id: { in: allChannelIds },
+      },
+      select: {
+        id: true,
+        channelName: true,
+        isLive: true,
+        currentViewerCount: true,
+        currentStreamStartedAt: true,
+        currentGameName: true,
+        source: true,
+        streamer: {
+          select: {
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    }),
+    prisma.streamSession.findMany({
+      where: {
+        channelId: { in: allChannelIds },
+        endedAt: null,
+      },
+      select: {
+        channelId: true,
+      },
+      distinct: ["channelId"],
+    }),
+  ]);
+
+  const activeSessionChannelIds = new Set(activeSessions.map((session) => session.channelId));
+  const statsMap = new Map<string, LifetimeStatResult>(
+    lifetimeStats.map((s: LifetimeStatResult) => [s.channelId, s])
+  );
+  const followsMap = new Map<string, Date>(
+    follows.map((f: FollowResult) => [f.channelId, f.followedAt])
+  );
+
+  return channels.map((channel: ChannelWithRelations) => {
+    const stat = statsMap.get(channel.id);
+    const followedAt = followsMap.get(channel.id);
+
+    const hasActiveSession = activeSessionChannelIds.has(channel.id);
+    const isLive = channel.isLive || hasActiveSession;
+
+    const displayName = channel.streamer?.displayName || channel.channelName;
+    const avatarUrl =
+      channel.streamer?.avatarUrl ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff&size=150`;
+
+    return {
+      id: channel.id,
+      channelName: channel.channelName,
+      displayName,
+      avatarUrl,
+      category: channel.currentGameName || "Just Chatting",
+      isLive,
+      viewerCount: channel.currentViewerCount ?? null,
+      streamStartedAt: channel.currentStreamStartedAt?.toISOString() ?? null,
+      followedAt: followedAt?.toISOString() ?? null,
+      tags: ["中文", "遊戲"],
+      lastWatched: stat?.lastWatchedAt?.toISOString() ?? null,
+      totalWatchMinutes: stat?.totalWatchTimeMinutes ?? 0,
+      messageCount: stat?.totalMessages ?? 0,
+      isExternal: channel.source === "external",
+    };
+  });
+}
+
+export async function refreshViewerChannelSummaryForViewer(viewerId: string): Promise<void> {
+  const rows = await buildFollowedChannelsFromSource(viewerId);
+  await persistSummaryRows(viewerId, rows);
+  cacheManager.delete(`viewer:${viewerId}:channels_list`);
+}
+
+export async function refreshViewerChannelSummaryForChannels(
+  snapshots: SummaryChannelSnapshot[]
+): Promise<void> {
+  if (snapshots.length === 0) {
+    return;
+  }
+
+  try {
+    for (const snapshot of snapshots) {
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE viewer_channel_summary
+        SET
+          isLive = ${snapshot.isLive ? 1 : 0},
+          viewerCount = ${snapshot.viewerCount},
+          streamStartedAt = ${snapshot.streamStartedAt},
+          category = ${snapshot.category},
+          updatedAt = CURRENT_TIMESTAMP
+        WHERE channelId = ${snapshot.channelId}
+      `);
+    }
+  } catch (error) {
+    logger.warn("ViewerService", "Failed to refresh channel live snapshot in summary table", error);
+  }
+}
+
+export async function warmViewerChannelsCache(limit = 100): Promise<void> {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const active = await prisma.viewerChannelLifetimeStats.findMany({
+    where: {
+      lastWatchedAt: {
+        gte: oneDayAgo,
+      },
+    },
+    select: {
+      viewerId: true,
+    },
+    distinct: ["viewerId"],
+    take: limit,
+  });
+
+  const viewerIds = active.map((row) => row.viewerId);
+  if (viewerIds.length === 0) {
+    return;
+  }
+
+  for (const viewerId of viewerIds) {
+    try {
+      await getFollowedChannels(viewerId);
+    } catch (error) {
+      logger.warn("ViewerService", `Cache warmup failed for viewer ${viewerId}`, error);
+    }
+  }
 }

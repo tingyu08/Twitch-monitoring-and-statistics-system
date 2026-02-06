@@ -11,7 +11,6 @@ import { logger } from "../utils/logger";
 // 配置常數
 const PRE_MESSAGE_BUFFER_MIN = 10; // 第一則訊息前假設看了 10 分鐘
 const POST_MESSAGE_BUFFER_MIN = 30; // 最後一則訊息後假設繼續看 30 分鐘
-const MESSAGE_PAGE_SIZE = 1000; // 分段查詢訊息（降低記憶體峰值）
 
 interface WatchSession {
   startTime: Date;
@@ -223,50 +222,31 @@ export async function updateViewerWatchTime(
       totalSeconds: 0,
     };
     let totalMessages = 0;
-    let lastTimestamp: Date | null = null;
-    let lastId: string | null = null;
 
-    while (true) {
-      const messages = await prisma.viewerChannelMessage.findMany({
-        where: {
-          viewerId,
-          channelId,
-          timestamp: {
-            gte: dayStart,
-            lt: dayEnd,
-          },
-          ...(lastTimestamp && lastId
-            ? {
-                OR: [
-                  { timestamp: { gt: lastTimestamp } },
-                  { timestamp: lastTimestamp, id: { gt: lastId } },
-                ],
-              }
-            : {}),
+    // B4 優化：單次查詢取代分頁 + OR keyset 條件，降低 DB round-trip
+    const messages = await prisma.viewerChannelMessage.findMany({
+      where: {
+        viewerId,
+        channelId,
+        timestamp: {
+          gte: dayStart,
+          lt: dayEnd,
         },
-        select: {
-          id: true,
-          timestamp: true,
-        },
-        orderBy: [{ timestamp: "asc" }, { id: "asc" }],
-        take: MESSAGE_PAGE_SIZE,
-      });
+      },
+      select: {
+        timestamp: true,
+      },
+      orderBy: [{ timestamp: "asc" }, { id: "asc" }],
+    });
 
-      if (messages.length === 0) {
-        break;
-      }
-
-      for (const message of messages) {
-        totalMessages++;
-        accumulator = accumulateWatchTime(
-          accumulator,
-          message.timestamp,
-          streamStartTime,
-          streamEndTime
-        );
-        lastTimestamp = message.timestamp;
-        lastId = message.id;
-      }
+    for (const message of messages) {
+      totalMessages++;
+      accumulator = accumulateWatchTime(
+        accumulator,
+        message.timestamp,
+        streamStartTime,
+        streamEndTime
+      );
     }
 
     if (totalMessages === 0) {

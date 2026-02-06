@@ -127,6 +127,17 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
         logger.warn("Server", "Prisma 連線預熱失敗，將在首次請求時重試");
       }
 
+      // 0.1 啟動後預熱活躍觀眾快取，降低首批請求延遲
+      setTimeout(async () => {
+        try {
+          const { warmViewerChannelsCache } = await import("./modules/viewer/viewer.service");
+          await warmViewerChannelsCache(100);
+          logger.info("Server", "活躍觀眾 channels 快取預熱完成");
+        } catch (error) {
+          logger.warn("Server", "活躍觀眾快取預熱失敗", error);
+        }
+      }, process.env.NODE_ENV === "production" ? 15000 : 3000);
+
       // 1. 先啟動定時任務（輕量級）- 但在生產環境延遲啟動
       if (process.env.NODE_ENV === "production") {
         // 生產環境：延遲 60 秒啟動定時任務，讓伺服器完全穩定後再啟動背景任務

@@ -4,6 +4,7 @@ import { prisma } from "../../db/prisma";
 // Mock Prisma
 jest.mock("../../db/prisma", () => ({
   prisma: {
+    $queryRaw: jest.fn(),
     viewerChannelLifetimeStats: {
       upsert: jest.fn(),
     },
@@ -52,9 +53,10 @@ describe("LifetimeStatsAggregatorService", () => {
         totalBits: null,
       },
     });
-    // Mock findMany for dates (empty)
-    (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValue([]);
-    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ cnt: 0 }])
+      .mockResolvedValueOnce([{ cnt: 0 }]);
 
     await service.aggregateStats(viewerId, channelId);
 
@@ -89,15 +91,13 @@ describe("LifetimeStatsAggregatorService", () => {
         totalBits: 100,
       },
     });
-    // Mock findMany for dates
-    (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValue([
-      { date: new Date("2025-12-01") },
-      { date: new Date("2025-12-02") },
-    ]);
-    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([
-      { date: new Date("2025-12-01") },
-      { date: new Date("2025-12-02") },
-    ]);
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        { d: new Date("2025-12-01") },
+        { d: new Date("2025-12-02") },
+      ])
+      .mockResolvedValueOnce([{ cnt: 2 }])
+      .mockResolvedValueOnce([{ cnt: 2 }]);
 
     await service.aggregateStats(viewerId, channelId);
 
@@ -136,11 +136,10 @@ describe("LifetimeStatsAggregatorService", () => {
         totalBits: null,
       },
     });
-    // Mock findMany for dates
-    (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValue(
-      dates.map((d) => ({ date: new Date(d) }))
-    );
-    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce(dates.map((d) => ({ d: new Date(d) })))
+      .mockResolvedValueOnce([{ cnt: 5 }])
+      .mockResolvedValueOnce([{ cnt: 5 }]);
 
     await service.aggregateStats(viewerId, channelId);
 
@@ -174,11 +173,10 @@ describe("LifetimeStatsAggregatorService", () => {
         totalBits: null,
       },
     });
-    // Mock findMany for dates
-    (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValue(
-      dates.map((d) => ({ date: new Date(d) }))
-    );
-    (prisma.viewerChannelMessageDailyAgg.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce(dates.map((d) => ({ d: new Date(d) })))
+      .mockResolvedValueOnce([{ cnt: 2 }])
+      .mockResolvedValueOnce([{ cnt: 2 }]);
 
     await service.aggregateStats(viewerId, channelId);
 

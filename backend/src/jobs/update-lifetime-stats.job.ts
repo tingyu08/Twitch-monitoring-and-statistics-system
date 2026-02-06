@@ -3,6 +3,7 @@ import pLimit from "p-limit";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { lifetimeStatsAggregator } from "../services/lifetime-stats-aggregator.service";
+import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
 
 // 批次處理大小
 const BATCH_SIZE = 50;
@@ -60,6 +61,7 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     logger.info("CronJob", `找到 ${targets.size} 組觀眾-頻道配對需要更新`);
 
     const affectedChannels = new Set<string>();
+    const affectedViewers = new Set<string>();
 
     // 批次並行處理 Stats（修復 N+1 問題）
     // P0 Fix: 使用 p-limit 限制並行度
@@ -76,6 +78,7 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
             const [viewerId, channelId] = target.split("|");
             await lifetimeStatsAggregator.aggregateStats(viewerId, channelId);
             affectedChannels.add(channelId);
+            affectedViewers.add(viewerId);
           })
         )
       );
@@ -106,6 +109,19 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
 
       // P0 Fix: 批次間延遲
       if (i + BATCH_SIZE < channelArray.length) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+
+    // 刷新受影響觀眾的摘要表（viewer_channel_summary）
+    const viewerArray = Array.from(affectedViewers);
+    logger.info("CronJob", `正在刷新 ${viewerArray.length} 位觀眾的頻道摘要...`);
+
+    for (let i = 0; i < viewerArray.length; i += BATCH_SIZE) {
+      const batch = viewerArray.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map((viewerId) => limit(() => refreshViewerChannelSummaryForViewer(viewerId))));
+
+      if (i + BATCH_SIZE < viewerArray.length) {
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
     }

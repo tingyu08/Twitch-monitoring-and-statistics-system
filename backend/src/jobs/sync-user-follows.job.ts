@@ -15,6 +15,7 @@ import { logger } from "../utils/logger";
 import { decryptToken } from "../utils/crypto.utils";
 import { cacheManager } from "../utils/cache-manager";
 import { retryDatabaseOperation } from "../utils/db-retry";
+import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
 
 // 類型定義
 type TransactionClient = Prisma.TransactionClient;
@@ -548,6 +549,9 @@ export class SyncUserFollowsJob {
       result.followsRemoved = followIdsToDelete.length;
     }
 
+    await refreshViewerChannelSummaryForViewer(user.id);
+    cacheManager.delete(`viewer:${user.id}:channels_list`);
+
     return result;
   }
 
@@ -909,6 +913,8 @@ export async function triggerFollowSyncForUser(
     }
 
     logger.info("Jobs", `✅ 追蹤同步完成: 新增 ${created}, 移除 ${removed}`);
+
+    await refreshViewerChannelSummaryForViewer(viewerId);
 
     // 清除該用戶的 channels_list 快取，確保下次刷新頁面能看到最新資料
     const cacheKey = `viewer:${viewerId}:channels_list`;

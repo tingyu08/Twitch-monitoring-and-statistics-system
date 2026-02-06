@@ -354,6 +354,7 @@ export class RevenueService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - effectiveDays);
         startDate.setHours(0, 0, 0, 0);
+        const startDateOnly = new Date(startDate.toISOString().split("T")[0]);
 
         // Zeabur 免費層: 查詢超時保護（20 秒）
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -361,24 +362,23 @@ export class RevenueService {
         });
 
         try {
-          // 優化：使用資料庫 GROUP BY 而非記憶體聚合
-          // 注意：SQLite 不直接支援按日期分組，需要使用 DATE() 函數
+          // 優化：使用 cheeredDate 欄位 + 索引做日期分組
           const results = await Promise.race([
             prisma.$queryRaw<
               Array<{
-                date: string;
+                date: string | Date;
                 totalBits: bigint;
                 eventCount: bigint;
               }>
             >`
               SELECT
-                DATE(cheeredAt) as date,
+                cheeredDate as date,
                 SUM(bits) as totalBits,
                 COUNT(*) as eventCount
               FROM cheer_events
               WHERE streamerId = ${streamerId}
-                AND cheeredAt >= ${startDate.toISOString()}
-              GROUP BY DATE(cheeredAt)
+                AND cheeredDate >= ${startDateOnly.toISOString()}
+              GROUP BY cheeredDate
               ORDER BY date ASC
               LIMIT 90
             `,
@@ -386,7 +386,10 @@ export class RevenueService {
           ]);
 
           return results.map((row) => ({
-            date: row.date,
+            date:
+              row.date instanceof Date
+                ? row.date.toISOString().split("T")[0]
+                : String(row.date).split("T")[0],
             totalBits: Number(row.totalBits),
             estimatedRevenue: Number(row.totalBits) * BITS_TO_USD_RATE,
             eventCount: Number(row.eventCount),
@@ -423,6 +426,7 @@ export class RevenueService {
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
+        const startOfMonthOnly = new Date(startOfMonth.toISOString().split("T")[0]);
 
         // Zeabur 免費層: 查詢超時保護（20 秒）
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -431,25 +435,26 @@ export class RevenueService {
 
         try {
           // 使用 Promise.all 平行查詢，避免 SQLite 事務鎖定
-          const [latestSnapshot, bitsAgg] = await Promise.race([
+          const [latestSnapshot, bitsRows] = await Promise.race([
             Promise.all([
               prisma.subscriptionSnapshot.findFirst({
                 where: { streamerId },
                 orderBy: { snapshotDate: "desc" },
               }),
-              prisma.cheerEvent.aggregate({
-                where: {
-                  streamerId,
-                  cheeredAt: { gte: startOfMonth },
-                },
-                _sum: { bits: true },
-                _count: true,
-              }),
+              prisma.$queryRaw<Array<{ totalBits: bigint | null; eventCount: bigint }>>`
+                SELECT
+                  COALESCE(SUM(bits), 0) as totalBits,
+                  COUNT(*) as eventCount
+                FROM cheer_events
+                WHERE streamerId = ${streamerId}
+                  AND cheeredDate >= ${startOfMonthOnly.toISOString()}
+              `,
             ]),
             timeoutPromise,
           ]);
 
-          const totalBits = bitsAgg._sum.bits || 0;
+          const totalBits = Number(bitsRows[0]?.totalBits || 0);
+          const bitsEventCount = Number(bitsRows[0]?.eventCount || 0);
           const bitsRevenue = totalBits * BITS_TO_USD_RATE;
 
           const subRevenue = latestSnapshot?.estimatedRevenue || 0;
@@ -465,7 +470,7 @@ export class RevenueService {
             bits: {
               totalBits,
               estimatedRevenue: bitsRevenue,
-              eventCount: bitsAgg._count,
+              eventCount: bitsEventCount,
             },
             totalEstimatedRevenue: subRevenue + bitsRevenue,
           };

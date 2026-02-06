@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 
@@ -23,6 +24,39 @@ interface LifetimeStatsResult {
   activeDaysLast90: number;
   mostActiveMonth: string | null;
   mostActiveMonthCount: number;
+}
+
+interface DateRow {
+  d: Date | string;
+}
+
+interface CountRow {
+  cnt: number | bigint | string | null;
+}
+
+interface PercentileUpdateRow {
+  id: string;
+  watchTimePercentile: number;
+  messagePercentile: number;
+}
+
+function normalizeDateToDay(value: Date | string): string {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toISOString().split("T")[0];
+}
+
+function toNumber(value: number | bigint | string | null | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 export class LifetimeStatsAggregatorService {
@@ -62,39 +96,68 @@ export class LifetimeStatsAggregatorService {
    * P1 Fix: 使用資料庫聚合函數減少資料傳輸量
    */
   private async calculateStats(viewerId: string, channelId: string): Promise<LifetimeStatsResult> {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
     // P1 Fix: 使用資料庫聚合函數計算總和，避免載入所有記錄到記憶體
-    const [dailyStatsAgg, messageAggsAgg, dailyStatsDates, messageAggsDates] = await Promise.all([
-      // 聚合觀看時間統計
-      prisma.viewerChannelDailyStat.aggregate({
-        where: { viewerId, channelId },
-        _sum: { watchSeconds: true },
-        _count: true,
-        _min: { date: true },
-        _max: { date: true },
-      }),
-      // 聚合訊息統計
-      prisma.viewerChannelMessageDailyAgg.aggregate({
-        where: { viewerId, channelId },
-        _sum: {
-          totalMessages: true,
-          chatMessages: true,
-          subscriptions: true,
-          cheers: true,
-          totalBits: true,
-        },
-      }),
-      // 只查詢日期列表用於 streak 計算（使用 select 只取日期欄位）
-      prisma.viewerChannelDailyStat.findMany({
-        where: { viewerId, channelId },
-        select: { date: true },
-        orderBy: { date: "asc" },
-      }),
-      prisma.viewerChannelMessageDailyAgg.findMany({
-        where: { viewerId, channelId },
-        select: { date: true },
-        orderBy: { date: "asc" },
-      }),
-    ]);
+    const [dailyStatsAgg, messageAggsAgg, activeDateRows, activeDaysLast30Rows, activeDaysLast90Rows] =
+      await Promise.all([
+        // 聚合觀看時間統計
+        prisma.viewerChannelDailyStat.aggregate({
+          where: { viewerId, channelId },
+          _sum: { watchSeconds: true },
+          _count: true,
+          _min: { date: true },
+          _max: { date: true },
+        }),
+        // 聚合訊息統計
+        prisma.viewerChannelMessageDailyAgg.aggregate({
+          where: { viewerId, channelId },
+          _sum: {
+            totalMessages: true,
+            chatMessages: true,
+            subscriptions: true,
+            cheers: true,
+            totalBits: true,
+          },
+        }),
+        // 只查詢日期列表用於 streak 計算（在 DB 側先做去重）
+        prisma.$queryRaw<DateRow[]>(Prisma.sql`
+          SELECT date AS d
+          FROM viewer_channel_daily_stats
+          WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+          UNION
+          SELECT date AS d
+          FROM viewer_channel_message_daily_aggs
+          WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+          ORDER BY d ASC
+        `),
+        prisma.$queryRaw<CountRow[]>(Prisma.sql`
+          SELECT COUNT(*) AS cnt
+          FROM (
+            SELECT date
+            FROM viewer_channel_daily_stats
+            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${thirtyDaysAgo}
+            UNION
+            SELECT date
+            FROM viewer_channel_message_daily_aggs
+            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${thirtyDaysAgo}
+          )
+        `),
+        prisma.$queryRaw<CountRow[]>(Prisma.sql`
+          SELECT COUNT(*) AS cnt
+          FROM (
+            SELECT date
+            FROM viewer_channel_daily_stats
+            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${ninetyDaysAgo}
+            UNION
+            SELECT date
+            FROM viewer_channel_message_daily_aggs
+            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${ninetyDaysAgo}
+          )
+        `),
+      ]);
 
     // ========== 基礎統計 ==========
 
@@ -117,12 +180,8 @@ export class LifetimeStatsAggregatorService {
 
     // ========== 忠誠度與連續簽到 ==========
 
-    // 合併兩個來源的日期，找出所有活躍日期 (去重並排序)
-    const activeDatesSet = new Set<string>();
-    dailyStatsDates.forEach((d) => activeDatesSet.add(d.date.toISOString().split("T")[0]));
-    messageAggsDates.forEach((m) => activeDatesSet.add(m.date.toISOString().split("T")[0]));
-
-    const activeDates = Array.from(activeDatesSet).sort();
+    // 由資料庫去重後回傳的日期列表
+    const activeDates = activeDateRows.map((row) => normalizeDateToDay(row.d));
 
     const trackingDays = activeDates.length;
     const trackingStartedAt = activeDates.length > 0 ? new Date(activeDates[0]) : new Date();
@@ -168,13 +227,8 @@ export class LifetimeStatsAggregatorService {
     }
 
     // ========== 活躍度 (最近 30/90 天) ==========
-
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-
-    const activeDaysLast30 = activeDates.filter((d) => new Date(d) >= thirtyDaysAgo).length;
-    const activeDaysLast90 = activeDates.filter((d) => new Date(d) >= ninetyDaysAgo).length;
+    const activeDaysLast30 = toNumber(activeDaysLast30Rows[0]?.cnt);
+    const activeDaysLast90 = toNumber(activeDaysLast90Rows[0]?.cnt);
 
     // 最活躍月份
     const monthCounts = new Map<string, number>();
@@ -217,11 +271,7 @@ export class LifetimeStatsAggregatorService {
 
   /**
    * 更新頻道的排名 (Percentile Ranking)
-   * 這是批次操作，計算所有觀眾的相對排名
-   *
-   * Optimized: Uses Map for O(1) rank lookup instead of O(n) findIndex
-   * Total complexity: O(n log n) for sorting + O(n) for Map building + O(n) for updates = O(n log n)
-   * Previously: O(n log n) + O(n²) = O(n²)
+   * 使用批量 SQL 寫入，降低逐筆 UPDATE 造成的寫入鎖競爭
    */
   public async updatePercentileRankings(channelId: string): Promise<void> {
     const allStats = await prisma.viewerChannelLifetimeStats.findMany({
@@ -253,8 +303,8 @@ export class LifetimeStatsAggregatorService {
       msgRankMap.set(sortedByMessages[i].id, i);
     }
 
-    const updates = [];
     const statsCount = allStats.length;
+    const updates: PercentileUpdateRow[] = [];
 
     // Build updates using Map lookup - O(n)
     for (const stat of allStats) {
@@ -264,22 +314,33 @@ export class LifetimeStatsAggregatorService {
       const watchTimePercentile = (watchRank / statsCount) * 100;
       const messagePercentile = (msgRank / statsCount) * 100;
 
-      updates.push(
-        prisma.viewerChannelLifetimeStats.update({
-          where: { id: stat.id },
-          data: {
-            watchTimePercentile,
-            messagePercentile,
-          },
-        })
-      );
+      updates.push({
+        id: stat.id,
+        watchTimePercentile,
+        messagePercentile,
+      });
     }
 
-    // 批量執行更新 (Prisma $transaction 限制較多，這裡我們分批或直接 Promise.all)
-    // 考慮到數量可能很大，分批執行比較安全
-    const BATCH_SIZE = 50;
+    // 分批執行批量 SQL，避免單次語句過大
+    const BATCH_SIZE = 200;
     for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-      await prisma.$transaction(updates.slice(i, i + BATCH_SIZE));
+      const batch = updates.slice(i, i + BATCH_SIZE);
+      const watchCases = batch.map(
+        (row) => Prisma.sql`WHEN ${row.id} THEN ${row.watchTimePercentile}`
+      );
+      const messageCases = batch.map(
+        (row) => Prisma.sql`WHEN ${row.id} THEN ${row.messagePercentile}`
+      );
+      const ids = batch.map((row) => row.id);
+
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE viewer_channel_lifetime_stats
+        SET
+          watchTimePercentile = CASE id ${Prisma.join(watchCases, " ")} ELSE watchTimePercentile END,
+          messagePercentile = CASE id ${Prisma.join(messageCases, " ")} ELSE messagePercentile END,
+          updatedAt = CURRENT_TIMESTAMP
+        WHERE id IN (${Prisma.join(ids)})
+      `);
     }
 
     logger.info("LifetimeStats", `Updated rankings for channel ${channelId}`);

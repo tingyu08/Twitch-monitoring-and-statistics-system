@@ -18,8 +18,13 @@ jest.mock("../../services/twitch-helix.service", () => ({
 
 jest.mock("../../db/prisma", () => ({
   prisma: {
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $executeRaw: jest.fn().mockResolvedValue(1),
     twitchToken: {
       findMany: jest.fn(),
+    },
+    viewerChannelLifetimeStats: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     channel: {
       findUnique: jest.fn(),
@@ -43,6 +48,9 @@ jest.mock("../../db/prisma", () => ({
       create: jest.fn(),
       update: jest.fn(),
       upsert: jest.fn(),
+    },
+    streamSession: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     $transaction: jest.fn((callback) => callback(mockPrismaTransaction)),
   },

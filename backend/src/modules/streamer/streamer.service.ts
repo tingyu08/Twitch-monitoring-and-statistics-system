@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 
 export interface StreamerSummary {
@@ -33,6 +34,156 @@ export interface HeatmapResponse {
   maxValue: number;
   minValue: number;
   isEstimated?: boolean;
+}
+
+interface HeatmapAggregateRow {
+  dayOfWeek: number;
+  hour: number;
+  totalHours: number | string;
+  updatedAt: string | Date;
+}
+
+const HEATMAP_AGGREGATE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function buildHeatmapResponseFromCells(range: string, cells: HeatmapCell[]): HeatmapResponse {
+  let maxValue = 0;
+  let minValue = Number.MAX_VALUE;
+
+  for (const cell of cells) {
+    if (cell.value > 0) {
+      maxValue = Math.max(maxValue, cell.value);
+      minValue = Math.min(minValue, cell.value);
+    }
+  }
+
+  if (minValue === Number.MAX_VALUE) {
+    minValue = 0;
+  }
+
+  return {
+    range,
+    data: cells,
+    maxValue,
+    minValue,
+    isEstimated: false,
+  };
+}
+
+function buildHeatmapFromSessions(
+  range: string,
+  sessions: Array<{ durationSeconds: number | null; startedAt: Date }>
+): HeatmapResponse {
+  const heatmapMatrix = new Map<string, number>();
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      heatmapMatrix.set(`${day}-${hour}`, 0);
+    }
+  }
+
+  sessions.forEach((session) => {
+    const startDate = new Date(session.startedAt);
+    let remainingSeconds = session.durationSeconds || 0;
+    let currentTempDate = new Date(startDate);
+
+    while (remainingSeconds > 0) {
+      const dWeek = currentTempDate.getDay();
+      const hr = currentTempDate.getHours();
+      const key = `${dWeek}-${hr}`;
+
+      const secondsToNextHour =
+        3600 - currentTempDate.getMinutes() * 60 - currentTempDate.getSeconds();
+      const secondsInThisHour = Math.min(remainingSeconds, secondsToNextHour);
+      const contribution = secondsInThisHour / 3600;
+
+      const val = heatmapMatrix.get(key) || 0;
+      heatmapMatrix.set(key, val + contribution);
+
+      remainingSeconds -= secondsInThisHour;
+      currentTempDate = new Date(currentTempDate.getTime() + secondsInThisHour * 1000 + 100);
+    }
+  });
+
+  const data: HeatmapCell[] = [];
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      const key = `${day}-${hour}`;
+      const value = heatmapMatrix.get(key) || 0;
+      data.push({
+        dayOfWeek: day,
+        hour,
+        value: Math.round(value * 10) / 10,
+      });
+    }
+  }
+
+  return buildHeatmapResponseFromCells(range, data);
+}
+
+async function loadHeatmapAggregate(
+  channelId: string,
+  range: string
+): Promise<HeatmapResponse | null> {
+  try {
+    const rows = await prisma.$queryRaw<HeatmapAggregateRow[]>(Prisma.sql`
+      SELECT dayOfWeek, hour, totalHours, updatedAt
+      FROM channel_hourly_stats
+      WHERE channelId = ${channelId}
+        AND range = ${range}
+      ORDER BY dayOfWeek ASC, hour ASC
+    `);
+
+    if (rows.length !== 7 * 24) {
+      return null;
+    }
+
+    const latestUpdatedAt = rows.reduce<number>((max, row) => {
+      const ts = row.updatedAt instanceof Date ? row.updatedAt.getTime() : new Date(row.updatedAt).getTime();
+      return Number.isFinite(ts) ? Math.max(max, ts) : max;
+    }, 0);
+
+    if (!latestUpdatedAt || Date.now() - latestUpdatedAt > HEATMAP_AGGREGATE_MAX_AGE_MS) {
+      return null;
+    }
+
+    const data: HeatmapCell[] = rows.map((row) => ({
+      dayOfWeek: row.dayOfWeek,
+      hour: row.hour,
+      value: Math.round(Number(row.totalHours) * 10) / 10,
+    }));
+
+    return buildHeatmapResponseFromCells(range, data);
+  } catch {
+    return null;
+  }
+}
+
+async function persistHeatmapAggregate(
+  channelId: string,
+  range: string,
+  cells: HeatmapCell[]
+): Promise<void> {
+  try {
+    const values = cells.map((cell) =>
+      Prisma.sql`(${channelId}, ${cell.dayOfWeek}, ${cell.hour}, ${cell.value}, ${range}, CURRENT_TIMESTAMP)`
+    );
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO channel_hourly_stats (
+        channelId,
+        dayOfWeek,
+        hour,
+        totalHours,
+        range,
+        updatedAt
+      )
+      VALUES ${Prisma.join(values)}
+      ON CONFLICT(channelId, dayOfWeek, hour, range) DO UPDATE SET
+        totalHours = excluded.totalHours,
+        updatedAt = CURRENT_TIMESTAMP
+    `);
+  } catch {
+    // 聚合表不存在或寫入失敗時，不影響主流程
+  }
 }
 
 /**
@@ -271,7 +422,6 @@ export async function getStreamerHeatmap(
   streamerId: string,
   range: string = "30d"
 ): Promise<HeatmapResponse> {
-  // 1. 解析時間範圍
   const now = new Date();
   let days = 30;
   if (range === "7d") days = 7;
@@ -279,7 +429,6 @@ export async function getStreamerHeatmap(
 
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  // 2. 取得實況主的頻道 ID
   const channel = await prisma.channel.findFirst({
     where: { streamerId },
   });
@@ -294,7 +443,12 @@ export async function getStreamerHeatmap(
     };
   }
 
-  // 3. 查詢指定期間的開台紀錄
+  // 先讀取預聚合結果（命中則直接回傳）
+  const aggregated = await loadHeatmapAggregate(channel.id, range);
+  if (aggregated) {
+    return aggregated;
+  }
+
   const sessions = await prisma.streamSession.findMany({
     where: {
       channelId: channel.id,
@@ -308,81 +462,9 @@ export async function getStreamerHeatmap(
     },
   });
 
-  // 4. 初始化 Heatmap 矩陣（7 天 × 24 小時）
-  const heatmapMatrix = new Map<string, number>();
-  for (let day = 0; day < 7; day++) {
-    for (let hour = 0; hour < 24; hour++) {
-      heatmapMatrix.set(`${day}-${hour}`, 0);
-    }
-  }
-
-  // 5. 彙整資料到 Heatmap
-  sessions.forEach((session) => {
-    const startDate = new Date(session.startedAt);
-
-    // 簡單將時數分配到開始的小時，但若跨時段應更精確
-    // 這裡改進為：如果 duration > 1，則迴圈分配
-    // 注意：這裡做一個簡化的改進，將每一小時視為獨立的計數貢獻
-    // 若要非常精確需計算每小時的實際分鐘數，但為保持效能，我們先將總時數平均分給跨越的小時數?
-    // 或者，最標準的做法是：每經過一小時，就在該小時的格子+1 (或+該小時的實際佔比)
-
-    // 實作精確分配：
-    let remainingSeconds = session.durationSeconds || 0;
-    let currentTempDate = new Date(startDate);
-
-    while (remainingSeconds > 0) {
-      const dWeek = currentTempDate.getDay();
-      const hr = currentTempDate.getHours();
-      const key = `${dWeek}-${hr}`;
-
-      // 計算這一小時內剩餘的秒數（或是直到下一小時的秒數）
-      const secondsToNextHour =
-        3600 - currentTempDate.getMinutes() * 60 - currentTempDate.getSeconds();
-      const secondsInThisHour = Math.min(remainingSeconds, secondsToNextHour);
-
-      const contribution = secondsInThisHour / 3600;
-
-      const val = heatmapMatrix.get(key) || 0;
-      heatmapMatrix.set(key, val + contribution);
-
-      remainingSeconds -= secondsInThisHour;
-      currentTempDate = new Date(currentTempDate.getTime() + secondsInThisHour * 1000 + 100); // +100ms 避免邊界問題
-    }
-  });
-
-  // 6. 轉換為陣列格式並計算最大/最小值
-  const data: HeatmapCell[] = [];
-  let maxValue = 0;
-  let minValue = Number.MAX_VALUE;
-
-  heatmapMatrix.forEach((value, key) => {
-    const [dayOfWeek, hour] = key.split("-").map(Number);
-    const roundedValue = Math.round(value * 10) / 10;
-
-    data.push({
-      dayOfWeek,
-      hour,
-      value: roundedValue,
-    });
-
-    if (roundedValue > 0) {
-      maxValue = Math.max(maxValue, roundedValue);
-      minValue = Math.min(minValue, roundedValue);
-    }
-  });
-
-  // 如果沒有資料，minValue 設為 0
-  if (minValue === Number.MAX_VALUE) {
-    minValue = 0;
-  }
-
-  return {
-    range,
-    data,
-    maxValue,
-    minValue,
-    isEstimated: false,
-  };
+  const response = buildHeatmapFromSessions(range, sessions);
+  await persistHeatmapAggregate(channel.id, range, response.data);
+  return response;
 }
 
 export interface GameStats {
@@ -392,6 +474,66 @@ export interface GameStats {
   peakViewers: number;
   streamCount: number;
   percentage: number;
+}
+
+interface GameStatsRow {
+  gameName: string;
+  totalSeconds: number | bigint | string | null;
+  weightedViewersSum: number | bigint | string | null;
+  peakViewers: number | bigint | string | null;
+  streamCount: number | bigint | string | null;
+}
+
+function toNumber(value: number | bigint | string | null | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+async function getGameStatsByChannelId(channelId: string, cutoffDate: Date): Promise<GameStats[]> {
+  const rows = await prisma.$queryRaw<GameStatsRow[]>(Prisma.sql`
+    SELECT
+      COALESCE(category, 'Uncategorized') AS gameName,
+      SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+      SUM(COALESCE(avgViewers, 0) * COALESCE(durationSeconds, 0)) AS weightedViewersSum,
+      MAX(COALESCE(peakViewers, 0)) AS peakViewers,
+      COUNT(*) AS streamCount
+    FROM stream_sessions
+    WHERE channelId = ${channelId} AND startedAt >= ${cutoffDate}
+    GROUP BY COALESCE(category, 'Uncategorized')
+    ORDER BY totalSeconds DESC
+  `);
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const normalizedRows = rows.map((row) => ({
+    gameName: row.gameName,
+    totalSeconds: toNumber(row.totalSeconds),
+    weightedViewersSum: toNumber(row.weightedViewersSum),
+    peakViewers: toNumber(row.peakViewers),
+    streamCount: toNumber(row.streamCount),
+  }));
+
+  const totalAllSeconds = normalizedRows.reduce((sum, row) => sum + row.totalSeconds, 0);
+
+  return normalizedRows
+    .map((row) => ({
+      gameName: row.gameName,
+      totalHours: Math.round((row.totalSeconds / 3600) * 10) / 10,
+      avgViewers:
+        row.totalSeconds > 0 ? Math.round(row.weightedViewersSum / row.totalSeconds) : 0,
+      peakViewers: row.peakViewers,
+      streamCount: row.streamCount,
+      percentage:
+        totalAllSeconds > 0 ? Math.round((row.totalSeconds / totalAllSeconds) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.totalHours - a.totalHours);
 }
 
 /**
@@ -410,52 +552,7 @@ export async function getStreamerGameStats(
   const channel = await prisma.channel.findFirst({ where: { streamerId } });
   if (!channel) return [];
 
-  const sessions = await prisma.streamSession.findMany({
-    where: {
-      channelId: channel.id,
-      startedAt: { gte: cutoffDate },
-    },
-  });
-
-  const statsMap = new Map<
-    string,
-    { totalSeconds: number; weightedViewersSum: number; peakViewers: number; count: number }
-  >();
-  let totalAllSeconds = 0;
-
-  sessions.forEach((session) => {
-    const game = session.category || "Uncategorized";
-    const duration = session.durationSeconds || 0;
-    const avgViewers = session.avgViewers || 0;
-    const peakViewers = session.peakViewers || 0;
-
-    totalAllSeconds += duration;
-
-    const current = statsMap.get(game) || {
-      totalSeconds: 0,
-      weightedViewersSum: 0,
-      peakViewers: 0,
-      count: 0,
-    };
-    current.totalSeconds += duration;
-    current.weightedViewersSum += avgViewers * duration; // Weighted by duration
-    current.peakViewers = Math.max(current.peakViewers, peakViewers);
-    current.count += 1;
-    statsMap.set(game, current);
-  });
-
-  return Array.from(statsMap.entries())
-    .map(([gameName, data]) => ({
-      gameName,
-      totalHours: Math.round((data.totalSeconds / 3600) * 10) / 10,
-      avgViewers:
-        data.totalSeconds > 0 ? Math.round(data.weightedViewersSum / data.totalSeconds) : 0,
-      peakViewers: data.peakViewers,
-      streamCount: data.count,
-      percentage:
-        totalAllSeconds > 0 ? Math.round((data.totalSeconds / totalAllSeconds) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.totalHours - a.totalHours);
+  return getGameStatsByChannelId(channel.id, cutoffDate);
 }
 
 /**
@@ -471,52 +568,7 @@ export async function getChannelGameStats(
   if (range === "90d") days = 90;
   const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const sessions = await prisma.streamSession.findMany({
-    where: {
-      channelId: channelId,
-      startedAt: { gte: cutoffDate },
-    },
-  });
-
-  const statsMap = new Map<
-    string,
-    { totalSeconds: number; weightedViewersSum: number; peakViewers: number; count: number }
-  >();
-  let totalAllSeconds = 0;
-
-  sessions.forEach((session) => {
-    const game = session.category || "Uncategorized";
-    const duration = session.durationSeconds || 0;
-    const avgViewers = session.avgViewers || 0;
-    const peakViewers = session.peakViewers || 0;
-
-    totalAllSeconds += duration;
-
-    const current = statsMap.get(game) || {
-      totalSeconds: 0,
-      weightedViewersSum: 0,
-      peakViewers: 0,
-      count: 0,
-    };
-    current.totalSeconds += duration;
-    current.weightedViewersSum += avgViewers * duration;
-    current.peakViewers = Math.max(current.peakViewers, peakViewers);
-    current.count += 1;
-    statsMap.set(game, current);
-  });
-
-  return Array.from(statsMap.entries())
-    .map(([gameName, data]) => ({
-      gameName,
-      totalHours: Math.round((data.totalSeconds / 3600) * 10) / 10,
-      avgViewers:
-        data.totalSeconds > 0 ? Math.round(data.weightedViewersSum / data.totalSeconds) : 0,
-      peakViewers: data.peakViewers,
-      streamCount: data.count,
-      percentage:
-        totalAllSeconds > 0 ? Math.round((data.totalSeconds / totalAllSeconds) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.totalHours - a.totalHours);
+  return getGameStatsByChannelId(channelId, cutoffDate);
 }
 
 export interface ViewerTrendPoint {

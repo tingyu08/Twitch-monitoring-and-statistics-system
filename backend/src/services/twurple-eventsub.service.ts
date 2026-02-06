@@ -540,8 +540,10 @@ class TwurpleEventSubService {
         return;
       }
 
+      const cheeredAt = new Date();
+
       // 儲存 CheerEvent
-      await prisma.cheerEvent.create({
+      const createdCheerEvent = await prisma.cheerEvent.create({
         data: {
           streamerId: streamer.id,
           twitchUserId: event.isAnonymous ? null : event.userId,
@@ -549,9 +551,16 @@ class TwurpleEventSubService {
           bits: event.bits,
           message: event.message,
           isAnonymous: event.isAnonymous,
-          cheeredAt: new Date(),
+          cheeredAt,
         },
       });
+
+      await prisma.$executeRaw`
+        UPDATE cheer_events
+        SET cheeredDate = DATE(${cheeredAt.toISOString()})
+        WHERE id = ${createdCheerEvent.id}
+          AND cheeredDate IS NULL
+      `;
 
       logger.info(
         "TwurpleEventSub",

@@ -11,6 +11,9 @@ jest.mock("../../../db/prisma", () => ({
     channel: {
       findMany: jest.fn(),
     },
+    streamSession: {
+      findMany: jest.fn(),
+    },
   },
 }));
 
@@ -39,6 +42,7 @@ const prisma = prismaClient as unknown as {
   viewerChannelLifetimeStats: { findMany: jest.Mock };
   userFollow: { findMany: jest.Mock };
   channel: { findMany: jest.Mock };
+  streamSession: { findMany: jest.Mock };
 };
 
 describe("viewer.service getFollowedChannels sorting", () => {
@@ -76,7 +80,6 @@ describe("viewer.service getFollowedChannels sorting", () => {
         currentStreamStartedAt: new Date("2026-01-28T00:00:00Z"),
         currentGameName: "Just Chatting",
         streamer: { displayName: "NoWatch", avatarUrl: "http://example.com/nowatch.png" },
-        streamSessions: [],
         source: "internal",
       },
       {
@@ -87,10 +90,11 @@ describe("viewer.service getFollowedChannels sorting", () => {
         currentStreamStartedAt: new Date("2026-01-28T00:00:00Z"),
         currentGameName: "Just Chatting",
         streamer: { displayName: "HasWatch", avatarUrl: "http://example.com/haswatch.png" },
-        streamSessions: [],
         source: "internal",
       },
     ]);
+
+    prisma.streamSession.findMany.mockResolvedValue([]);
 
     const result = await getFollowedChannels("viewer_1");
 

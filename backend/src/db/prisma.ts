@@ -72,6 +72,23 @@ if (process.env.NODE_ENV !== "production") {
 
 // 連線狀態追蹤
 let isConnectionWarmed = false;
+let sqlitePragmasApplied = false;
+
+async function applyLocalSqlitePragmas(): Promise<void> {
+  if (isTurso || sqlitePragmasApplied) {
+    return;
+  }
+
+  try {
+    await prisma.$executeRawUnsafe("PRAGMA journal_mode=WAL;");
+    await prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;");
+    await prisma.$executeRawUnsafe("PRAGMA synchronous=NORMAL;");
+    sqlitePragmasApplied = true;
+    console.log("[INFO] 已套用本機 SQLite PRAGMA (WAL/busy_timeout/synchronous)");
+  } catch (error) {
+    console.warn("[WARN] 套用本機 SQLite PRAGMA 失敗:", error);
+  }
+}
 
 /**
  * 預熱資料庫連線
@@ -88,6 +105,8 @@ export async function warmupConnection(maxRetries = 3, timeoutMs = 15000): Promi
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      await applyLocalSqlitePragmas();
+
       const result = await Promise.race([
         prisma.$queryRaw`SELECT 1 as ping`,
         new Promise<never>((_, reject) =>

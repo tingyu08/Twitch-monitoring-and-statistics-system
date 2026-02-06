@@ -314,25 +314,30 @@ export class RevenueController {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
     startDate.setHours(0, 0, 0, 0);
+    const startDateOnly = new Date(startDate.toISOString().split("T")[0]);
 
     // 建立日期到 Bits 的映射（Bits 資料量通常較少，先全部載入）
     const bitsMap = new Map<string, { totalBits: number; eventCount: number }>();
     const bitsResults = await prisma.$queryRaw<
-      Array<{ date: string; totalBits: bigint; eventCount: bigint }>
+      Array<{ date: string | Date; totalBits: bigint; eventCount: bigint }>
     >`
       SELECT
-        DATE(cheeredAt) as date,
+        cheeredDate as date,
         SUM(bits) as totalBits,
         COUNT(*) as eventCount
       FROM cheer_events
       WHERE streamerId = ${streamerId}
-        AND cheeredAt >= ${startDate.toISOString()}
-      GROUP BY DATE(cheeredAt)
+        AND cheeredDate >= ${startDateOnly.toISOString()}
+      GROUP BY cheeredDate
       ORDER BY date ASC
     `;
 
     for (const row of bitsResults) {
-      bitsMap.set(row.date, {
+      const dateKey =
+        row.date instanceof Date
+          ? row.date.toISOString().split("T")[0]
+          : String(row.date).split("T")[0];
+      bitsMap.set(dateKey, {
         totalBits: Number(row.totalBits),
         eventCount: Number(row.eventCount),
       });
