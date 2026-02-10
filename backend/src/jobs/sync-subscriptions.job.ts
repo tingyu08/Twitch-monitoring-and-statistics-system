@@ -85,7 +85,8 @@ export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async
     logger.info(
       "Jobs",
       `Sync Subscriptions Job: 已加入 ${addedCount} 個任務到佇列, ${rejectedCount} 個被拒絕。` +
-        `佇列狀態: ${status.queued} 排隊中, ${status.processing} 處理中`
+        `佇列狀態: ${status.queued} 排隊中, ${status.processing} 處理中, ` +
+        `overflow 已持久化 ${status.overflowPersisted} / 回補 ${status.overflowRecovered}`
     );
   } catch (error) {
     logger.error("Jobs", "Sync Subscriptions Job 執行失敗", error);

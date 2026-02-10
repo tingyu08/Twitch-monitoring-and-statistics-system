@@ -42,7 +42,85 @@ export interface RevenueOverview {
   totalEstimatedRevenue: number;
 }
 
+const BITS_DAILY_AGG_REFRESH_TTL_SECONDS = 120;
+
 export class RevenueService {
+  private bitsDailyAggInitialized = false;
+  private bitsDailyAggInitPromise: Promise<void> | null = null;
+
+  private toDateKey(date: Date): string {
+    return date.toISOString().split("T")[0];
+  }
+
+  private async ensureBitsDailyAggTable(): Promise<void> {
+    if (this.bitsDailyAggInitialized) {
+      return;
+    }
+
+    if (!this.bitsDailyAggInitPromise) {
+      this.bitsDailyAggInitPromise = (async () => {
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS cheer_daily_agg (
+            streamerId TEXT NOT NULL,
+            date TEXT NOT NULL,
+            totalBits INTEGER NOT NULL DEFAULT 0,
+            eventCount INTEGER NOT NULL DEFAULT 0,
+            updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (streamerId, date)
+          )
+        `);
+
+        await prisma.$executeRawUnsafe(`
+          CREATE INDEX IF NOT EXISTS idx_cheer_daily_agg_streamer_date
+          ON cheer_daily_agg(streamerId, date)
+        `);
+
+        this.bitsDailyAggInitialized = true;
+      })().catch((error) => {
+        this.bitsDailyAggInitPromise = null;
+        throw error;
+      });
+    }
+
+    await this.bitsDailyAggInitPromise;
+  }
+
+  private async refreshBitsDailyAgg(streamerId: string, startDateKey: string): Promise<void> {
+    await this.ensureBitsDailyAggTable();
+
+    await prisma.$executeRaw`
+      INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
+      SELECT
+        streamerId,
+        date(cheeredDate) as date,
+        COALESCE(SUM(bits), 0) as totalBits,
+        COUNT(*) as eventCount,
+        CURRENT_TIMESTAMP as updatedAt
+      FROM cheer_events
+      WHERE streamerId = ${streamerId}
+        AND cheeredDate IS NOT NULL
+        AND date(cheeredDate) >= ${startDateKey}
+      GROUP BY streamerId, date(cheeredDate)
+      ON CONFLICT(streamerId, date) DO UPDATE SET
+        totalBits = excluded.totalBits,
+        eventCount = excluded.eventCount,
+        updatedAt = CURRENT_TIMESTAMP
+    `;
+  }
+
+  private async ensureBitsDailyAggFresh(streamerId: string, startDateKey: string): Promise<void> {
+    const refreshKey = `revenue:${streamerId}:bits_daily_agg_refresh:${startDateKey}`;
+
+    await cacheManager.getOrSet(
+      refreshKey,
+      async () => {
+        await this.refreshBitsDailyAgg(streamerId, startDateKey);
+        return true;
+      },
+      BITS_DAILY_AGG_REFRESH_TTL_SECONDS
+    );
+  }
+
   async prewarmRevenueCache(streamerId: string): Promise<void> {
     await Promise.allSettled([
       this.getRevenueOverview(streamerId),
@@ -389,7 +467,7 @@ export class RevenueService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - effectiveDays);
         startDate.setHours(0, 0, 0, 0);
-        const startDateOnly = new Date(startDate.toISOString().split("T")[0]);
+        const startDateKey = this.toDateKey(startDate);
 
         // Zeabur 免費層: 查詢超時保護（20 秒）
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -397,23 +475,24 @@ export class RevenueService {
         });
 
         try {
-          // 優化：使用 cheeredDate 欄位 + 索引做日期分組
+          // 先刷新日聚合表，再從聚合表讀取，避免每次掃描 cheer_events
+          await this.ensureBitsDailyAggFresh(streamerId, startDateKey);
+
           const results = await Promise.race([
             prisma.$queryRaw<
               Array<{
                 date: string | Date;
-                totalBits: bigint;
-                eventCount: bigint;
+                totalBits: bigint | number;
+                eventCount: bigint | number;
               }>
             >`
               SELECT
-                cheeredDate as date,
-                SUM(bits) as totalBits,
-                COUNT(*) as eventCount
-              FROM cheer_events
+                date,
+                totalBits,
+                eventCount
+              FROM cheer_daily_agg
               WHERE streamerId = ${streamerId}
-                AND cheeredDate >= ${startDateOnly.toISOString()}
-              GROUP BY cheeredDate
+                AND date >= ${startDateKey}
               ORDER BY date ASC
               LIMIT 90
             `,
@@ -464,7 +543,7 @@ export class RevenueService {
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
-        const startOfMonthOnly = new Date(startOfMonth.toISOString().split("T")[0]);
+        const startOfMonthKey = this.toDateKey(startOfMonth);
 
         // Zeabur 免費層: 查詢超時保護（20 秒）
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -472,6 +551,8 @@ export class RevenueService {
         });
 
         try {
+          await this.ensureBitsDailyAggFresh(streamerId, startOfMonthKey);
+
           // 使用 Promise.all 平行查詢，避免 SQLite 事務鎖定
           const [latestSnapshot, bitsRows] = await Promise.race([
             Promise.all([
@@ -479,13 +560,13 @@ export class RevenueService {
                 where: { streamerId },
                 orderBy: { snapshotDate: "desc" },
               }),
-              prisma.$queryRaw<Array<{ totalBits: bigint | null; eventCount: bigint }>>`
+              prisma.$queryRaw<Array<{ totalBits: bigint | number | null; eventCount: bigint | number }>>`
                 SELECT
-                  COALESCE(SUM(bits), 0) as totalBits,
-                  COUNT(*) as eventCount
-                FROM cheer_events
+                  COALESCE(SUM(totalBits), 0) as totalBits,
+                  COALESCE(SUM(eventCount), 0) as eventCount
+                FROM cheer_daily_agg
                 WHERE streamerId = ${streamerId}
-                  AND cheeredDate >= ${startOfMonthOnly.toISOString()}
+                  AND date >= ${startOfMonthKey}
               `,
             ]),
             timeoutPromise,

@@ -16,7 +16,7 @@ let isRunning = false;
 // P0 Optimization: 只在必要時更新 lastLiveCheckAt，減少 80% 資料庫寫入
 const LAST_CHECK_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
 
-const UPDATE_LIVE_STATUS_CRON = process.env.UPDATE_LIVE_STATUS_CRON || "* * * * *";
+const UPDATE_LIVE_STATUS_CRON = process.env.UPDATE_LIVE_STATUS_CRON || "30 * * * * *";
 
 // 活躍頻道判斷窗口（超過此時間未開台則進入低頻輪詢）
 const SLOW_POLL_GROUPS = 5;

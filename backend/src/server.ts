@@ -34,6 +34,8 @@ import { memoryMonitor } from "./utils/memory-monitor";
 import { viewerMessageRepository } from "./modules/viewer/viewer-message.repository";
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
+const JOB_START_RETRY_DELAY_MS = 5 * 60 * 1000;
+const JOB_START_MAX_RETRIES = 12;
 
 const httpServer = http.createServer(app);
 
@@ -76,6 +78,39 @@ function clearPendingStartupTasks(): void {
     clearImmediate(immediateHandle);
   }
   startupImmediateHandles.clear();
+}
+
+let jobsStarted = false;
+
+function startJobsWithMemoryGuard(attempt: number = 1): void {
+  if (jobsStarted || isShuttingDown) {
+    return;
+  }
+
+  if (!memoryMonitor.isOverLimit() || attempt >= JOB_START_MAX_RETRIES) {
+    if (memoryMonitor.isOverLimit()) {
+      logger.warn(
+        "Server",
+        `記憶體長時間偏高，已達重試上限 (${attempt}/${JOB_START_MAX_RETRIES})，強制啟動定時任務`
+      );
+    }
+
+    startAllJobs();
+    jobsStarted = true;
+    logger.info("Server", "定時任務已啟動（含記憶體保護重試）");
+    return;
+  }
+
+  logger.warn(
+    "Server",
+    `啟動定時任務前記憶體偏高，第 ${attempt}/${JOB_START_MAX_RETRIES} 次延遲 ${Math.floor(
+      JOB_START_RETRY_DELAY_MS / 1000
+    )} 秒後重試`
+  );
+
+  scheduleStartupTimeout(() => {
+    startJobsWithMemoryGuard(attempt + 1);
+  }, JOB_START_RETRY_DELAY_MS);
 }
 
 function gracefulShutdown(signal: string) {
@@ -197,16 +232,12 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
 
       // 1. 先啟動定時任務（輕量級）- 但在生產環境延遲啟動
       if (process.env.NODE_ENV === "production") {
-        // 生產環境：延遲 60 秒啟動定時任務，讓伺服器完全穩定後再啟動背景任務
+        // 生產環境：延遲 60 秒後嘗試啟動，若記憶體偏高則持續重試
         scheduleStartupTimeout(() => {
-          // 檢查記憶體狀況，如果記憶體已經很高則跳過
-          if (!memoryMonitor.isOverLimit()) {
-            startAllJobs();
-            logger.info("Server", "定時任務已啟動（延遲啟動）");
-          }
+          startJobsWithMemoryGuard();
         }, 60000); // 從 30 秒增加到 60 秒
       } else {
-        startAllJobs();
+        startJobsWithMemoryGuard();
       }
 
       // 2. 初始化 Token 管理系統（必須在 Twitch 服務之前）

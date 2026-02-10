@@ -11,8 +11,25 @@ type MessageInput = ParsedMessage | RawChatMessage;
 // 批次寫入配置
 const MESSAGE_BATCH_SIZE = 50;
 const MESSAGE_BATCH_FLUSH_MS = 5000;
-const MESSAGE_BATCH_MAX_SIZE = 1000;
+const DEFAULT_MESSAGE_BUFFER_MAX_SIZE = 3000;
+const MESSAGE_BATCH_MAX_SIZE = (() => {
+  const parsed = Number.parseInt(
+    process.env.VIEWER_MESSAGE_BUFFER_MAX || String(DEFAULT_MESSAGE_BUFFER_MAX_SIZE),
+    10
+  );
+
+  if (!Number.isFinite(parsed) || parsed < MESSAGE_BATCH_SIZE) {
+    return DEFAULT_MESSAGE_BUFFER_MAX_SIZE;
+  }
+
+  return parsed;
+})();
+const MESSAGE_BATCH_SOFT_THRESHOLD = Math.max(
+  MESSAGE_BATCH_SIZE,
+  Math.floor(MESSAGE_BATCH_MAX_SIZE * 0.8)
+);
 const MESSAGE_BATCH_MAX_RETRIES = 3;
+const BUFFER_OVERFLOW_WARN_INTERVAL_MS = 30 * 1000;
 
 interface BufferedMessage {
   viewerId: string;
@@ -117,6 +134,24 @@ export class ViewerMessageRepository {
   private flushTimer: NodeJS.Timeout | null = null;
   private flushInProgress = false;
   private flushRequested = false;
+  private overflowDropCount = 0;
+  private lastOverflowWarnAt = 0;
+
+  private logOverflowDrop(): void {
+    this.overflowDropCount += 1;
+    const now = Date.now();
+
+    if (now - this.lastOverflowWarnAt >= BUFFER_OVERFLOW_WARN_INTERVAL_MS) {
+      logger.warn(
+        "ViewerMessage",
+        `Message buffer pressure: dropped ${this.overflowDropCount} messages in last ${
+          BUFFER_OVERFLOW_WARN_INTERVAL_MS / 1000
+        }s (buffer ${this.messageBuffer.length}/${MESSAGE_BATCH_MAX_SIZE})`
+      );
+      this.lastOverflowWarnAt = now;
+      this.overflowDropCount = 0;
+    }
+  }
 
   /**
    * P1 Memory: Use cacheManager instead of raw Map (with LRU eviction)
@@ -247,9 +282,23 @@ export class ViewerMessageRepository {
   }
 
   private enqueueMessage(message: BufferedMessage): void {
+    if (this.messageBuffer.length >= MESSAGE_BATCH_SOFT_THRESHOLD && !this.flushInProgress) {
+      this.flushBuffers().catch((err) =>
+        logger.error("ViewerMessage", "Failed to flush message buffer under pressure", err)
+      );
+    }
+
     if (this.messageBuffer.length >= MESSAGE_BATCH_MAX_SIZE) {
-      this.messageBuffer.shift();
-      logger.warn("ViewerMessage", "Message buffer full, dropping oldest message");
+      if (!this.flushInProgress) {
+        this.flushBuffers().catch((err) =>
+          logger.error("ViewerMessage", "Failed to flush message buffer at capacity", err)
+        );
+      }
+
+      if (this.messageBuffer.length >= MESSAGE_BATCH_MAX_SIZE) {
+        this.messageBuffer.shift();
+        this.logOverflowDrop();
+      }
     }
 
     this.messageBuffer.push(message);

@@ -9,6 +9,9 @@
  */
 
 import { logger } from "./logger";
+import { appendFile, mkdir, readFile, writeFile } from "fs/promises";
+import os from "os";
+import path from "path";
 
 export interface QueueJob<T = unknown> {
   id: string;
@@ -23,6 +26,7 @@ export interface QueueOptions {
   maxRetries?: number;
   maxQueueSize?: number;
   retryDelayMs?: number;
+  overflowFilePath?: string;
 }
 
 type JobProcessor<T> = (data: T) => Promise<void>;
@@ -32,17 +36,34 @@ export class MemoryQueue<T = unknown> {
   private processing = 0;
   private processor: JobProcessor<T> | null = null;
   private jobIdCounter = 0;
+  private overflowRecovering = false;
+  private overflowPersisted = 0;
+  private overflowRecovered = 0;
 
   private readonly concurrency: number;
   private readonly maxRetries: number;
   private readonly maxQueueSize: number;
   private readonly retryDelayMs: number;
+  private readonly overflowFilePath: string | null;
 
   constructor(options: QueueOptions = {}) {
     this.concurrency = options.concurrency ?? 2;
     this.maxRetries = options.maxRetries ?? 2;
     this.maxQueueSize = options.maxQueueSize ?? 50;
     this.retryDelayMs = options.retryDelayMs ?? 5000;
+    this.overflowFilePath = options.overflowFilePath ?? null;
+
+    if (this.overflowFilePath) {
+      const recoveryTimer = setInterval(() => {
+        this.recoverOverflowJobs().catch((error) => {
+          logger.error("MemoryQueue", "Overflow recovery failed", error);
+        });
+      }, 30 * 1000);
+
+      if (recoveryTimer.unref) {
+        recoveryTimer.unref();
+      }
+    }
   }
 
   /**
@@ -52,6 +73,137 @@ export class MemoryQueue<T = unknown> {
     this.processor = processor;
     // 開始處理佇列中的任務
     this.tick();
+    this.recoverOverflowJobs().catch((error) => {
+      logger.error("MemoryQueue", "Initial overflow recovery failed", error);
+    });
+  }
+
+  private createJob(data: T, priority: number): QueueJob<T> {
+    return {
+      id: `job_${++this.jobIdCounter}`,
+      data,
+      priority,
+      retries: 0,
+      createdAt: new Date(),
+    };
+  }
+
+  private enqueueJob(job: QueueJob<T>): boolean {
+    if (this.queue.length >= this.maxQueueSize) {
+      return false;
+    }
+
+    const insertIndex = this.queue.findIndex((queued) => queued.priority < job.priority);
+    if (insertIndex === -1) {
+      this.queue.push(job);
+    } else {
+      this.queue.splice(insertIndex, 0, job);
+    }
+
+    return true;
+  }
+
+  private async persistOverflowJob(job: QueueJob<T>): Promise<void> {
+    if (!this.overflowFilePath) {
+      return;
+    }
+
+    try {
+      await mkdir(path.dirname(this.overflowFilePath), { recursive: true });
+      const serialized = JSON.stringify({
+        id: job.id,
+        data: job.data,
+        priority: job.priority,
+        retries: job.retries,
+        createdAt: job.createdAt.toISOString(),
+      });
+      await appendFile(this.overflowFilePath, `${serialized}\n`, "utf8");
+      this.overflowPersisted += 1;
+      logger.warn("MemoryQueue", `Queue full, persisted overflow job ${job.id}`);
+    } catch (error) {
+      logger.error("MemoryQueue", `Failed to persist overflow job ${job.id}`, error);
+    }
+  }
+
+  private async recoverOverflowJobs(): Promise<void> {
+    if (!this.overflowFilePath || this.overflowRecovering) {
+      return;
+    }
+
+    if (this.queue.length >= this.maxQueueSize) {
+      return;
+    }
+
+    this.overflowRecovering = true;
+
+    try {
+      let content: string;
+      try {
+        content = await readFile(this.overflowFilePath, "utf8");
+      } catch (error) {
+        const nodeError = error as NodeJS.ErrnoException;
+        if (nodeError.code === "ENOENT") {
+          return;
+        }
+        throw error;
+      }
+
+      const lines = content
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      if (lines.length === 0) {
+        return;
+      }
+
+      const remainingLines: string[] = [];
+
+      for (const line of lines) {
+        if (this.queue.length >= this.maxQueueSize) {
+          remainingLines.push(line);
+          continue;
+        }
+
+        try {
+          const parsed = JSON.parse(line) as {
+            data?: T;
+            priority?: number;
+            retries?: number;
+            createdAt?: string;
+          };
+
+          if (typeof parsed.priority !== "number") {
+            continue;
+          }
+
+          const recoveredJob: QueueJob<T> = {
+            id: `job_${++this.jobIdCounter}`,
+            data: parsed.data as T,
+            priority: parsed.priority,
+            retries: typeof parsed.retries === "number" ? parsed.retries : 0,
+            createdAt: parsed.createdAt ? new Date(parsed.createdAt) : new Date(),
+          };
+
+          if (this.enqueueJob(recoveredJob)) {
+            this.overflowRecovered += 1;
+          } else {
+            remainingLines.push(line);
+          }
+        } catch {
+          logger.warn("MemoryQueue", "Skipped invalid overflow payload line");
+        }
+      }
+
+      const nextContent = remainingLines.length > 0 ? `${remainingLines.join("\n")}\n` : "";
+      await writeFile(this.overflowFilePath, nextContent, "utf8");
+
+      if (this.processor && this.queue.length > 0) {
+        this.tick();
+      }
+    } finally {
+      this.overflowRecovering = false;
+    }
   }
 
   /**
@@ -59,25 +211,16 @@ export class MemoryQueue<T = unknown> {
    * @returns 任務 ID 或 null（如果佇列已滿）
    */
   add(data: T, priority: number = 0): string | null {
-    if (this.queue.length >= this.maxQueueSize) {
+    const job = this.createJob(data, priority);
+
+    if (!this.enqueueJob(job)) {
+      if (this.overflowFilePath) {
+        void this.persistOverflowJob(job);
+        return job.id;
+      }
+
       logger.warn("MemoryQueue", `Queue is full (${this.maxQueueSize} jobs). Job rejected.`);
       return null;
-    }
-
-    const job: QueueJob<T> = {
-      id: `job_${++this.jobIdCounter}`,
-      data,
-      priority,
-      retries: 0,
-      createdAt: new Date(),
-    };
-
-    // 依優先級插入（高優先級在前）
-    const insertIndex = this.queue.findIndex((j) => j.priority < priority);
-    if (insertIndex === -1) {
-      this.queue.push(job);
-    } else {
-      this.queue.splice(insertIndex, 0, job);
     }
 
     logger.debug("MemoryQueue", `Job ${job.id} added. Queue size: ${this.queue.length}`);
@@ -95,11 +238,15 @@ export class MemoryQueue<T = unknown> {
     queued: number;
     processing: number;
     total: number;
+    overflowPersisted: number;
+    overflowRecovered: number;
   } {
     return {
       queued: this.queue.length,
       processing: this.processing,
       total: this.queue.length + this.processing,
+      overflowPersisted: this.overflowPersisted,
+      overflowRecovered: this.overflowRecovered,
     };
   }
 
@@ -158,17 +305,27 @@ export class MemoryQueue<T = unknown> {
         );
 
         // 延遲後重新加入佇列
-        setTimeout(() => {
+        const retryTimer = setTimeout(() => {
           // 重試時降低優先級
-          const newPriority = job.priority - 1;
-          const insertIndex = this.queue.findIndex((j) => j.priority < newPriority);
-          if (insertIndex === -1) {
-            this.queue.push({ ...job, priority: newPriority });
+          const retryJob: QueueJob<T> = {
+            ...job,
+            priority: job.priority - 1,
+          };
+
+          if (!this.enqueueJob(retryJob)) {
+            if (this.overflowFilePath) {
+              void this.persistOverflowJob(retryJob);
+            } else {
+              logger.warn("MemoryQueue", `Retry queue full, dropping job ${retryJob.id}`);
+            }
           } else {
-            this.queue.splice(insertIndex, 0, { ...job, priority: newPriority });
+            this.tick();
           }
-          this.tick();
         }, this.retryDelayMs);
+
+        if (retryTimer.unref) {
+          retryTimer.unref();
+        }
       } else {
         logger.error("MemoryQueue", `Job ${job.id} failed after ${this.maxRetries} retries. Giving up.`);
       }
@@ -192,4 +349,5 @@ export const revenueSyncQueue = new MemoryQueue<RevenueSyncJobData>({
   maxRetries: 2,       // 最多重試 2 次
   maxQueueSize: 50,    // 最大 50 個待處理任務
   retryDelayMs: 10000, // 重試間隔 10 秒
+  overflowFilePath: path.join(os.tmpdir(), "twitch-analytics", "revenue-sync-overflow.jsonl"),
 });

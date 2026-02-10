@@ -17,6 +17,34 @@ import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
 import { captureJobError } from "./job-error-tracker";
 
+const CHANNEL_STATS_START_RETRY_MS = 5 * 60 * 1000;
+const CHANNEL_STATS_MAX_DELAYED_START_ATTEMPTS = 6;
+
+function startChannelStatsSyncWithMemoryGuard(attempt: number = 1): void {
+  const heapUsedMB = process.memoryUsage().heapUsed / 1024 / 1024;
+  const canStartNow = !global.gc || heapUsedMB < MEMORY_THRESHOLDS.CRITICAL_MB;
+
+  if (canStartNow || attempt >= CHANNEL_STATS_MAX_DELAYED_START_ATTEMPTS) {
+    if (!canStartNow) {
+      logger.warn(
+        "Jobs",
+        `記憶體持續偏高 (${heapUsedMB.toFixed(1)}MB)，已達延遲上限，強制啟動 Channel Stats Sync Job`
+      );
+    }
+    channelStatsSyncJob.start();
+    return;
+  }
+
+  logger.warn(
+    "Jobs",
+    `記憶體偏高 (${heapUsedMB.toFixed(1)}MB)，第 ${attempt}/${CHANNEL_STATS_MAX_DELAYED_START_ATTEMPTS} 次延遲啟動 Channel Stats Sync Job`
+  );
+
+  setTimeout(() => {
+    startChannelStatsSyncWithMemoryGuard(attempt + 1);
+  }, CHANNEL_STATS_START_RETRY_MS);
+}
+
 /**
  * 啟動所有定時任務（Zeabur 免費層優化版）
  */
@@ -55,15 +83,7 @@ export function startAllJobs(): void {
       updateLifetimeStatsJob();
 
       // Story 3.3: 頻道統計同步任務 (耗資源)
-      // P0 Fix: 使用統一的記憶體閾值常數
-      const heapUsedMB = process.memoryUsage().heapUsed / 1024 / 1024;
-      if (!global.gc || heapUsedMB < MEMORY_THRESHOLDS.CRITICAL_MB) {
-        channelStatsSyncJob.start();
-      } else {
-        logger.warn("Jobs", "記憶體偏高，暫緩啟動 Channel Stats Sync Job");
-        // 稍後再試...
-        setTimeout(() => channelStatsSyncJob.start(), 5 * 60 * 1000);
-      }
+      startChannelStatsSyncWithMemoryGuard();
     },
     5 * 60 * 1000
   ); // 延長到 5 分鐘
