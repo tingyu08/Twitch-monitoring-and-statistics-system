@@ -25,7 +25,20 @@ const MAX_SLOW_POLL_GROUPS = 12;
 const TARGET_SLOW_CHANNELS_PER_CYCLE = 250;
 const MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE = 300;
 const BASE_API_BATCH_SIZE = 100;
+const CHANNEL_QUERY_BATCH_SIZE = 500;
 let slowPollIndex = 0;
+
+type MonitoredChannelRow = {
+  id: string;
+  twitchChannelId: string;
+  channelName: string;
+  isLive: boolean;
+  lastLiveCheckAt: Date | null;
+  currentViewerCount: number | null;
+  currentTitle: string | null;
+  currentGameName: string | null;
+  currentStreamStartedAt: Date | null;
+};
 
 function getPollGroup(channelId: string, groups: number): number {
   let sum = 0;
@@ -54,6 +67,76 @@ function selectChannelsForCheckUpdate(
   }
 
   return filtered.slice(0, MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE);
+}
+
+async function loadMonitoredChannelsByBatch(): Promise<{
+  activeChannels: MonitoredChannelRow[];
+  slowChannels: MonitoredChannelRow[];
+  previousStatusMap: Map<string, boolean>;
+  scannedCount: number;
+}> {
+  const activeChannels: MonitoredChannelRow[] = [];
+  const slowChannels: MonitoredChannelRow[] = [];
+  const previousStatusMap = new Map<string, boolean>();
+  let scannedCount = 0;
+  let cursorId: string | undefined;
+
+  while (true) {
+    const batch = await retryDatabaseOperation(() =>
+      prisma.channel.findMany({
+        where: {
+          twitchChannelId: { not: "" },
+          isMonitored: true,
+        },
+        select: {
+          id: true,
+          twitchChannelId: true,
+          channelName: true,
+          isLive: true,
+          lastLiveCheckAt: true,
+          currentViewerCount: true,
+          currentTitle: true,
+          currentGameName: true,
+          currentStreamStartedAt: true,
+        },
+        orderBy: { id: "asc" },
+        take: CHANNEL_QUERY_BATCH_SIZE,
+        ...(cursorId
+          ? {
+              cursor: { id: cursorId },
+              skip: 1,
+            }
+          : {}),
+      })
+    );
+
+    if (batch.length === 0) {
+      break;
+    }
+
+    scannedCount += batch.length;
+
+    for (const channel of batch) {
+      previousStatusMap.set(channel.twitchChannelId, channel.isLive);
+      if (channel.isLive) {
+        activeChannels.push(channel);
+      } else {
+        slowChannels.push(channel);
+      }
+    }
+
+    cursorId = batch[batch.length - 1]?.id;
+    if (batch.length < CHANNEL_QUERY_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return {
+    activeChannels,
+    slowChannels,
+    previousStatusMap,
+    scannedCount,
+  };
 }
 
 /**
@@ -221,38 +304,16 @@ export async function updateLiveStatusFn() {
   logger.debug("Jobs", "🔄 開始執行 Update Live Status Job...");
 
   try {
-    // 1. 獲取所有需要監控的頻道 (有設定 Twitch ID 的)，包含當前狀態
-    const allChannels = await retryDatabaseOperation(() =>
-      prisma.channel.findMany({
-        where: {
-          twitchChannelId: { not: "" },
-          isMonitored: true,
-        },
-        select: {
-          id: true,
-          twitchChannelId: true,
-          channelName: true,
-          isLive: true, // 獲取當前狀態以便比較變更
-          lastLiveCheckAt: true, // P0: 用於判斷是否需要更新檢查時間
-          currentViewerCount: true,
-          currentTitle: true,
-          currentGameName: true,
-          currentStreamStartedAt: true,
-        },
-      })
-    );
+    // 1. 批次獲取所有需要監控的頻道，避免單次無上限查詢
+    const { activeChannels, slowChannels, previousStatusMap, scannedCount } =
+      await loadMonitoredChannelsByBatch();
 
-    // 建立當前狀態 Map 用於比較
-    const previousStatusMap = new Map(
-      allChannels.map((c: { twitchChannelId: string; isLive: boolean }) => [c.twitchChannelId, c.isLive])
-    );
-
-    if (allChannels.length === 0) {
+    if (scannedCount === 0) {
       logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
       return;
     }
 
-    logger.debug("Jobs", `📊 找到 ${allChannels.length} 個受監控的頻道需要檢查`);
+    logger.debug("Jobs", `📊 找到 ${scannedCount} 個受監控的頻道需要檢查`);
 
     // 2. 初始化 API Client (使用單例模式或確保釋放)
     // 這裡我們直接使用 twurpleHelixService 封裝好的方法，它已經處理了 ApiClient 的生命週期
@@ -263,23 +324,12 @@ export async function updateLiveStatusFn() {
 
     // 3. 分批處理
     const BATCH_SIZE =
-      allChannels.length > 2000
+      scannedCount > 2000
         ? 60
-        : allChannels.length > 1000
+        : scannedCount > 1000
           ? 80
           : BASE_API_BATCH_SIZE;
     const now = new Date();
-    // 3.1 Reduce per-minute DB pressure by avoiding streamSession groupBy in hot loop.
-    const activeChannels: typeof allChannels = [];
-    const slowChannels: typeof allChannels = [];
-
-    for (const channel of allChannels) {
-      if (channel.isLive) {
-        activeChannels.push(channel);
-      } else {
-        slowChannels.push(channel);
-      }
-    }
 
     const adaptiveSlowPollGroups = getAdaptiveSlowPollGroups(slowChannels.length);
     slowPollIndex = (slowPollIndex + 1) % adaptiveSlowPollGroups;

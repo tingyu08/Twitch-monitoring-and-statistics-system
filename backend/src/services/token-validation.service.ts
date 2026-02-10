@@ -40,6 +40,11 @@ interface TwitchValidateResponse {
 class TokenValidationService {
   private readonly TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate";
   private readonly MAX_FAILURE_COUNT = 3;
+  private readonly TOKEN_SCAN_BATCH_SIZE = 200;
+  private readonly TOKENS_NEEDING_REFRESH_LIMIT = Number.parseInt(
+    process.env.TOKENS_NEEDING_REFRESH_LIMIT || "500",
+    10
+  );
 
   /**
    * 驗證單個 Token 是否有效
@@ -168,51 +173,79 @@ class TokenValidationService {
     invalid: number;
     errors: string[];
   }> {
-    const tokens = await prisma.twitchToken.findMany({
-      where: {
-        status: TokenStatus.ACTIVE,
-      },
-      select: {
-        id: true,
-        ownerType: true,
-        streamerId: true,
-        viewerId: true,
-      },
-    });
-
-    logger.info("Token Validation", `Validating ${tokens.length} active tokens`);
-
     let valid = 0;
     let invalid = 0;
+    let total = 0;
     const errors: string[] = [];
 
-    for (const token of tokens) {
-      try {
-        const result = await this.validateAndUpdateToken(token.id);
-        if (result.isValid) {
-          valid++;
-        } else {
+    logger.info("Token Validation", "Validating active tokens in paged batches...");
+
+    let cursorId: string | undefined;
+
+    while (true) {
+      const batch = await prisma.twitchToken.findMany({
+        where: {
+          status: TokenStatus.ACTIVE,
+        },
+        select: {
+          id: true,
+          ownerType: true,
+          streamerId: true,
+          viewerId: true,
+        },
+        orderBy: { id: "asc" },
+        take: this.TOKEN_SCAN_BATCH_SIZE,
+        ...(cursorId
+          ? {
+              cursor: { id: cursorId },
+              skip: 1,
+            }
+          : {}),
+      });
+
+      if (batch.length === 0) {
+        break;
+      }
+
+      total += batch.length;
+
+      for (const token of batch) {
+        try {
+          const result = await this.validateAndUpdateToken(token.id);
+          if (result.isValid) {
+            valid++;
+          } else {
+            invalid++;
+            errors.push(`Token ${token.id} (${token.ownerType}): ${result.message}`);
+          }
+
+          // 避免速率限制，每個請求間隔 100ms
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } catch (error) {
           invalid++;
-          errors.push(`Token ${token.id} (${token.ownerType}): ${result.message}`);
+          errors.push(
+            `Token ${token.id}: ${error instanceof Error ? error.message : "Unknown error"}`
+          );
         }
 
-        // 避免速率限制，每個請求間隔 100ms
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } catch (error) {
-        invalid++;
-        errors.push(
-          `Token ${token.id}: ${error instanceof Error ? error.message : "Unknown error"}`
-        );
+        if (errors.length > 200) {
+          errors.splice(0, errors.length - 200);
+        }
+      }
+
+      cursorId = batch[batch.length - 1]?.id;
+      if (batch.length < this.TOKEN_SCAN_BATCH_SIZE) {
+        break;
       }
     }
 
     logger.info(
       "Token Validation",
-      `Validation complete: ${valid} valid, ${invalid} invalid out of ${tokens.length}`
+      `Validation complete: ${valid} valid, ${invalid} invalid out of ${total}`
     );
 
     return {
-      total: tokens.length,
+      total,
       valid,
       invalid,
       errors,
@@ -282,6 +315,11 @@ class TokenValidationService {
       viewerId: string | null;
     }>
   > {
+    const refreshLimit =
+      Number.isFinite(this.TOKENS_NEEDING_REFRESH_LIMIT) && this.TOKENS_NEEDING_REFRESH_LIMIT > 0
+        ? this.TOKENS_NEEDING_REFRESH_LIMIT
+        : 500;
+
     return prisma.twitchToken.findMany({
       where: {
         status: TokenStatus.EXPIRED,
@@ -295,6 +333,8 @@ class TokenValidationService {
         streamerId: true,
         viewerId: true,
       },
+      orderBy: { updatedAt: "asc" },
+      take: refreshLimit,
     }) as Promise<
       Array<{
         id: string;

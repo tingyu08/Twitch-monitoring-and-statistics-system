@@ -44,6 +44,7 @@ const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "50 * * * *";
 
 // 並發控制：同時最多處理 5 個使用者
 const CONCURRENCY_LIMIT = 5;
+const TOKEN_QUERY_BATCH_SIZE = 200;
 
 export interface SyncUserFollowsResult {
   usersProcessed: number;
@@ -202,57 +203,97 @@ export class SyncUserFollowsJob {
       tokenId: string;
     }> = [];
 
-    // 獲取有 user:read:follows scope 的 Streamer tokens
+    // 獲取有 user:read:follows scope 的 Streamer tokens（分頁）
     // 注意：統一登入後，streamer token 也會有 viewerId
-    const streamerTokens = await prisma.twitchToken.findMany({
-      where: {
-        ownerType: "streamer",
-        streamerId: { not: null },
-        scopes: { contains: "user:read:follows" },
-      },
-      include: { streamer: true, viewer: true },
-    });
+    let streamerCursorId: string | undefined;
+    while (true) {
+      const streamerTokens = await prisma.twitchToken.findMany({
+        where: {
+          ownerType: "streamer",
+          streamerId: { not: null },
+          scopes: { contains: "user:read:follows" },
+        },
+        include: { streamer: true, viewer: true },
+        orderBy: { id: "asc" },
+        take: TOKEN_QUERY_BATCH_SIZE,
+        ...(streamerCursorId
+          ? {
+              cursor: { id: streamerCursorId },
+              skip: 1,
+            }
+          : {}),
+      });
 
-    for (const token of streamerTokens) {
-      if (token.streamer && token.streamerId) {
-        // 優先使用 viewerId（因為前端查詢使用 viewerId）
-        // 如果沒有 viewerId，則使用 streamerId
-        const userId = token.viewerId || token.streamerId;
-        const userType = token.viewerId ? "viewer" : "streamer";
+      if (streamerTokens.length === 0) {
+        break;
+      }
 
-        users.push({
-          id: userId,
-          twitchUserId: token.streamer.twitchUserId,
-          userType: userType as "streamer" | "viewer",
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
-          expiresAt: token.expiresAt,
-          tokenId: token.id,
-        });
+      for (const token of streamerTokens) {
+        if (token.streamer && token.streamerId) {
+          // 優先使用 viewerId（因為前端查詢使用 viewerId）
+          // 如果沒有 viewerId，則使用 streamerId
+          const userId = token.viewerId || token.streamerId;
+          const userType = token.viewerId ? "viewer" : "streamer";
+
+          users.push({
+            id: userId,
+            twitchUserId: token.streamer.twitchUserId,
+            userType: userType as "streamer" | "viewer",
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken,
+            expiresAt: token.expiresAt,
+            tokenId: token.id,
+          });
+        }
+      }
+
+      streamerCursorId = streamerTokens[streamerTokens.length - 1]?.id;
+      if (streamerTokens.length < TOKEN_QUERY_BATCH_SIZE) {
+        break;
       }
     }
 
-    // 獲取有 user:read:follows scope 的 Viewer tokens
-    const viewerTokens = await prisma.twitchToken.findMany({
-      where: {
-        ownerType: "viewer",
-        viewerId: { not: null },
-        scopes: { contains: "user:read:follows" },
-      },
-      include: { viewer: true },
-    });
+    // 獲取有 user:read:follows scope 的 Viewer tokens（分頁）
+    let viewerCursorId: string | undefined;
+    while (true) {
+      const viewerTokens = await prisma.twitchToken.findMany({
+        where: {
+          ownerType: "viewer",
+          viewerId: { not: null },
+          scopes: { contains: "user:read:follows" },
+        },
+        include: { viewer: true },
+        orderBy: { id: "asc" },
+        take: TOKEN_QUERY_BATCH_SIZE,
+        ...(viewerCursorId
+          ? {
+              cursor: { id: viewerCursorId },
+              skip: 1,
+            }
+          : {}),
+      });
 
-    for (const token of viewerTokens) {
-      if (token.viewer && token.viewerId) {
-        users.push({
-          id: token.viewerId,
-          twitchUserId: token.viewer.twitchUserId,
-          userType: "viewer",
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
-          expiresAt: token.expiresAt,
-          tokenId: token.id,
-        });
+      if (viewerTokens.length === 0) {
+        break;
+      }
+
+      for (const token of viewerTokens) {
+        if (token.viewer && token.viewerId) {
+          users.push({
+            id: token.viewerId,
+            twitchUserId: token.viewer.twitchUserId,
+            userType: "viewer",
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken,
+            expiresAt: token.expiresAt,
+            tokenId: token.id,
+          });
+        }
+      }
+
+      viewerCursorId = viewerTokens[viewerTokens.length - 1]?.id;
+      if (viewerTokens.length < TOKEN_QUERY_BATCH_SIZE) {
+        break;
       }
     }
 
