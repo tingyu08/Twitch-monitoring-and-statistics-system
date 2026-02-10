@@ -98,6 +98,33 @@ class TwurpleEventSubService {
   private subscribedChannels: Set<string> = new Set();
   private cheerDailyAggReady = false;
   private cheerDailyAggInitPromise: Promise<void> | null = null;
+  private static readonly CHEER_DAILY_AGG_INIT_MAX_RETRIES = 3;
+  private static readonly CHEER_DAILY_AGG_INIT_RETRY_BASE_MS = 200;
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async runCheerDailyAggInitWithRetry(operation: () => Promise<void>): Promise<void> {
+    for (let attempt = 1; attempt <= TwurpleEventSubService.CHEER_DAILY_AGG_INIT_MAX_RETRIES; attempt += 1) {
+      try {
+        await operation();
+        return;
+      } catch (error) {
+        if (attempt >= TwurpleEventSubService.CHEER_DAILY_AGG_INIT_MAX_RETRIES) {
+          throw error;
+        }
+
+        const backoffMs = TwurpleEventSubService.CHEER_DAILY_AGG_INIT_RETRY_BASE_MS * 2 ** (attempt - 1);
+        logger.warn(
+          "TwurpleEventSub",
+          `cheer_daily_agg init failed (attempt ${attempt}/${TwurpleEventSubService.CHEER_DAILY_AGG_INIT_MAX_RETRIES}), retrying in ${backoffMs}ms`,
+          error
+        );
+        await this.sleep(backoffMs);
+      }
+    }
+  }
 
   private async ensureCheerDailyAggTable(): Promise<void> {
     if (this.cheerDailyAggReady) {
@@ -106,21 +133,23 @@ class TwurpleEventSubService {
 
     if (!this.cheerDailyAggInitPromise) {
       this.cheerDailyAggInitPromise = (async () => {
-        await prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS cheer_daily_agg (
-            streamerId TEXT NOT NULL,
-            date TEXT NOT NULL,
-            totalBits INTEGER NOT NULL DEFAULT 0,
-            eventCount INTEGER NOT NULL DEFAULT 0,
-            updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (streamerId, date)
-          )
-        `);
+        await this.runCheerDailyAggInitWithRetry(async () => {
+          await prisma.$executeRaw`
+            CREATE TABLE IF NOT EXISTS cheer_daily_agg (
+              streamerId TEXT NOT NULL,
+              date TEXT NOT NULL,
+              totalBits INTEGER NOT NULL DEFAULT 0,
+              eventCount INTEGER NOT NULL DEFAULT 0,
+              updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (streamerId, date)
+            )
+          `;
 
-        await prisma.$executeRawUnsafe(`
-          CREATE INDEX IF NOT EXISTS idx_cheer_daily_agg_streamer_date
-          ON cheer_daily_agg(streamerId, date)
-        `);
+          await prisma.$executeRaw`
+            CREATE INDEX IF NOT EXISTS idx_cheer_daily_agg_streamer_date
+            ON cheer_daily_agg(streamerId, date)
+          `;
+        });
 
         this.cheerDailyAggReady = true;
       })().catch((error) => {

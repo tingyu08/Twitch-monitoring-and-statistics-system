@@ -354,6 +354,10 @@ function parsePositiveNumber(value: string | undefined, fallback: number): numbe
   if (!value) return fallback;
   const parsed = Number.parseFloat(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
+    logger.warn(
+      "CacheManager",
+      `Invalid numeric env value '${value}', fallback to ${fallback}`
+    );
     return fallback;
   }
   return parsed;
@@ -362,6 +366,10 @@ function parsePositiveNumber(value: string | undefined, fallback: number): numbe
 function parseRatio(value: string | undefined, fallback: number): number {
   const parsed = parsePositiveNumber(value, fallback);
   if (parsed > 1) {
+    logger.warn(
+      "CacheManager",
+      `Invalid ratio env value '${value}', expected 0-1, fallback to ${fallback}`
+    );
     return fallback;
   }
   return parsed;

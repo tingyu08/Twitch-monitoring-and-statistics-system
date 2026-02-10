@@ -148,7 +148,6 @@ model ChannelDailyStat {
   channel       Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([channelId, date])
-  @@index([channelId, date])
   @@map("channel_daily_stats")
 }
 
@@ -166,7 +165,6 @@ model ViewerChannelDailyStat {
   viewer       Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@unique([viewerId, channelId, date])
-  @@index([viewerId, channelId, date])
   @@index([viewerId]) // 優化：支援 getFollowedChannels 的 groupBy 查詢
   @@index([updatedAt]) // 優化：支援增量更新查詢（lifetime stats job）
   @@index([updatedAt, viewerId, channelId]) // 優化：增量查詢後續聚合欄位回表成本
@@ -300,7 +298,6 @@ model UserFollow {
   @@index([userId])
   @@index([channelId])
   @@index([userId, userType]) // 優化 viewer/streamer 分流查詢
-  @@index([channelId, userType]) // 優化按頻道 + 使用者類型查詢
   @@map("user_follows")
 }
 
@@ -351,8 +348,6 @@ model ViewerChannelLifetimeStats {
   @@index([viewerId]) // 優化：支援 getFollowedChannels 查詢
   @@index([channelId]) // 優化：支援 updatePercentileRankings 查詢
   @@index([viewerId, lastWatchedAt]) // 優化：支援按最後觀看時間排序
-  @@index([channelId, watchTimePercentile]) // 優化：頻道內觀看時數百分位排名
-  @@index([channelId, messagePercentile]) // 優化：頻道內留言百分位排名
   @@map("viewer_channel_lifetime_stats")
 }
 
@@ -649,4 +644,15 @@ model CheerEvent {
   @@index([streamerId, cheeredDate])
   @@index([streamerId, userName, isAnonymous])
   @@map("cheer_events")
+}
+
+model CheerDailyAgg {
+  streamerId String
+  date       String
+  totalBits  Int      @default(0)
+  eventCount Int      @default(0)
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@id([streamerId, date])
+  @@map("cheer_daily_agg")
 }

@@ -45,10 +45,11 @@ export interface RevenueOverview {
 const BITS_DAILY_AGG_REFRESH_TTL_SECONDS = 120;
 const BITS_DAILY_AGG_BOOTSTRAP_TTL_SECONDS = 24 * 60 * 60;
 const BITS_DAILY_AGG_RECENT_REFRESH_DAYS = 3;
+const BITS_DAILY_AGG_MAX_RETRIES = 3;
+const BITS_DAILY_AGG_RETRY_BASE_MS = 250;
 
 export class RevenueService {
-  private bitsDailyAggInitialized = false;
-  private bitsDailyAggInitPromise: Promise<void> | null = null;
+  private bitsDailyAggRefreshLocks = new Map<string, Promise<void>>();
 
   private toDateKey(date: Date): string {
     return date.toISOString().split("T")[0];
@@ -64,65 +65,77 @@ export class RevenueService {
     return a > b ? a : b;
   }
 
-  private async ensureBitsDailyAggTable(): Promise<void> {
-    if (this.bitsDailyAggInitialized) {
-      return;
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async runBitsDailyAggWithRetry(operationName: string, operation: () => Promise<void>): Promise<void> {
+    for (let attempt = 1; attempt <= BITS_DAILY_AGG_MAX_RETRIES; attempt += 1) {
+      try {
+        await operation();
+        return;
+      } catch (error) {
+        if (attempt >= BITS_DAILY_AGG_MAX_RETRIES) {
+          throw error;
+        }
+
+        const backoffMs = BITS_DAILY_AGG_RETRY_BASE_MS * 2 ** (attempt - 1);
+        logger.warn(
+          "RevenueService",
+          `${operationName} failed (attempt ${attempt}/${BITS_DAILY_AGG_MAX_RETRIES}), retrying in ${backoffMs}ms`,
+          error
+        );
+        await this.sleep(backoffMs);
+      }
     }
+  }
 
-    if (!this.bitsDailyAggInitPromise) {
-      this.bitsDailyAggInitPromise = (async () => {
-        await prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS cheer_daily_agg (
-            streamerId TEXT NOT NULL,
-            date TEXT NOT NULL,
-            totalBits INTEGER NOT NULL DEFAULT 0,
-            eventCount INTEGER NOT NULL DEFAULT 0,
-            updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (streamerId, date)
-          )
-        `);
+  private async withBitsDailyAggRefreshLock(lockKey: string, operation: () => Promise<void>): Promise<void> {
+    const previous = this.bitsDailyAggRefreshLocks.get(lockKey) || Promise.resolve();
 
-        await prisma.$executeRawUnsafe(`
-          CREATE INDEX IF NOT EXISTS idx_cheer_daily_agg_streamer_date
-          ON cheer_daily_agg(streamerId, date)
-        `);
+    let releaseCurrent: (() => void) | null = null;
+    const current = new Promise<void>((resolve) => {
+      releaseCurrent = resolve;
+    });
 
-        this.bitsDailyAggInitialized = true;
-      })().catch((error) => {
-        this.bitsDailyAggInitPromise = null;
-        throw error;
-      });
+    this.bitsDailyAggRefreshLocks.set(lockKey, current);
+
+    await previous;
+
+    try {
+      await operation();
+    } finally {
+      releaseCurrent?.();
+      if (this.bitsDailyAggRefreshLocks.get(lockKey) === current) {
+        this.bitsDailyAggRefreshLocks.delete(lockKey);
+      }
     }
-
-    await this.bitsDailyAggInitPromise;
   }
 
   private async refreshBitsDailyAgg(streamerId: string, startDateKey: string): Promise<void> {
-    await this.ensureBitsDailyAggTable();
-
-    await prisma.$executeRaw`
-      INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
-      SELECT
-        streamerId,
-        date(cheeredDate) as date,
-        COALESCE(SUM(bits), 0) as totalBits,
-        COUNT(*) as eventCount,
-        CURRENT_TIMESTAMP as updatedAt
-      FROM cheer_events
-      WHERE streamerId = ${streamerId}
-        AND cheeredDate IS NOT NULL
-        AND date(cheeredDate) >= ${startDateKey}
-      GROUP BY streamerId, date(cheeredDate)
-      ON CONFLICT(streamerId, date) DO UPDATE SET
-        totalBits = excluded.totalBits,
-        eventCount = excluded.eventCount,
-        updatedAt = CURRENT_TIMESTAMP
-    `;
+    await this.runBitsDailyAggWithRetry("refreshBitsDailyAgg", async () => {
+      await prisma.$executeRaw`
+        INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
+        SELECT
+          streamerId,
+          date(cheeredDate) as date,
+          COALESCE(SUM(bits), 0) as totalBits,
+          COUNT(*) as eventCount,
+          CURRENT_TIMESTAMP as updatedAt
+        FROM cheer_events
+        WHERE streamerId = ${streamerId}
+          AND cheeredDate IS NOT NULL
+          AND date(cheeredDate) >= ${startDateKey}
+        GROUP BY streamerId, date(cheeredDate)
+        ON CONFLICT(streamerId, date) DO UPDATE SET
+          totalBits = excluded.totalBits,
+          eventCount = excluded.eventCount,
+          updatedAt = CURRENT_TIMESTAMP
+      `;
+    });
   }
 
   private async hasBitsDailyAggData(streamerId: string, startDateKey: string): Promise<boolean> {
-    await this.ensureBitsDailyAggTable();
-
     const rows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
       SELECT COUNT(1) as count
       FROM cheer_daily_agg
@@ -134,17 +147,17 @@ export class RevenueService {
   }
 
   private async ensureBitsDailyAggFresh(streamerId: string, startDateKey: string): Promise<void> {
-    await this.ensureBitsDailyAggTable();
-
     const bootstrapKey = `revenue:${streamerId}:bits_daily_agg_bootstrap:${startDateKey}`;
 
     await cacheManager.getOrSet(
       bootstrapKey,
       async () => {
-        const hasData = await this.hasBitsDailyAggData(streamerId, startDateKey);
-        if (!hasData) {
-          await this.refreshBitsDailyAgg(streamerId, startDateKey);
-        }
+        await this.withBitsDailyAggRefreshLock(`bootstrap:${streamerId}:${startDateKey}`, async () => {
+          const hasData = await this.hasBitsDailyAggData(streamerId, startDateKey);
+          if (!hasData) {
+            await this.refreshBitsDailyAgg(streamerId, startDateKey);
+          }
+        });
         return true;
       },
       BITS_DAILY_AGG_BOOTSTRAP_TTL_SECONDS
@@ -158,7 +171,9 @@ export class RevenueService {
     await cacheManager.getOrSet(
       refreshKey,
       async () => {
-        await this.refreshBitsDailyAgg(streamerId, recentStartKey);
+        await this.withBitsDailyAggRefreshLock(`recent:${streamerId}:${recentStartKey}`, async () => {
+          await this.refreshBitsDailyAgg(streamerId, recentStartKey);
+        });
         return true;
       },
       BITS_DAILY_AGG_REFRESH_TTL_SECONDS
