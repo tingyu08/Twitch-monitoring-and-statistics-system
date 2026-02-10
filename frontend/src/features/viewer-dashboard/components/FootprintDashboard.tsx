@@ -59,6 +59,74 @@ interface Props {
   initialLayout?: DashboardLayout | null;
 }
 
+interface ViewportState {
+  width: number;
+  isDraggable: boolean;
+}
+
+function isSameLayout(
+  prevLayout: DashboardGridItem[],
+  nextLayout: DashboardGridItem[]
+): boolean {
+  if (prevLayout.length !== nextLayout.length) return false;
+
+  for (let i = 0; i < prevLayout.length; i += 1) {
+    const prev = prevLayout[i];
+    const next = nextLayout[i];
+
+    if (
+      prev.i !== next.i ||
+      prev.x !== next.x ||
+      prev.y !== next.y ||
+      prev.w !== next.w ||
+      prev.h !== next.h ||
+      prev.minW !== next.minW ||
+      prev.maxW !== next.maxW ||
+      prev.minH !== next.minH ||
+      prev.maxH !== next.maxH
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function normalizeLayoutItems(items: unknown[]): DashboardGridItem[] {
+  const normalized: DashboardGridItem[] = [];
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const candidate = item as Partial<DashboardGridItem>;
+    if (
+      typeof candidate.i !== "string" ||
+      typeof candidate.x !== "number" ||
+      typeof candidate.y !== "number" ||
+      typeof candidate.w !== "number" ||
+      typeof candidate.h !== "number"
+    ) {
+      continue;
+    }
+
+    normalized.push({
+      i: candidate.i,
+      x: candidate.x,
+      y: candidate.y,
+      w: candidate.w,
+      h: candidate.h,
+      minW: candidate.minW,
+      maxW: candidate.maxW,
+      minH: candidate.minH,
+      maxH: candidate.maxH,
+    });
+  }
+
+  return normalized;
+}
+
 export const FootprintDashboard = ({
   stats,
   channelId,
@@ -78,17 +146,30 @@ export const FootprintDashboard = ({
     }
     return DEFAULT_LAYOUT;
   });
-  const [width, setWidth] = useState(1200);
-  const [isDraggable, setIsDraggable] = useState(true);
+  const [viewport, setViewport] = useState<ViewportState>({
+    width: 1200,
+    isDraggable: true,
+  });
+
+  const updateViewport = useCallback((nextWidth: number) => {
+    const nextIsDraggable = window.innerWidth >= 768;
+    setViewport((prev) => {
+      if (prev.width === nextWidth && prev.isDraggable === nextIsDraggable) {
+        return prev;
+      }
+      return {
+        width: nextWidth,
+        isDraggable: nextIsDraggable,
+      };
+    });
+  }, []);
 
   // Resize handler
   useEffect(() => {
     const handleResize = () => {
       const container = document.getElementById("dashboard-container");
       if (container) {
-        setWidth(container.offsetWidth);
-        // Mobile check: disable drag < 768px
-        setIsDraggable(window.innerWidth >= 768);
+        updateViewport(container.offsetWidth);
       }
     };
 
@@ -98,8 +179,7 @@ export const FootprintDashboard = ({
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect.width > 0) {
-          setWidth(entry.contentRect.width);
-          setIsDraggable(window.innerWidth >= 768);
+          updateViewport(entry.contentRect.width);
         }
       }
     });
@@ -112,7 +192,7 @@ export const FootprintDashboard = ({
       window.removeEventListener("resize", handleResize);
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [updateViewport]);
 
   // Debounced save
   const saveLayout = useMemo(
@@ -148,11 +228,27 @@ export const FootprintDashboard = ({
     };
   }, [saveLayout]);
 
-  const handleLayoutChange = (newLayout: any) => {
-    // Cast incoming layout from library to our type
-    setLayout(newLayout as DashboardGridItem[]);
-    saveLayout(newLayout as DashboardGridItem[]);
-  };
+  const handleLayoutChange = useCallback(
+    (newLayout: unknown) => {
+      if (!Array.isArray(newLayout)) {
+        return;
+      }
+
+      const nextLayout = normalizeLayoutItems(newLayout);
+      if (nextLayout.length === 0) {
+        return;
+      }
+
+      setLayout((prev) => {
+        if (isSameLayout(prev, nextLayout)) {
+          return prev;
+        }
+        saveLayout(nextLayout);
+        return nextLayout;
+      });
+    },
+    [saveLayout]
+  );
 
   const handleReset = async () => {
     if (confirm(t("footprint.confirmReset"))) {
@@ -193,9 +289,9 @@ export const FootprintDashboard = ({
           layout={layout}
           cols={12}
           rowHeight={100}
-          width={width}
-          isDraggable={isDraggable}
-          isResizable={isDraggable}
+          width={viewport.width}
+          isDraggable={viewport.isDraggable}
+          isResizable={viewport.isDraggable}
           onLayoutChange={handleLayoutChange}
           draggableHandle=".drag-handle"
           margin={[16, 16]}
