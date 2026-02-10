@@ -140,12 +140,7 @@ export class ViewerController {
           // 並行查詢所有資料源，使用 Promise.allSettled 避免單點失敗
           const queryPromise = Promise.allSettled([
             getChannelStats(viewerId, channelId, days),
-            this.getMessageStatsInternal(
-              viewerId,
-              channelId,
-              startDate.toISOString(),
-              endDate.toISOString()
-            ),
+            getViewerMessageStats(viewerId, channelId, startDate.toISOString(), endDate.toISOString()),
             getChannelGameStatsAndViewerTrends(channelId, rangeKey),
           ]);
 
@@ -205,15 +200,4 @@ export class ViewerController {
     }
   };
 
-  /**
-   * 內部方法：獲取留言統計（用於 BFF 聚合）
-   */
-  private async getMessageStatsInternal(
-    viewerId: string,
-    channelId: string,
-    startDate: string,
-    endDate: string
-  ) {
-    return getViewerMessageStats(viewerId, channelId, startDate, endDate);
-  }
 }

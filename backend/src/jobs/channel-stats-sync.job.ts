@@ -241,35 +241,42 @@ export class ChannelStatsSyncJob {
       channelStats.set(session.channelId, existing);
     }
 
-    // Update or create daily stats
+    // Update or create daily stats (parallel batch)
+    const entries = Array.from(channelStats.entries());
     let updated = 0;
-    for (const [channelId, stats] of channelStats) {
-      const avgViewers =
-        stats.streamCount > 0 ? Math.round(stats.totalViewers / stats.streamCount) : null;
 
-      await prisma.channelDailyStat.upsert({
-        where: {
-          channelId_date: {
-            channelId,
-            date: today,
-          },
-        },
-        create: {
-          channelId,
-          date: today,
-          streamSeconds: stats.streamSeconds,
-          streamCount: stats.streamCount,
-          avgViewers,
-          peakViewers: stats.peakViewers,
-        },
-        update: {
-          streamSeconds: stats.streamSeconds,
-          streamCount: stats.streamCount,
-          avgViewers,
-          peakViewers: stats.peakViewers,
-        },
-      });
-      updated++;
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+      const batch = entries.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async ([channelId, stats]) => {
+          const avgViewers =
+            stats.streamCount > 0 ? Math.round(stats.totalViewers / stats.streamCount) : null;
+
+          await prisma.channelDailyStat.upsert({
+            where: {
+              channelId_date: {
+                channelId,
+                date: today,
+              },
+            },
+            create: {
+              channelId,
+              date: today,
+              streamSeconds: stats.streamSeconds,
+              streamCount: stats.streamCount,
+              avgViewers,
+              peakViewers: stats.peakViewers,
+            },
+            update: {
+              streamSeconds: stats.streamSeconds,
+              streamCount: stats.streamCount,
+              avgViewers,
+              peakViewers: stats.peakViewers,
+            },
+          });
+        })
+      );
+      updated += batch.length;
     }
 
     return updated;

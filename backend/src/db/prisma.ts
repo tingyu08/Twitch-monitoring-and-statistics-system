@@ -182,4 +182,64 @@ export function isConnectionReady(): boolean {
   return isConnectionWarmed;
 }
 
+// 連線健康度追蹤
+let consecutiveFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 3;
+
+/**
+ * 連線健康檢查 (帶背壓治理)
+ * - 成功: 重置失敗計數器
+ * - 連續失敗超過閾值: 觸發重連 warmup 並加入指數退避
+ */
+export async function healthCheck(): Promise<{ healthy: boolean; latencyMs: number }> {
+  const start = Date.now();
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1 as ping`,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("health check timeout")), 5000)
+      ),
+    ]);
+    const latencyMs = Date.now() - start;
+    consecutiveFailures = 0;
+
+    if (latencyMs > 3000) {
+      logger.warn("Prisma", `Health check slow: ${latencyMs}ms`);
+    }
+    return { healthy: true, latencyMs };
+  } catch (error) {
+    consecutiveFailures++;
+    const latencyMs = Date.now() - start;
+    logger.warn(
+      "Prisma",
+      `Health check failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}): ${
+        error instanceof Error ? error.message : error
+      }`
+    );
+
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      logger.error("Prisma", "連續健康檢查失敗，嘗試重新預熱連線...");
+      isConnectionWarmed = false;
+      // 指數退避重連
+      const backoffMs = Math.min(1000 * Math.pow(2, consecutiveFailures - MAX_CONSECUTIVE_FAILURES), 10000);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      await warmupConnection(2, 10000);
+    }
+
+    return { healthy: false, latencyMs };
+  }
+}
+
+/**
+ * 取得連線治理狀態
+ */
+export function getConnectionGovernanceStatus() {
+  return {
+    isWarmed: isConnectionWarmed,
+    consecutiveFailures,
+    isTurso,
+    keepAliveStarted,
+  };
+}
+
 export default prisma;

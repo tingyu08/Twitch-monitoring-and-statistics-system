@@ -138,6 +138,26 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
         }
       }, process.env.NODE_ENV === "production" ? 15000 : 3000);
 
+      // 0.2 預熱 Revenue 快取（有 Streamer token 時），降低首請求延遲
+      setTimeout(async () => {
+        try {
+          const { revenueService } = await import("./modules/streamer/revenue.service");
+          const streamers = await (await import("./db/prisma")).prisma.streamer.findMany({
+            where: { twitchTokens: { some: { status: "active" } } },
+            select: { id: true },
+            take: 5,
+          });
+          for (const s of streamers) {
+            await revenueService.prewarmRevenueCache(s.id);
+          }
+          if (streamers.length > 0) {
+            logger.info("Server", `Revenue 快取預熱完成 (${streamers.length} streamers)`);
+          }
+        } catch (error) {
+          logger.warn("Server", "Revenue 快取預熱失敗", error);
+        }
+      }, process.env.NODE_ENV === "production" ? 20000 : 5000);
+
       // 1. 先啟動定時任務（輕量級）- 但在生產環境延遲啟動
       if (process.env.NODE_ENV === "production") {
         // 生產環境：延遲 60 秒啟動定時任務，讓伺服器完全穩定後再啟動背景任務

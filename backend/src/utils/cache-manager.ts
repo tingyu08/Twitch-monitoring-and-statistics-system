@@ -270,12 +270,25 @@ export class CacheManager {
 
   /**
    * 估算物件大小（bytes）
+   * 使用分層估算策略：基礎型別直接計算，物件使用 JSON 長度 + V8 額外開銷
    */
   private estimateSize(value: unknown): number {
-    // 保守估算：JSON 字串長度 + V8 物件額外開銷
+    if (value === null || value === undefined) return 16;
+    switch (typeof value) {
+      case "boolean":
+        return 16;
+      case "number":
+        return 16;
+      case "string":
+        return 40 + (value as string).length * 2; // V8 string header + UTF-16
+      default:
+        break;
+    }
     try {
       const json = JSON.stringify(value);
-      return json.length * 4;
+      // JSON 字串長度 * 2 (UTF-16) + 每個 key 約 72 bytes V8 overhead
+      const keyCount = typeof value === "object" && value !== null ? Object.keys(value as object).length : 0;
+      return json.length * 2 + keyCount * 72 + 64; // +64 for object header
     } catch {
       return 2048;
     }

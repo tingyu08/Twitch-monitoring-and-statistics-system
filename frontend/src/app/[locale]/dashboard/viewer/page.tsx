@@ -455,9 +455,9 @@ export default function ViewerDashboardPage() {
     };
   }, [leaveChannel]);
 
-  const handleChannelClick = (channelId: string) => {
+  const handleChannelClick = useCallback((channelId: string) => {
     router.push(`/dashboard/viewer/${channelId}`);
-  };
+  }, [router]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);

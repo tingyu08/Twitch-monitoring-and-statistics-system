@@ -57,7 +57,28 @@ export class RevenueService {
   /**
    * 同步訂閱快照到資料庫
    */
+  private readonly SYNC_TIMEOUT_MS = 60000; // 60 seconds overall timeout
+
   async syncSubscriptionSnapshot(streamerId: string): Promise<void> {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("SYNC_OVERALL_TIMEOUT")), this.SYNC_TIMEOUT_MS);
+    });
+
+    try {
+      await Promise.race([
+        this._syncSubscriptionSnapshotInner(streamerId),
+        timeoutPromise,
+      ]);
+    } catch (error) {
+      if (error instanceof Error && error.message === "SYNC_OVERALL_TIMEOUT") {
+        logger.error("RevenueService", `syncSubscriptionSnapshot overall timeout (${this.SYNC_TIMEOUT_MS}ms) for streamer ${streamerId}`);
+        throw new Error(`Subscription sync timed out after ${this.SYNC_TIMEOUT_MS}ms`);
+      }
+      throw error;
+    }
+  }
+
+  private async _syncSubscriptionSnapshotInner(streamerId: string): Promise<void> {
     const streamer = await prisma.streamer.findUnique({
       where: { id: streamerId },
       include: {
