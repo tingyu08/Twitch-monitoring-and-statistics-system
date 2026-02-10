@@ -42,8 +42,9 @@ export async function getViewerMessageStats(
     ? new Date(startDateStr)
     : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  const cacheKey = `viewer:${viewerId}:channel:${channelId}:msgstats:${days}d`;
+  const startKey = startDate.toISOString().split("T")[0];
+  const endKey = endDate.toISOString().split("T")[0];
+  const cacheKey = `viewer:${viewerId}:channel:${channelId}:msgstats:${startKey}:${endKey}`;
   const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
 
   return cacheManager.getOrSet(

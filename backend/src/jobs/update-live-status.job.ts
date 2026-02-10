@@ -1,9 +1,10 @@
-﻿import { prisma } from "../db/prisma";
+﻿import { prisma, isConnectionReady } from "../db/prisma";
 
 import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { cacheManager } from "../utils/cache-manager";
+import { memoryMonitor } from "../utils/memory-monitor";
 import { refreshViewerChannelSummaryForChannels } from "../modules/viewer/viewer.service";
 
 import cron from "node-cron";
@@ -51,6 +52,145 @@ function selectChannelsForCheckUpdate(
   }
 
   return filtered.slice(0, MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE);
+}
+
+/**
+ * 場景 1: 只更新檢查時間（無狀態變化）
+ */
+async function updateChannelsCheckTimeOnly(
+  checkUpdateCandidates: Array<{ id: string }>,
+  now: Date,
+  totalChannels: number
+): Promise<void> {
+  if (checkUpdateCandidates.length === 0) return;
+
+  await retryDatabaseOperation(() =>
+    prisma.channel.updateMany({
+      where: {
+        id: { in: checkUpdateCandidates.map((c) => c.id) },
+      },
+      data: {
+        lastLiveCheckAt: now,
+      },
+    })
+  );
+
+  logger.debug(
+    "Jobs",
+    `✅ 已更新 ${checkUpdateCandidates.length}/${totalChannels} 個頻道的檢查時間`
+  );
+}
+
+/**
+ * 場景 2: 更新有變化的頻道（狀態變更 + 元數據更新）
+ */
+async function updateChannelsWithChanges(
+  changedUpdates: Array<{
+    channelId: string;
+    twitchId: string;
+    isLive?: boolean;
+    viewerCount: number;
+    title: string;
+    gameName: string;
+    startedAt: Date | null;
+  }>,
+  liveUpdates: Array<{
+    channelId: string;
+    twitchId: string;
+    viewerCount: number;
+    title: string;
+    gameName: string;
+    startedAt: Date | null;
+  }>,
+  checkUpdateCandidates: Array<{ id: string; twitchChannelId: string }>,
+  changedTwitchIds: Set<string>,
+  now: Date
+): Promise<{ successCount: number; failCount: number }> {
+  let successCount = 0;
+  let failCount = 0;
+
+  const combinedUpdates = [...changedUpdates, ...liveUpdates];
+  const TX_BATCH_SIZE =
+    combinedUpdates.length > 800 ? 10 : combinedUpdates.length > 300 ? 12 : 15;
+
+  for (let i = 0; i < combinedUpdates.length; i += TX_BATCH_SIZE) {
+    // 記憶體保護：如果記憶體過高，中止剩餘更新
+    if (memoryMonitor.isOverLimit()) {
+      logger.warn(
+        "Jobs",
+        `記憶體超限，跳過剩餘 ${combinedUpdates.length - i} 個頻道的 DB 更新`
+      );
+      break;
+    }
+
+    const batch = combinedUpdates.slice(i, i + TX_BATCH_SIZE);
+    const batchIndex = Math.floor(i / TX_BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(combinedUpdates.length / TX_BATCH_SIZE);
+
+    try {
+      await retryDatabaseOperation(async () => {
+        const updatePromises = batch.map((update) =>
+          prisma.channel.update({
+            where: { twitchChannelId: update.twitchId },
+            data: {
+              ...("isLive" in update ? { isLive: update.isLive } : {}),
+              currentViewerCount: update.viewerCount,
+              currentTitle: update.title || undefined,
+              currentGameName: update.gameName || undefined,
+              currentStreamStartedAt: update.startedAt,
+              lastLiveCheckAt: now,
+            },
+          })
+        );
+
+        await prisma.$transaction(updatePromises);
+      });
+
+      successCount += batch.length;
+    } catch (error) {
+      failCount += batch.length;
+      logger.error(
+        "Jobs",
+        `批次更新失敗 (${batchIndex}/${totalBatches}):`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+
+    // 批次之間短暫延遲
+    if (i + TX_BATCH_SIZE < combinedUpdates.length) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+
+  // 清除快取
+  if (liveUpdates.length > 0) {
+    cacheManager.deleteSuffix(":channels_list");
+  }
+
+  // 更新未變化但需要更新檢查時間的頻道
+  const unchangedChannelsNeedingUpdate = checkUpdateCandidates.filter(
+    (c) => !changedTwitchIds.has(c.twitchChannelId)
+  );
+
+  if (unchangedChannelsNeedingUpdate.length > 0) {
+    await retryDatabaseOperation(() =>
+      prisma.channel.updateMany({
+        where: {
+          id: { in: unchangedChannelsNeedingUpdate.map((c) => c.id) },
+        },
+        data: {
+          lastLiveCheckAt: now,
+        },
+      })
+    );
+
+    logger.debug(
+      "Jobs",
+      `✅ 已更新 ${unchangedChannelsNeedingUpdate.length} 個未變化頻道的檢查時間`
+    );
+  }
+
+  return { successCount, failCount };
 }
 
 /**
@@ -280,15 +420,10 @@ export async function updateLiveStatusFn() {
     }
 
     // 4. 批量更新 DB（只更新有變化的頻道）
-    // 優化：增加批次大小、減少延遲，因為只處理變化的頻道
-    const totalDbWritesEstimate = changedUpdates.length + liveUpdates.length;
-    const TX_BATCH_SIZE =
-      totalDbWritesEstimate > 800 ? 10 : totalDbWritesEstimate > 300 ? 12 : 15;
     let updateSuccessCount = 0;
     let updateFailCount = 0;
 
     // 檢查資料庫連線狀態
-    const { isConnectionReady } = await import("../db/prisma");
     if (!isConnectionReady()) {
       logger.warn("Jobs", "資料庫連線尚未預熱，跳過 DB 更新以避免超時");
       return;
@@ -301,110 +436,27 @@ export async function updateLiveStatusFn() {
         now.getTime() - c.lastLiveCheckAt.getTime() > LAST_CHECK_UPDATE_INTERVAL_MS
     );
 
-    // 如果沒有狀態變化，只更新需要更新檢查時間的頻道
     const checkUpdateCandidates = selectChannelsForCheckUpdate(
       channelsNeedingCheckUpdate,
       adaptiveSlowPollGroups,
       slowPollIndex
     );
 
-    if (changedUpdates.length === 0 && checkUpdateCandidates.length > 0) {
-      await retryDatabaseOperation(() =>
-        prisma.channel.updateMany({
-          where: {
-            id: { in: checkUpdateCandidates.map((c) => c.id) },
-          },
-          data: {
-            lastLiveCheckAt: now,
-          },
-        })
+    // 根據變化情況選擇更新策略
+    if (changedUpdates.length === 0 && liveUpdates.length === 0) {
+      // 場景 1: 無任何變化，只更新檢查時間
+      await updateChannelsCheckTimeOnly(checkUpdateCandidates, now, channels.length);
+    } else {
+      // 場景 2: 有變化，執行完整更新
+      const result = await updateChannelsWithChanges(
+        changedUpdates,
+        liveUpdates,
+        checkUpdateCandidates,
+        changedTwitchIds,
+        now
       );
-
-      logger.debug(
-        "Jobs",
-        `✅ 已更新 ${checkUpdateCandidates.length}/${channels.length} 個頻道的檢查時間`
-      );
-    } else if (changedUpdates.length > 0 || liveUpdates.length > 0) {
-      // 有變化的頻道：完整更新
-      const combinedUpdates = [...changedUpdates, ...liveUpdates];
-      for (let i = 0; i < combinedUpdates.length; i += TX_BATCH_SIZE) {
-        // 記憶體保護：如果記憶體過高，中止剩餘更新
-        const { memoryMonitor } = await import("../utils/memory-monitor");
-        if (memoryMonitor.isOverLimit()) {
-          break;
-        }
-
-        const batch = combinedUpdates.slice(i, i + TX_BATCH_SIZE);
-        const batchIndex = Math.floor(i / TX_BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(combinedUpdates.length / TX_BATCH_SIZE);
-
-        try {
-          // 使用重試機制執行批次更新
-          await retryDatabaseOperation(async () => {
-            const updatePromises = batch.map((update) =>
-              prisma.channel.update({
-                where: { twitchChannelId: update.twitchId },
-                data: {
-                  ...("isLive" in update
-                    ? {
-                        isLive: update.isLive,
-                      }
-                    : {}),
-                  currentViewerCount: update.viewerCount,
-                  currentTitle: update.title || undefined,
-                  currentGameName: update.gameName || undefined,
-                  currentStreamStartedAt: update.startedAt,
-                  lastLiveCheckAt: now,
-                },
-              })
-            );
-
-            await prisma.$transaction(updatePromises);
-          });
-
-          updateSuccessCount += batch.length;
-        } catch (error) {
-          updateFailCount += batch.length;
-          logger.error(
-            "Jobs",
-            `批次更新失敗 (${batchIndex}/${totalBatches}):`,
-            error instanceof Error ? error.message : String(error)
-          );
-          // 繼續處理下一批，不中斷整個流程
-        }
-
-        // 批次之間短暫延遲（從 1000ms 降到 150ms，因為批次數量大幅減少）
-        if (i + TX_BATCH_SIZE < combinedUpdates.length) {
-          await new Promise((resolve) => setTimeout(resolve, 150));
-        }
-      }
-
-      if (liveUpdates.length > 0) {
-        cacheManager.deleteSuffix(":channels_list");
-      }
-
-      // P0 Optimization: 只更新超過 5 分鐘未檢查的未變化頻道
-      const unchangedChannelsNeedingUpdate = checkUpdateCandidates.filter(
-        (c) => !changedTwitchIds.has(c.twitchChannelId)
-      );
-
-      if (unchangedChannelsNeedingUpdate.length > 0) {
-        await retryDatabaseOperation(() =>
-          prisma.channel.updateMany({
-            where: {
-              id: { in: unchangedChannelsNeedingUpdate.map((c) => c.id) },
-            },
-            data: {
-              lastLiveCheckAt: now,
-            },
-          })
-        );
-
-        logger.debug(
-          "Jobs",
-          `✅ 已更新 ${unchangedChannelsNeedingUpdate.length} 個未變化頻道的檢查時間`
-        );
-      }
+      updateSuccessCount = result.successCount;
+      updateFailCount = result.failCount;
     }
 
     // 記錄更新結果

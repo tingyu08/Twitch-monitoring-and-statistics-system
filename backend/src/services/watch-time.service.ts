@@ -177,9 +177,26 @@ function accumulateWatchTime(
 
 /**
  * 更新使用者在特定頻道特定日期的觀看時間
+ *
+ * ⚠️ Single-Writer 策略說明：
+ * 為避免資料不一致，本系統採用單一寫入源策略：
+ *
+ * - **Primary Writer**: watch-time-increment.job
+ *   - 每 6 分鐘增量更新在線觀眾的 watchSeconds
+ *   - 使用 SQL 的 `UPDATE SET watchSeconds = watchSeconds + 360`
+ *   - 這是唯一的生產環境寫入路徑
+ *
+ * - **Recalculation Mode**: 僅用於修正/對帳（需明確啟用）
+ *   - 設定 `allowOverwrite: true` 時，會從訊息重新計算並覆蓋現有資料
+ *   - 使用場景：手動資料修正、夜間對帳任務
+ *   - ⚠️ 不應在常規業務流程中使用，會導致與 increment job 的競態條件
+ *
  * @param viewerId - 觀眾 ID
  * @param channelId - 頻道 ID
  * @param date - 日期（會被正規化到當天 00:00:00）
+ * @param options.allowOverwrite - 是否允許覆蓋現有資料（預設 false，保護資料完整性）
+ *   - `false` (預設): 跳過重算，保護 Primary Writer 的資料
+ *   - `true`: 從訊息重新計算，用於手動修正或對帳任務
  */
 export async function updateViewerWatchTime(
   viewerId: string,

@@ -9,6 +9,8 @@ jest.mock("../../../db/prisma", () => ({
     streamSession: {
       findMany: jest.fn(),
     },
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
   },
 }));
 
@@ -26,9 +28,8 @@ describe("StreamerService", () => {
 
     it("should calc stats correctly", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
-      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
-        { durationSeconds: 3600, startedAt: new Date() },
-        { durationSeconds: 7200, startedAt: new Date() },
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { totalSeconds: 10800, sessionCount: 2 },
       ]);
 
       const res = await getStreamerSummary("s1", "30d");
@@ -39,7 +40,9 @@ describe("StreamerService", () => {
 
     it("should handle 90d range", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
-      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { totalSeconds: 0, sessionCount: 0 },
+      ]);
       const res = await getStreamerSummary("s1", "90d");
       expect(res.range).toBe("90d");
     });
@@ -55,8 +58,9 @@ describe("StreamerService", () => {
     it("should aggregate data by day", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
       const today = new Date();
-      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
-        { durationSeconds: 3600, startedAt: today },
+      const dateKey = today.toISOString().split("T")[0];
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { bucketDate: dateKey, totalSeconds: 3600, sessionCount: 1 },
       ]);
 
       const res = await getStreamerTimeSeries("s1", "7d", "day");
@@ -66,8 +70,9 @@ describe("StreamerService", () => {
     it("should aggregate data by week", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
       const now = new Date();
-      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
-        { durationSeconds: 3600, startedAt: now },
+      const weekKey = now.toISOString().split("T")[0];
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { bucketDate: weekKey, totalSeconds: 3600, sessionCount: 1 },
       ]);
 
       const res = await getStreamerTimeSeries("s1", "90d", "week");
@@ -77,13 +82,20 @@ describe("StreamerService", () => {
 
     it("should handle custom ranges", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
-      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
       const res = await getStreamerTimeSeries("s1", "all");
       expect(res.range).toBe("all");
     });
   });
 
   describe("getStreamerHeatmap", () => {
+    beforeEach(() => {
+      // loadHeatmapAggregate 使用 $queryRaw：回傳空陣列使其 fallback 到 findMany
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+      // persistHeatmapAggregate 使用 $executeRaw
+      (prisma.$executeRaw as jest.Mock).mockResolvedValue(0);
+    });
+
     it("should return zeros if no channel", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue(null);
       const res = await getStreamerHeatmap("s1", "30d");

@@ -220,53 +220,37 @@ export class RevenueService {
 
       const paginator = apiClient.subscriptions.getSubscriptionsPaginated(broadcasterId);
 
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          logger.error(
-            "RevenueService",
-            `同步超時 (${SUBSCRIPTION_SYNC.MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`
-          );
-          reject(
-            new Error(
-              `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
-            )
-          );
-        }, SUBSCRIPTION_SYNC.MAX_TIME_MS);
+      const timer = setTimeout(() => {
+        // Timer 作為安全網，主迴圈中已有時間檢查
+      }, SUBSCRIPTION_SYNC.MAX_TIME_MS);
 
-        (async () => {
-          try {
-            for await (const sub of paginator) {
-              result.total++;
-              if (sub.tier === "1000") result.tier1++;
-              else if (sub.tier === "2000") result.tier2++;
-              else if (sub.tier === "3000") result.tier3++;
+      try {
+        for await (const sub of paginator) {
+          result.total++;
+          if (sub.tier === "1000") result.tier1++;
+          else if (sub.tier === "2000") result.tier2++;
+          else if (sub.tier === "3000") result.tier3++;
 
-              if (result.total >= SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS) {
-                logger.error("RevenueService", `訂閱者數量超過 ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS}`);
-                throw new Error(
-                  `SUBSCRIPTION_LIMIT_EXCEEDED: Channel has more than ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS} subscribers. Please contact support for enterprise solutions.`
-                );
-              }
-
-              if (Date.now() - startTime > SUBSCRIPTION_SYNC.MAX_TIME_MS) {
-                throw new Error(
-                  `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
-                );
-              }
-            }
-
-            resolve();
-          } catch (error) {
-            reject(error);
+          if (result.total >= SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS) {
+            logger.error("RevenueService", `訂閱者數量超過 ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS}`);
+            throw new Error(
+              `SUBSCRIPTION_LIMIT_EXCEEDED: Channel has more than ${SUBSCRIPTION_SYNC.MAX_SUBSCRIPTIONS} subscribers. Please contact support for enterprise solutions.`
+            );
           }
-        })()
-          .finally(() => {
-            clearTimeout(timer);
-          })
-          .catch(() => {
-            // 錯誤已由 reject 傳遞
-          });
-      });
+
+          if (Date.now() - startTime > SUBSCRIPTION_SYNC.MAX_TIME_MS) {
+            logger.error(
+              "RevenueService",
+              `同步超時 (${SUBSCRIPTION_SYNC.MAX_TIME_MS}ms)，目前已獲取 ${result.total} 筆`
+            );
+            throw new Error(
+              `SYNC_TIMEOUT: Subscription sync exceeded time limit. Retrieved ${result.total} subscriptions before timeout.`
+            );
+          }
+        }
+      } finally {
+        clearTimeout(timer);
+      }
     } catch (error: unknown) {
       // 處理權限不足或 Token 無效的情況
       const apiError = error as import("../../types/twitch.types").TwitchApiError;

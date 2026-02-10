@@ -209,6 +209,9 @@ export class CacheManager {
         const value = await factory();
         this.set(key, value, ttlSeconds);
         return value;
+      } catch (error) {
+        logger.warn("Cache", `Factory failed for key: ${key}`);
+        throw error;
       } finally {
         // 無論成功失敗，都要移除 pending 標記
         this.pendingPromises.delete(key);
@@ -223,10 +226,8 @@ export class CacheManager {
    * 獲取快取統計
    */
   getStats(): CacheStats {
-    const hitRate =
-      this.stats.hits + this.stats.misses > 0
-        ? (this.stats.hits / (this.stats.hits + this.stats.misses)) * 100
-        : 0;
+    const total = this.stats.hits + this.stats.misses;
+    const hitRate = total > 0 ? Math.round(((this.stats.hits / total) * 100) * 100) / 100 : 0;
 
     return {
       ...this.stats,
@@ -234,8 +235,8 @@ export class CacheManager {
       itemCount: this.cache.size,
       memoryUsage: this.currentMemoryUsage,
       pendingRequests: this.pendingPromises.size,
-      ...({ hitRate: Math.round(hitRate * 100) / 100 } as Record<string, unknown>),
-    } as CacheStats;
+      hitRate,
+    };
   }
 
   /**

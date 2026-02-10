@@ -25,11 +25,44 @@ export interface ExportJobResult {
   downloadPath?: string;
 }
 
-// 匯出資料類型定義 (使用寬鬆類型以兼容 Prisma 返回值)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ExportViewerData = Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ExportLifetimeStat = Record<string, any>;
+// 匯出資料類型定義
+interface ExportViewerData {
+  id: string;
+  twitchUserId: string;
+  displayName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  privacyConsent: {
+    consentVersion: string;
+    consentGivenAt: Date;
+    collectDailyWatchTime: boolean;
+    collectWatchTimeDistribution: boolean;
+    collectMonthlyAggregates: boolean;
+    collectChatMessages: boolean;
+    collectInteractions: boolean;
+    collectInteractionFrequency: boolean;
+    collectBadgeProgress: boolean;
+    collectFootprintData: boolean;
+    collectRankings: boolean;
+    collectRadarAnalysis: boolean;
+    updatedAt: Date;
+  } | null;
+}
+
+interface ExportLifetimeStat {
+  totalWatchTimeMinutes: number;
+  totalSessions: number;
+  totalMessages: number;
+  totalChatMessages: number;
+  totalSubscriptions: number;
+  totalCheers: number;
+  totalBits: number;
+  trackingDays: number;
+  longestStreakDays: number;
+  firstWatchedAt: Date | null;
+  lastWatchedAt: Date | null;
+  channel: { channelName: string } | null;
+}
 
 /**
  * Helper: Check if a path exists (async)

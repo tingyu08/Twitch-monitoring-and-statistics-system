@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import * as path from "path";
 import { setupSlowQueryLogger } from "./slow-query-logger";
+import { logger } from "../utils/logger";
 
 // 使用單例模式確保只有一個 Prisma Client 實例
 declare global {
@@ -17,42 +18,31 @@ const authToken = process.env.TURSO_AUTH_TOKEN;
 // 判斷是否使用 Turso 雲端資料庫（URL 以 libsql:// 開頭）
 const isTurso = databaseUrl.startsWith("libsql://");
 
-console.log(`[INFO] 資料庫模式: ${isTurso ? "Turso 雲端" : "本地 SQLite"}`);
-console.log(`[INFO] DATABASE_URL: ${databaseUrl.substring(0, 30)}...`);
+logger.info("Prisma", `資料庫模式: ${isTurso ? "Turso 雲端" : "本地 SQLite"}`);
 
 // 建立 Prisma adapter
 let adapter: PrismaLibSql | null = null;
 
 if (isTurso && authToken) {
-  // 生產環境：使用 Turso 雲端資料庫
-  console.log("[INFO] 使用 Turso 雲端資料庫");
+  logger.info("Prisma", "使用 Turso 雲端資料庫");
 
-  // 診斷日誌：確認變數值
-  console.log("[DEBUG] databaseUrl =", databaseUrl);
-  console.log("[DEBUG] authToken length =", authToken?.length || 0);
-  console.log("[DEBUG] isTurso =", isTurso);
-
-  // 直接傳配置物件給 PrismaLibSql adapter
   const adapterConfig = {
     url: databaseUrl,
     authToken: authToken,
   };
 
-  console.log(
-    "[DEBUG] Adapter config:",
-    JSON.stringify({
-      url: adapterConfig.url?.substring(0, 30) + "...",
-      hasAuthToken: !!adapterConfig.authToken,
-    })
-  );
+  if (process.env.NODE_ENV === "development") {
+    logger.debug("Prisma", `databaseUrl = ${databaseUrl.substring(0, 30)}...`);
+    logger.debug("Prisma", `authToken length = ${authToken?.length || 0}`);
+  }
 
   adapter = new PrismaLibSql(adapterConfig);
 
-  console.log("[INFO] Turso 連線配置完成");
+  logger.info("Prisma", "Turso 連線配置完成");
 } else {
-  // 開發環境：使用本地原生 SQLite (避免 Adapter 版本相容問題)
-  console.log("[DEBUG] 使用原生 Prisma Client (本地 SQLite)");
-  console.log("[DEBUG] isTurso =", isTurso, "authToken =", !!authToken);
+  if (process.env.NODE_ENV === "development") {
+    logger.debug("Prisma", "使用原生 Prisma Client (本地 SQLite)");
+  }
 }
 
 const prismaOptions = {
@@ -86,9 +76,9 @@ async function applyLocalSqlitePragmas(): Promise<void> {
     await prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;");
     await prisma.$executeRawUnsafe("PRAGMA synchronous=NORMAL;");
     sqlitePragmasApplied = true;
-    console.log("[INFO] 已套用本機 SQLite PRAGMA (WAL/busy_timeout/synchronous)");
+    logger.info("Prisma", "已套用本機 SQLite PRAGMA (WAL/busy_timeout/synchronous)");
   } catch (error) {
-    console.warn("[WARN] 套用本機 SQLite PRAGMA 失敗:", error);
+    logger.warn("Prisma", `套用本機 SQLite PRAGMA 失敗: ${error instanceof Error ? error.message : error}`);
   }
 }
 
@@ -99,11 +89,11 @@ async function applyLocalSqlitePragmas(): Promise<void> {
  */
 export async function warmupConnection(maxRetries = 3, timeoutMs = 15000): Promise<boolean> {
   if (isConnectionWarmed) {
-    console.log("[INFO] Prisma 連線已預熱，跳過");
+    logger.info("Prisma", "連線已預熱，跳過");
     return true;
   }
 
-  console.log("[INFO] 開始預熱 Prisma 連線...");
+  logger.info("Prisma", "開始預熱連線...");
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -120,25 +110,25 @@ export async function warmupConnection(maxRetries = 3, timeoutMs = 15000): Promi
         isConnectionWarmed = true;
         startConnectionKeepAlive();
         registerShutdownHooks();
-        console.log(`[INFO] ✅ Prisma 連線預熱成功 (第 ${attempt} 次嘗試)`);
+        logger.info("Prisma", `連線預熱成功 (第 ${attempt} 次嘗試)`);
         return true;
       }
     } catch (error) {
-      console.warn(
-        `[WARN] Prisma 連線預熱失敗 (${attempt}/${maxRetries}):`,
-        error instanceof Error ? error.message : error
+      logger.warn(
+        "Prisma",
+        `連線預熱失敗 (${attempt}/${maxRetries}): ${error instanceof Error ? error.message : error}`
       );
 
       if (attempt < maxRetries) {
         // 指數退避：1s, 2s, 4s...
         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        console.log(`[INFO] 等待 ${delay}ms 後重試...`);
+        logger.info("Prisma", `等待 ${delay}ms 後重試...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
 
-  console.error("[ERROR] ❌ Prisma 連線預熱失敗，已重試 " + maxRetries + " 次");
+  logger.error("Prisma", `連線預熱失敗，已重試 ${maxRetries} 次`);
   return false;
 }
 
@@ -155,7 +145,7 @@ function startConnectionKeepAlive(): void {
       await prisma.$queryRaw`SELECT 1 as ping`;
     } catch (error) {
       isConnectionWarmed = false;
-      console.warn("[WARN] Prisma keep-alive ping failed:", error);
+      logger.warn("Prisma", `keep-alive ping failed: ${error instanceof Error ? error.message : error}`);
     }
   }, intervalMs);
 
@@ -175,7 +165,7 @@ function registerShutdownHooks(): void {
     try {
       await prisma.$disconnect();
     } catch (error) {
-      console.warn("[WARN] Prisma disconnect failed:", error);
+      logger.warn("Prisma", `disconnect failed: ${error instanceof Error ? error.message : error}`);
     }
   };
 

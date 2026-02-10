@@ -59,13 +59,28 @@ export class WatchTimeIncrementJob {
 
       const liveChannelIds = liveChannels.map((c: { id: string }) => c.id);
 
+      // 安全檢查：驗證所有 ID 為有效 UUID 格式
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validIds = liveChannelIds.filter((id) => UUID_REGEX.test(id));
+      if (validIds.length !== liveChannelIds.length) {
+        logger.warn(
+          "Jobs",
+          `檢測到 ${liveChannelIds.length - validIds.length} 個無效的頻道 ID，已過濾`
+        );
+      }
+
+      if (validIds.length === 0) {
+        logger.debug("Jobs", "沒有有效的直播頻道 ID，跳過觀看時間更新");
+        return;
+      }
+
       // 2. 計算活躍的 viewer-channel 組合數量
       const rows = await prisma.$queryRaw<Array<{ count: number | string }>>(Prisma.sql`
         SELECT COUNT(*) AS count
         FROM (
           SELECT viewerId, channelId
           FROM viewer_channel_messages
-          WHERE channelId IN (${Prisma.join(liveChannelIds)})
+          WHERE channelId IN (${Prisma.join(validIds)})
             AND timestamp >= ${activeWindowStart}
           GROUP BY viewerId, channelId
         )
@@ -103,7 +118,7 @@ export class WatchTimeIncrementJob {
         FROM (
           SELECT viewerId, channelId
           FROM viewer_channel_messages
-          WHERE channelId IN (${Prisma.join(liveChannelIds)})
+          WHERE channelId IN (${Prisma.join(validIds)})
             AND timestamp >= ${activeWindowStart}
           GROUP BY viewerId, channelId
         ) AS active

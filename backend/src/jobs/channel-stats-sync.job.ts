@@ -191,11 +191,6 @@ export class ChannelStatsSyncJob {
       }
     }
 
-    // console.log(
-    //   `INFO: Synced: ${channel.channelName} (${
-    //     channelInfo.isLive ? "LIVE" : "OFFLINE"
-    //   })`
-    // );
   }
 
   /**
@@ -205,7 +200,6 @@ export class ChannelStatsSyncJob {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // console.log("[DEBUG] updateDailyStats: Fetching sessions...");
     // Get all finished sessions for today
     const todaySessions = await prisma.streamSession.findMany({
       where: {
@@ -220,10 +214,6 @@ export class ChannelStatsSyncJob {
       },
     });
 
-    // console.log(
-    //   `[DEBUG] updateDailyStats found ${todaySessions.length} sessions.`
-    // );
-
     // Group by channel
     const channelStats = new Map<
       string,
@@ -236,9 +226,6 @@ export class ChannelStatsSyncJob {
     >();
 
     for (const session of todaySessions) {
-      // console.log(
-      //   `[DEBUG] Processing session for channelId: ${session.channelId}`
-      // );
       const existing = channelStats.get(session.channelId) || {
         streamSeconds: 0,
         streamCount: 0,
@@ -256,12 +243,10 @@ export class ChannelStatsSyncJob {
 
     // Update or create daily stats
     let updated = 0;
-    // console.log(`[DEBUG] Updating stats for ${channelStats.size} channels.`);
     for (const [channelId, stats] of channelStats) {
       const avgViewers =
         stats.streamCount > 0 ? Math.round(stats.totalViewers / stats.streamCount) : null;
 
-      // console.log(`[DEBUG] Upserting stats for channel: ${channelId}`);
       await prisma.channelDailyStat.upsert({
         where: {
           channelId_date: {
