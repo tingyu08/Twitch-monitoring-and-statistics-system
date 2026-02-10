@@ -43,6 +43,8 @@ export interface RevenueOverview {
 }
 
 const BITS_DAILY_AGG_REFRESH_TTL_SECONDS = 120;
+const BITS_DAILY_AGG_BOOTSTRAP_TTL_SECONDS = 24 * 60 * 60;
+const BITS_DAILY_AGG_RECENT_REFRESH_DAYS = 3;
 
 export class RevenueService {
   private bitsDailyAggInitialized = false;
@@ -50,6 +52,16 @@ export class RevenueService {
 
   private toDateKey(date: Date): string {
     return date.toISOString().split("T")[0];
+  }
+
+  private addDays(date: Date, days: number): Date {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+  }
+
+  private maxDateKey(a: string, b: string): string {
+    return a > b ? a : b;
   }
 
   private async ensureBitsDailyAggTable(): Promise<void> {
@@ -108,13 +120,45 @@ export class RevenueService {
     `;
   }
 
+  private async hasBitsDailyAggData(streamerId: string, startDateKey: string): Promise<boolean> {
+    await this.ensureBitsDailyAggTable();
+
+    const rows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
+      SELECT COUNT(1) as count
+      FROM cheer_daily_agg
+      WHERE streamerId = ${streamerId}
+        AND date >= ${startDateKey}
+    `;
+
+    return Number(rows[0]?.count || 0) > 0;
+  }
+
   private async ensureBitsDailyAggFresh(streamerId: string, startDateKey: string): Promise<void> {
-    const refreshKey = `revenue:${streamerId}:bits_daily_agg_refresh:${startDateKey}`;
+    await this.ensureBitsDailyAggTable();
+
+    const bootstrapKey = `revenue:${streamerId}:bits_daily_agg_bootstrap:${startDateKey}`;
+
+    await cacheManager.getOrSet(
+      bootstrapKey,
+      async () => {
+        const hasData = await this.hasBitsDailyAggData(streamerId, startDateKey);
+        if (!hasData) {
+          await this.refreshBitsDailyAgg(streamerId, startDateKey);
+        }
+        return true;
+      },
+      BITS_DAILY_AGG_BOOTSTRAP_TTL_SECONDS
+    );
+
+    const recentStartDate = this.addDays(new Date(), -BITS_DAILY_AGG_RECENT_REFRESH_DAYS);
+    recentStartDate.setHours(0, 0, 0, 0);
+    const recentStartKey = this.maxDateKey(startDateKey, this.toDateKey(recentStartDate));
+    const refreshKey = `revenue:${streamerId}:bits_daily_agg_recent_refresh:${recentStartKey}`;
 
     await cacheManager.getOrSet(
       refreshKey,
       async () => {
-        await this.refreshBitsDailyAgg(streamerId, startDateKey);
+        await this.refreshBitsDailyAgg(streamerId, recentStartKey);
         return true;
       },
       BITS_DAILY_AGG_REFRESH_TTL_SECONDS

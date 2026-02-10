@@ -11,6 +11,7 @@ import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
 import { memoryMonitor } from "../utils/memory-monitor";
 import { captureJobError } from "./job-error-tracker";
+import { runWithWriteGuard } from "./job-write-guard";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
@@ -371,32 +372,34 @@ export class StreamStatusJob {
       startedAt: Date;
     }
   ): Promise<void> {
-    // Upsert 並直接返回結果
-    const session = await prisma.streamSession.upsert({
-      where: { twitchStreamId: stream.id },
-      create: {
-        channelId: channel.id,
-        twitchStreamId: stream.id,
-        startedAt: stream.startedAt,
-        title: stream.title,
-        category: stream.gameName,
-        avgViewers: stream.viewerCount,
-        peakViewers: stream.viewerCount,
-      },
-      update: {
-        title: stream.title,
-        category: stream.gameName,
-        peakViewers: { set: stream.viewerCount },
-      },
-    });
+    await runWithWriteGuard("stream-status:create-session", async () => {
+      // Upsert 並直接返回結果
+      const session = await prisma.streamSession.upsert({
+        where: { twitchStreamId: stream.id },
+        create: {
+          channelId: channel.id,
+          twitchStreamId: stream.id,
+          startedAt: stream.startedAt,
+          title: stream.title,
+          category: stream.gameName,
+          avgViewers: stream.viewerCount,
+          peakViewers: stream.viewerCount,
+        },
+        update: {
+          title: stream.title,
+          category: stream.gameName,
+          peakViewers: { set: stream.viewerCount },
+        },
+      });
 
-    // 直接使用 session.id 建立 metric
-    await prisma.streamMetric.create({
-      data: {
-        streamSessionId: session.id,
-        viewerCount: stream.viewerCount,
-        timestamp: new Date(),
-      },
+      // 直接使用 session.id 建立 metric
+      await prisma.streamMetric.create({
+        data: {
+          streamSessionId: session.id,
+          viewerCount: stream.viewerCount,
+          timestamp: new Date(),
+        },
+      });
     });
 
     logger.info("JOB", `新開播: ${channel.channelName} - ${stream.title}`);
@@ -418,30 +421,32 @@ export class StreamStatusJob {
     const currentAvg = activeSession.avgViewers || stream.viewerCount;
     const newAvg = Math.round((currentAvg + stream.viewerCount) / 2);
 
-    // 直接更新
-    await prisma.streamSession.update({
-      where: { id: activeSession.id },
-      data: {
-        title: stream.title,
-        category: stream.gameName,
-        avgViewers: newAvg,
-        peakViewers: newPeak,
-      },
-    });
-
-    const now = new Date();
-    const shouldSampleMetric =
-      METRIC_SAMPLE_MINUTES <= 1 || now.getMinutes() % METRIC_SAMPLE_MINUTES === 0;
-
-    if (shouldSampleMetric) {
-      await prisma.streamMetric.create({
+    await runWithWriteGuard("stream-status:update-session", async () => {
+      // 直接更新
+      await prisma.streamSession.update({
+        where: { id: activeSession.id },
         data: {
-          streamSessionId: activeSession.id,
-          viewerCount: stream.viewerCount,
-          timestamp: now,
+          title: stream.title,
+          category: stream.gameName,
+          avgViewers: newAvg,
+          peakViewers: newPeak,
         },
       });
-    }
+
+      const now = new Date();
+      const shouldSampleMetric =
+        METRIC_SAMPLE_MINUTES <= 1 || now.getMinutes() % METRIC_SAMPLE_MINUTES === 0;
+
+      if (shouldSampleMetric) {
+        await prisma.streamMetric.create({
+          data: {
+            streamSessionId: activeSession.id,
+            viewerCount: stream.viewerCount,
+            timestamp: now,
+          },
+        });
+      }
+    });
   }
 
   /**
@@ -453,13 +458,15 @@ export class StreamStatusJob {
       (endedAt.getTime() - activeSession.startedAt.getTime()) / 1000
     );
 
-    await prisma.streamSession.update({
-      where: { id: activeSession.id },
-      data: {
-        endedAt,
-        durationSeconds,
-      },
-    });
+    await runWithWriteGuard("stream-status:end-session", () =>
+      prisma.streamSession.update({
+        where: { id: activeSession.id },
+        data: {
+          endedAt,
+          durationSeconds,
+        },
+      })
+    );
 
     logger.info(
       "JOB",

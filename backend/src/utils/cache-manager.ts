@@ -344,21 +344,76 @@ export const CacheTTL = {
   VERY_LONG: 1800, // 30 分鐘 - 很少變動的資料（從 3600 秒降低）
 };
 
+const DEFAULT_CACHE_TTL_MEDIUM_PRESSURE_PERCENT = 60;
+const DEFAULT_CACHE_TTL_HIGH_PRESSURE_PERCENT = 80;
+const DEFAULT_CACHE_TTL_MEDIUM_FACTOR = 0.75;
+const DEFAULT_CACHE_TTL_HIGH_FACTOR = 0.5;
+const DEFAULT_CACHE_TTL_MIN_SECONDS = 15;
+
+function parsePositiveNumber(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function parseRatio(value: string | undefined, fallback: number): number {
+  const parsed = parsePositiveNumber(value, fallback);
+  if (parsed > 1) {
+    return fallback;
+  }
+  return parsed;
+}
+
+const CACHE_TTL_MEDIUM_PRESSURE_PERCENT = parsePositiveNumber(
+  process.env.CACHE_TTL_MEDIUM_PRESSURE_PERCENT,
+  DEFAULT_CACHE_TTL_MEDIUM_PRESSURE_PERCENT
+);
+const CACHE_TTL_HIGH_PRESSURE_PERCENT = parsePositiveNumber(
+  process.env.CACHE_TTL_HIGH_PRESSURE_PERCENT,
+  DEFAULT_CACHE_TTL_HIGH_PRESSURE_PERCENT
+);
+const CACHE_TTL_MEDIUM_FACTOR = parseRatio(
+  process.env.CACHE_TTL_MEDIUM_FACTOR,
+  DEFAULT_CACHE_TTL_MEDIUM_FACTOR
+);
+const CACHE_TTL_HIGH_FACTOR = parseRatio(
+  process.env.CACHE_TTL_HIGH_FACTOR,
+  DEFAULT_CACHE_TTL_HIGH_FACTOR
+);
+const CACHE_TTL_MIN_SECONDS = parsePositiveNumber(
+  process.env.CACHE_TTL_MIN_SECONDS,
+  DEFAULT_CACHE_TTL_MIN_SECONDS
+);
+
 /**
- * 根據記憶體壓力動態調整 TTL
- * 在 0.5GB RAM 環境下，當記憶體使用率高時縮短 TTL
+ * 根據快取壓力動態調整 TTL
+ * 注意：壓力基準是 cacheManager 的容量上限（maxMemoryBytes），不是進程總記憶體。
+ * 這可確保壓力計算與實際快取上限一致。
  */
 export function getAdaptiveTTL(baseTTL: number, cacheManager: CacheManager): number {
-  const stats = cacheManager.getStats();
-  const memoryUsagePercent = (stats.memoryUsage / cacheManager.getMaxMemoryBytes()) * 100;
-
-  // 高記憶體壓力：縮短 TTL 50%
-  if (memoryUsagePercent > 80) {
-    return Math.floor(baseTTL * 0.5);
+  if (!Number.isFinite(baseTTL) || baseTTL <= 0) {
+    return baseTTL;
   }
-  // 中等記憶體壓力：縮短 TTL 25%
-  if (memoryUsagePercent > 60) {
-    return Math.floor(baseTTL * 0.75);
+
+  const stats = cacheManager.getStats();
+  const maxCacheBytes = cacheManager.getMaxMemoryBytes();
+  if (!Number.isFinite(maxCacheBytes) || maxCacheBytes <= 0) {
+    return baseTTL;
+  }
+
+  const cacheUsagePercent = Math.min(100, (stats.memoryUsage / maxCacheBytes) * 100);
+  const minTTL = Math.min(baseTTL, CACHE_TTL_MIN_SECONDS);
+
+  // 高快取壓力：縮短 TTL（預設 50%）
+  if (cacheUsagePercent > CACHE_TTL_HIGH_PRESSURE_PERCENT) {
+    return Math.max(minTTL, Math.floor(baseTTL * CACHE_TTL_HIGH_FACTOR));
+  }
+  // 中等快取壓力：縮短 TTL（預設 25%）
+  if (cacheUsagePercent > CACHE_TTL_MEDIUM_PRESSURE_PERCENT) {
+    return Math.max(minTTL, Math.floor(baseTTL * CACHE_TTL_MEDIUM_FACTOR));
   }
   // 正常情況
   return baseTTL;

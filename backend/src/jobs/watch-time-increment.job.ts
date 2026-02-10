@@ -10,6 +10,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { captureJobError } from "./job-error-tracker";
+import { runWithWriteGuard } from "./job-write-guard";
 
 const parsedIncrementMinutes = Number.parseInt(
   process.env.WATCH_TIME_INCREMENT_MINUTES || "10",
@@ -104,39 +105,41 @@ export class WatchTimeIncrementJob {
       }
 
       // 3. 使用 set-based SQL 一次性 upsert，降低大量逐筆寫入成本
-      await prisma.$executeRaw(Prisma.sql`
-        INSERT INTO viewer_channel_daily_stats (
-          id,
-          viewerId,
-          channelId,
-          date,
-          watchSeconds,
-          messageCount,
-          emoteCount,
-          createdAt,
-          updatedAt
-        )
-        SELECT
-          lower(hex(randomblob(16))) AS id,
-          active.viewerId,
-          active.channelId,
-          ${today} AS date,
-          ${INCREMENT_SECONDS} AS watchSeconds,
-          0,
-          0,
-          CURRENT_TIMESTAMP,
-          CURRENT_TIMESTAMP
-        FROM (
-          SELECT viewerId, channelId
-          FROM viewer_channel_messages
-          WHERE channelId IN (${Prisma.join(validIds)})
-            AND timestamp >= ${activeWindowStart}
-          GROUP BY viewerId, channelId
-        ) AS active
-        ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-          watchSeconds = viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds,
-          updatedAt = CURRENT_TIMESTAMP
-      `);
+      await runWithWriteGuard("watch-time-increment:daily-stats-upsert", () =>
+        prisma.$executeRaw(Prisma.sql`
+          INSERT INTO viewer_channel_daily_stats (
+            id,
+            viewerId,
+            channelId,
+            date,
+            watchSeconds,
+            messageCount,
+            emoteCount,
+            createdAt,
+            updatedAt
+          )
+          SELECT
+            lower(hex(randomblob(16))) AS id,
+            active.viewerId,
+            active.channelId,
+            ${today} AS date,
+            ${INCREMENT_SECONDS} AS watchSeconds,
+            0,
+            0,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          FROM (
+            SELECT viewerId, channelId
+            FROM viewer_channel_messages
+            WHERE channelId IN (${Prisma.join(validIds)})
+              AND timestamp >= ${activeWindowStart}
+            GROUP BY viewerId, channelId
+          ) AS active
+          ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+            watchSeconds = viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds,
+            updatedAt = CURRENT_TIMESTAMP
+        `)
+      );
 
       const updatedCount = activeCount;
 

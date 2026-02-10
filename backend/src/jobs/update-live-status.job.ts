@@ -7,6 +7,7 @@ import { cacheManager } from "../utils/cache-manager";
 import { memoryMonitor } from "../utils/memory-monitor";
 import { refreshViewerChannelSummaryForChannels } from "../modules/viewer/viewer.service";
 import { captureJobError } from "./job-error-tracker";
+import { runWithWriteGuard } from "./job-write-guard";
 
 import cron from "node-cron";
 
@@ -65,15 +66,17 @@ async function updateChannelsCheckTimeOnly(
 ): Promise<void> {
   if (checkUpdateCandidates.length === 0) return;
 
-  await retryDatabaseOperation(() =>
-    prisma.channel.updateMany({
-      where: {
-        id: { in: checkUpdateCandidates.map((c) => c.id) },
-      },
-      data: {
-        lastLiveCheckAt: now,
-      },
-    })
+  await runWithWriteGuard("update-live-status:check-time-only", () =>
+    retryDatabaseOperation(() =>
+      prisma.channel.updateMany({
+        where: {
+          id: { in: checkUpdateCandidates.map((c) => c.id) },
+        },
+        data: {
+          lastLiveCheckAt: now,
+        },
+      })
+    )
   );
 
   logger.debug(
@@ -129,23 +132,25 @@ async function updateChannelsWithChanges(
     const totalBatches = Math.ceil(combinedUpdates.length / TX_BATCH_SIZE);
 
     try {
-      await retryDatabaseOperation(async () => {
-        const updatePromises = batch.map((update) =>
-          prisma.channel.update({
-            where: { twitchChannelId: update.twitchId },
-            data: {
-              ...("isLive" in update ? { isLive: update.isLive } : {}),
-              currentViewerCount: update.viewerCount,
-              currentTitle: update.title || undefined,
-              currentGameName: update.gameName || undefined,
-              currentStreamStartedAt: update.startedAt,
-              lastLiveCheckAt: now,
-            },
-          })
-        );
+      await runWithWriteGuard("update-live-status:batch-channel-update", () =>
+        retryDatabaseOperation(async () => {
+          const updatePromises = batch.map((update) =>
+            prisma.channel.update({
+              where: { twitchChannelId: update.twitchId },
+              data: {
+                ...("isLive" in update ? { isLive: update.isLive } : {}),
+                currentViewerCount: update.viewerCount,
+                currentTitle: update.title || undefined,
+                currentGameName: update.gameName || undefined,
+                currentStreamStartedAt: update.startedAt,
+                lastLiveCheckAt: now,
+              },
+            })
+          );
 
-        await prisma.$transaction(updatePromises);
-      });
+          await prisma.$transaction(updatePromises);
+        })
+      );
 
       successCount += batch.length;
     } catch (error) {
@@ -174,15 +179,17 @@ async function updateChannelsWithChanges(
   );
 
   if (unchangedChannelsNeedingUpdate.length > 0) {
-    await retryDatabaseOperation(() =>
-      prisma.channel.updateMany({
-        where: {
-          id: { in: unchangedChannelsNeedingUpdate.map((c) => c.id) },
-        },
-        data: {
-          lastLiveCheckAt: now,
-        },
-      })
+    await runWithWriteGuard("update-live-status:unchanged-check-time", () =>
+      retryDatabaseOperation(() =>
+        prisma.channel.updateMany({
+          where: {
+            id: { in: unchangedChannelsNeedingUpdate.map((c) => c.id) },
+          },
+          data: {
+            lastLiveCheckAt: now,
+          },
+        })
+      )
     );
 
     logger.debug(

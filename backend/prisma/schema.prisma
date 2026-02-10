@@ -94,6 +94,7 @@ model Channel {
   @@index([isLive])                // P0: 優化直播狀態篩選查詢
   @@index([lastLiveCheckAt])       // P0: 優化最後檢查時間排序
   @@index([channelName])           // P0: hot path lookup by normalized channel name
+  @@index([isMonitored, twitchChannelId]) // 優化 update-live-status 監控頻道掃描
   @@map("channels")
 }
 
@@ -168,6 +169,7 @@ model ViewerChannelDailyStat {
   @@index([viewerId, channelId, date])
   @@index([viewerId]) // 優化：支援 getFollowedChannels 的 groupBy 查詢
   @@index([updatedAt]) // 優化：支援增量更新查詢（lifetime stats job）
+  @@index([updatedAt, viewerId, channelId]) // 優化：增量查詢後續聚合欄位回表成本
   @@map("viewer_channel_daily_stats")
 }
 
@@ -213,6 +215,7 @@ model ViewerChannelMessageDailyAgg {
   @@index([viewerId])
   @@index([channelId])
   @@index([updatedAt]) // 優化：支援增量更新查詢（lifetime stats job）
+  @@index([updatedAt, viewerId, channelId]) // 優化：增量查詢後續聚合欄位回表成本
   @@map("viewer_channel_message_daily_aggs")
 }
 
@@ -296,6 +299,8 @@ model UserFollow {
   @@unique([userId, channelId])
   @@index([userId])
   @@index([channelId])
+  @@index([userId, userType]) // 優化 viewer/streamer 分流查詢
+  @@index([channelId, userType]) // 優化按頻道 + 使用者類型查詢
   @@map("user_follows")
 }
 
@@ -346,6 +351,8 @@ model ViewerChannelLifetimeStats {
   @@index([viewerId]) // 優化：支援 getFollowedChannels 查詢
   @@index([channelId]) // 優化：支援 updatePercentileRankings 查詢
   @@index([viewerId, lastWatchedAt]) // 優化：支援按最後觀看時間排序
+  @@index([channelId, watchTimePercentile]) // 優化：頻道內觀看時數百分位排名
+  @@index([channelId, messagePercentile]) // 優化：頻道內留言百分位排名
   @@map("viewer_channel_lifetime_stats")
 }
 

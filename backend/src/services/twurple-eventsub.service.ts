@@ -96,6 +96,58 @@ class TwurpleEventSubService {
   private apiClient: unknown = null;
   private isInitialized = false;
   private subscribedChannels: Set<string> = new Set();
+  private cheerDailyAggReady = false;
+  private cheerDailyAggInitPromise: Promise<void> | null = null;
+
+  private async ensureCheerDailyAggTable(): Promise<void> {
+    if (this.cheerDailyAggReady) {
+      return;
+    }
+
+    if (!this.cheerDailyAggInitPromise) {
+      this.cheerDailyAggInitPromise = (async () => {
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS cheer_daily_agg (
+            streamerId TEXT NOT NULL,
+            date TEXT NOT NULL,
+            totalBits INTEGER NOT NULL DEFAULT 0,
+            eventCount INTEGER NOT NULL DEFAULT 0,
+            updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (streamerId, date)
+          )
+        `);
+
+        await prisma.$executeRawUnsafe(`
+          CREATE INDEX IF NOT EXISTS idx_cheer_daily_agg_streamer_date
+          ON cheer_daily_agg(streamerId, date)
+        `);
+
+        this.cheerDailyAggReady = true;
+      })().catch((error) => {
+        this.cheerDailyAggInitPromise = null;
+        throw error;
+      });
+    }
+
+    await this.cheerDailyAggInitPromise;
+  }
+
+  private async incrementCheerDailyAgg(
+    streamerId: string,
+    cheeredAtIso: string,
+    bits: number
+  ): Promise<void> {
+    await this.ensureCheerDailyAggTable();
+
+    await prisma.$executeRaw`
+      INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
+      VALUES (${streamerId}, DATE(${cheeredAtIso}), ${bits}, 1, CURRENT_TIMESTAMP)
+      ON CONFLICT(streamerId, date) DO UPDATE SET
+        totalBits = totalBits + excluded.totalBits,
+        eventCount = eventCount + excluded.eventCount,
+        updatedAt = CURRENT_TIMESTAMP
+    `;
+  }
 
   /**
    * 初始化 EventSub 服務
@@ -561,6 +613,8 @@ class TwurpleEventSubService {
         WHERE id = ${createdCheerEvent.id}
           AND cheeredDate IS NULL
       `;
+
+      await this.incrementCheerDailyAgg(streamer.id, cheeredAt.toISOString(), event.bits);
 
       logger.info(
         "TwurpleEventSub",

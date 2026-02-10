@@ -10,6 +10,7 @@ import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
 import { captureJobError } from "./job-error-tracker";
+import { runWithWriteGuard } from "./job-write-guard";
 
 // P1 Fix: 每小時第 10 分鐘執行（錯開 syncUserFollowsJob 的整點執行）
 const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "35 * * * *";
@@ -162,10 +163,12 @@ export class ChannelStatsSyncJob {
     // 如果頻道名稱有變更，更新資料庫
     if (channelInfo.login !== channel.channelName) {
       logger.info("ChannelStatsSync", `Channel renamed: ${channel.channelName} -> ${channelInfo.login}`);
-      await prisma.channel.update({
-        where: { id: channel.id },
-        data: { channelName: channelInfo.login },
-      });
+      await runWithWriteGuard("channel-stats-sync:rename-channel", () =>
+        prisma.channel.update({
+          where: { id: channel.id },
+          data: { channelName: channelInfo.login },
+        })
+      );
     }
 
     // If live, update active session
@@ -181,15 +184,17 @@ export class ChannelStatsSyncJob {
         const currentAvg = activeSession.avgViewers || channelInfo.viewerCount;
         const newAvg = Math.round((currentAvg + channelInfo.viewerCount) / 2);
 
-        await prisma.streamSession.update({
-          where: { id: activeSession.id },
-          data: {
-            title: channelInfo.streamTitle,
-            category: channelInfo.currentGame,
-            avgViewers: newAvg,
-            peakViewers: newPeak,
-          },
-        });
+        await runWithWriteGuard("channel-stats-sync:update-session", () =>
+          prisma.streamSession.update({
+            where: { id: activeSession.id },
+            data: {
+              title: channelInfo.streamTitle,
+              category: channelInfo.currentGame,
+              avgViewers: newAvg,
+              peakViewers: newPeak,
+            },
+          })
+        );
       }
     }
 
@@ -249,34 +254,36 @@ export class ChannelStatsSyncJob {
 
     for (let i = 0; i < entries.length; i += BATCH_SIZE) {
       const batch = entries.slice(i, i + BATCH_SIZE);
-      await Promise.all(
-        batch.map(async ([channelId, stats]) => {
-          const avgViewers =
-            stats.streamCount > 0 ? Math.round(stats.totalViewers / stats.streamCount) : null;
+      await runWithWriteGuard("channel-stats-sync:daily-stats-upsert", () =>
+        Promise.all(
+          batch.map(async ([channelId, stats]) => {
+            const avgViewers =
+              stats.streamCount > 0 ? Math.round(stats.totalViewers / stats.streamCount) : null;
 
-          await prisma.channelDailyStat.upsert({
-            where: {
-              channelId_date: {
+            await prisma.channelDailyStat.upsert({
+              where: {
+                channelId_date: {
+                  channelId,
+                  date: today,
+                },
+              },
+              create: {
                 channelId,
                 date: today,
+                streamSeconds: stats.streamSeconds,
+                streamCount: stats.streamCount,
+                avgViewers,
+                peakViewers: stats.peakViewers,
               },
-            },
-            create: {
-              channelId,
-              date: today,
-              streamSeconds: stats.streamSeconds,
-              streamCount: stats.streamCount,
-              avgViewers,
-              peakViewers: stats.peakViewers,
-            },
-            update: {
-              streamSeconds: stats.streamSeconds,
-              streamCount: stats.streamCount,
-              avgViewers,
-              peakViewers: stats.peakViewers,
-            },
-          });
-        })
+              update: {
+                streamSeconds: stats.streamSeconds,
+                streamCount: stats.streamCount,
+                avgViewers,
+                peakViewers: stats.peakViewers,
+              },
+            });
+          })
+        )
       );
       updated += batch.length;
     }
