@@ -9,6 +9,7 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
+import { captureJobError } from "./job-error-tracker";
 
 // P1 Fix: 每小時第 10 分鐘執行（錯開 syncUserFollowsJob 的整點執行）
 const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "35 * * * *";
@@ -126,6 +127,7 @@ export class ChannelStatsSyncJob {
       return result;
     } catch (error) {
       logger.error("ChannelStatsSync", "Job execution failed:", error);
+      captureJobError("channel-stats-sync", error);
       throw error;
     } finally {
       this.isRunning = false;

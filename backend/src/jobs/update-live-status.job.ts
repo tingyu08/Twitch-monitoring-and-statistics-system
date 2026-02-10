@@ -6,6 +6,7 @@ import { retryDatabaseOperation } from "../utils/db-retry";
 import { cacheManager } from "../utils/cache-manager";
 import { memoryMonitor } from "../utils/memory-monitor";
 import { refreshViewerChannelSummaryForChannels } from "../modules/viewer/viewer.service";
+import { captureJobError } from "./job-error-tracker";
 
 import cron from "node-cron";
 
@@ -536,6 +537,7 @@ export async function updateLiveStatusFn() {
     }
   } catch (error) {
     logger.error("Jobs", "Update Live Status Job 執行失敗", error);
+    captureJobError("update-live-status", error);
   } finally {
     // 確保解鎖，即使發生錯誤
     isRunning = false;

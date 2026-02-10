@@ -12,6 +12,7 @@ import cron from "node-cron";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { captureJobError } from "./job-error-tracker";
 
 const LAST_AGGREGATED_AT_KEY = "message_agg_last_aggregated_at";
 const AGGREGATE_DAILY_MESSAGES_CRON = process.env.AGGREGATE_DAILY_MESSAGES_CRON || "15 * * * *";
@@ -115,6 +116,7 @@ export async function aggregateDailyMessages(): Promise<void> {
     logger.info("Cron", `訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`);
   } catch (error) {
     logger.error("Cron", "訊息聚合失敗:", error);
+    captureJobError("aggregate-daily-messages", error);
     throw error;
   }
 }
@@ -129,6 +131,7 @@ export function startMessageAggregationJob(): void {
       await aggregateDailyMessages();
     } catch (error) {
       logger.error("Cron", "訊息聚合任務執行失敗:", error);
+      captureJobError("aggregate-daily-messages-scheduler", error);
     }
   });
 

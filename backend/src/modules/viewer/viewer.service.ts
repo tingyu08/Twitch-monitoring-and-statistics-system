@@ -77,6 +77,16 @@ interface SummaryChannelSnapshot {
   category: string;
 }
 
+const SQLITE_IN_CHUNK_SIZE = 100;
+
+function chunkArray<T>(items: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
 export interface ViewerDailyStat {
   date: string;
   watchHours: number;
@@ -455,38 +465,51 @@ async function buildFollowedChannelsFromSource(viewerId: string): Promise<Follow
     return [];
   }
 
-  const [channels, activeSessions] = await Promise.all([
-    prisma.channel.findMany({
-      where: {
-        id: { in: allChannelIds },
-      },
-      select: {
-        id: true,
-        channelName: true,
-        isLive: true,
-        currentViewerCount: true,
-        currentStreamStartedAt: true,
-        currentGameName: true,
-        source: true,
-        streamer: {
-          select: {
-            displayName: true,
-            avatarUrl: true,
+  const channelIdChunks = chunkArray(allChannelIds, SQLITE_IN_CHUNK_SIZE);
+
+  const [channelChunkResults, activeSessionChunkResults] = await Promise.all([
+    Promise.all(
+      channelIdChunks.map((chunk) =>
+        prisma.channel.findMany({
+          where: {
+            id: { in: chunk },
           },
-        },
-      },
-    }),
-    prisma.streamSession.findMany({
-      where: {
-        channelId: { in: allChannelIds },
-        endedAt: null,
-      },
-      select: {
-        channelId: true,
-      },
-      distinct: ["channelId"],
-    }),
+          select: {
+            id: true,
+            channelName: true,
+            isLive: true,
+            currentViewerCount: true,
+            currentStreamStartedAt: true,
+            currentGameName: true,
+            source: true,
+            streamer: {
+              select: {
+                displayName: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        })
+      )
+    ),
+    Promise.all(
+      channelIdChunks.map((chunk) =>
+        prisma.streamSession.findMany({
+          where: {
+            channelId: { in: chunk },
+            endedAt: null,
+          },
+          select: {
+            channelId: true,
+          },
+          distinct: ["channelId"],
+        })
+      )
+    ),
   ]);
+
+  const channels = channelChunkResults.flat();
+  const activeSessions = activeSessionChunkResults.flat();
 
   const activeSessionChannelIds = new Set(activeSessions.map((session) => session.channelId));
   const statsMap = new Map<string, LifetimeStatResult>(

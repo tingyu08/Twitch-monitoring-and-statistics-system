@@ -9,6 +9,7 @@ import cron from "node-cron";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { captureJobError } from "./job-error-tracker";
 
 // 每 6 分鐘執行，在第 4 分鐘觸發（錯開其他 Jobs）
 const WATCH_TIME_INCREMENT_CRON = process.env.WATCH_TIME_INCREMENT_CRON || "15 4-59/6 * * * *";
@@ -142,6 +143,7 @@ export class WatchTimeIncrementJob {
       }
     } catch (error) {
       logger.error("Jobs", "❌ Watch Time Increment Job 執行失敗", error);
+      captureJobError("watch-time-increment", error);
     } finally {
       this.isRunning = false;
     }

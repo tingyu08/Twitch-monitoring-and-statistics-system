@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { revenueService } from "../modules/streamer/revenue.service";
 import { logger } from "../utils/logger";
 import { revenueSyncQueue, type RevenueSyncJobData } from "../utils/memory-queue";
+import { captureJobError } from "./job-error-tracker";
 
 // 每個實況主的超時時間（毫秒）- 60 秒
 const PER_STREAMER_TIMEOUT_MS = 60 * 1000;
@@ -88,5 +89,6 @@ export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async
     );
   } catch (error) {
     logger.error("Jobs", "Sync Subscriptions Job 執行失敗", error);
+    captureJobError("sync-subscriptions", error);
   }
 });

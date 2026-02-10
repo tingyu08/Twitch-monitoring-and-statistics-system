@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { twurpleVideoService } from "../services/twitch-video.service";
 import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
+import { captureJobError } from "./job-error-tracker";
 
 /**
  * Sync Videos & Clips Job (記憶體優化版)
@@ -203,5 +204,6 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
     );
   } catch (error) {
     logger.error("Jobs", "Sync Videos Job 執行失敗", error);
+    captureJobError("sync-videos", error);
   }
 });

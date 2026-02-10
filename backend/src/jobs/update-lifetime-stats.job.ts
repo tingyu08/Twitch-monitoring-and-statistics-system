@@ -4,6 +4,7 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { lifetimeStatsAggregator } from "../services/lifetime-stats-aggregator.service";
 import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
+import { captureJobError } from "./job-error-tracker";
 
 // 批次處理大小
 const BATCH_SIZE = 50;
@@ -130,5 +131,6 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     logger.info("CronJob", `Lifetime Stats 更新完成，耗時 ${duration}ms`);
   } catch (error) {
     logger.error("CronJob", "Lifetime Stats 更新失敗:", error);
+    captureJobError("update-lifetime-stats", error, { fullUpdate });
   }
 };

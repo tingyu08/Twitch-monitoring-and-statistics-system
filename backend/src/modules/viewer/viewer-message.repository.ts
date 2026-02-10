@@ -12,6 +12,20 @@ type MessageInput = ParsedMessage | RawChatMessage;
 const MESSAGE_BATCH_SIZE = 50;
 const MESSAGE_BATCH_FLUSH_MS = 5000;
 const MESSAGE_BATCH_MAX_SIZE = 1000;
+const MESSAGE_BATCH_MAX_RETRIES = 3;
+
+interface BufferedMessage {
+  viewerId: string;
+  channelId: string;
+  messageText: string;
+  messageType: string;
+  timestamp: Date;
+  badges: string | null;
+  emotesUsed: string | null;
+  bitsAmount: number | null;
+  emoteCount: number;
+  retryCount: number;
+}
 
 // 類型守衛：檢查是否為 RawChatMessage
 function isRawChatMessage(msg: MessageInput): msg is RawChatMessage {
@@ -99,17 +113,7 @@ const CacheKeys = {
 };
 
 export class ViewerMessageRepository {
-  private messageBuffer: Array<{
-    viewerId: string;
-    channelId: string;
-    messageText: string;
-    messageType: string;
-    timestamp: Date;
-    badges: string | null;
-    emotesUsed: string | null;
-    bitsAmount: number | null;
-    emoteCount: number;
-  }> = [];
+  private messageBuffer: BufferedMessage[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private flushInProgress = false;
   private flushRequested = false;
@@ -225,6 +229,7 @@ export class ViewerMessageRepository {
         emotesUsed: message.emotes ? JSON.stringify(message.emotes) : null,
         bitsAmount: message.bits > 0 ? message.bits : null,
         emoteCount: message.emotes ? message.emotes.length : 0,
+        retryCount: 0,
       });
 
       // P1 Optimization: Removed real-time WebSocket stats-update broadcast
@@ -241,17 +246,7 @@ export class ViewerMessageRepository {
     await this.flushBuffers();
   }
 
-  private enqueueMessage(message: {
-    viewerId: string;
-    channelId: string;
-    messageText: string;
-    messageType: string;
-    timestamp: Date;
-    badges: string | null;
-    emotesUsed: string | null;
-    bitsAmount: number | null;
-    emoteCount: number;
-  }): void {
+  private enqueueMessage(message: BufferedMessage): void {
     if (this.messageBuffer.length >= MESSAGE_BATCH_MAX_SIZE) {
       this.messageBuffer.shift();
       logger.warn("ViewerMessage", "Message buffer full, dropping oldest message");
@@ -295,7 +290,10 @@ export class ViewerMessageRepository {
     try {
       while (this.messageBuffer.length > 0) {
         const batch = this.messageBuffer.splice(0, MESSAGE_BATCH_SIZE);
-        await this.flushBatch(batch);
+        const success = await this.flushBatch(batch);
+        if (!success) {
+          break;
+        }
       }
     } finally {
       this.flushInProgress = false;
@@ -306,20 +304,8 @@ export class ViewerMessageRepository {
     }
   }
 
-  private async flushBatch(
-    batch: Array<{
-      viewerId: string;
-      channelId: string;
-      messageText: string;
-      messageType: string;
-      timestamp: Date;
-      badges: string | null;
-      emotesUsed: string | null;
-      bitsAmount: number | null;
-      emoteCount: number;
-    }>
-  ): Promise<void> {
-    if (batch.length === 0) return;
+  private async flushBatch(batch: BufferedMessage[]): Promise<boolean> {
+    if (batch.length === 0) return true;
 
     const messageAggIncrements = new Map<
       string,
@@ -635,10 +621,32 @@ export class ViewerMessageRepository {
           cacheManager.delete(`viewer:${daily.viewerId}:channels_list`);
         }
       }
+      return true;
     } catch (error) {
       logger.error("ViewerMessage", "Failed to flush message batch", error);
-      this.messageBuffer.unshift(...batch);
+
+      const retryableMessages = batch
+        .map((message) => ({
+          ...message,
+          retryCount: message.retryCount + 1,
+        }))
+        .filter((message) => message.retryCount <= MESSAGE_BATCH_MAX_RETRIES);
+
+      const droppedMessages = batch.length - retryableMessages.length;
+
+      if (retryableMessages.length > 0) {
+        this.messageBuffer.unshift(...retryableMessages);
+      }
+
+      if (droppedMessages > 0) {
+        logger.error(
+          "ViewerMessage",
+          `Dropped ${droppedMessages} messages after ${MESSAGE_BATCH_MAX_RETRIES} retries`
+        );
+      }
+
       this.scheduleFlush();
+      return false;
     }
   }
 }

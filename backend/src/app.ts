@@ -43,6 +43,8 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "1mb";
+
 class App {
   public express: express.Application;
 
@@ -90,7 +92,7 @@ class App {
       if (req.path.startsWith("/api/eventsub")) {
         next();
       } else {
-        express.json()(req, res, next);
+        express.json({ limit: JSON_BODY_LIMIT })(req, res, next);
       }
     });
 

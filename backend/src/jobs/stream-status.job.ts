@@ -10,6 +10,7 @@ import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
 import { memoryMonitor } from "../utils/memory-monitor";
+import { captureJobError } from "./job-error-tracker";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
@@ -138,6 +139,7 @@ export class StreamStatusJob {
       return result;
     } catch (error) {
       logger.error("JOB", "Stream Status Job 執行失敗:", error);
+      captureJobError("stream-status", error);
       throw error;
     } finally {
       if (this.timeoutHandle) {

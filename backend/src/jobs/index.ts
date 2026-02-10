@@ -15,6 +15,7 @@ import { syncSubscriptionsJob } from "./sync-subscriptions.job";
 import { updateLiveStatusJob } from "./update-live-status.job";
 import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
+import { captureJobError } from "./job-error-tracker";
 
 /**
  * 啟動所有定時任務（Zeabur 免費層優化版）
@@ -38,6 +39,7 @@ export function startAllJobs(): void {
       logger.info("Jobs", `Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`);
     } catch (error) {
       logger.error("Jobs", "Token 驗證失敗:", error);
+      captureJobError("validate-tokens-scheduler", error);
     }
   });
 

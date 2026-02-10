@@ -10,6 +10,7 @@ import { accountDeletionService } from "../services/account-deletion.service";
 import { dataExportService } from "../services/data-export.service";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { captureJobError } from "./job-error-tracker";
 
 // 每日凌晨 3 點執行
 const DATA_RETENTION_CRON = process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 * * *";
@@ -81,6 +82,7 @@ export class DataRetentionJob {
       logger.info("DataRetention", "Job 執行完成");
     } catch (error) {
       logger.error("DataRetention", "Job 執行失敗:", error);
+      captureJobError("data-retention", error);
     } finally {
       this.isRunning = false;
     }

@@ -9,6 +9,7 @@
 
 import { tokenValidationService } from "../services/token-validation.service";
 import { logger } from "../utils/logger";
+import { captureJobError } from "./job-error-tracker";
 
 // Job 配置
 const JOB_NAME = "ValidateTokensJob";
@@ -92,6 +93,7 @@ export async function validateTokensJob(): Promise<JobResult> {
     lastRunResult = jobResult;
 
     logger.error(JOB_NAME, "任務執行失敗", error);
+    captureJobError("validate-tokens", error);
     return jobResult;
   }
 }
