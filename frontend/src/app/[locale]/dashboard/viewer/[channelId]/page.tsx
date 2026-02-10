@@ -170,7 +170,6 @@ export default function ViewerChannelStatsPage() {
                   width={80}
                   height={80}
                   className="w-20 h-20 rounded-full border-4 border-purple-500/50 ring-4 ring-purple-500/20 object-cover shadow-xl"
-                  unoptimized
                   priority
                 />
 

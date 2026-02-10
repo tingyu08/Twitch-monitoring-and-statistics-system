@@ -339,7 +339,14 @@ export class StreamStatusJob {
           channelId: { in: batch },
           endedAt: null,
         },
-      })) as unknown as ActiveStreamSession[];
+        select: {
+          id: true,
+          channelId: true,
+          startedAt: true,
+          avgViewers: true,
+          peakViewers: true,
+        },
+      })) as ActiveStreamSession[];
 
       sessions.push(...batchSessions);
 

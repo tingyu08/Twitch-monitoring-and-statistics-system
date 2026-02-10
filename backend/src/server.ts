@@ -42,6 +42,41 @@ webSocketGateway.initialize(httpServer);
 
 // ========== 優雅關閉處理 ==========
 let isShuttingDown = false;
+const startupTimeoutHandles = new Set<NodeJS.Timeout>();
+const startupImmediateHandles = new Set<NodeJS.Immediate>();
+
+function scheduleStartupTimeout(
+  callback: () => void | Promise<void>,
+  delayMs: number
+): NodeJS.Timeout {
+  const handle = setTimeout(() => {
+    startupTimeoutHandles.delete(handle);
+    void callback();
+  }, delayMs);
+  startupTimeoutHandles.add(handle);
+  return handle;
+}
+
+function scheduleStartupImmediate(callback: () => void | Promise<void>): NodeJS.Immediate {
+  const handle = setImmediate(() => {
+    startupImmediateHandles.delete(handle);
+    void callback();
+  });
+  startupImmediateHandles.add(handle);
+  return handle;
+}
+
+function clearPendingStartupTasks(): void {
+  for (const timeoutHandle of startupTimeoutHandles) {
+    clearTimeout(timeoutHandle);
+  }
+  startupTimeoutHandles.clear();
+
+  for (const immediateHandle of startupImmediateHandles) {
+    clearImmediate(immediateHandle);
+  }
+  startupImmediateHandles.clear();
+}
 
 function gracefulShutdown(signal: string) {
   if (isShuttingDown) {
@@ -50,6 +85,8 @@ function gracefulShutdown(signal: string) {
   }
   isShuttingDown = true;
   console.log(`\n🛑 收到 ${signal}，開始優雅關閉...`);
+
+  clearPendingStartupTasks();
 
   // 給予 10 秒完成關閉
   const forceExitTimeout = setTimeout(() => {
@@ -117,7 +154,7 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
 
   // 延遲初始化：使用 setImmediate 避免啟動時記憶體峰值
   // 先讓 Express 伺服器完全啟動，再逐步載入背景服務
-  setImmediate(async () => {
+  scheduleStartupImmediate(async () => {
     try {
       // 0. 預熱 Prisma/Turso 連線（在背景執行，不阻塞啟動）
       // 減少重試次數和超時時間，避免阻塞太久
@@ -128,7 +165,7 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
       }
 
       // 0.1 啟動後預熱活躍觀眾快取，降低首批請求延遲
-      setTimeout(async () => {
+      scheduleStartupTimeout(async () => {
         try {
           const { warmViewerChannelsCache } = await import("./modules/viewer/viewer.service");
           await warmViewerChannelsCache(100);
@@ -139,7 +176,7 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
       }, process.env.NODE_ENV === "production" ? 15000 : 3000);
 
       // 0.2 預熱 Revenue 快取（有 Streamer token 時），降低首請求延遲
-      setTimeout(async () => {
+      scheduleStartupTimeout(async () => {
         try {
           const { revenueService } = await import("./modules/streamer/revenue.service");
           const streamers = await (await import("./db/prisma")).prisma.streamer.findMany({
@@ -161,7 +198,7 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
       // 1. 先啟動定時任務（輕量級）- 但在生產環境延遲啟動
       if (process.env.NODE_ENV === "production") {
         // 生產環境：延遲 60 秒啟動定時任務，讓伺服器完全穩定後再啟動背景任務
-        setTimeout(() => {
+        scheduleStartupTimeout(() => {
           // 檢查記憶體狀況，如果記憶體已經很高則跳過
           if (!memoryMonitor.isOverLimit()) {
             startAllJobs();
@@ -173,7 +210,7 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
       }
 
       // 2. 初始化 Token 管理系統（必須在 Twitch 服務之前）
-      setTimeout(async () => {
+      scheduleStartupTimeout(async () => {
         try {
           const { initializeTokenManagement } = await import("./services/token-management.init");
           await initializeTokenManagement();
@@ -187,7 +224,7 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
       // 生產環境：延遲 5 秒（讓健康檢查快速通過）
       // 開發環境：延遲 3 秒
       const twitchInitDelay = process.env.NODE_ENV === "production" ? 5000 : 3000;
-      setTimeout(async () => {
+      scheduleStartupTimeout(async () => {
         try {
           logger.info("Server", "正在初始化 Twitch 服務...");
           await unifiedTwitchService.initialize();
@@ -207,7 +244,7 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
       if (eventsubEnabled && eventsubSecret && eventsubCallbackUrl) {
         // 生產環境：進一步延遲（15 秒），開發環境：10 秒
         const eventsubDelay = process.env.NODE_ENV === "production" ? 15000 : 10000;
-        setTimeout(async () => {
+        scheduleStartupTimeout(async () => {
           try {
             await twurpleEventSubService.initialize(app, {
               secret: eventsubSecret,

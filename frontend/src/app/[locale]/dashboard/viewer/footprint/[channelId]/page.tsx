@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { FootprintDashboard } from "@/features/viewer-dashboard/components/FootprintDashboard";
 import {
   getLifetimeStats,
   LifetimeStatsResponse,
@@ -15,6 +15,19 @@ import {
 import { useAuthSession } from "@/features/auth/AuthContext";
 
 import { isViewer } from "@/lib/api/auth";
+
+const FootprintDashboard = dynamic(
+  () =>
+    import("@/features/viewer-dashboard/components/FootprintDashboard").then(
+      (mod) => mod.FootprintDashboard
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="theme-card p-6 text-center theme-text-secondary">Loading dashboard...</div>
+    ),
+  }
+);
 
 export default function ViewerFootprintPage() {
   const t = useTranslations();

@@ -17,6 +17,8 @@ const OAUTH_SCOPES = [
   "whispers:read",
 ];
 
+const NO_STORE_CACHE_CONTROL = "private, no-store, max-age=0";
+
 function getCookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
   return {
@@ -34,7 +36,11 @@ export async function GET(request: NextRequest) {
   const clientId = process.env.TWITCH_CLIENT_ID || process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID;
 
   if (!clientId) {
-    return NextResponse.redirect(new URL("/?error=missing_client_id", request.url));
+    const missingClientIdResponse = NextResponse.redirect(
+      new URL("/?error=missing_client_id", request.url)
+    );
+    missingClientIdResponse.headers.set("Cache-Control", NO_STORE_CACHE_CONTROL);
+    return missingClientIdResponse;
   }
 
   const state = crypto.randomBytes(16).toString("hex");
@@ -50,5 +56,6 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(authUrl.toString());
   response.cookies.set("twitch_auth_state", state, getCookieOptions());
+  response.headers.set("Cache-Control", NO_STORE_CACHE_CONTROL);
   return response;
 }

@@ -206,7 +206,7 @@ export default function ViewerDashboardPage() {
       } catch {
         // ignore cache write errors
       }
-    }, 400);
+    }, 600);
   };
 
   useEffect(() => {
@@ -228,6 +228,27 @@ export default function ViewerDashboardPage() {
   useEffect(() => {
     if (!socket || !socketConnected) return;
 
+    const updateSingleChannel = (
+      matcher: (channel: FollowedChannel) => boolean,
+      updater: (channel: FollowedChannel) => FollowedChannel
+    ) => {
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+
+        const targetIndex = prev.findIndex(matcher);
+        if (targetIndex === -1) return prev;
+
+        const current = prev[targetIndex];
+        const updated = updater(current);
+        if (updated === current) return prev;
+
+        const next = prev.slice();
+        next[targetIndex] = updated;
+        syncSessionCache(next);
+        return next;
+      });
+    };
+
     // 處理開台事件（即時通知）
     const handleStreamOnline = (data: {
       channelId: string;
@@ -238,47 +259,67 @@ export default function ViewerDashboardPage() {
       startedAt?: string;
     }) => {
       console.log("[WebSocket] Stream online:", data);
-      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
-        if (!prev) return prev;
-        const next = prev.map((ch) => {
-          if (ch.id === data.channelId || ch.channelName === data.channelName) {
-            return {
-              ...ch,
-              isLive: true,
-              viewerCount: data.viewerCount ?? ch.viewerCount,
-              currentTitle: data.title || ch.currentTitle,
-              currentGameName: data.gameName || ch.currentGameName,
-              currentViewerCount: data.viewerCount || 0,
-              currentStreamStartedAt: data.startedAt || new Date().toISOString(),
-            };
+      updateSingleChannel(
+        (ch) => ch.id === data.channelId || ch.channelName === data.channelName,
+        (ch) => {
+          const nextViewerCount = data.viewerCount ?? ch.viewerCount;
+          const nextCurrentViewerCount = data.viewerCount ?? ch.currentViewerCount ?? 0;
+          const nextTitle = data.title || ch.currentTitle;
+          const nextGame = data.gameName || ch.currentGameName;
+          const nextStartedAt =
+            data.startedAt || ch.currentStreamStartedAt || ch.streamStartedAt || new Date().toISOString();
+
+          if (
+            ch.isLive &&
+            ch.viewerCount === nextViewerCount &&
+            ch.currentViewerCount === nextCurrentViewerCount &&
+            ch.currentTitle === nextTitle &&
+            ch.currentGameName === nextGame &&
+            ch.currentStreamStartedAt === nextStartedAt &&
+            ch.streamStartedAt === nextStartedAt
+          ) {
+            return ch;
           }
-          return ch;
-        });
-        syncSessionCache(next);
-        return next;
-      });
+
+          return {
+            ...ch,
+            isLive: true,
+            viewerCount: nextViewerCount,
+            streamStartedAt: nextStartedAt,
+            currentTitle: nextTitle,
+            currentGameName: nextGame,
+            currentViewerCount: nextCurrentViewerCount,
+            currentStreamStartedAt: nextStartedAt,
+          };
+        }
+      );
     };
 
     // 處理關台事件（即時通知）
     const handleStreamOffline = (data: { channelId: string; channelName: string }) => {
       console.log("[WebSocket] Stream offline:", data);
-      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
-        if (!prev) return prev;
-        const next = prev.map((ch) => {
-          if (ch.id === data.channelId || ch.channelName === data.channelName) {
-            return {
-              ...ch,
-              isLive: false,
-              viewerCount: 0,
-              currentViewerCount: 0,
-              currentStreamStartedAt: undefined,
-            };
+      updateSingleChannel(
+        (ch) => ch.id === data.channelId || ch.channelName === data.channelName,
+        (ch) => {
+          if (
+            !ch.isLive &&
+            ch.viewerCount === 0 &&
+            (ch.currentViewerCount ?? 0) === 0 &&
+            !ch.currentStreamStartedAt
+          ) {
+            return ch;
           }
-          return ch;
-        });
-        syncSessionCache(next);
-        return next;
-      });
+
+          return {
+            ...ch,
+            isLive: false,
+            viewerCount: 0,
+            streamStartedAt: null,
+            currentViewerCount: 0,
+            currentStreamStartedAt: undefined,
+          };
+        }
+      );
     };
 
     const handleChannelUpdate = (data: {
@@ -290,45 +331,50 @@ export default function ViewerDashboardPage() {
       viewerCount?: number;
       startedAt?: string;
     }) => {
-      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
-        if (!prev) return prev;
-        const next = prev.map((ch) => {
+      updateSingleChannel(
+        (ch) =>
+          ch.id === data.channelId ||
+          ch.channelName === data.channelName ||
+          ch.channelName === data.twitchChannelId,
+        (ch) => {
+          const nextViewerCount = data.viewerCount ?? ch.viewerCount;
+          const nextCurrentViewerCount = data.viewerCount ?? ch.currentViewerCount;
+          const nextTitle = data.title || ch.currentTitle;
+          const nextGame = data.gameName || ch.currentGameName;
+          const nextStartedAt = data.startedAt || ch.currentStreamStartedAt;
+
           if (
-            ch.id === data.channelId ||
-            ch.channelName === data.channelName ||
-            ch.channelName === data.twitchChannelId
+            ch.viewerCount === nextViewerCount &&
+            ch.currentViewerCount === nextCurrentViewerCount &&
+            ch.currentTitle === nextTitle &&
+            ch.currentGameName === nextGame &&
+            ch.currentStreamStartedAt === nextStartedAt
           ) {
-            return {
-              ...ch,
-              viewerCount: data.viewerCount ?? ch.viewerCount,
-              currentViewerCount: data.viewerCount ?? ch.currentViewerCount,
-              currentTitle: data.title || ch.currentTitle,
-              currentGameName: data.gameName || ch.currentGameName,
-              currentStreamStartedAt: data.startedAt || ch.currentStreamStartedAt,
-            };
+            return ch;
           }
-          return ch;
-        });
-        syncSessionCache(next);
-        return next;
-      });
+
+          return {
+            ...ch,
+            viewerCount: nextViewerCount,
+            currentViewerCount: nextCurrentViewerCount,
+            currentTitle: nextTitle,
+            currentGameName: nextGame,
+            currentStreamStartedAt: nextStartedAt,
+          };
+        }
+      );
     };
 
     const handleStatsUpdate = (data: { channelId: string; messageCountDelta: number }) => {
-      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
-        if (!prev) return prev;
-        const next = prev.map((ch) => {
-          if (ch.id === data.channelId) {
-            return {
-              ...ch,
-              messageCount: ch.messageCount + data.messageCountDelta,
-            };
-          }
-          return ch;
-        });
-        syncSessionCache(next);
-        return next;
-      });
+      if (data.messageCountDelta === 0) return;
+
+      updateSingleChannel(
+        (ch) => ch.id === data.channelId,
+        (ch) => ({
+          ...ch,
+          messageCount: ch.messageCount + data.messageCountDelta,
+        })
+      );
     };
 
     socket.on("stream.online", handleStreamOnline);

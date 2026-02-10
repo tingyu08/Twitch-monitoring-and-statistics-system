@@ -224,6 +224,10 @@ export async function updateViewerWatchTime(
           lt: dayEnd,
         },
       },
+      select: {
+        startedAt: true,
+        endedAt: true,
+      },
       orderBy: {
         startedAt: "asc",
       },

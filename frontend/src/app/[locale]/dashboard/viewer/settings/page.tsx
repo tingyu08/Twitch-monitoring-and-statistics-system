@@ -303,7 +303,6 @@ export default function ViewerSettingsPage() {
                 width={80}
                 height={80}
                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 sm:border-4 border-purple-500/50 object-cover ring-2 sm:ring-4 ring-purple-500/20 flex-shrink-0"
-                unoptimized
                 priority
               />
             )}

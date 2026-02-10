@@ -8,6 +8,8 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:4000";
 
+const NO_STORE_CACHE_CONTROL = "private, no-store, max-age=0";
+
 export async function POST(request: NextRequest) {
   // 嘗試調用後端登出 API（設置 5 秒超時）
   const controller = new AbortController();
@@ -42,7 +44,12 @@ export async function POST(request: NextRequest) {
   // 無論後端調用成功與否，都清除前端的 Cookie
   const response = NextResponse.json(
     { message: "Logged out successfully" },
-    { status: 200 }
+    {
+      status: 200,
+      headers: {
+        "Cache-Control": NO_STORE_CACHE_CONTROL,
+      },
+    }
   );
 
   // 清除 auth_token（使用 "lax" 以匹配設定時的 sameSite）

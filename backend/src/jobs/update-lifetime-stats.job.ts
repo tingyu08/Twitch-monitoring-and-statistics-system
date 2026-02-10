@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import pLimit from "p-limit";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { lifetimeStatsAggregator } from "../services/lifetime-stats-aggregator.service";
@@ -9,8 +10,85 @@ import { captureJobError } from "./job-error-tracker";
 // 批次處理大小
 const BATCH_SIZE = 50;
 
+// 查詢批次大小（避免一次性 findMany 造成記憶體尖峰）
+const TARGET_QUERY_BATCH_SIZE = 2000;
+
 // P0 Fix: 限制並行度，避免同時發送過多 DB 查詢
-const CONCURRENCY_LIMIT = 10;
+const CONCURRENCY_LIMIT = 5;
+
+function appendPairTarget(targets: Set<string>, viewerId: string, channelId: string): void {
+  targets.add(`${viewerId}|${channelId}`);
+}
+
+async function collectTargetsFromDailyStats(
+  targets: Set<string>,
+  where?: Prisma.ViewerChannelDailyStatWhereInput
+): Promise<void> {
+  let cursorId: string | undefined;
+
+  while (true) {
+    const rows = await prisma.viewerChannelDailyStat.findMany({
+      where,
+      select: {
+        id: true,
+        viewerId: true,
+        channelId: true,
+      },
+      orderBy: { id: "asc" },
+      take: TARGET_QUERY_BATCH_SIZE,
+      ...(cursorId
+        ? {
+            cursor: { id: cursorId },
+            skip: 1,
+          }
+        : {}),
+    });
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      appendPairTarget(targets, row.viewerId, row.channelId);
+    }
+
+    cursorId = rows[rows.length - 1]?.id;
+    if (rows.length < TARGET_QUERY_BATCH_SIZE) break;
+  }
+}
+
+async function collectTargetsFromMessageAgg(
+  targets: Set<string>,
+  where?: Prisma.ViewerChannelMessageDailyAggWhereInput
+): Promise<void> {
+  let cursorId: string | undefined;
+
+  while (true) {
+    const rows = await prisma.viewerChannelMessageDailyAgg.findMany({
+      where,
+      select: {
+        id: true,
+        viewerId: true,
+        channelId: true,
+      },
+      orderBy: { id: "asc" },
+      take: TARGET_QUERY_BATCH_SIZE,
+      ...(cursorId
+        ? {
+            cursor: { id: cursorId },
+            skip: 1,
+          }
+        : {}),
+    });
+
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      appendPairTarget(targets, row.viewerId, row.channelId);
+    }
+
+    cursorId = rows[rows.length - 1]?.id;
+    if (rows.length < TARGET_QUERY_BATCH_SIZE) break;
+  }
+}
 
 export const updateLifetimeStatsJob = () => {
   // 每天凌晨 2 點執行
@@ -27,36 +105,19 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     let targets = new Set<string>();
 
     if (fullUpdate) {
-      // 全量更新：從所有 Daily Stats 獲取
-      const allStats = await prisma.viewerChannelDailyStat.findMany({
-        select: { viewerId: true, channelId: true },
-        distinct: ["viewerId", "channelId"],
-      });
-      const allMsgs = await prisma.viewerChannelMessageDailyAgg.findMany({
-        select: { viewerId: true, channelId: true },
-        distinct: ["viewerId", "channelId"],
-      });
-
-      allStats.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
-      allMsgs.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
+      // 全量更新：使用分頁掃描，避免無上限查詢導致 OOM
+      await Promise.all([
+        collectTargetsFromDailyStats(targets),
+        collectTargetsFromMessageAgg(targets),
+      ]);
     } else {
       // 增量更新：找出過去 26 小時有變動的 (多留一點緩衝)
       const checkTime = new Date(Date.now() - 26 * 60 * 60 * 1000);
 
-      const activeStats = await prisma.viewerChannelDailyStat.findMany({
-        where: { updatedAt: { gte: checkTime } },
-        select: { viewerId: true, channelId: true },
-        distinct: ["viewerId", "channelId"],
-      });
-
-      const activeMsgs = await prisma.viewerChannelMessageDailyAgg.findMany({
-        where: { updatedAt: { gte: checkTime } },
-        select: { viewerId: true, channelId: true },
-        distinct: ["viewerId", "channelId"],
-      });
-
-      activeStats.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
-      activeMsgs.forEach((s: { viewerId: string; channelId: string }) => targets.add(`${s.viewerId}|${s.channelId}`));
+      await Promise.all([
+        collectTargetsFromDailyStats(targets, { updatedAt: { gte: checkTime } }),
+        collectTargetsFromMessageAgg(targets, { updatedAt: { gte: checkTime } }),
+      ]);
     }
 
     logger.info("CronJob", `找到 ${targets.size} 組觀眾-頻道配對需要更新`);

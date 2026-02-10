@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import {
   X,
@@ -409,8 +410,13 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
                         className="w-full flex items-center gap-3 p-3 hover:bg-gray-700 transition-colors text-left"
                       >
                         {game.boxArtUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={game.boxArtUrl} alt={game.name} className="w-8 h-10 rounded" />
+                          <Image
+                            src={game.boxArtUrl}
+                            alt={game.name}
+                            width={32}
+                            height={40}
+                            className="w-8 h-10 rounded"
+                          />
                         )}
                         <span className="text-white">{game.name}</span>
                       </button>

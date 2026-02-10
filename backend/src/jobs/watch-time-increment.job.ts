@@ -11,14 +11,24 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { captureJobError } from "./job-error-tracker";
 
-// 每 6 分鐘執行，在第 4 分鐘觸發（錯開其他 Jobs）
-const WATCH_TIME_INCREMENT_CRON = process.env.WATCH_TIME_INCREMENT_CRON || "15 4-59/6 * * * *";
+const parsedIncrementMinutes = Number.parseInt(
+  process.env.WATCH_TIME_INCREMENT_MINUTES || "10",
+  10
+);
+const WATCH_TIME_INCREMENT_MINUTES =
+  Number.isFinite(parsedIncrementMinutes) && parsedIncrementMinutes > 0
+    ? parsedIncrementMinutes
+    : 10;
 
-// 每次增加的秒數：0.1 小時 = 6 分鐘 = 360 秒
-const INCREMENT_SECONDS = 360;
+// 預設每 10 分鐘執行一次（可用環境變數覆蓋）
+const WATCH_TIME_INCREMENT_CRON =
+  process.env.WATCH_TIME_INCREMENT_CRON || `15 */${WATCH_TIME_INCREMENT_MINUTES} * * * *`;
 
-// 活躍窗口：過去 6 分鐘內有訊息視為在線
-const ACTIVE_WINDOW_MINUTES = 6;
+// 每次增加的秒數：與執行間隔一致
+const INCREMENT_SECONDS = WATCH_TIME_INCREMENT_MINUTES * 60;
+
+// 活躍窗口：過去 N 分鐘內有訊息視為在線
+const ACTIVE_WINDOW_MINUTES = WATCH_TIME_INCREMENT_MINUTES;
 
 export class WatchTimeIncrementJob {
   private isRunning = false;

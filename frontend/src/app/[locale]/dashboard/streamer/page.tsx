@@ -154,13 +154,14 @@ export default function StreamerDashboard() {
     if (!user) return;
 
     let cancelled = false;
+    const bootstrapChartRange: ChartRange = "30d";
+    const bootstrapGranularity: ChartGranularity = "day";
+    const bootstrapSubsRange: ChartRange = "30d";
+
     const fetchBootstrap = async () => {
       setBootstrapLoaded(false);
       try {
-        const response = await fetch(
-          `/api/streamer/dashboard?range=${chartRange}&granularity=${granularity}&subsRange=${subsChartRange}`,
-          { credentials: "include" }
-        );
+        const response = await fetch(`/api/streamer/dashboard`, { credentials: "include" });
 
         if (!response.ok) {
           throw new Error(`Dashboard bootstrap failed: ${response.status}`);
@@ -176,9 +177,13 @@ export default function StreamerDashboard() {
         if (cancelled) return;
 
         setBootstrapSummary(data.summary ?? null);
-        mutate(`/api/streamer/time-series/${chartRange}/${granularity}`, data.timeSeries.data, false);
-        mutate(`/api/streamer/heatmap/${chartRange}`, data.heatmap, false);
-        mutate(`/api/streamer/subscription-trend/${subsChartRange}`, data.subscriptionTrend, false);
+        mutate(
+          `/api/streamer/time-series/${bootstrapChartRange}/${bootstrapGranularity}`,
+          data.timeSeries.data,
+          false
+        );
+        mutate(`/api/streamer/heatmap/${bootstrapChartRange}`, data.heatmap, false);
+        mutate(`/api/streamer/subscription-trend/${bootstrapSubsRange}`, data.subscriptionTrend, false);
         if (!cancelled) {
           setBootstrapLoaded(true);
         }
@@ -186,9 +191,9 @@ export default function StreamerDashboard() {
         authLogger.warn("Dashboard bootstrap failed", err);
         if (!cancelled) {
           setBootstrapLoaded(true);
-          mutate(`/api/streamer/time-series/${chartRange}/${granularity}`);
-          mutate(`/api/streamer/heatmap/${chartRange}`);
-          mutate(`/api/streamer/subscription-trend/${subsChartRange}`);
+          mutate(`/api/streamer/time-series/${bootstrapChartRange}/${bootstrapGranularity}`);
+          mutate(`/api/streamer/heatmap/${bootstrapChartRange}`);
+          mutate(`/api/streamer/subscription-trend/${bootstrapSubsRange}`);
         }
       }
     };
@@ -198,7 +203,7 @@ export default function StreamerDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [user, chartRange, granularity, subsChartRange, mutate]);
+  }, [user, mutate]);
 
   if (loading) {
     return (

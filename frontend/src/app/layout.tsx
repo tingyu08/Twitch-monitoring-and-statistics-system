@@ -17,9 +17,10 @@ const inter = Inter({
 
 const notoSansTC = Noto_Sans_TC({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "700"],
   variable: "--font-noto-sans-tc",
   display: "swap",
+  preload: false,
 });
 
 // 動態導入 ConsentBanner 以避免 SSR 問題

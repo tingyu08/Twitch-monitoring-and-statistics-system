@@ -27,6 +27,88 @@ const BATCH_DELAY_MS = 1500;     // 批次之間休息 1.5 秒（讓 GC 有時�
 const STREAMER_DELAY_MS = 300;   // 每個實況主之間休息 300ms
 // P0 Fix: 使用統一的記憶體閾值常數
 const MAX_MEMORY_MB = MEMORY_THRESHOLDS.MAX_MB;
+const ENTITY_QUERY_BATCH_SIZE = 200;
+
+type StreamerSyncTarget = {
+  id: string;
+  twitchUserId: string;
+  displayName: string;
+};
+
+type FollowedChannelSyncTarget = {
+  id: string;
+  twitchChannelId: string;
+  channelName: string;
+};
+
+async function loadStreamersForSync(): Promise<StreamerSyncTarget[]> {
+  const streamers: StreamerSyncTarget[] = [];
+  let cursorId: string | undefined;
+
+  while (true) {
+    const batch = await prisma.streamer.findMany({
+      select: {
+        id: true,
+        twitchUserId: true,
+        displayName: true,
+      },
+      orderBy: { id: "asc" },
+      take: ENTITY_QUERY_BATCH_SIZE,
+      ...(cursorId
+        ? {
+            cursor: { id: cursorId },
+            skip: 1,
+          }
+        : {}),
+    });
+
+    if (batch.length === 0) break;
+
+    streamers.push(...batch);
+    cursorId = batch[batch.length - 1]?.id;
+
+    if (batch.length < ENTITY_QUERY_BATCH_SIZE) break;
+  }
+
+  return streamers;
+}
+
+async function loadFollowedChannelsForSync(): Promise<FollowedChannelSyncTarget[]> {
+  const channels: FollowedChannelSyncTarget[] = [];
+  let cursorId: string | undefined;
+
+  while (true) {
+    const batch = await prisma.channel.findMany({
+      where: {
+        userFollows: {
+          some: {},
+        },
+      },
+      select: {
+        id: true,
+        twitchChannelId: true,
+        channelName: true,
+      },
+      orderBy: { id: "asc" },
+      take: ENTITY_QUERY_BATCH_SIZE,
+      ...(cursorId
+        ? {
+            cursor: { id: cursorId },
+            skip: 1,
+          }
+        : {}),
+    });
+
+    if (batch.length === 0) break;
+
+    channels.push(...batch);
+    cursorId = batch[batch.length - 1]?.id;
+
+    if (batch.length < ENTITY_QUERY_BATCH_SIZE) break;
+  }
+
+  return channels;
+}
 
 async function shouldSkipBatch(maxMemoryMB: number, context: string): Promise<boolean> {
   const memUsage = process.memoryUsage();
@@ -72,13 +154,7 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
   try {
     // ========== Part 1: 同步實況主的 Videos 和 Clips ==========
     // 只取得 ID 和基本資訊，減少記憶體佔用
-    const streamers = await prisma.streamer.findMany({
-      select: {
-        id: true,
-        twitchUserId: true,
-        displayName: true,
-      },
-    });
+    const streamers = await loadStreamersForSync();
 
     const totalStreamers = streamers.length;
     logger.info("Jobs", `找到 ${totalStreamers} 個實況主需要同步`);
@@ -137,18 +213,7 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
     logger.info("Jobs", "開始同步觀眾追蹤名單影片和剪輯...");
 
     // 找出所有被追蹤的 Channel（有 UserFollow 記錄的）
-    const followedChannels = await prisma.channel.findMany({
-      where: {
-        userFollows: {
-          some: {}, // 有至少一個追蹤者
-        },
-      },
-      select: {
-        id: true,
-        twitchChannelId: true,
-        channelName: true,
-      },
-    });
+    const followedChannels = await loadFollowedChannelsForSync();
 
     logger.info("Jobs", `找到 ${followedChannels.length} 個被追蹤的 Channel 需要同步觀眾影片/剪輯`);
 
