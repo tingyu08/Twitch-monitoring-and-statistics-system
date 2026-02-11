@@ -23,6 +23,7 @@ export interface ExportJobResult {
   message: string;
   job?: ExportJob;
   downloadPath?: string;
+  queued?: boolean;
 }
 
 // 匯出資料類型定義
@@ -94,7 +95,7 @@ export class DataExportService {
 
   /**
    * 建立並執行匯出任務
-   * 使用同步處理（簡化方案）
+   * 只建立任務，實際處理交給 queue worker
    */
   async createExportJob(viewerId: string): Promise<ExportJobResult> {
     // Ensure export directory exists
@@ -112,6 +113,24 @@ export class DataExportService {
       };
     }
 
+    const existingJob = await prisma.exportJob.findFirst({
+      where: {
+        viewerId,
+        status: { in: ["processing", "completed"] },
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingJob) {
+      return {
+        success: true,
+        message: "已有可用的匯出任務",
+        job: existingJob,
+        queued: false,
+      };
+    }
+
     // 建立匯出任務記錄
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + EXPORT_EXPIRY_HOURS);
@@ -124,39 +143,49 @@ export class DataExportService {
       },
     });
 
-    try {
-      // 同步執行匯出
-      const downloadPath = await this.generateExport(viewerId, job.id);
+    return {
+      success: true,
+      message: "資料匯出任務已建立",
+      job,
+      queued: true,
+    };
+  }
 
-      // 更新任務狀態
-      const updatedJob = await prisma.exportJob.update({
+  async processExportJob(jobId: string): Promise<void> {
+    const job = await prisma.exportJob.findUnique({ where: { id: jobId } });
+
+    if (!job) {
+      logger.warn("DataExport", `Job not found: ${jobId}`);
+      return;
+    }
+
+    if (job.status === "completed" || job.status === "expired") {
+      return;
+    }
+
+    try {
+      const downloadPath = await this.generateExport(job.viewerId, job.id);
+
+      await prisma.exportJob.update({
         where: { id: job.id },
         data: {
           status: "completed",
           downloadPath,
+          errorMessage: null,
         },
       });
 
-      // 記錄審計日誌
       await prisma.privacyAuditLog.create({
         data: {
-          viewerId,
+          viewerId: job.viewerId,
           action: "data_exported",
           details: JSON.stringify({
             jobId: job.id,
-            expiresAt: expiresAt.toISOString(),
+            expiresAt: job.expiresAt.toISOString(),
           }),
         },
       });
-
-      return {
-        success: true,
-        message: "資料匯出完成",
-        job: updatedJob,
-        downloadPath,
-      };
     } catch (error) {
-      // 更新任務狀態為失敗
       await prisma.exportJob.update({
         where: { id: job.id },
         data: {
@@ -165,11 +194,7 @@ export class DataExportService {
         },
       });
 
-      return {
-        success: false,
-        message: `匯出失敗: ${error instanceof Error ? error.message : "未知錯誤"}`,
-        job,
-      };
+      throw error;
     }
   }
 

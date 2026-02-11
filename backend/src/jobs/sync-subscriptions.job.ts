@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { revenueService } from "../modules/streamer/revenue.service";
 import { logger } from "../utils/logger";
-import { revenueSyncQueue, type RevenueSyncJobData } from "../utils/memory-queue";
+import { revenueSyncQueue, type RevenueSyncJobData } from "../utils/revenue-sync-queue";
 import { captureJobError } from "./job-error-tracker";
 
 // 每個實況主的超時時間（毫秒）- 60 秒
@@ -81,7 +81,7 @@ export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async
       }
     }
 
-    const status = revenueSyncQueue.getStatus();
+    const status = await revenueSyncQueue.getStatus();
     logger.info(
       "Jobs",
       `Sync Subscriptions Job: 已加入 ${addedCount} 個任務到佇列, ${rejectedCount} 個被拒絕。` +

@@ -1,6 +1,9 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
+import { createAdapter } from "@socket.io/redis-adapter";
+import type Redis from "ioredis";
 import { logger } from "../utils/logger";
+import { getRedisClient } from "../utils/redis-client";
 
 interface ViewerChannelStats {
   channelId: string;
@@ -14,6 +17,8 @@ interface ViewerChannelStats {
  */
 export class WebSocketGateway {
   private io: Server | null = null;
+  private pubClient: Redis | null = null;
+  private subClient: Redis | null = null;
   private readonly CORS_ORIGIN = process.env.FRONTEND_URL || "http://localhost:3000";
 
   public initialize(httpServer: HttpServer) {
@@ -33,7 +38,30 @@ export class WebSocketGateway {
       this.handleConnection(socket);
     });
 
+    void this.setupRedisAdapter();
+
     logger.info("WebSocket", "Socket.IO Gateway initialized with room support");
+  }
+
+  private async setupRedisAdapter(): Promise<void> {
+    if (!this.io) return;
+
+    const baseClient = getRedisClient();
+    if (!baseClient) {
+      logger.info("WebSocket", "Redis adapter not enabled (REDIS_URL missing)");
+      return;
+    }
+
+    try {
+      this.pubClient = baseClient.duplicate();
+      this.subClient = baseClient.duplicate();
+
+      await Promise.all([this.pubClient.connect(), this.subClient.connect()]);
+      this.io.adapter(createAdapter(this.pubClient, this.subClient));
+      logger.info("WebSocket", "Redis adapter enabled for cross-instance broadcast");
+    } catch (error) {
+      logger.warn("WebSocket", "Failed to enable Redis adapter", error);
+    }
   }
 
   private handleConnection(socket: Socket) {
@@ -164,6 +192,18 @@ export class WebSocketGateway {
   public getConnectionCount(): number {
     if (!this.io) return 0;
     return this.io.sockets.sockets.size;
+  }
+
+  public async shutdown(): Promise<void> {
+    try {
+      await Promise.all([
+        this.pubClient?.quit().catch((): undefined => undefined),
+        this.subClient?.quit().catch((): undefined => undefined),
+      ]);
+    } finally {
+      this.pubClient = null;
+      this.subClient = null;
+    }
   }
 }
 

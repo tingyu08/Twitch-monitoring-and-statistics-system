@@ -4,6 +4,7 @@ import { prisma } from "../../db/prisma";
 import { encryptToken } from "../../utils/crypto.utils";
 import { env } from "../../config/env";
 import { logger } from "../../utils/logger";
+import { retryDatabaseOperation } from "../../utils/db-retry";
 import { triggerFollowSyncForUser } from "../../jobs/sync-user-follows.job";
 
 // Streamer 介面（與 Prisma model 對應）
@@ -13,6 +14,91 @@ export interface Streamer {
   displayName: string;
   avatarUrl: string;
   channelUrl: string; // 從 Channel 關聯取得
+}
+
+const CHANNEL_UPSERT_MAX_ATTEMPTS = 5;
+const CHANNEL_UPSERT_BASE_DELAY_MS = 2000;
+
+type ChannelUpsertPayload = {
+  streamerId: string;
+  twitchChannelId: string;
+  channelName: string;
+  channelUrl: string;
+  displayNameForLog: string;
+};
+
+function isLockContentionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("database is locked") ||
+    message.includes("busy") ||
+    message.includes("timeout") ||
+    message.includes("p2028") ||
+    message.includes("transaction not found")
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function upsertChannelWithCompensation(payload: ChannelUpsertPayload): Promise<void> {
+  for (let attempt = 1; attempt <= CHANNEL_UPSERT_MAX_ATTEMPTS; attempt++) {
+    try {
+      await retryDatabaseOperation(
+        () =>
+          prisma.channel.upsert({
+            where: { twitchChannelId: payload.twitchChannelId },
+            update: {
+              channelName: payload.channelName,
+              channelUrl: payload.channelUrl,
+            },
+            create: {
+              streamerId: payload.streamerId,
+              twitchChannelId: payload.twitchChannelId,
+              channelName: payload.channelName,
+              channelUrl: payload.channelUrl,
+            },
+          }),
+        {
+          maxRetries: 1,
+          initialDelayMs: 300,
+          maxDelayMs: 1500,
+          shouldRetry: isLockContentionError,
+        }
+      );
+
+      logger.info(
+        "Auth",
+        `Channel upserted for ${payload.displayNameForLog} (attempt ${attempt}/${CHANNEL_UPSERT_MAX_ATTEMPTS})`
+      );
+      return;
+    } catch (error) {
+      if (attempt === CHANNEL_UPSERT_MAX_ATTEMPTS) {
+        logger.error(
+          "Auth",
+          `Channel upsert permanently failed after ${CHANNEL_UPSERT_MAX_ATTEMPTS} attempts`,
+          error
+        );
+        return;
+      }
+
+      const delayMs = Math.min(
+        CHANNEL_UPSERT_BASE_DELAY_MS * Math.pow(2, attempt - 1),
+        30000
+      );
+      logger.warn(
+        "Auth",
+        `Channel upsert attempt ${attempt} failed, retrying in ${delayMs}ms`,
+        error
+      );
+      await sleep(delayMs);
+    }
+  }
 }
 
 /**
@@ -161,26 +247,14 @@ export async function handleStreamerTwitchCallback(
 
   // ✅ 非阻塞執行 Channel upsert（避免被 update-live-status Job 的寫入鎖阻塞）
   // 這是修復晚上登入 100% 失敗問題的關鍵改動
-  setImmediate(async () => {
-    try {
-      await prisma.channel.upsert({
-        where: { twitchChannelId: user.id },
-        update: {
-          channelName: channelLogin,
-          channelUrl: channelUrl,
-        },
-        create: {
-          streamerId: streamerRecord.id,
-          twitchChannelId: user.id,
-          channelName: channelLogin,
-          channelUrl: channelUrl,
-        },
-      });
-      logger.info("Auth", `Channel upserted for ${user.display_name}`);
-    } catch (err: unknown) {
-      // 失敗不影響登入，只記錄 warning
-      logger.warn("Auth", "Channel upsert failed after login (non-blocking)", err);
-    }
+  setImmediate(() => {
+    void upsertChannelWithCompensation({
+      streamerId: streamerRecord.id,
+      twitchChannelId: user.id,
+      channelName: channelLogin,
+      channelUrl,
+      displayNameForLog: user.display_name,
+    });
   });
 
   // 立即預熱快取（不阻塞登入回應）

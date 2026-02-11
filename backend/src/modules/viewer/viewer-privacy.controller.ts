@@ -13,6 +13,7 @@ import {
 } from "../../services/privacy-consent.service";
 import { accountDeletionService } from "../../services/account-deletion.service";
 import { dataExportService } from "../../services/data-export.service";
+import { dataExportQueue } from "../../utils/data-export-queue";
 import { logger } from "../../utils/logger";
 import * as fs from "fs";
 import * as path from "path";
@@ -31,6 +32,17 @@ const getViewerFromRequest = async (req: Request) => {
 };
 
 export class ViewerPrivacyController {
+  private static exportQueueInitialized = false;
+
+  constructor() {
+    if (!ViewerPrivacyController.exportQueueInitialized) {
+      dataExportQueue.process(async ({ exportJobId }) => {
+        await dataExportService.processExportJob(exportJobId);
+      });
+      ViewerPrivacyController.exportQueueInitialized = true;
+    }
+  }
+
   // ==================== 細粒度隱私設定 ====================
 
   /**
@@ -198,9 +210,26 @@ export class ViewerPrivacyController {
         return;
       }
 
+      if (!result.job?.id) {
+        res.status(500).json({ error: "匯出任務建立失敗" });
+        return;
+      }
+
+      if (result.queued) {
+        const queuedId = dataExportQueue.add({ exportJobId: result.job.id }, 5);
+        if (!queuedId) {
+          await prisma.exportJob.update({
+            where: { id: result.job.id },
+            data: { status: "failed", errorMessage: "Queue is full" },
+          });
+          res.status(503).json({ error: "匯出系統繁忙，請稍後再試" });
+          return;
+        }
+      }
+
       res.json({
         success: true,
-        message: result.message,
+        message: result.queued ? "資料匯出任務已排入佇列" : result.message,
         jobId: result.job?.id,
         status: result.job?.status,
         expiresAt: result.job?.expiresAt,

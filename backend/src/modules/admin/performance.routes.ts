@@ -14,6 +14,8 @@ import {
   API_SLOW_THRESHOLD_MS,
 } from "../../utils/performance-monitor";
 import { cacheManager } from "../../utils/cache-manager";
+import { revenueSyncQueue } from "../../utils/revenue-sync-queue";
+import { dataExportQueue } from "../../utils/data-export-queue";
 
 const router = Router();
 
@@ -27,30 +29,44 @@ router.get("/stats", (_req: Request, res: Response) => {
     const cacheStats = cacheManager.getStats();
     const memUsage = process.memoryUsage();
 
-    performanceLogger.info(`Performance stats requested: ${stats.totalRequests} total requests`);
-    res.json({
-      success: true,
-      data: {
-        api: {
-          ...stats,
-          slowThreshold: API_SLOW_THRESHOLD_MS,
-        },
-        cache: cacheStats,
-        memory: {
-          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-          rss: Math.round(memUsage.rss / 1024 / 1024),
-          external: Math.round(memUsage.external / 1024 / 1024),
-          unit: "MB",
-        },
-        system: {
-          uptime: Math.floor(process.uptime()),
-          nodeVersion: process.version,
-          platform: process.platform,
-        },
-        collectedAt: new Date().toISOString(),
-      },
-    });
+    Promise.all([revenueSyncQueue.getStatus(), dataExportQueue.getStatus()])
+      .then(([revenueQueue, exportQueue]) => {
+        performanceLogger.info(`Performance stats requested: ${stats.totalRequests} total requests`);
+        res.json({
+          success: true,
+          data: {
+            api: {
+              ...stats,
+              slowThreshold: API_SLOW_THRESHOLD_MS,
+            },
+            cache: cacheStats,
+            memory: {
+              heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+              heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+              rss: Math.round(memUsage.rss / 1024 / 1024),
+              external: Math.round(memUsage.external / 1024 / 1024),
+              unit: "MB",
+            },
+            queues: {
+              revenueSync: revenueQueue,
+              dataExport: exportQueue,
+            },
+            system: {
+              uptime: Math.floor(process.uptime()),
+              nodeVersion: process.version,
+              platform: process.platform,
+            },
+            collectedAt: new Date().toISOString(),
+          },
+        });
+      })
+      .catch((error) => {
+        performanceLogger.error("Failed to get queue stats", error);
+        res.status(500).json({
+          success: false,
+          error: "Failed to retrieve queue statistics",
+        });
+      });
   } catch (error) {
     performanceLogger.error("Failed to get performance stats", error);
     res.status(500).json({
@@ -81,6 +97,34 @@ router.get("/slow", (_req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: "Failed to retrieve slow requests",
+    });
+  }
+});
+
+/**
+ * GET /api/admin/performance/queues
+ * 取得佇列狀態
+ */
+router.get("/queues", async (_req: Request, res: Response) => {
+  try {
+    const [revenueQueue, exportQueue] = await Promise.all([
+      revenueSyncQueue.getStatus(),
+      dataExportQueue.getStatus(),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        revenueSync: revenueQueue,
+        dataExport: exportQueue,
+        collectedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    performanceLogger.error("Failed to get queue status", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to retrieve queue status",
     });
   }
 });

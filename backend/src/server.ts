@@ -149,6 +149,13 @@ function gracefulShutdown(signal: string) {
     }
 
     try {
+      await webSocketGateway.shutdown();
+      console.log("✅ WebSocket Redis 連線已關閉");
+    } catch (error) {
+      console.error("❌ 關閉 WebSocket Redis 連線失敗", error);
+    }
+
+    try {
       // 關閉資料庫連線
       const { prisma } = await import("./db/prisma");
       await prisma.$disconnect();

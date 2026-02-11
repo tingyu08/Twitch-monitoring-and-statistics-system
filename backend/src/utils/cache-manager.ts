@@ -8,6 +8,14 @@
  */
 
 import { logger } from "./logger";
+import {
+  isRedisEnabled,
+  redisDeleteByPrefix,
+  redisDeleteBySuffix,
+  redisDeleteKey,
+  redisGetJson,
+  redisSetJson,
+} from "./redis-client";
 
 interface CacheEntry<T> {
   value: T;
@@ -32,10 +40,12 @@ export class CacheManager {
   private currentMemoryUsage: number;
   // P1 Fix: 防止快取擊穿 (Cache Stampede) 的等待隊列
   private pendingPromises: Map<string, Promise<unknown>>;
+  private redisEnabled: boolean;
 
   constructor(maxMemoryMB: number = 50) {
     this.cache = new Map();
     this.pendingPromises = new Map();
+    this.redisEnabled = isRedisEnabled();
     this.stats = {
       hits: 0,
       misses: 0,
@@ -94,6 +104,10 @@ export class CacheManager {
     this.currentMemoryUsage += size;
     this.stats.itemCount = this.cache.size;
     this.stats.memoryUsage = this.currentMemoryUsage;
+
+    if (this.redisEnabled) {
+      void redisSetJson(key, value, ttlSeconds);
+    }
   }
 
   /**
@@ -129,6 +143,10 @@ export class CacheManager {
       this.stats.itemCount = this.cache.size;
       this.stats.memoryUsage = this.currentMemoryUsage;
     }
+
+    if (this.redisEnabled) {
+      void redisDeleteKey(key);
+    }
   }
 
   /**
@@ -140,6 +158,10 @@ export class CacheManager {
     this.currentMemoryUsage = 0;
     this.stats.itemCount = 0;
     this.stats.memoryUsage = 0;
+
+    if (this.redisEnabled) {
+      void redisDeleteByPrefix("");
+    }
   }
 
   /**
@@ -155,6 +177,11 @@ export class CacheManager {
         count++;
       }
     }
+
+    if (this.redisEnabled) {
+      void redisDeleteByPrefix(pattern);
+    }
+
     return count;
   }
 
@@ -171,6 +198,11 @@ export class CacheManager {
         count++;
       }
     }
+
+    if (this.redisEnabled) {
+      void redisDeleteBySuffix(suffix);
+    }
+
     return count;
   }
 
@@ -194,6 +226,15 @@ export class CacheManager {
     const cached = this.get<T>(key);
     if (cached !== null) {
       return cached;
+    }
+
+    if (this.redisEnabled) {
+      const redisCached = await redisGetJson<T>(key);
+      if (redisCached !== null) {
+        this.stats.hits++;
+        this.set(key, redisCached, ttlSeconds);
+        return redisCached;
+      }
     }
 
     // 2. 合併路徑：如果已經有正在進行的查詢，等待它

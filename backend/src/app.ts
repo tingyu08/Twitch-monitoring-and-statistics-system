@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import { RedisStore, type RedisReply } from "rate-limit-redis";
 import * as Sentry from "@sentry/node";
 import { oauthRoutes, apiRoutes } from "./modules/auth/auth.routes";
 import { streamerRoutes } from "./modules/streamer/streamer.routes";
@@ -17,9 +18,24 @@ import twitchRoutes from "./routes/twitch.routes";
 import { eventSubRoutes } from "./routes/eventsub.routes";
 import extensionRoutes from "./modules/extension/extension.routes";
 import { requireAuth } from "./modules/auth/auth.middleware";
+import { getRedisClient } from "./utils/redis-client";
 
 // Rate Limiting 閮剖?
 const isDev = process.env.NODE_ENV === "development";
+const redisClient = getRedisClient();
+
+function createRateLimitStore(prefix: string): RedisStore | undefined {
+  if (!redisClient) {
+    return undefined;
+  }
+
+  return new RedisStore({
+    prefix,
+    sendCommand: (...args: string[]) =>
+      redisClient.call(args[0], ...args.slice(1)) as Promise<RedisReply>,
+  });
+}
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 ??
   max: isDev ? 1000 : 100, // ??啣??曉祝?
@@ -30,6 +46,7 @@ const apiLimiter = rateLimit({
     // 頝喲??亙熒瑼Ｘ蝡舫?
     return req.path === "/" || req.path.startsWith("/api/health");
   },
+  store: createRateLimitStore("rl:api:"),
 });
 
 // ??隤?蝡舫???湔?
@@ -41,6 +58,7 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createRateLimitStore("rl:auth:"),
 });
 
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "1mb";
