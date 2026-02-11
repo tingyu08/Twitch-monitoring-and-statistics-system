@@ -440,7 +440,7 @@ export class RevenueService {
     const effectiveDays = Math.min(days, 90);
 
     // 使用快取（5 分鐘 TTL）
-    return cacheManager.getOrSet(
+    return cacheManager.getOrSetWithTags(
       CacheKeys.revenueSubscriptions(streamerId, effectiveDays),
       async () => {
         const startDate = new Date();
@@ -501,7 +501,8 @@ export class RevenueService {
           throw error;
         }
       },
-      CacheTTL.MEDIUM
+      CacheTTL.MEDIUM,
+      [`streamer:${streamerId}`, "revenue:subscriptions"]
     );
   }
 
@@ -520,7 +521,7 @@ export class RevenueService {
     const effectiveDays = Math.min(days, 90);
 
     // 使用快取（5 分鐘 TTL）
-    return cacheManager.getOrSet(
+    return cacheManager.getOrSetWithTags(
       CacheKeys.revenueBits(streamerId, effectiveDays),
       async () => {
         const startDate = new Date();
@@ -577,7 +578,8 @@ export class RevenueService {
           throw error;
         }
       },
-      CacheTTL.MEDIUM
+      CacheTTL.MEDIUM,
+      [`streamer:${streamerId}`, "revenue:bits"]
     );
   }
 
@@ -595,7 +597,7 @@ export class RevenueService {
     const cacheKey = CacheKeys.revenueOverview(streamerId);
     const staleKey = `${cacheKey}:stale`;
 
-    return cacheManager.getOrSet(
+    return cacheManager.getOrSetWithTags(
       cacheKey,
       async () => {
         // 獲取本月 Bits 統計的起始時間
@@ -686,7 +688,8 @@ export class RevenueService {
           throw error;
         }
       },
-      CacheTTL.SHORT
+      CacheTTL.SHORT,
+      [`streamer:${streamerId}`, "revenue:overview"]
     );
   }
 

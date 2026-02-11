@@ -130,6 +130,35 @@ router.get("/queues", async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/admin/performance/queues/failed
+ * 取得近期失敗佇列任務
+ */
+router.get("/queues/failed", async (req: Request, res: Response) => {
+  try {
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 20));
+    const [revenue, exportJobs] = await Promise.all([
+      revenueSyncQueue.getDiagnostics(limit),
+      dataExportQueue.getDiagnostics(limit),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        revenueSync: revenue,
+        dataExport: exportJobs,
+        collectedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    performanceLogger.error("Failed to get failed queue jobs", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to retrieve failed queue jobs",
+    });
+  }
+});
+
+/**
  * POST /api/admin/performance/reset
  * 重置效能指標 (僅限開發環境)
  */

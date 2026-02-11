@@ -169,7 +169,7 @@ export async function getChannelStats(
 
   // 使用適應性 TTL 快取
   const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
-  return cacheManager.getOrSet(
+  return cacheManager.getOrSetWithTags(
     cacheKey,
     async () => {
       // 1. 併發查詢: 統計數據 + 頻道資訊
@@ -237,7 +237,8 @@ export async function getChannelStats(
         channel: channelDisplay,
       };
     },
-    ttl
+    ttl,
+    [`viewer:${viewerId}`, `channel:${channelId}`, "viewer:stats"]
   );
 }
 
@@ -249,7 +250,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
 
   // P1 Fix: 使用後端快取 + 物化摘要表避免昂貴查詢
   const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
-  return cacheManager.getOrSet(
+  return cacheManager.getOrSetWithTags(
     cacheKey,
     async () => {
       const startTime = Date.now();
@@ -284,7 +285,8 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         throw error;
       }
     },
-    ttl // 適應性 TTL（根據記憶體壓力從 30 秒到 3 分鐘）
+    ttl, // 適應性 TTL（根據記憶體壓力從 30 秒到 3 分鐘）
+    [`viewer:${viewerId}`, "viewer:channels"]
   );
 }
 

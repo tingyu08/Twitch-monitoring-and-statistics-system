@@ -216,7 +216,7 @@ export class ViewerPrivacyController {
       }
 
       if (result.queued) {
-        const queuedId = dataExportQueue.add({ exportJobId: result.job.id }, 5);
+        const queuedId = await dataExportQueue.add({ exportJobId: result.job.id }, 5);
         if (!queuedId) {
           await prisma.exportJob.update({
             where: { id: result.job.id },

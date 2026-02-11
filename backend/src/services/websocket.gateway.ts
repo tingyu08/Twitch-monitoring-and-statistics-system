@@ -19,6 +19,9 @@ export class WebSocketGateway {
   private io: Server | null = null;
   private pubClient: Redis | null = null;
   private subClient: Redis | null = null;
+  private pendingChannelUpdates: Map<string, { channelId?: string; twitchChannelId?: string; [key: string]: unknown }> = new Map();
+  private channelUpdateFlushTimer: NodeJS.Timeout | null = null;
+  private readonly CHANNEL_UPDATE_DEBOUNCE_MS = Number(process.env.CHANNEL_UPDATE_DEBOUNCE_MS || 800);
   private readonly CORS_ORIGIN = process.env.FRONTEND_URL || "http://localhost:3000";
 
   public initialize(httpServer: HttpServer) {
@@ -137,6 +140,11 @@ export class WebSocketGateway {
   ) {
     if (!this.io) return;
 
+    if (event === "channel.update") {
+      this.enqueueChannelUpdate(channelData);
+      return;
+    }
+
     // Client can join room by channelId (DB ID) or twitchChannelId
     // We emit to both rooms to be safe
     if (channelData.channelId) {
@@ -145,6 +153,48 @@ export class WebSocketGateway {
     if (channelData.twitchChannelId) {
       this.io.to(`channel:${channelData.twitchChannelId}`).emit(event, channelData);
     }
+  }
+
+  private enqueueChannelUpdate(channelData: {
+    channelId?: string;
+    twitchChannelId?: string;
+    [key: string]: unknown;
+  }): void {
+    const key = channelData.channelId || channelData.twitchChannelId;
+    if (!key) {
+      this.emit("channel.update", channelData);
+      return;
+    }
+
+    this.pendingChannelUpdates.set(key, channelData);
+
+    if (this.channelUpdateFlushTimer) {
+      return;
+    }
+
+    this.channelUpdateFlushTimer = setTimeout(() => {
+      this.flushChannelUpdates();
+    }, this.CHANNEL_UPDATE_DEBOUNCE_MS);
+  }
+
+  private flushChannelUpdates(): void {
+    if (!this.io) {
+      this.pendingChannelUpdates.clear();
+      this.channelUpdateFlushTimer = null;
+      return;
+    }
+
+    for (const channelData of this.pendingChannelUpdates.values()) {
+      if (channelData.channelId) {
+        this.io.to(`channel:${channelData.channelId}`).emit("channel.update", channelData);
+      }
+      if (channelData.twitchChannelId) {
+        this.io.to(`channel:${channelData.twitchChannelId}`).emit("channel.update", channelData);
+      }
+    }
+
+    this.pendingChannelUpdates.clear();
+    this.channelUpdateFlushTimer = null;
   }
 
   /**
@@ -195,6 +245,12 @@ export class WebSocketGateway {
   }
 
   public async shutdown(): Promise<void> {
+    if (this.channelUpdateFlushTimer) {
+      clearTimeout(this.channelUpdateFlushTimer);
+      this.channelUpdateFlushTimer = null;
+    }
+    this.pendingChannelUpdates.clear();
+
     try {
       await Promise.all([
         this.pubClient?.quit().catch((): undefined => undefined),

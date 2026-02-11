@@ -32,6 +32,8 @@ import { twurpleEventSubService } from "./services/twurple-eventsub.service";
 import { logger } from "./utils/logger";
 import { memoryMonitor } from "./utils/memory-monitor";
 import { viewerMessageRepository } from "./modules/viewer/viewer-message.repository";
+import { revenueSyncQueue } from "./utils/revenue-sync-queue";
+import { dataExportQueue } from "./utils/data-export-queue";
 
 const PORT = parseInt(process.env.PORT || '4000', 10);
 const JOB_START_RETRY_DELAY_MS = 5 * 60 * 1000;
@@ -153,6 +155,13 @@ function gracefulShutdown(signal: string) {
       console.log("✅ WebSocket Redis 連線已關閉");
     } catch (error) {
       console.error("❌ 關閉 WebSocket Redis 連線失敗", error);
+    }
+
+    try {
+      await Promise.all([revenueSyncQueue.shutdown(), dataExportQueue.shutdown()]);
+      console.log("✅ Queue workers 已關閉");
+    } catch (error) {
+      console.error("❌ 關閉 Queue workers 失敗", error);
     }
 
     try {

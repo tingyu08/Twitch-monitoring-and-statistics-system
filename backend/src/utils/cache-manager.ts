@@ -10,11 +10,16 @@
 import { logger } from "./logger";
 import {
   isRedisEnabled,
+  redisAcquireLock,
   redisDeleteByPrefix,
   redisDeleteBySuffix,
   redisDeleteKey,
   redisGetJson,
+  redisReleaseLock,
   redisSetJson,
+  redisTagAddKeys,
+  redisTagDelete,
+  redisTagGetKeys,
 } from "./redis-client";
 
 interface CacheEntry<T> {
@@ -41,11 +46,16 @@ export class CacheManager {
   // P1 Fix: 防止快取擊穿 (Cache Stampede) 的等待隊列
   private pendingPromises: Map<string, Promise<unknown>>;
   private redisEnabled: boolean;
+  private tagIndex: Map<string, Set<string>>;
+  private readonly redisLockTtlMs = 15000;
+  private readonly redisWaitRetries = 8;
+  private readonly redisWaitIntervalMs = 120;
 
   constructor(maxMemoryMB: number = 50) {
     this.cache = new Map();
     this.pendingPromises = new Map();
     this.redisEnabled = isRedisEnabled();
+    this.tagIndex = new Map();
     this.stats = {
       hits: 0,
       misses: 0,
@@ -71,7 +81,7 @@ export class CacheManager {
   /**
    * 設定快取項目
    */
-  set<T>(key: string, value: T, ttlSeconds: number = 300): void {
+  private setInternal<T>(key: string, value: T, ttlSeconds: number = 300, tags: string[] = []): void {
     const size = this.estimateSize(value);
 
     // 如果單個項目超過最大記憶體限制的 25%，拒絕快取 (Zeabur 免費層優化)
@@ -107,7 +117,28 @@ export class CacheManager {
 
     if (this.redisEnabled) {
       void redisSetJson(key, value, ttlSeconds);
+      if (tags.length > 0) {
+        for (const tag of tags) {
+          void redisTagAddKeys(tag, [key]);
+        }
+      }
     }
+
+    if (tags.length > 0) {
+      for (const tag of tags) {
+        const bucket = this.tagIndex.get(tag) || new Set<string>();
+        bucket.add(key);
+        this.tagIndex.set(tag, bucket);
+      }
+    }
+  }
+
+  set<T>(key: string, value: T, ttlSeconds: number = 300): void {
+    this.setInternal(key, value, ttlSeconds, []);
+  }
+
+  setWithTags<T>(key: string, value: T, ttlSeconds: number = 300, tags: string[] = []): void {
+    this.setInternal(key, value, ttlSeconds, tags);
   }
 
   /**
@@ -144,6 +175,13 @@ export class CacheManager {
       this.stats.memoryUsage = this.currentMemoryUsage;
     }
 
+    for (const [tag, keys] of this.tagIndex.entries()) {
+      keys.delete(key);
+      if (keys.size === 0) {
+        this.tagIndex.delete(tag);
+      }
+    }
+
     if (this.redisEnabled) {
       void redisDeleteKey(key);
     }
@@ -158,6 +196,7 @@ export class CacheManager {
     this.currentMemoryUsage = 0;
     this.stats.itemCount = 0;
     this.stats.memoryUsage = 0;
+    this.tagIndex.clear();
 
     if (this.redisEnabled) {
       void redisDeleteByPrefix("");
@@ -212,6 +251,7 @@ export class CacheManager {
    */
   deleteRevenueCache(streamerId: string): void {
     const deleted = this.deletePattern(`revenue:${streamerId}:`);
+    void this.invalidateTag(`streamer:${streamerId}`);
     if (deleted > 0) {
       logger.debug("Cache", `Deleted ${deleted} revenue cache entries for streamer ${streamerId}`);
     }
@@ -235,6 +275,32 @@ export class CacheManager {
         this.set(key, redisCached, ttlSeconds);
         return redisCached;
       }
+
+      const lockToken = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const lockAcquired = await redisAcquireLock(key, lockToken, this.redisLockTtlMs);
+
+      if (!lockAcquired) {
+        for (let i = 0; i < this.redisWaitRetries; i++) {
+          await new Promise((resolve) => setTimeout(resolve, this.redisWaitIntervalMs));
+          const waitedValue = await redisGetJson<T>(key);
+          if (waitedValue !== null) {
+            this.stats.hits++;
+            this.set(key, waitedValue, ttlSeconds);
+            return waitedValue;
+          }
+        }
+      } else {
+        try {
+          const value = await factory();
+          this.setInternal(key, value, ttlSeconds, []);
+          return value;
+        } catch (error) {
+          logger.warn("Cache", `Factory failed for key: ${key}`);
+          throw error;
+        } finally {
+          await redisReleaseLock(key, lockToken);
+        }
+      }
     }
 
     // 2. 合併路徑：如果已經有正在進行的查詢，等待它
@@ -248,7 +314,7 @@ export class CacheManager {
     const promise = (async () => {
       try {
         const value = await factory();
-        this.set(key, value, ttlSeconds);
+        this.setInternal(key, value, ttlSeconds, []);
         return value;
       } catch (error) {
         logger.warn("Cache", `Factory failed for key: ${key}`);
@@ -261,6 +327,66 @@ export class CacheManager {
 
     this.pendingPromises.set(key, promise);
     return promise as Promise<T>;
+  }
+
+  async getOrSetWithTags<T>(
+    key: string,
+    factory: () => Promise<T>,
+    ttlSeconds: number = 300,
+    tags: string[] = []
+  ): Promise<T> {
+    const cached = this.get<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    if (this.redisEnabled) {
+      const redisCached = await redisGetJson<T>(key);
+      if (redisCached !== null) {
+        this.stats.hits++;
+        this.setInternal(key, redisCached, ttlSeconds, tags);
+        return redisCached;
+      }
+    }
+
+    const pending = this.pendingPromises.get(key);
+    if (pending) {
+      return pending as Promise<T>;
+    }
+
+    const promise = (async () => {
+      try {
+        const value = await factory();
+        this.setInternal(key, value, ttlSeconds, tags);
+        return value;
+      } finally {
+        this.pendingPromises.delete(key);
+      }
+    })();
+
+    this.pendingPromises.set(key, promise);
+    return promise as Promise<T>;
+  }
+
+  async invalidateTag(tag: string): Promise<number> {
+    const localKeys = Array.from(this.tagIndex.get(tag) || []);
+    let remoteKeys: string[] = [];
+
+    if (this.redisEnabled) {
+      remoteKeys = await redisTagGetKeys(tag);
+    }
+
+    const keys = Array.from(new Set([...localKeys, ...remoteKeys]));
+    for (const key of keys) {
+      this.delete(key);
+    }
+
+    this.tagIndex.delete(tag);
+    if (this.redisEnabled) {
+      await redisTagDelete(tag);
+    }
+
+    return keys.length;
   }
 
   /**

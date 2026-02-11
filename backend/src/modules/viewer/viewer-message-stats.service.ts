@@ -47,7 +47,7 @@ export async function getViewerMessageStats(
   const cacheKey = `viewer:${viewerId}:channel:${channelId}:msgstats:${startKey}:${endKey}`;
   const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
 
-  return cacheManager.getOrSet(
+  return cacheManager.getOrSetWithTags(
     cacheKey,
     async () => {
       const aggs = await prisma.viewerChannelMessageDailyAgg.findMany({
@@ -131,6 +131,7 @@ export async function getViewerMessageStats(
         dailyBreakdown,
       };
     },
-    ttl
+    ttl,
+    [`viewer:${viewerId}`, `channel:${channelId}`, "viewer:message-stats"]
   );
 }

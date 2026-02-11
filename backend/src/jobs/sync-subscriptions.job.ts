@@ -68,7 +68,7 @@ export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async
 
     // 將所有實況主加入佇列
     for (const streamer of streamers) {
-      const jobId = revenueSyncQueue.add({
+      const jobId = await revenueSyncQueue.add({
         streamerId: streamer.id,
         streamerName: streamer.displayName,
       });
