@@ -80,21 +80,6 @@ export async function handleStreamerTwitchCallback(
     }),
   ]);
 
-  // Step 2: Channel 需要 streamerId，所以必須在 streamer 之後
-  await prisma.channel.upsert({
-    where: { twitchChannelId: user.id },
-    update: {
-      channelName: channelLogin,
-      channelUrl: channelUrl,
-    },
-    create: {
-      streamerId: streamerRecord.id,
-      twitchChannelId: user.id,
-      channelName: channelLogin,
-      channelUrl: channelUrl,
-    },
-  });
-
   logger.info("Auth", `Processing unified login for: ${user.display_name} (${user.id})`);
   logger.info("Auth", `Viewer record upserted: ${viewerRecord.id}`);
 
@@ -173,6 +158,30 @@ export async function handleStreamerTwitchCallback(
 
   const totalTime = Date.now() - startTime;
   logger.info("Auth", `OAuth callback completed in ${totalTime}ms for ${user.display_name}`);
+
+  // ✅ 非阻塞執行 Channel upsert（避免被 update-live-status Job 的寫入鎖阻塞）
+  // 這是修復晚上登入 100% 失敗問題的關鍵改動
+  setImmediate(async () => {
+    try {
+      await prisma.channel.upsert({
+        where: { twitchChannelId: user.id },
+        update: {
+          channelName: channelLogin,
+          channelUrl: channelUrl,
+        },
+        create: {
+          streamerId: streamerRecord.id,
+          twitchChannelId: user.id,
+          channelName: channelLogin,
+          channelUrl: channelUrl,
+        },
+      });
+      logger.info("Auth", `Channel upserted for ${user.display_name}`);
+    } catch (err: unknown) {
+      // 失敗不影響登入，只記錄 warning
+      logger.warn("Auth", "Channel upsert failed after login (non-blocking)", err);
+    }
+  });
 
   // 立即預熱快取（不阻塞登入回應）
   // 這樣當前端請求 /api/viewer/channels 時，快取已經準備好了

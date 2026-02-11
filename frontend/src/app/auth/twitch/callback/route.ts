@@ -21,19 +21,19 @@ export async function GET(request: NextRequest) {
   // 1. 處理 Twitch 回傳的錯誤
   if (error) {
     console.error(`[Auth Callback] Twitch Error: ${error} - ${errorDescription}`);
-    return withNoStore(NextResponse.redirect(new URL(`/?error=${error}`, request.url)));
+    return withNoStore(NextResponse.redirect(new URL(`/?authError=${error}`, request.url)));
   }
 
   // 2. 如果沒有 code，視為異常請求
   if (!code) {
     console.error("[Auth Callback] No authorization code received");
-    return withNoStore(NextResponse.redirect(new URL("/?error=no_code", request.url)));
+    return withNoStore(NextResponse.redirect(new URL("/?authError=no_code", request.url)));
   }
 
   const storedState = request.cookies.get("twitch_auth_state")?.value;
   if (!state || !storedState || state !== storedState) {
     console.error("[Auth Callback] CSRF State Mismatch");
-    return withNoStore(NextResponse.redirect(new URL("/?error=state_mismatch", request.url)));
+    return withNoStore(NextResponse.redirect(new URL("/?authError=state_mismatch", request.url)));
   }
 
   try {
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     if (!exchangeResponse.ok) {
       console.error("[Auth Callback] Token exchange failed", exchangeResponse.status);
-      return withNoStore(NextResponse.redirect(new URL("/?error=exchange_failed", request.url)));
+      return withNoStore(NextResponse.redirect(new URL("/?authError=exchange_failed", request.url)));
     }
 
     const { accessToken, refreshToken } = (await exchangeResponse.json()) as {
@@ -91,6 +91,6 @@ export async function GET(request: NextRequest) {
     return withNoStore(response);
   } catch (err) {
     console.error("[Auth Callback] Error building redirect URL:", err);
-    return withNoStore(NextResponse.redirect(new URL("/?error=server_error", request.url)));
+    return withNoStore(NextResponse.redirect(new URL("/?authError=server_error", request.url)));
   }
 }
