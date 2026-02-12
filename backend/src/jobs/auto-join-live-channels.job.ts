@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import { prisma } from "../db/prisma";
 import { twurpleHelixService } from "../services/twitch-helix.service";
 import { chatListenerManager } from "../services/chat-listener-manager";
 import { logger } from "../utils/logger";
