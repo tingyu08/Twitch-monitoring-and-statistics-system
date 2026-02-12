@@ -1,19 +1,13 @@
-import { Request, Response } from "express";
+import type { Response } from "express";
 import { dashboardLayoutService } from "./dashboard-layout.service";
 import { logger } from "../../utils/logger";
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    viewerId: string;
-    [key: string]: unknown;
-  };
-}
+import type { AuthRequest } from "../auth/auth.middleware";
 
 export class DashboardLayoutController {
-  public getLayout = async (req: Request, res: Response) => {
+  public getLayout = async (req: AuthRequest, res: Response) => {
     try {
       const { channelId } = req.params;
-      const viewerId = (req as AuthenticatedRequest).user?.viewerId;
+      const viewerId = req.user?.viewerId;
 
       if (!viewerId) return res.status(401).json({ error: "Unauthorized" });
 
@@ -26,7 +20,7 @@ export class DashboardLayoutController {
     }
   };
 
-  public saveLayout = async (req: Request, res: Response) => {
+  public saveLayout = async (req: AuthRequest, res: Response) => {
     try {
       // AC 5.1: POST /api/viewer/:viewerId/dashboard-layout
       // Body: { channelId, layout }
@@ -35,7 +29,7 @@ export class DashboardLayoutController {
       // Let's stick to using token for viewerId.
 
       const { channelId, layout } = req.body;
-      const viewerId = (req as AuthenticatedRequest).user?.viewerId;
+      const viewerId = req.user?.viewerId;
 
       if (!viewerId) return res.status(401).json({ error: "Unauthorized" });
       if (!channelId || !layout)
@@ -49,10 +43,10 @@ export class DashboardLayoutController {
     }
   };
 
-  public resetLayout = async (req: Request, res: Response) => {
+  public resetLayout = async (req: AuthRequest, res: Response) => {
     try {
       const { channelId } = req.params;
-      const viewerId = (req as AuthenticatedRequest).user?.viewerId;
+      const viewerId = req.user?.viewerId;
 
       if (!viewerId) return res.status(401).json({ error: "Unauthorized" });
 

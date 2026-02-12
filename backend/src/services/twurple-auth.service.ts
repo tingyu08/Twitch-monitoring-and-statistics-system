@@ -100,7 +100,7 @@ class TwurpleAuthService {
 
     // 設定 Token 刷新成功回調
     if (onRefresh) {
-      // 閮身 Token 憿舐內 (敺賊鞈摨)
+      // 更新 Token 回調（刷新成功）
       authProvider.onRefresh(async (userId: string, newTokenData: AccessToken) => {
         logger.info("Twurple Auth", `Token refreshed for user: ${userId}`);
         await onRefresh(userId, {
@@ -112,7 +112,7 @@ class TwurpleAuthService {
       });
     }
 
-    // 閮身 Token 憿舐內 (敺賊鞈摨)
+    // 更新 Token 失敗回調（刷新失敗）
     authProvider.onRefreshFailure(async (userId: string, error: Error) => {
       logger.error("Twurple Auth", `Token refresh failed for user: ${userId}`, error);
 

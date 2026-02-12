@@ -17,8 +17,104 @@ interface HeartbeatBody {
   duration: number; // seconds
 }
 
+interface PendingHeartbeat {
+  viewerId: string;
+  channelId: string;
+  date: Date;
+  watchSeconds: number;
+  minuteIncrements: number;
+  lastWatchedAt: Date;
+}
+
 const CHANNEL_ID_CACHE_TTL_MS = 5 * 60 * 1000;
 const channelIdCache = new Map<string, { channelId: string; expiresAt: number }>();
+const HEARTBEAT_FLUSH_INTERVAL_MS = Number(process.env.HEARTBEAT_FLUSH_INTERVAL_MS || 5000);
+const HEARTBEAT_FLUSH_BATCH_SIZE = Number(process.env.HEARTBEAT_FLUSH_BATCH_SIZE || 200);
+const heartbeatBuffer = new Map<string, PendingHeartbeat>();
+let heartbeatFlushTimer: NodeJS.Timeout | null = null;
+let isHeartbeatFlushing = false;
+
+function buildHeartbeatKey(viewerId: string, channelId: string, date: Date): string {
+  return `${viewerId}:${channelId}:${date.toISOString().slice(0, 10)}`;
+}
+
+function scheduleHeartbeatFlush(): void {
+  if (heartbeatFlushTimer) {
+    return;
+  }
+
+  heartbeatFlushTimer = setTimeout(() => {
+    heartbeatFlushTimer = null;
+    void flushHeartbeatBuffer();
+  }, HEARTBEAT_FLUSH_INTERVAL_MS);
+
+  heartbeatFlushTimer.unref?.();
+}
+
+async function flushHeartbeatBuffer(): Promise<void> {
+  if (isHeartbeatFlushing || heartbeatBuffer.size === 0) {
+    return;
+  }
+
+  isHeartbeatFlushing = true;
+  try {
+    const entries = Array.from(heartbeatBuffer.entries()).slice(0, HEARTBEAT_FLUSH_BATCH_SIZE);
+    for (const [key] of entries) {
+      heartbeatBuffer.delete(key);
+    }
+
+    await Promise.all(
+      entries.map(async ([, pending]) => {
+        const dailyStatPromise = prisma.viewerChannelDailyStat.upsert({
+          where: {
+            viewerId_channelId_date: {
+              viewerId: pending.viewerId,
+              channelId: pending.channelId,
+              date: pending.date,
+            },
+          },
+          create: {
+            viewerId: pending.viewerId,
+            channelId: pending.channelId,
+            date: pending.date,
+            watchSeconds: pending.watchSeconds,
+          },
+          update: {
+            watchSeconds: { increment: pending.watchSeconds },
+          },
+        });
+
+        const lifetimeStatsPromise = prisma.viewerChannelLifetimeStats.upsert({
+          where: {
+            viewerId_channelId: {
+              viewerId: pending.viewerId,
+              channelId: pending.channelId,
+            },
+          },
+          create: {
+            viewerId: pending.viewerId,
+            channelId: pending.channelId,
+            lastWatchedAt: pending.lastWatchedAt,
+            totalWatchTimeMinutes: pending.minuteIncrements,
+          },
+          update: {
+            lastWatchedAt: pending.lastWatchedAt,
+            totalWatchTimeMinutes: { increment: pending.minuteIncrements },
+          },
+        });
+
+        await Promise.all([dailyStatPromise, lifetimeStatsPromise]);
+      })
+    );
+  } catch (error) {
+    logger.error("EXTENSION", "Flush heartbeat buffer failed", error);
+  } finally {
+    isHeartbeatFlushing = false;
+    if (heartbeatBuffer.size > 0) {
+      scheduleHeartbeatFlush();
+    }
+  }
+}
 
 async function getCachedChannelId(channelName: string): Promise<string | null> {
   const normalized = channelName.toLowerCase();
@@ -132,46 +228,26 @@ export async function postHeartbeatHandler(req: ExtensionAuthRequest, res: Respo
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const dailyStatPromise = prisma.viewerChannelDailyStat.upsert({
-      where: {
-        viewerId_channelId_date: {
-          viewerId,
-          channelId,
-          date: today,
-        },
-      },
-      create: {
+    const heartbeatKey = buildHeartbeatKey(viewerId, channelId, today);
+    const existing = heartbeatBuffer.get(heartbeatKey);
+    const minuteIncrements = Math.floor(duration / 60);
+
+    if (existing) {
+      existing.watchSeconds += duration;
+      existing.minuteIncrements += minuteIncrements;
+      existing.lastWatchedAt = new Date();
+    } else {
+      heartbeatBuffer.set(heartbeatKey, {
         viewerId,
         channelId,
         date: today,
         watchSeconds: duration,
-      },
-      update: {
-        watchSeconds: { increment: duration },
-      },
-    });
-
-    // 更新生命週期統計的 lastWatchedAt
-    const lifetimeStatsPromise = prisma.viewerChannelLifetimeStats.upsert({
-      where: {
-        viewerId_channelId: {
-          viewerId,
-          channelId,
-        },
-      },
-      create: {
-        viewerId,
-        channelId,
+        minuteIncrements,
         lastWatchedAt: new Date(),
-        totalWatchTimeMinutes: Math.floor(duration / 60),
-      },
-      update: {
-        lastWatchedAt: new Date(),
-        totalWatchTimeMinutes: { increment: Math.floor(duration / 60) },
-      },
-    });
+      });
+    }
 
-    await Promise.all([dailyStatPromise, lifetimeStatsPromise]);
+    scheduleHeartbeatFlush();
 
     logger.info(
       "EXTENSION",

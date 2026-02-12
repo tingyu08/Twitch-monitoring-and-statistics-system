@@ -8,16 +8,11 @@ import {
   signRefreshToken,
   verifyRefreshToken,
   verifyAccessToken,
-  type JWTPayload,
 } from "./jwt.utils";
 import { env } from "../../config/env";
 import { authLogger } from "../../utils/logger";
 import { prisma } from "../../db/prisma";
-
-// 擴展 Express Request 類型以支援 user 屬性
-interface AuthenticatedRequest extends Request {
-  user?: JWTPayload;
-}
+import type { AuthRequest } from "./auth.middleware";
 
 const STREAMER_STATE_COOKIE = "twitch_auth_state";
 
@@ -44,7 +39,7 @@ function isAllowedRedirectUri(redirectUri?: string): boolean {
   return allowed.has(normalizeUri(redirectUri));
 }
 
-const DEFAULT_COOKIE_OPTIONS = {
+export const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: env.nodeEnv === "production",
   // 使用 "lax" 而非 "none"，避免 third-party cookie 阻擋問題
@@ -55,17 +50,17 @@ const DEFAULT_COOKIE_OPTIONS = {
 
 function setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
   res.cookie("auth_token", accessToken, {
-    ...DEFAULT_COOKIE_OPTIONS,
+    ...AUTH_COOKIE_OPTIONS,
     maxAge: 60 * 60 * 1000, // 1h
   });
 
   res.cookie("refresh_token", refreshToken, {
-    ...DEFAULT_COOKIE_OPTIONS,
+    ...AUTH_COOKIE_OPTIONS,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
   });
 }
 
-function clearAuthCookies(res: Response) {
+export function clearAuthCookies(res: Response) {
   // 跨域環境下需要手動設置 Set-Cookie 標頭來確保 Cookie 被清除
   // 使用 res.cookie 並確保所有選項與設置時完全一致
   const isProduction = env.nodeEnv === "production";
@@ -99,7 +94,7 @@ export class AuthController {
 
       // 2. 將 State 存入 HTTP-only Cookie (設定 5 分鐘過期)
       res.cookie(STREAMER_STATE_COOKIE, state, {
-        ...DEFAULT_COOKIE_OPTIONS,
+        ...AUTH_COOKIE_OPTIONS,
         maxAge: 5 * 60 * 1000,
       });
 
@@ -228,7 +223,7 @@ export class AuthController {
     }
   };
 
-  public me = async (req: AuthenticatedRequest, res: Response) => {
+  public me = async (req: AuthRequest, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
     }

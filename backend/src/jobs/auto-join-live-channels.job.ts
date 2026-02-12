@@ -1,5 +1,4 @@
 import cron from "node-cron";
-import { prisma } from "../db/prisma";
 import { twurpleHelixService } from "../services/twitch-helix.service";
 import { chatListenerManager } from "../services/chat-listener-manager";
 import { logger } from "../utils/logger";
@@ -69,21 +68,6 @@ export class AutoJoinLiveChannelsJob {
           const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);
           const liveStreamMap = new Map(streams.map((s) => [s.userId, s]));
 
-          // P0 Fix: 批次查詢所有活躍的 StreamSession，避免 N+1 查詢
-          const batchChannelIds = batch.map((c) => c.id);
-          const activeSessions = await prisma.streamSession.findMany({
-            where: {
-              channelId: { in: batchChannelIds },
-              endedAt: null,
-            },
-            select: {
-              id: true,
-              channelId: true,
-              twitchStreamId: true,
-            },
-          });
-          const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
-
           // 3. 更新狀態並加入聊天室
           for (const channel of batch) {
             const stream = liveStreamMap.get(channel.twitchChannelId);
@@ -103,53 +87,9 @@ export class AutoJoinLiveChannelsJob {
               // 避免觸發 Twitch IRC 速率限制和超時錯誤
               // Twitch 限制: 20 joins/10 seconds (authenticated) or 50 joins/15 seconds (verified bot)
               await new Promise((resolve) => setTimeout(resolve, 300)); // 300ms 延遲
-
-              // 更新 Channel Live 狀態 (如果變更)
-              if (!channel.isLive) {
-                await prisma.channel.update({
-                  where: { id: channel.id },
-                  data: { isLive: true },
-                });
-              }
-
-              // P0 Fix: 使用預先查詢的 Map 取代迴圈內查詢
-              const activeSession = activeSessionMap.get(channel.id);
-
-              if (!activeSession && stream) {
-                // 使用 upsert 避免唯一約束衝突
-                await prisma.streamSession.upsert({
-                  where: { twitchStreamId: stream.id },
-                  update: {
-                    // 如果已存在，更新相關資訊
-                    title: stream.title,
-                    category: stream.gameName,
-                  },
-                  create: {
-                    channelId: channel.id,
-                    twitchStreamId: stream.id,
-                    startedAt: stream.startedAt,
-                    title: stream.title,
-                    category: stream.gameName,
-                  },
-                });
-              }
             } else {
               // 頻道離線 — 釋放 listener slot
               await chatListenerManager.stopListening(channel.channelName);
-
-              // 更新 Channel Live 狀態
-              if (channel.isLive) {
-                await prisma.channel.update({
-                  where: { id: channel.id },
-                  data: { isLive: false },
-                });
-
-                // 結束 Session
-                await prisma.streamSession.updateMany({
-                  where: { channelId: channel.id, endedAt: null },
-                  data: { endedAt: new Date() },
-                });
-              }
             }
           }
         } catch (error) {

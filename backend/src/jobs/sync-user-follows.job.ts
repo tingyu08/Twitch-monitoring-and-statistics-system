@@ -883,29 +883,35 @@ export async function triggerFollowSyncForUser(
     }
 
     // 批次建立追蹤記錄（避免逐筆寫入）
-    const UPSERT_BATCH_SIZE = 50;
+    const UPSERT_BATCH_SIZE = 100;
     for (let i = 0; i < followsToUpsert.length; i += UPSERT_BATCH_SIZE) {
       const batch = followsToUpsert.slice(i, i + UPSERT_BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map((followData) =>
-          prisma.userFollow.upsert({
-            where: {
-              userId_channelId: {
-                userId: followData.userId,
-                channelId: followData.channelId,
-              },
-            },
-            create: followData,
-            update: { followedAt: followData.followedAt },
-          })
-        )
-      );
 
-      created += results.filter((r) => r.status === "fulfilled").length;
+      try {
+        const rows = batch.map(
+          (followData) =>
+            Prisma.sql`(${randomUUID()}, ${followData.userId}, ${followData.userType}, ${
+              followData.channelId
+            }, ${followData.followedAt})`
+        );
 
-      const failures = results.filter((r) => r.status === "rejected");
-      if (failures.length > 0) {
-        logger.warn("Jobs", `批次 upsert 有 ${failures.length} 筆失敗`);
+        await retryDatabaseOperation(() =>
+          prisma.$executeRaw(
+            Prisma.sql`
+              INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
+              VALUES ${Prisma.join(rows)}
+              ON CONFLICT(userId, channelId) DO UPDATE SET followedAt=excluded.followedAt
+            `
+          )
+        );
+
+        created += batch.length;
+      } catch (error) {
+        logger.warn(
+          "Jobs",
+          `批次 upsert 失敗 (${i}/${followsToUpsert.length}):`,
+          error instanceof Error ? error.message : String(error)
+        );
       }
 
       if (i + UPSERT_BATCH_SIZE < followsToUpsert.length) {

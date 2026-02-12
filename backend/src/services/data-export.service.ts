@@ -537,23 +537,34 @@ export class DataExportService {
     });
 
     let cleaned = 0;
+    const expiredJobIds = expiredJobs.map((job) => job.id);
 
-    for (const job of expiredJobs) {
-      if (job.downloadPath) {
-        const exists = await pathExists(job.downloadPath);
-        if (exists) {
-          try {
-            await fs.promises.unlink(job.downloadPath);
-            cleaned++;
-          } catch (error) {
-            logger.error("DataExport", `清理匯出檔案失敗: ${job.downloadPath}`, error);
+    const deleteResults = await Promise.allSettled(
+      expiredJobs
+        .map((job) => job.downloadPath)
+        .filter((downloadPath): downloadPath is string => Boolean(downloadPath))
+        .map(async (downloadPath) => {
+          const exists = await pathExists(downloadPath);
+          if (!exists) {
+            return false;
           }
-        }
-      }
 
-      // 更新任務狀態
-      await prisma.exportJob.update({
-        where: { id: job.id },
+          await fs.promises.unlink(downloadPath);
+          return true;
+        })
+    );
+
+    for (const result of deleteResults) {
+      if (result.status === "fulfilled" && result.value) {
+        cleaned++;
+      } else if (result.status === "rejected") {
+        logger.error("DataExport", "清理匯出檔案失敗", result.reason);
+      }
+    }
+
+    if (expiredJobIds.length > 0) {
+      await prisma.exportJob.updateMany({
+        where: { id: { in: expiredJobIds } },
         data: {
           downloadPath: null,
           status: "expired",

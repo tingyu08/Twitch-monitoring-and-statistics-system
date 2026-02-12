@@ -2,6 +2,7 @@ import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
+import { importTwurpleApi } from "../utils/dynamic-import";
 
 export class TwurpleVideoService {
   // ApiClient 透過動態導入，使用 unknown 類型
@@ -10,14 +11,18 @@ export class TwurpleVideoService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async getClient(): Promise<any> {
     if (!this.apiClient) {
-      const { ApiClient } = (await new Function('return import("@twurple/api")')()) as {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ApiClient: any;
-      };
+      const { ApiClient } = await importTwurpleApi();
       const authProvider = await twurpleAuthService.getAppAuthProvider();
       this.apiClient = new ApiClient({ authProvider });
     }
     return this.apiClient;
+  }
+
+  private async runBatchedDbOps(ops: Array<() => Promise<unknown>>, batchSize = 25): Promise<void> {
+    for (let i = 0; i < ops.length; i += batchSize) {
+      const batch = ops.slice(i, i + batchSize);
+      await Promise.all(batch.map((op) => op()));
+    }
   }
 
   /**
@@ -72,32 +77,35 @@ export class TwurpleVideoService {
           break;
         }
 
-        for (const video of data) {
-          await prisma.video.upsert({
-            where: { twitchVideoId: video.id },
-            create: {
-              twitchVideoId: video.id,
-              streamerId: streamerId,
-              title: video.title,
-              description: video.description,
-              url: video.url,
-              thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
-              viewCount: video.view_count,
-              duration: video.duration,
-              language: video.language,
-              type: video.type,
-              createdAt: new Date(video.created_at),
-              publishedAt: new Date(video.published_at),
-            },
-            update: {
-              title: video.title,
-              description: video.description,
-              thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
-              viewCount: video.view_count,
-            },
-          });
-          syncedCount++;
-        }
+        await this.runBatchedDbOps(
+          data.map((video) => async () => {
+            await prisma.video.upsert({
+              where: { twitchVideoId: video.id },
+              create: {
+                twitchVideoId: video.id,
+                streamerId: streamerId,
+                title: video.title,
+                description: video.description,
+                url: video.url,
+                thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
+                viewCount: video.view_count,
+                duration: video.duration,
+                language: video.language,
+                type: video.type,
+                createdAt: new Date(video.created_at),
+                publishedAt: new Date(video.published_at),
+              },
+              update: {
+                title: video.title,
+                description: video.description,
+                thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
+                viewCount: video.view_count,
+              },
+            });
+          })
+        );
+
+        syncedCount += data.length;
 
         cursor = response?.pagination?.cursor;
         if (!cursor) {
@@ -318,32 +326,35 @@ export class TwurpleVideoService {
           break;
         }
 
-        for (const clip of data) {
-          await prisma.clip.upsert({
-            where: { twitchClipId: clip.id },
-            create: {
-              twitchClipId: clip.id,
-              streamerId: streamerId,
-              creatorId: clip.creator_id,
-              creatorName: clip.creator_name,
-              videoId: clip.video_id,
-              gameId: clip.game_id,
-              title: clip.title,
-              url: clip.url,
-              embedUrl: clip.embed_url,
-              thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
-              viewCount: clip.view_count,
-              duration: clip.duration,
-              createdAt: new Date(clip.created_at),
-            },
-            update: {
-              title: clip.title,
-              viewCount: clip.view_count,
-              thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
-            },
-          });
-          syncedCount++;
-        }
+        await this.runBatchedDbOps(
+          data.map((clip) => async () => {
+            await prisma.clip.upsert({
+              where: { twitchClipId: clip.id },
+              create: {
+                twitchClipId: clip.id,
+                streamerId: streamerId,
+                creatorId: clip.creator_id,
+                creatorName: clip.creator_name,
+                videoId: clip.video_id,
+                gameId: clip.game_id,
+                title: clip.title,
+                url: clip.url,
+                embedUrl: clip.embed_url,
+                thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
+                viewCount: clip.view_count,
+                duration: clip.duration,
+                createdAt: new Date(clip.created_at),
+              },
+              update: {
+                title: clip.title,
+                viewCount: clip.view_count,
+                thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
+              },
+            });
+          })
+        );
+
+        syncedCount += data.length;
 
         cursor = response?.pagination?.cursor;
         if (!cursor) {

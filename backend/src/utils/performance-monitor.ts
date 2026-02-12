@@ -72,6 +72,7 @@ const DEFAULT_CONFIG = {
 class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
   private config = DEFAULT_CONFIG;
+  private writeCursor = 0;
 
   constructor(config?: Partial<typeof DEFAULT_CONFIG>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -85,6 +86,8 @@ class PerformanceMonitor {
       const startTime = process.hrtime.bigint();
       const startDate = new Date();
 
+      const normalizedPath = normalizeRoutePath(req.originalUrl || req.path);
+
       // 在響應結束時記錄效能指標
       res.on("finish", () => {
         const endTime = process.hrtime.bigint();
@@ -92,7 +95,7 @@ class PerformanceMonitor {
         const durationMs = durationNs / 1_000_000;
 
         const metric: PerformanceMetric = {
-          path: req.path,
+          path: normalizedPath,
           method: req.method,
           duration: Math.round(durationMs * 100) / 100, // 保留兩位小數
           statusCode: res.statusCode,
@@ -110,12 +113,11 @@ class PerformanceMonitor {
    * 記錄效能指標
    */
   private recordMetric(metric: PerformanceMetric): void {
-    // 保存指標
-    this.metrics.push(metric);
-
-    // 限制歷史記錄數量
-    if (this.metrics.length > this.config.maxMetricsHistory) {
-      this.metrics.shift();
+    if (this.metrics.length < this.config.maxMetricsHistory) {
+      this.metrics.push(metric);
+    } else {
+      this.metrics[this.writeCursor] = metric;
+      this.writeCursor = (this.writeCursor + 1) % this.config.maxMetricsHistory;
     }
 
     if (!this.config.enableLogging) {
@@ -207,6 +209,7 @@ class PerformanceMonitor {
    */
   reset(): void {
     this.metrics = [];
+    this.writeCursor = 0;
   }
 
   /**
@@ -261,6 +264,18 @@ class PerformanceMonitor {
 
 // 導出單例
 export const performanceMonitor = new PerformanceMonitor();
+
+function normalizeRoutePath(path: string): string {
+  const pathWithoutQuery = path.split("?")[0];
+
+  return pathWithoutQuery
+    .replace(/\/[0-9]+(?=\/|$)/g, "/:id")
+    .replace(/\/[0-9a-f]{24}(?=\/|$)/gi, "/:id")
+    .replace(
+      /\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?=\/|$)/gi,
+      "/:id"
+    );
+}
 
 // 效能日誌輔助函數
 export const performanceLogger = {

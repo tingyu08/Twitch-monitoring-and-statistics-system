@@ -73,7 +73,7 @@ export class ChannelStatsSyncJob {
         return result;
       }
 
-      // P0 Fix: 批次查詢所有活躍的 StreamSession，避免 N+1 查詢
+      // P0 Fix: 使用批次處理同步頻道統計
       const channelIds = channels.map((c) => c.id);
       const activeSessions = await prisma.streamSession.findMany({
         where: {
@@ -84,13 +84,12 @@ export class ChannelStatsSyncJob {
         select: {
           id: true,
           channelId: true,
-          peakViewers: true,
-          avgViewers: true,
+          title: true,
+          category: true,
         },
       });
       const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
 
-      // P0 Fix: 使用批次處理同步頻道統計
       for (let i = 0; i < channels.length; i += BATCH_SIZE) {
         const batch = channels.slice(i, i + BATCH_SIZE);
         
@@ -145,12 +144,15 @@ export class ChannelStatsSyncJob {
       channelName: string;
       twitchChannelId: string;
     },
-    activeSessionMap: Map<string, {
-      id: string;
-      channelId: string;
-      peakViewers: number | null;
-      avgViewers: number | null;
-    }>
+    activeSessionMap: Map<
+      string,
+      {
+        id: string;
+        channelId: string;
+        title: string | null;
+        category: string | null;
+      }
+    >
   ): Promise<void> {
     // 使用 twitchChannelId 查詢（ID 永不改變，避免用戶改名後找不到）
     const channelInfo = await unifiedTwitchService.getChannelInfoById(channel.twitchChannelId);
@@ -171,30 +173,23 @@ export class ChannelStatsSyncJob {
       );
     }
 
-    // If live, update active session
+    // 僅同步標題/分類文字，避免與 stream-status 重複寫入觀眾數統計。
     if (channelInfo.isLive) {
-      // P0 Fix: 使用預先查詢的 Map 取代迴圈內查詢
       const activeSession = activeSessionMap.get(channel.id);
-
-      if (activeSession && channelInfo.viewerCount !== undefined) {
-        // Update peak viewers
-        const newPeak = Math.max(activeSession.peakViewers || 0, channelInfo.viewerCount);
-
-        // Update avg viewers
-        const currentAvg = activeSession.avgViewers || channelInfo.viewerCount;
-        const newAvg = Math.round((currentAvg + channelInfo.viewerCount) / 2);
-
-        await runWithWriteGuard("channel-stats-sync:update-session", () =>
-          prisma.streamSession.update({
-            where: { id: activeSession.id },
-            data: {
-              title: channelInfo.streamTitle,
-              category: channelInfo.currentGame,
-              avgViewers: newAvg,
-              peakViewers: newPeak,
-            },
-          })
-        );
+      if (activeSession) {
+        const nextTitle = channelInfo.streamTitle || null;
+        const nextCategory = channelInfo.currentGame || null;
+        if (activeSession.title !== nextTitle || activeSession.category !== nextCategory) {
+          await runWithWriteGuard("channel-stats-sync:update-session", () =>
+            prisma.streamSession.update({
+              where: { id: activeSession.id },
+              data: {
+                title: nextTitle || "",
+                category: nextCategory || "",
+              },
+            })
+          );
+        }
       }
     }
 

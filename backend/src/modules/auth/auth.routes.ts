@@ -1,22 +1,10 @@
 import { Router } from "express";
-import { AuthController } from "./auth.controller";
+import { AuthController, clearAuthCookies } from "./auth.controller";
 import { requireAuth, type AuthRequest } from "./auth.middleware";
 import type { Response } from "express";
 import { prisma } from "../../db/prisma";
-import { env } from "../../config/env";
 import { getFollowedChannels } from "../viewer/viewer.service";
 import { logger } from "../../utils/logger";
-
-// P1 Fix: 統一 Cookie 設定
-// 使用 "lax" 而非 "none"，因為：
-// 1. OAuth callback 是 top-level navigation，"lax" 完全支援
-// 2. "none" 會被某些瀏覽器的 third-party cookie 阻擋政策影響
-const getCookieOptions = () => ({
-  httpOnly: true,
-  secure: env.nodeEnv === "production",
-  sameSite: "lax" as const,
-  path: "/",
-});
 
 // 建立 AuthController 實例
 const authController = new AuthController();
@@ -78,11 +66,7 @@ export async function getMeHandler(req: AuthRequest, res: Response): Promise<voi
 }
 
 export async function logoutHandler(req: AuthRequest, res: Response): Promise<void> {
-  // P1 Fix: 使用統一的 cookie 設定，確保與設定時的選項一致
-  const cookieOptions = getCookieOptions();
-
-  res.clearCookie("auth_token", cookieOptions);
-  res.clearCookie("refresh_token", cookieOptions);
+  clearAuthCookies(res);
 
   if (req.user?.role === "viewer" && req.user.viewerId) {
     await prisma.twitchToken.deleteMany({
