@@ -145,15 +145,32 @@ export class EventSubService {
         return;
       }
 
-      // 建立 StreamSession
-      await prisma.streamSession.create({
-        data: {
-          channelId: channel.id,
-          startedAt: new Date(event.started_at),
-          title: "", // 會由後續的 channel.update 事件更新
-          category: "", // 遊戲/分類名稱
-        },
-      });
+      // 建立 StreamSession（使用 twitchStreamId 去重，避免 EventSub 重送造成重複場次）
+      if (typeof prisma.streamSession.upsert === "function") {
+        await prisma.streamSession.upsert({
+          where: { twitchStreamId: event.id },
+          create: {
+            channelId: channel.id,
+            twitchStreamId: event.id,
+            startedAt: new Date(event.started_at),
+            title: "", // 會由後續的 channel.update 事件更新
+            category: "", // 遊戲/分類名稱
+          },
+          update: {
+            channelId: channel.id,
+            startedAt: new Date(event.started_at),
+          },
+        });
+      } else {
+        await prisma.streamSession.create({
+          data: {
+            channelId: channel.id,
+            startedAt: new Date(event.started_at),
+            title: "",
+            category: "",
+          },
+        });
+      }
 
       logger.info("EventSub", `StreamSession 已建立: ${channel.channelName}`);
     } catch (error) {

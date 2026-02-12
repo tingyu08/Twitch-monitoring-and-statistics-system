@@ -129,7 +129,7 @@ export class ViewerController {
     const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
 
     try {
-      const result = await cacheManager.getOrSet(
+      const result = await cacheManager.getOrSetWithTags(
         cacheKey,
         async () => {
           // 計算日期範圍
@@ -181,7 +181,8 @@ export class ViewerController {
             viewerTrends,
           };
         },
-        ttl
+        ttl,
+        [`viewer:${viewerId}`, `channel:${channelId}`, "viewer:bff"]
       );
 
       const duration = Date.now() - requestStart;

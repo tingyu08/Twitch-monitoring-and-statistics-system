@@ -14,6 +14,10 @@ export class ViewerMessageStatsController {
     const startTime = Date.now();
 
     try {
+      if (req.user?.role === "viewer" && req.user.viewerId !== viewerId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
       const result = await getViewerMessageStats(viewerId, channelId, startDateStr, endDateStr);
 
       const totalTime = Date.now() - startTime;

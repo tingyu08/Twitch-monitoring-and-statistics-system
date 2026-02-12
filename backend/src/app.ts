@@ -137,14 +137,14 @@ class App {
     // 蝞∠?頝舐嚗??賜?改??? Streamer嚗?
     this.express.use(
       "/api/admin/performance",
-      (req, res, next) => requireAuth(req, res, next, ["streamer"]),
+      requireAuth(["streamer"]),
       performanceRoutes
     );
 
     // 蝞∠?頝舐嚗oken 蝞∠?嚗???Streamer嚗?
     this.express.use(
       "/api/admin/tokens",
-      (req, res, next) => requireAuth(req, res, next, ["streamer"]),
+      requireAuth(["streamer"]),
       tokenManagementRoutes
     );
 
@@ -154,7 +154,7 @@ class App {
     // ?汗?冽????API
     // 效能監控路由（根據環境變數啟用）
     if (process.env.ENABLE_MONITORING === "true") {
-      this.express.use("/api/monitoring", monitoringRoutes);
+      this.express.use("/api/monitoring", requireAuth(["streamer"]), monitoringRoutes);
     }
 
     this.express.use("/api/sync", extensionRoutes);

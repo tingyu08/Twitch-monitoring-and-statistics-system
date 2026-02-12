@@ -1,6 +1,7 @@
 import { prisma } from "../../db/prisma";
 import { TwitchOAuthClient } from "../auth/twitch-oauth.client";
 import { streamerLogger } from "../../utils/logger";
+import { decryptToken } from "../../utils/crypto.utils";
 
 const twitchClient = new TwitchOAuthClient();
 
@@ -51,9 +52,15 @@ export async function syncSubscriptionSnapshot(streamerId: string): Promise<void
     }
 
     // 3. 呼叫 Twitch API 獲取訂閱數
+    let accessToken = token.accessToken;
+    try {
+      accessToken = decryptToken(token.accessToken);
+    } catch {
+      // backward compatibility: historical plain text token records
+    }
     const { total: currentSubsTotal } = await twitchClient.getBroadcasterSubscriptions(
       channel.twitchChannelId,
-      token.accessToken
+      accessToken
     );
 
     // 4. 取得今天的日期 (YYYY-MM-DD)

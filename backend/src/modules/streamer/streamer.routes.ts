@@ -79,7 +79,7 @@ router.get("/me/videos", (req, res, next) => requireAuth(req, res, next), getVid
 router.get("/me/clips", (req, res, next) => requireAuth(req, res, next), getClipsHandler);
 
 // POST /api/streamer/me/sync-subscriptions - 手動同步訂閱數據
-router.post("/me/sync-subscriptions", requireAuth, syncSubscriptionsHandler);
+router.post("/me/sync-subscriptions", (req, res, next) => requireAuth(req, res, next), syncSubscriptionsHandler);
 
 // GET /api/streamer/:streamerId/summary?range=30d - 查詢指定 streamer 的統計（開發模式）
 // ⚠️ 注意：這是開發/測試用的端點，生產環境應加上權限控制

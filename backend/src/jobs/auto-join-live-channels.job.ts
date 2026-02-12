@@ -134,9 +134,8 @@ export class AutoJoinLiveChannelsJob {
                 });
               }
             } else {
-              // 頻道離線
-              // 停止監聯 (可選，或讓 manager 自動清理)
-              // await chatListenerManager.stopListening(channel.channelName);
+              // 頻道離線 — 釋放 listener slot
+              await chatListenerManager.stopListening(channel.channelName);
 
               // 更新 Channel Live 狀態
               if (channel.isLive) {

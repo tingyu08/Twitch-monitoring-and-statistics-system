@@ -8,12 +8,12 @@ export interface AuthRequest extends Request {
   user?: JWTPayload;
 }
 
-export const requireAuth = async (
+async function requireAuthHandler(
   req: Request,
   res: Response,
   next: NextFunction,
   allowedRoles: UserRole[] = []
-) => {
+) {
   try {
     const token = req.cookies.auth_token;
 
@@ -32,7 +32,7 @@ export const requireAuth = async (
       // 這大幅減少了 Round Trip Latency (N requests * RTT)
       const cacheKey = `auth:viewer:${decoded.viewerId}:token_version`;
 
-      const currentVersion = await cacheManager.getOrSet(
+      const currentVersion = await cacheManager.getOrSetWithTags(
         cacheKey,
         async () => {
           const viewer = await prisma.viewer.findUnique({
@@ -41,7 +41,8 @@ export const requireAuth = async (
           });
           return viewer?.tokenVersion ?? null;
         },
-        60 // 快取 60 秒
+        60, // 快取 60 秒
+        [`viewer:${decoded.viewerId}`, "auth:token-version"]
       );
 
       if (currentVersion === null || currentVersion !== decoded.tokenVersion) {
@@ -69,7 +70,31 @@ export const requireAuth = async (
   } catch {
     return res.status(401).json({ error: "Unauthorized" });
   }
-};
+}
+
+type RequireAuthMiddleware = (req: Request, res: Response, next: NextFunction) => Promise<Response | void>;
+
+export function requireAuth(allowedRoles?: UserRole[]): RequireAuthMiddleware;
+export function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  allowedRoles?: UserRole[]
+): Promise<Response | void>;
+export function requireAuth(
+  first: Request | UserRole[] = [],
+  res?: Response,
+  next?: NextFunction,
+  allowedRoles: UserRole[] = []
+): Promise<Response | void> | RequireAuthMiddleware {
+  if (Array.isArray(first)) {
+    const roles = first;
+    return (req: Request, response: Response, nextFn: NextFunction) =>
+      requireAuthHandler(req, response, nextFn, roles);
+  }
+
+  return requireAuthHandler(first as Request, res as Response, next as NextFunction, allowedRoles);
+}
 
 // 為了向後兼容，也導出 authMiddleware
 export const authMiddleware = requireAuth;

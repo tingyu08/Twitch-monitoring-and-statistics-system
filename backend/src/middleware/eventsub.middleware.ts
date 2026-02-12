@@ -102,8 +102,10 @@ export function verifyEventSubSignature(req: Request, res: Response, next: NextF
       return;
     }
 
-    // 獲取 raw body (需要在 express.json() 之前使用 express.raw())
-    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    // 使用原始 body 驗簽，避免 JSON re-stringify 改變格式造成簽名不一致
+    const rawBody =
+      (req as Request & { rawBody?: string }).rawBody ||
+      (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
 
     // 計算預期的簽名
     const secret = getSecret();

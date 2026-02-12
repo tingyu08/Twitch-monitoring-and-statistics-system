@@ -52,6 +52,7 @@ router.get("/avatar", async (req, res) => {
     const response = await axios.get(decodedUrl, {
       responseType: "arraybuffer",
       timeout: 10000, // 10 秒超時
+      maxRedirects: 0,
       headers: {
         "User-Agent": "TwitchAnalytics/1.0",
       },

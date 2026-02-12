@@ -9,6 +9,6 @@ export const heartbeatSchema = {
   body: z.object({
     channelName: z.string().min(1),
     timestamp: z.string().optional(),
-    duration: z.number().int().positive(),
+    duration: z.number().int().positive().max(3600),
   }),
 };

@@ -28,25 +28,25 @@ export const MEMORY_THRESHOLDS = {
    * 警告閾值 (MB) - 約 50% RAM
    * 達到此閾值時觸發 GC 和警告日誌
    */
-  WARNING_MB: parseInt(process.env.MEMORY_WARNING_MB || "250"),
+  WARNING_MB: parseInt(process.env.MEMORY_WARNING_MB || "350"),
 
   /**
    * 危險閾值 (MB) - 約 70% RAM
    * 達到此閾值時強制清理快取
    */
-  CRITICAL_MB: parseInt(process.env.MEMORY_CRITICAL_MB || "350"),
+  CRITICAL_MB: parseInt(process.env.MEMORY_CRITICAL_MB || "420"),
 
   /**
    * 最大閾值 (MB) - 約 80% RAM
    * 達到此閾值時應該停止新任務
    */
-  MAX_MB: parseInt(process.env.MEMORY_MAX_MB || "400"),
+  MAX_MB: parseInt(process.env.MEMORY_MAX_MB || "450"),
 
   /**
    * GC 觸發閾值 (MB)
    * 記憶體超過此值時自動觸發 GC
    */
-  GC_TRIGGER_MB: parseInt(process.env.MEMORY_GC_TRIGGER_MB || "300"),
+  GC_TRIGGER_MB: parseInt(process.env.MEMORY_GC_TRIGGER_MB || "380"),
 } as const;
 
 /**
@@ -62,8 +62,8 @@ export const MEMORY_THRESHOLDS = {
  * ```
  */
 export function isMemorySafe(): boolean {
-  const heapUsed = process.memoryUsage().heapUsed / 1024 / 1024;
-  return heapUsed < MEMORY_THRESHOLDS.WARNING_MB;
+  const rss = process.memoryUsage().rss / 1024 / 1024;
+  return rss < MEMORY_THRESHOLDS.WARNING_MB;
 }
 
 /**
@@ -80,8 +80,8 @@ export function isMemorySafe(): boolean {
  * ```
  */
 export function isMemoryCritical(): boolean {
-  const heapUsed = process.memoryUsage().heapUsed / 1024 / 1024;
-  return heapUsed >= MEMORY_THRESHOLDS.CRITICAL_MB;
+  const rss = process.memoryUsage().rss / 1024 / 1024;
+  return rss >= MEMORY_THRESHOLDS.CRITICAL_MB;
 }
 
 /**
@@ -98,8 +98,8 @@ export function isMemoryCritical(): boolean {
  * ```
  */
 export function shouldStopNewTasks(): boolean {
-  const heapUsed = process.memoryUsage().heapUsed / 1024 / 1024;
-  return heapUsed >= MEMORY_THRESHOLDS.MAX_MB;
+  const rss = process.memoryUsage().rss / 1024 / 1024;
+  return rss >= MEMORY_THRESHOLDS.MAX_MB;
 }
 
 /**
@@ -114,5 +114,5 @@ export function shouldStopNewTasks(): boolean {
  * ```
  */
 export function getCurrentMemoryMB(): number {
-  return Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+  return Math.round(process.memoryUsage().rss / 1024 / 1024);
 }

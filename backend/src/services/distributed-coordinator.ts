@@ -269,42 +269,35 @@ export class DistributedListenerCoordinator {
     const timeout = new Date(now.getTime() - LOCK_TIMEOUT_MS);
 
     try {
-      // 嘗試獲取鎖（如果不存在或已過期）
-      await prisma.channelListenerLock.upsert({
-        where: { channelId },
-        create: {
-          channelId,
-          instanceId: this.instanceId,
-          lastHeartbeat: now,
-          acquiredAt: now,
-        },
-        update: {
-          // 只有在自己持有或已過期時才更新
-          instanceId: this.instanceId,
-          lastHeartbeat: now,
-        },
-      });
-
-      // 確認是否真的獲取到了
-      const lock = await prisma.channelListenerLock.findUnique({
-        where: { channelId },
-      });
-
-      if (lock && lock.instanceId === this.instanceId) {
-        return true;
-      }
-
-      // 檢查現有鎖是否已過期
-      if (lock && lock.lastHeartbeat < timeout) {
-        // 鎖已過期，強制接管
-        await prisma.channelListenerLock.update({
-          where: { channelId },
+      // 先嘗試直接建立鎖（原子）
+      try {
+        await prisma.channelListenerLock.create({
           data: {
+            channelId,
             instanceId: this.instanceId,
             lastHeartbeat: now,
             acquiredAt: now,
           },
         });
+        return true;
+      } catch {
+        // lock 已存在，進入條件式接管流程
+      }
+
+      // 只在自己已持有或鎖過期時接管，使用 updateMany + 條件確保原子性
+      const takeover = await prisma.channelListenerLock.updateMany({
+        where: {
+          channelId,
+          OR: [{ instanceId: this.instanceId }, { lastHeartbeat: { lt: timeout } }],
+        },
+        data: {
+          instanceId: this.instanceId,
+          lastHeartbeat: now,
+          acquiredAt: now,
+        },
+      });
+
+      if (takeover.count > 0) {
         return true;
       }
 

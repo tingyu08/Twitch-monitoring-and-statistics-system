@@ -169,9 +169,8 @@ function registerShutdownHooks(): void {
     }
   };
 
+  // 只保留 beforeExit，避免與 server.ts 的 SIGINT/SIGTERM 優雅關閉流程互相競態。
   process.once("beforeExit", gracefulDisconnect);
-  process.once("SIGINT", gracefulDisconnect);
-  process.once("SIGTERM", gracefulDisconnect);
   shutdownHooksRegistered = true;
 }
 

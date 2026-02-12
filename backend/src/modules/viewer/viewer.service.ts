@@ -1,6 +1,28 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
+
+async function getOrSetWithOptionalTags<T>(
+  key: string,
+  factory: () => Promise<T>,
+  ttl: number,
+  tags: string[]
+): Promise<T> {
+  const tagged = (cacheManager as unknown as {
+    getOrSetWithTags?: (
+      cacheKey: string,
+      cacheFactory: () => Promise<T>,
+      cacheTtl?: number,
+      cacheTags?: string[]
+    ) => Promise<T>;
+  }).getOrSetWithTags;
+
+  if (typeof tagged === "function") {
+    return tagged.call(cacheManager, key, factory, ttl, tags);
+  }
+
+  return cacheManager.getOrSet(key, factory, ttl);
+}
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 
 // Type definitions for query results
@@ -169,7 +191,7 @@ export async function getChannelStats(
 
   // 使用適應性 TTL 快取
   const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
-  return cacheManager.getOrSetWithTags(
+  return getOrSetWithOptionalTags(
     cacheKey,
     async () => {
       // 1. 併發查詢: 統計數據 + 頻道資訊
@@ -250,7 +272,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
 
   // P1 Fix: 使用後端快取 + 物化摘要表避免昂貴查詢
   const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
-  return cacheManager.getOrSetWithTags(
+  return getOrSetWithOptionalTags(
     cacheKey,
     async () => {
       const startTime = Date.now();
@@ -619,11 +641,15 @@ export async function warmViewerChannelsCache(limit = 100): Promise<void> {
     return;
   }
 
-  for (const viewerId of viewerIds) {
-    try {
-      await getFollowedChannels(viewerId);
-    } catch (error) {
-      logger.warn("ViewerService", `Cache warmup failed for viewer ${viewerId}`, error);
-    }
+  const CONCURRENCY = 8;
+  for (let i = 0; i < viewerIds.length; i += CONCURRENCY) {
+    const batch = viewerIds.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(batch.map((viewerId) => getFollowedChannels(viewerId)));
+
+    results.forEach((result, index) => {
+      if (result.status === "rejected") {
+        logger.warn("ViewerService", `Cache warmup failed for viewer ${batch[index]}`, result.reason);
+      }
+    });
   }
 }

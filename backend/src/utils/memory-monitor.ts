@@ -71,9 +71,9 @@ export class MemoryMonitor {
     };
 
     // 檢查是否超過閾值
-    if (stats.heapUsed >= this.criticalThresholdMB) {
+    if (stats.rss >= this.criticalThresholdMB) {
       this.handleCritical(stats);
-    } else if (stats.heapUsed >= this.warningThresholdMB) {
+    } else if (stats.rss >= this.warningThresholdMB) {
       this.handleWarning(stats);
     }
 
@@ -155,7 +155,7 @@ export class MemoryMonitor {
    */
   isNearLimit(): boolean {
     const stats = this.check();
-    return stats.heapUsed >= this.warningThresholdMB;
+    return stats.rss >= this.warningThresholdMB;
   }
 
   /**
@@ -163,7 +163,7 @@ export class MemoryMonitor {
    */
   isOverLimit(): boolean {
     const stats = this.check();
-    return stats.heapUsed >= this.criticalThresholdMB;
+    return stats.rss >= this.criticalThresholdMB;
   }
 }
 

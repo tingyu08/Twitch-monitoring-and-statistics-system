@@ -113,9 +113,11 @@ export class TwitchOAuthClient {
     byTier: { tier1: number; tier2: number; tier3: number };
   }> {
     const subscriptionsUrl = "https://api.twitch.tv/helix/subscriptions";
+    const MAX_PAGES = 100;
     let total = 0;
     const byTier = { tier1: 0, tier2: 0, tier3: 0 };
     let cursor: string | undefined;
+    let page = 0;
 
     try {
       do {
@@ -151,7 +153,12 @@ export class TwitchOAuthClient {
         });
 
         cursor = response.data.pagination?.cursor;
-      } while (cursor);
+        page += 1;
+      } while (cursor && page < MAX_PAGES);
+
+      if (cursor) {
+        throw new Error(`Subscription pagination exceeded ${MAX_PAGES} pages`);
+      }
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;

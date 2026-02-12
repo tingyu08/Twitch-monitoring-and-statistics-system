@@ -16,7 +16,12 @@ if (process.env.SENTRY_DSN) {
 const originalWarn = console.warn;
 console.warn = (...args: unknown[]) => {
   const message = args[0];
-  if (typeof message === "string" && message.includes("rate-limit")) {
+  if (
+    typeof message === "string" &&
+    message.includes("Twurple") &&
+    message.includes("rate") &&
+    message.includes("limit")
+  ) {
     return; // 忽略 rate-limit 相關警告
   }
   originalWarn.apply(console, args);
@@ -235,9 +240,9 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
             select: { id: true },
             take: 5,
           });
-          for (const s of streamers) {
-            await revenueService.prewarmRevenueCache(s.id);
-          }
+          await Promise.allSettled(
+            streamers.map((streamer) => revenueService.prewarmRevenueCache(streamer.id))
+          );
           if (streamers.length > 0) {
             logger.info("Server", `Revenue 快取預熱完成 (${streamers.length} streamers)`);
           }

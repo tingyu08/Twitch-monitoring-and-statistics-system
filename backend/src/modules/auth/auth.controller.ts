@@ -21,6 +21,29 @@ interface AuthenticatedRequest extends Request {
 
 const STREAMER_STATE_COOKIE = "twitch_auth_state";
 
+function normalizeUri(value: string): string {
+  try {
+    return new URL(value).toString();
+  } catch {
+    return value.trim();
+  }
+}
+
+function isAllowedRedirectUri(redirectUri?: string): boolean {
+  if (!redirectUri) return true;
+
+  const configured = (process.env.TWITCH_ALLOWED_REDIRECT_URIS || "")
+    .split(",")
+    .map((uri) => uri.trim())
+    .filter((uri) => uri.length > 0);
+
+  const allowed = new Set(
+    [env.twitchRedirectUri, env.twitchViewerRedirectUri, ...configured].map((uri) => normalizeUri(uri))
+  );
+
+  return allowed.has(normalizeUri(redirectUri));
+}
+
 const DEFAULT_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: env.nodeEnv === "production",
@@ -178,6 +201,10 @@ export class AuthController {
     try {
       if (!code) {
         return res.status(400).json({ message: "Authorization code missing" });
+      }
+
+      if (!isAllowedRedirectUri(redirectUri)) {
+        return res.status(400).json({ message: "Invalid redirectUri" });
       }
 
       // 使用前端傳來的 redirectUri（因為 Twitch 要求必須與授權時相同）

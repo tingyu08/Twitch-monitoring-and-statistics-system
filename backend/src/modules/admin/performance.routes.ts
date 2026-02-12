@@ -16,6 +16,7 @@ import {
 import { cacheManager } from "../../utils/cache-manager";
 import { revenueSyncQueue } from "../../utils/revenue-sync-queue";
 import { dataExportQueue } from "../../utils/data-export-queue";
+import { getRedisCircuitBreakerStats } from "../../utils/redis-client";
 
 const router = Router();
 
@@ -31,6 +32,24 @@ router.get("/stats", (_req: Request, res: Response) => {
 
     Promise.all([revenueSyncQueue.getStatus(), dataExportQueue.getStatus()])
       .then(([revenueQueue, exportQueue]) => {
+        const alerts: string[] = [];
+        if ((revenueQueue.oldestWaitingMs || 0) > 120000) {
+          alerts.push("Revenue queue waiting oldest > 120s");
+        }
+        if ((exportQueue.oldestWaitingMs || 0) > 300000) {
+          alerts.push("Export queue waiting oldest > 300s");
+        }
+        if ((revenueQueue.failedRatioPercent || 0) > 5) {
+          alerts.push("Revenue queue failed ratio > 5%");
+        }
+        if ((exportQueue.failedRatioPercent || 0) > 10) {
+          alerts.push("Export queue failed ratio > 10%");
+        }
+
+        if (alerts.length > 0) {
+          performanceLogger.warn(`Queue alerts: ${alerts.join("; ")}`);
+        }
+
         performanceLogger.info(`Performance stats requested: ${stats.totalRequests} total requests`);
         res.json({
           success: true,
@@ -51,6 +70,10 @@ router.get("/stats", (_req: Request, res: Response) => {
               revenueSync: revenueQueue,
               dataExport: exportQueue,
             },
+            redis: {
+              circuitBreaker: getRedisCircuitBreakerStats(),
+            },
+            alerts,
             system: {
               uptime: Math.floor(process.uptime()),
               nodeVersion: process.version,

@@ -251,6 +251,11 @@ export class WebSocketGateway {
     }
     this.pendingChannelUpdates.clear();
 
+    if (this.io) {
+      await this.io.close();
+      this.io = null;
+    }
+
     try {
       await Promise.all([
         this.pubClient?.quit().catch((): undefined => undefined),

@@ -3,6 +3,7 @@
  */
 
 import cron from "node-cron";
+import type { ScheduledTask } from "node-cron";
 import { startMessageAggregationJob } from "./aggregate-daily-messages.job";
 import { updateLifetimeStatsJob } from "./update-lifetime-stats.job";
 import { dataRetentionJob } from "./data-retention.job";
@@ -19,6 +20,17 @@ import { captureJobError } from "./job-error-tracker";
 
 const CHANNEL_STATS_START_RETRY_MS = 5 * 60 * 1000;
 const CHANNEL_STATS_MAX_DELAYED_START_ATTEMPTS = 6;
+const startupTimeoutHandles = new Set<NodeJS.Timeout>();
+const scheduledTasks: ScheduledTask[] = [];
+
+function scheduleJobTimeout(callback: () => void, delayMs: number): NodeJS.Timeout {
+  const handle = setTimeout(() => {
+    startupTimeoutHandles.delete(handle);
+    callback();
+  }, delayMs);
+  startupTimeoutHandles.add(handle);
+  return handle;
+}
 
 function startChannelStatsSyncWithMemoryGuard(attempt: number = 1): void {
   const heapUsedMB = process.memoryUsage().heapUsed / 1024 / 1024;
@@ -60,7 +72,7 @@ export function startAllJobs(): void {
   updateLiveStatusJob.start();
 
   // Token 驗證任務 - 每天凌晨 4 點執行（低流量時段）
-  cron.schedule("0 4 * * *", async () => {
+  const tokenValidationTask = cron.schedule("0 4 * * *", async () => {
     logger.info("Jobs", "開始執行 Token 驗證任務...");
     try {
       const result = await validateTokensJob();
@@ -70,10 +82,10 @@ export function startAllJobs(): void {
       captureJobError("validate-tokens-scheduler", error);
     }
   });
+  scheduledTasks.push(tokenValidationTask);
 
   // === 階段 2: 延遲 5 分鐘後啟動次要任務 ===
-  setTimeout(
-    () => {
+  scheduleJobTimeout(() => {
       logger.info("Jobs", "啟動次要任務...");
 
       // 訊息聚合任務
@@ -84,13 +96,10 @@ export function startAllJobs(): void {
 
       // Story 3.3: 頻道統計同步任務 (耗資源)
       startChannelStatsSyncWithMemoryGuard();
-    },
-    5 * 60 * 1000
-  ); // 延長到 5 分鐘
+    }, 5 * 60 * 1000); // 延長到 5 分鐘
 
   // === 階段 3: 延遲 10 分鐘後啟動低優先級任務 ===
-  setTimeout(
-    () => {
+  scheduleJobTimeout(() => {
       logger.info("Jobs", "啟動低優先級任務...");
 
       // Story 2.5: 資料保留與刪除任務
@@ -104,9 +113,7 @@ export function startAllJobs(): void {
 
       // Epic 4: 訂閱快照同步任務
       syncSubscriptionsJob.start();
-    },
-    10 * 60 * 1000
-  ); // 延長到 10 分鐘
+    }, 10 * 60 * 1000); // 延長到 10 分鐘
 
   logger.info("Jobs", "核心定時任務已啟動（其他任務將在背景分階段啟動）");
 }
@@ -116,6 +123,15 @@ export function startAllJobs(): void {
  */
 export function stopAllJobs(): void {
   logger.info("Jobs", "正在停止所有定時任務...");
-  // node-cron 任務會在程序結束時自動停止
-  // 如果需要手動控制，可以保存 cron.schedule 返回的 task 並調用 task.stop()
+
+  for (const task of scheduledTasks) {
+    task.stop();
+    task.destroy();
+  }
+  scheduledTasks.length = 0;
+
+  for (const timeoutHandle of startupTimeoutHandles) {
+    clearTimeout(timeoutHandle);
+  }
+  startupTimeoutHandles.clear();
 }

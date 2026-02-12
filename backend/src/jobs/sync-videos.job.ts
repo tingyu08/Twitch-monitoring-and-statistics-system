@@ -25,9 +25,11 @@ import { captureJobError } from "./job-error-tracker";
 const BATCH_SIZE = 20;           // 每批處理 20 個實況主（平衡性能與記憶體）
 const BATCH_DELAY_MS = 1500;     // 批次之間休息 1.5 秒（讓 GC 有時間清理）
 const STREAMER_DELAY_MS = 300;   // 每個實況主之間休息 300ms
+const JOB_TIMEOUT_MS = 90 * 60 * 1000;
 // P0 Fix: 使用統一的記憶體閾值常數
 const MAX_MEMORY_MB = MEMORY_THRESHOLDS.MAX_MB;
 const ENTITY_QUERY_BATCH_SIZE = 200;
+let isRunning = false;
 
 type StreamerSyncTarget = {
   id: string;
@@ -144,12 +146,22 @@ async function shouldSkipBatch(maxMemoryMB: number, context: string): Promise<bo
 }
 
 export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
+  if (isRunning) {
+    logger.warn("Jobs", "Sync Videos Job 正在執行中，跳過此次排程");
+    return;
+  }
+
+  isRunning = true;
   logger.info("Jobs", "開始執行 Sync Videos Job (記憶體優化版)...");
 
   const startTime = Date.now();
   let totalProcessed = 0;
   let totalSkipped = 0;
   let viewerChannelsSynced = 0;
+  let timeoutTriggered = false;
+  const timeoutHandle = setTimeout(() => {
+    timeoutTriggered = true;
+  }, JOB_TIMEOUT_MS);
 
   try {
     // ========== Part 1: 同步實況主的 Videos 和 Clips ==========
@@ -161,6 +173,11 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
 
     // 分批處理
     for (let i = 0; i < streamers.length; i += BATCH_SIZE) {
+      if (timeoutTriggered) {
+        logger.warn("Jobs", "Sync Videos Job 已達超時上限，提前結束");
+        break;
+      }
+
       const batch = streamers.slice(i, i + BATCH_SIZE);
       const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(streamers.length / BATCH_SIZE);
@@ -174,6 +191,8 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
 
       // 處理此批次
       for (const streamer of batch) {
+        if (timeoutTriggered) break;
+
         if (!streamer.twitchUserId) {
           totalSkipped++;
           continue;
@@ -219,6 +238,11 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
 
     // 分批處理 Channels
     for (let i = 0; i < followedChannels.length; i += BATCH_SIZE) {
+      if (timeoutTriggered) {
+        logger.warn("Jobs", "Sync Videos Job 已達超時上限，提前結束觀眾內容同步");
+        break;
+      }
+
       const batch = followedChannels.slice(i, i + BATCH_SIZE);
       const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(followedChannels.length / BATCH_SIZE);
@@ -231,6 +255,8 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
 
       // 處理此批次
       for (const channel of batch) {
+        if (timeoutTriggered) break;
+
         if (!channel.twitchChannelId) {
           continue;
         }
@@ -270,5 +296,8 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
   } catch (error) {
     logger.error("Jobs", "Sync Videos Job 執行失敗", error);
     captureJobError("sync-videos", error);
+  } finally {
+    clearTimeout(timeoutHandle);
+    isRunning = false;
   }
 });

@@ -7,6 +7,8 @@ const TAG_PREFIX = "bmad:cache-tag:";
 let redisClient: Redis | null = null;
 let redisFailureCount = 0;
 let redisDisabledUntil = 0;
+let redisCircuitOpenedCount = 0;
+let redisLastFailureReason: string | null = null;
 
 const REDIS_FAILURE_THRESHOLD = Number(process.env.REDIS_FAILURE_THRESHOLD || 5);
 const REDIS_CIRCUIT_BREAKER_MS = Number(process.env.REDIS_CIRCUIT_BREAKER_MS || 30000);
@@ -33,17 +35,13 @@ export function getRedisClient(): Redis | null {
   redisClient = new Redis(redisUrl, {
     maxRetriesPerRequest: 1,
     enableReadyCheck: true,
-    lazyConnect: true,
   });
 
   redisClient.on("error", (error: unknown) => {
     logger.warn("Redis", "Redis client error", error);
   });
 
-  redisClient
-    .connect()
-    .then(() => logger.info("Redis", "Redis connected"))
-    .catch((error: unknown) => logger.warn("Redis", "Redis connect failed", error));
+  redisClient.once("ready", () => logger.info("Redis", "Redis connected"));
 
   return redisClient;
 }
@@ -61,6 +59,7 @@ function markRedisFailure(): void {
   redisFailureCount += 1;
   if (redisFailureCount >= REDIS_FAILURE_THRESHOLD) {
     redisDisabledUntil = Date.now() + REDIS_CIRCUIT_BREAKER_MS;
+    redisCircuitOpenedCount += 1;
     logger.warn(
       "Redis",
       `Circuit breaker opened for ${REDIS_CIRCUIT_BREAKER_MS}ms after ${redisFailureCount} failures`
@@ -79,6 +78,20 @@ function getHealthyRedisClient(): Redis | null {
   return client;
 }
 
+export function getRedisCircuitBreakerStats() {
+  const now = Date.now();
+  return {
+    enabled: isRedisEnabled(),
+    open: isRedisCircuitOpen(),
+    openUntil: redisDisabledUntil > now ? new Date(redisDisabledUntil).toISOString() : null,
+    remainingOpenMs: Math.max(0, redisDisabledUntil - now),
+    openedCount: redisCircuitOpenedCount,
+    lastFailureReason: redisLastFailureReason,
+    failureThreshold: REDIS_FAILURE_THRESHOLD,
+    breakerWindowMs: REDIS_CIRCUIT_BREAKER_MS,
+  };
+}
+
 function cacheKey(key: string): string {
   return `${CACHE_PREFIX}${key}`;
 }
@@ -92,6 +105,7 @@ export async function redisGetJson<T>(key: string): Promise<T | null> {
     markRedisSuccess();
     return data ? (JSON.parse(data) as T) : null;
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis get failed for key=${key}`, error);
     return null;
@@ -106,6 +120,7 @@ export async function redisSetJson(key: string, value: unknown, ttlSeconds: numb
     await client.set(cacheKey(key), JSON.stringify(value), "EX", Math.max(1, ttlSeconds));
     markRedisSuccess();
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis set failed for key=${key}`, error);
   }
@@ -119,6 +134,7 @@ export async function redisDeleteKey(key: string): Promise<void> {
     await client.del(cacheKey(key));
     markRedisSuccess();
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis del failed for key=${key}`, error);
   }
@@ -141,6 +157,7 @@ async function scanDelete(pattern: string): Promise<number> {
     } while (cursor !== "0");
     markRedisSuccess();
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis scan delete failed pattern=${pattern}`, error);
   }
@@ -168,6 +185,7 @@ export async function redisTagAddKeys(tag: string, keys: string[]): Promise<void
     await client.sadd(tagKey(tag), ...keys.map((key) => cacheKey(key)));
     markRedisSuccess();
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis sadd failed for tag=${tag}`, error);
   }
@@ -182,6 +200,7 @@ export async function redisTagGetKeys(tag: string): Promise<string[]> {
     markRedisSuccess();
     return values.map((value) => value.replace(CACHE_PREFIX, ""));
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis smembers failed for tag=${tag}`, error);
     return [];
@@ -196,6 +215,7 @@ export async function redisTagDelete(tag: string): Promise<void> {
     await client.del(tagKey(tag));
     markRedisSuccess();
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis tag delete failed for tag=${tag}`, error);
   }
@@ -218,6 +238,7 @@ export async function redisAcquireLock(
     markRedisSuccess();
     return result === "OK";
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis lock acquire failed key=${key}`, error);
     return false;
@@ -234,6 +255,7 @@ export async function redisReleaseLock(key: string, token: string): Promise<void
     await client.eval(script, 1, lockKey(key), token);
     markRedisSuccess();
   } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
     markRedisFailure();
     logger.warn("Redis", `Redis lock release failed key=${key}`, error);
   }

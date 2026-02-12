@@ -10,7 +10,6 @@
 
 import { logger } from "./logger";
 import { appendFile, mkdir, readFile, writeFile } from "fs/promises";
-import os from "os";
 import path from "path";
 
 export interface QueueJob<T = unknown> {
@@ -340,14 +339,3 @@ export interface RevenueSyncJobData {
   streamerId: string;
   streamerName?: string;
 }
-
-/**
- * Revenue Sync 佇列單例
- */
-export const revenueSyncQueue = new MemoryQueue<RevenueSyncJobData>({
-  concurrency: 2,      // 同時處理 2 個任務
-  maxRetries: 2,       // 最多重試 2 次
-  maxQueueSize: 50,    // 最大 50 個待處理任務
-  retryDelayMs: 10000, // 重試間隔 10 秒
-  overflowFilePath: path.join(os.tmpdir(), "twitch-analytics", "revenue-sync-overflow.jsonl"),
-});

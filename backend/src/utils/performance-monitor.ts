@@ -72,13 +72,9 @@ const DEFAULT_CONFIG = {
 class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
   private config = DEFAULT_CONFIG;
-  private memoryCheckInterval?: NodeJS.Timeout;
-  private lastMemoryWarning = 0;
-  private readonly MEMORY_WARNING_COOLDOWN = 60000; // 1 分鐘只警告一次
 
   constructor(config?: Partial<typeof DEFAULT_CONFIG>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.startMemoryMonitoring();
   }
 
   /**
@@ -231,34 +227,14 @@ class PerformanceMonitor {
    * 啟動記憶體監控（針對 0.5GB RAM 環境）
    */
   private startMemoryMonitoring(): void {
-    this.memoryCheckInterval = setInterval(() => {
-      this.checkMemoryUsage();
-    }, this.config.memoryCheckIntervalMs);
-
-    // Don't prevent Node.js from exiting
-    if (this.memoryCheckInterval.unref) {
-      this.memoryCheckInterval.unref();
-    }
+    // 記憶體監控由 memory-monitor.ts 統一處理，避免重複監控器。
   }
 
   /**
    * 檢查記憶體使用並在必要時發出警告
    */
   private checkMemoryUsage(): void {
-    const memUsage = process.memoryUsage();
-    const rssMB = memUsage.rss / 1024 / 1024;
-
-    // 如果 RSS 超過閾值且距上次警告超過冷卻時間
-    if (
-      rssMB > this.config.memoryWarningThresholdMB &&
-      Date.now() - this.lastMemoryWarning > this.MEMORY_WARNING_COOLDOWN
-    ) {
-      this.lastMemoryWarning = Date.now();
-
-      if (global.gc) {
-        global.gc();
-      }
-    }
+    // 記憶體監控由 memory-monitor.ts 統一處理，避免重複監控器。
   }
 
   /**
@@ -279,9 +255,7 @@ class PerformanceMonitor {
    * 停止監控（清理資源）
    */
   stop(): void {
-    if (this.memoryCheckInterval) {
-      clearInterval(this.memoryCheckInterval);
-    }
+    // no-op
   }
 }
 

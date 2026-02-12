@@ -17,6 +17,43 @@ const DATA_RETENTION_CRON = process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 *
 
 export class DataRetentionJob {
   private isRunning = false;
+  private readonly MESSAGE_DELETE_BATCH_SIZE = 3000;
+  private readonly MESSAGE_DELETE_BATCH_DELAY_MS = 200;
+
+  private async batchDeleteViewerMessages(before: Date): Promise<number> {
+    let totalDeleted = 0;
+
+    while (true) {
+      const rows = await prisma.viewerChannelMessage.findMany({
+        where: { timestamp: { lt: before } },
+        select: { id: true },
+        take: this.MESSAGE_DELETE_BATCH_SIZE,
+        orderBy: { timestamp: "asc" },
+      });
+
+      if (rows.length === 0) {
+        break;
+      }
+
+      const deleted = await prisma.viewerChannelMessage.deleteMany({
+        where: {
+          id: {
+            in: rows.map((row) => row.id),
+          },
+        },
+      });
+
+      totalDeleted += deleted.count;
+
+      if (rows.length < this.MESSAGE_DELETE_BATCH_SIZE) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, this.MESSAGE_DELETE_BATCH_DELAY_MS));
+    }
+
+    return totalDeleted;
+  }
 
   /**
    * 啟動 Cron Job
@@ -55,28 +92,14 @@ export class DataRetentionJob {
       const cleanedExports = await dataExportService.cleanupExpiredExports();
       logger.info("DataRetention", `清理了 ${cleanedExports} 個過期匯出檔案`);
 
-      // 3. 清理過期的影片與剪輯 (7天)
-      logger.info("DataRetention", "清理過期的 VOD 與 Clip...");
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const deletedVideos = await prisma.video.deleteMany({
-        where: { createdAt: { lt: sevenDaysAgo } },
-      });
-      const deletedClips = await prisma.clip.deleteMany({
-        where: { createdAt: { lt: sevenDaysAgo } },
-      });
-
-      // 4. 清理過期聊天室訊息（保留 90 天）
+      // 3. 清理過期聊天室訊息（保留 90 天，使用分批刪除避免鎖表）
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-      const deletedViewerMessages = await prisma.viewerChannelMessage.deleteMany({
-        where: { timestamp: { lt: ninetyDaysAgo } },
-      });
+      const deletedViewerMessageCount = await this.batchDeleteViewerMessages(ninetyDaysAgo);
 
       logger.info(
         "DataRetention",
-        `清理了 ${deletedVideos.count} 個影片, ${deletedClips.count} 個剪輯, ${deletedViewerMessages.count} 則訊息`
+        `清理了 ${deletedViewerMessageCount} 則過期訊息`
       );
 
       logger.info("DataRetention", "Job 執行完成");

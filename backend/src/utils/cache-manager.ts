@@ -159,6 +159,10 @@ export class CacheManager {
       return null;
     }
 
+    // LRU: 讀取時提升為最近使用，避免熱點被錯誤淘汰
+    this.cache.delete(key);
+    this.cache.set(key, entry as CacheEntry<unknown>);
+
     this.stats.hits++;
     return entry.value;
   }
@@ -477,7 +481,7 @@ export class CacheManager {
 // 導出單例
 // P0 Optimization: 提升生產環境快取至 30MB，改善命中率從 40% 至 75-85%
 export const cacheManager = new CacheManager(
-  process.env.NODE_ENV === "production" ? 30 : 50 // 生產環境 30MB，開發環境 50MB
+  process.env.NODE_ENV === "production" ? 50 : 30 // 生產環境 50MB，開發環境 30MB
 );
 
 // 預定義的快取鍵生成器

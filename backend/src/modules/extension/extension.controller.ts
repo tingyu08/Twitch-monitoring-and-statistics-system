@@ -17,6 +17,40 @@ interface HeartbeatBody {
   duration: number; // seconds
 }
 
+const CHANNEL_ID_CACHE_TTL_MS = 5 * 60 * 1000;
+const channelIdCache = new Map<string, { channelId: string; expiresAt: number }>();
+
+async function getCachedChannelId(channelName: string): Promise<string | null> {
+  const normalized = channelName.toLowerCase();
+  const cached = channelIdCache.get(normalized);
+  const now = Date.now();
+
+  if (cached && cached.expiresAt > now) {
+    return cached.channelId;
+  }
+
+  const channel = await prisma.channel.findFirst({
+    where: {
+      channelName: normalized,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!channel) {
+    channelIdCache.delete(normalized);
+    return null;
+  }
+
+  channelIdCache.set(normalized, {
+    channelId: channel.id,
+    expiresAt: now + CHANNEL_ID_CACHE_TTL_MS,
+  });
+
+  return channel.id;
+}
+
 /**
  * POST /api/extension/token
  * Generate a dedicated extension JWT token for authenticated users
@@ -86,13 +120,9 @@ export async function postHeartbeatHandler(req: ExtensionAuthRequest, res: Respo
     }
 
     // 查找頻道
-    const channel = await prisma.channel.findFirst({
-      where: {
-        channelName: channelName.toLowerCase(),
-      },
-    });
+    const channelId = await getCachedChannelId(channelName);
 
-    if (!channel) {
+    if (!channelId) {
       logger.debug("EXTENSION", `Channel not found: ${channelName}`);
       res.json({ success: true, message: "Channel not tracked" });
       return;
@@ -102,17 +132,17 @@ export async function postHeartbeatHandler(req: ExtensionAuthRequest, res: Respo
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    await prisma.viewerChannelDailyStat.upsert({
+    const dailyStatPromise = prisma.viewerChannelDailyStat.upsert({
       where: {
         viewerId_channelId_date: {
           viewerId,
-          channelId: channel.id,
+          channelId,
           date: today,
         },
       },
       create: {
         viewerId,
-        channelId: channel.id,
+        channelId,
         date: today,
         watchSeconds: duration,
       },
@@ -122,16 +152,16 @@ export async function postHeartbeatHandler(req: ExtensionAuthRequest, res: Respo
     });
 
     // 更新生命週期統計的 lastWatchedAt
-    await prisma.viewerChannelLifetimeStats.upsert({
+    const lifetimeStatsPromise = prisma.viewerChannelLifetimeStats.upsert({
       where: {
         viewerId_channelId: {
           viewerId,
-          channelId: channel.id,
+          channelId,
         },
       },
       create: {
         viewerId,
-        channelId: channel.id,
+        channelId,
         lastWatchedAt: new Date(),
         totalWatchTimeMinutes: Math.floor(duration / 60),
       },
@@ -140,6 +170,8 @@ export async function postHeartbeatHandler(req: ExtensionAuthRequest, res: Respo
         totalWatchTimeMinutes: { increment: Math.floor(duration / 60) },
       },
     });
+
+    await Promise.all([dailyStatPromise, lifetimeStatsPromise]);
 
     logger.info(
       "EXTENSION",

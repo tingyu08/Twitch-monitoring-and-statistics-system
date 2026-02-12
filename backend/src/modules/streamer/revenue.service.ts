@@ -149,7 +149,7 @@ export class RevenueService {
   private async ensureBitsDailyAggFresh(streamerId: string, startDateKey: string): Promise<void> {
     const bootstrapKey = `revenue:${streamerId}:bits_daily_agg_bootstrap:${startDateKey}`;
 
-    await cacheManager.getOrSet(
+    await cacheManager.getOrSetWithTags(
       bootstrapKey,
       async () => {
         await this.withBitsDailyAggRefreshLock(`bootstrap:${streamerId}:${startDateKey}`, async () => {
@@ -160,7 +160,8 @@ export class RevenueService {
         });
         return true;
       },
-      BITS_DAILY_AGG_BOOTSTRAP_TTL_SECONDS
+      BITS_DAILY_AGG_BOOTSTRAP_TTL_SECONDS,
+      [`streamer:${streamerId}`, "revenue:bits-agg"]
     );
 
     const recentStartDate = this.addDays(new Date(), -BITS_DAILY_AGG_RECENT_REFRESH_DAYS);
@@ -168,7 +169,7 @@ export class RevenueService {
     const recentStartKey = this.maxDateKey(startDateKey, this.toDateKey(recentStartDate));
     const refreshKey = `revenue:${streamerId}:bits_daily_agg_recent_refresh:${recentStartKey}`;
 
-    await cacheManager.getOrSet(
+    await cacheManager.getOrSetWithTags(
       refreshKey,
       async () => {
         await this.withBitsDailyAggRefreshLock(`recent:${streamerId}:${recentStartKey}`, async () => {
@@ -176,7 +177,8 @@ export class RevenueService {
         });
         return true;
       },
-      BITS_DAILY_AGG_REFRESH_TTL_SECONDS
+      BITS_DAILY_AGG_REFRESH_TTL_SECONDS,
+      [`streamer:${streamerId}`, "revenue:bits-agg"]
     );
   }
 

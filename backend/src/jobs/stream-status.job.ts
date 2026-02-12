@@ -12,6 +12,7 @@ import { logger } from "../utils/logger";
 import { memoryMonitor } from "../utils/memory-monitor";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
+import { chatListenerManager } from "../services/chat-listener-manager";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
@@ -20,10 +21,10 @@ const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
 const MAX_CHANNELS_PER_BATCH = 100;
 
 // P0-6: Active session 查詢批次大小
-const SESSION_QUERY_BATCH_SIZE = 20;
+const SESSION_QUERY_BATCH_SIZE = 200;
 
 // P0-6: 批次間休息時間
-const BATCH_DELAY_MS = 1000;
+const BATCH_DELAY_MS = 100;
 
 // 超時時間（毫秒）- 優化：增加到 4 分鐘以處理大量頻道（286+）
 const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
@@ -216,6 +217,8 @@ export class StreamStatusJob {
         } else if (!isLive && activeSession) {
           // 已下播：結束 session (直接使用 activeSession 物件)
           await this.endStreamSession(activeSession);
+          // 釋放 listener slot
+          await chatListenerManager.stopListening(channel.channelName);
           result.endedSessions++;
           result.offline++;
         } else {
@@ -269,20 +272,7 @@ export class StreamStatusJob {
    * 獲取所有需要監控的頻道
    */
   private async getActiveChannels(): Promise<MonitoredChannel[]> {
-    const totalChannels = await prisma.channel.count();
-    const monitoredChannels = await prisma.channel.count({
-      where: { isMonitored: true },
-    });
-
-    // 只在 debug 模式顯示詳細統計
-    if (process.env.NODE_ENV !== "production") {
-      logger.debug(
-        "JOB",
-        `頻道統計: 總共 ${totalChannels} 個頻道, 其中 ${monitoredChannels} 個正在監控`
-      );
-    }
-
-    return (await prisma.channel.findMany({
+    const channels = (await prisma.channel.findMany({
       where: { isMonitored: true },
       select: {
         id: true,
@@ -290,6 +280,12 @@ export class StreamStatusJob {
         channelName: true,
       },
     })) as MonitoredChannel[];
+
+    if (process.env.NODE_ENV !== "production") {
+      logger.debug("JOB", `頻道統計: 監控中 ${channels.length} 個頻道`);
+    }
+
+    return channels;
   }
 
   /**

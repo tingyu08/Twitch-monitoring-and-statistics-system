@@ -228,25 +228,55 @@ export default function ViewerDashboardPage() {
   useEffect(() => {
     if (!socket || !socketConnected) return;
 
+    type ChannelMutation = {
+      matcher: (channel: FollowedChannel) => boolean;
+      updater: (channel: FollowedChannel) => FollowedChannel;
+    };
+
+    const pendingMutations: ChannelMutation[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushMutations = () => {
+      if (pendingMutations.length === 0) {
+        flushTimer = null;
+        return;
+      }
+
+      const mutations = pendingMutations.splice(0, pendingMutations.length);
+      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
+        if (!prev) return prev;
+
+        let next = prev;
+        for (const mutation of mutations) {
+          const targetIndex = next.findIndex(mutation.matcher);
+          if (targetIndex === -1) continue;
+
+          const current = next[targetIndex];
+          const updated = mutation.updater(current);
+          if (updated === current) continue;
+
+          if (next === prev) {
+            next = prev.slice();
+          }
+          next[targetIndex] = updated;
+        }
+
+        if (next !== prev) {
+          syncSessionCache(next);
+        }
+        return next;
+      });
+
+      flushTimer = null;
+    };
+
     const updateSingleChannel = (
       matcher: (channel: FollowedChannel) => boolean,
       updater: (channel: FollowedChannel) => FollowedChannel
     ) => {
-      queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
-        if (!prev) return prev;
-
-        const targetIndex = prev.findIndex(matcher);
-        if (targetIndex === -1) return prev;
-
-        const current = prev[targetIndex];
-        const updated = updater(current);
-        if (updated === current) return prev;
-
-        const next = prev.slice();
-        next[targetIndex] = updated;
-        syncSessionCache(next);
-        return next;
-      });
+      pendingMutations.push({ matcher, updater });
+      if (flushTimer) return;
+      flushTimer = setTimeout(flushMutations, 180);
     };
 
     // 處理開台事件（即時通知）
@@ -383,6 +413,9 @@ export default function ViewerDashboardPage() {
     socket.on("stats-update", handleStatsUpdate);
 
     return () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+      }
       socket.off("stream.online", handleStreamOnline);
       socket.off("stream.offline", handleStreamOffline);
       socket.off("channel.update", handleChannelUpdate);

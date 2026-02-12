@@ -52,7 +52,7 @@ export async function getPublicGameStatsHandler(req: Request, res: Response): Pr
     const cacheKey = `channel:${channelId}:gamestats:${range}`;
     const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
 
-    const stats = await cacheManager.getOrSet(
+    const stats = await cacheManager.getOrSetWithTags(
       cacheKey,
       async () => {
         const channel = await prisma.channel.findUnique({
@@ -66,7 +66,8 @@ export async function getPublicGameStatsHandler(req: Request, res: Response): Pr
 
         return await getStreamerGameStats(channel.streamerId, range as "7d" | "30d" | "90d");
       },
-      ttl
+      ttl,
+      [`channel:${channelId}`, "streamer:public-game-stats"]
     );
 
     res.json(stats);
@@ -213,7 +214,7 @@ export async function getPublicViewerTrendsHandler(req: Request, res: Response):
     const cacheKey = `channel:${channelId}:viewertrends:${range}`;
     const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
 
-    const data = await cacheManager.getOrSet(
+    const data = await cacheManager.getOrSetWithTags(
       cacheKey,
       async () => {
         const channel = await prisma.channel.findUnique({
@@ -263,7 +264,8 @@ export async function getPublicViewerTrendsHandler(req: Request, res: Response):
           })
         );
       },
-      ttl
+      ttl,
+      [`channel:${channelId}`, "streamer:public-viewer-trends"]
     );
 
     res.json(data);
@@ -293,7 +295,7 @@ export async function getPublicStreamHourlyHandler(req: Request, res: Response):
     // 歷史資料使用較長的 TTL（30 分鐘），因為不會再變動
     const ttl = getAdaptiveTTL(CacheTTL.VERY_LONG, cacheManager);
 
-    const data = await cacheManager.getOrSet(
+    const data = await cacheManager.getOrSetWithTags(
       cacheKey,
       async () => {
         const startOfDay = new Date(date as string);
@@ -374,7 +376,8 @@ export async function getPublicStreamHourlyHandler(req: Request, res: Response):
 
         return result;
       },
-      ttl
+      ttl,
+      [`channel:${channelId}`, "streamer:public-stream-hourly"]
     );
 
     res.json(data);
