@@ -34,12 +34,6 @@ interface CountRow {
   cnt: number | bigint | string | null;
 }
 
-interface PercentileUpdateRow {
-  id: string;
-  watchTimePercentile: number;
-  messagePercentile: number;
-}
-
 function normalizeDateToDay(value: Date | string): string {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
     return value.slice(0, 10);
@@ -274,74 +268,41 @@ export class LifetimeStatsAggregatorService {
    * 使用批量 SQL 寫入，降低逐筆 UPDATE 造成的寫入鎖競爭
    */
   public async updatePercentileRankings(channelId: string): Promise<void> {
-    const allStats = await prisma.viewerChannelLifetimeStats.findMany({
+    const statsCount = await prisma.viewerChannelLifetimeStats.count({
       where: { channelId },
-      select: {
-        id: true,
-        totalWatchTimeMinutes: true,
-        totalMessages: true,
-      },
     });
 
-    if (allStats.length === 0) return;
+    if (statsCount === 0) return;
 
-    // Sort arrays - O(n log n)
-    const sortedByWatchTime = [...allStats].sort(
-      (a, b) => a.totalWatchTimeMinutes - b.totalWatchTimeMinutes
-    );
-    const sortedByMessages = [...allStats].sort((a, b) => a.totalMessages - b.totalMessages);
-
-    // Build rank Maps for O(1) lookup - O(n)
-    const watchRankMap = new Map<string, number>();
-    const msgRankMap = new Map<string, number>();
-
-    for (let i = 0; i < sortedByWatchTime.length; i++) {
-      watchRankMap.set(sortedByWatchTime[i].id, i);
-    }
-
-    for (let i = 0; i < sortedByMessages.length; i++) {
-      msgRankMap.set(sortedByMessages[i].id, i);
-    }
-
-    const statsCount = allStats.length;
-    const updates: PercentileUpdateRow[] = [];
-
-    // Build updates using Map lookup - O(n)
-    for (const stat of allStats) {
-      const watchRank = watchRankMap.get(stat.id) ?? statsCount;
-      const msgRank = msgRankMap.get(stat.id) ?? statsCount;
-
-      const watchTimePercentile = (watchRank / statsCount) * 100;
-      const messagePercentile = (msgRank / statsCount) * 100;
-
-      updates.push({
-        id: stat.id,
-        watchTimePercentile,
-        messagePercentile,
-      });
-    }
-
-    // 分批執行批量 SQL，避免單次語句過大
-    const BATCH_SIZE = 200;
-    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-      const batch = updates.slice(i, i + BATCH_SIZE);
-      const watchCases = batch.map(
-        (row) => Prisma.sql`WHEN ${row.id} THEN ${row.watchTimePercentile}`
-      );
-      const messageCases = batch.map(
-        (row) => Prisma.sql`WHEN ${row.id} THEN ${row.messagePercentile}`
-      );
-      const ids = batch.map((row) => row.id);
-
-      await prisma.$executeRaw(Prisma.sql`
-        UPDATE viewer_channel_lifetime_stats
-        SET
-          watchTimePercentile = CASE id ${Prisma.join(watchCases, " ")} ELSE watchTimePercentile END,
-          messagePercentile = CASE id ${Prisma.join(messageCases, " ")} ELSE messagePercentile END,
-          updatedAt = CURRENT_TIMESTAMP
-        WHERE id IN (${Prisma.join(ids)})
-      `);
-    }
+    await prisma.$executeRaw(Prisma.sql`
+      WITH ranked AS (
+        SELECT
+          id,
+          CASE
+            WHEN cnt = 0 THEN 0.0
+            ELSE ((watchRank - 1) * 100.0 / cnt)
+          END AS watchPercentile,
+          CASE
+            WHEN cnt = 0 THEN 0.0
+            ELSE ((messageRank - 1) * 100.0 / cnt)
+          END AS messagePercentile
+        FROM (
+          SELECT
+            id,
+            ROW_NUMBER() OVER (ORDER BY totalWatchTimeMinutes ASC, id ASC) AS watchRank,
+            ROW_NUMBER() OVER (ORDER BY totalMessages ASC, id ASC) AS messageRank,
+            COUNT(*) OVER () AS cnt
+          FROM viewer_channel_lifetime_stats
+          WHERE channelId = ${channelId}
+        ) base
+      )
+      UPDATE viewer_channel_lifetime_stats
+      SET
+        watchTimePercentile = (SELECT ranked.watchPercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
+        messagePercentile = (SELECT ranked.messagePercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
+        updatedAt = CURRENT_TIMESTAMP
+      WHERE channelId = ${channelId}
+    `);
 
     logger.info("LifetimeStats", `Updated rankings for channel ${channelId}`);
   }

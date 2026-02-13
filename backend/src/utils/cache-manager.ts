@@ -351,6 +351,32 @@ export class CacheManager {
         this.setInternal(key, redisCached, ttlSeconds, tags);
         return redisCached;
       }
+
+      const lockToken = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const lockAcquired = await redisAcquireLock(key, lockToken, this.redisLockTtlMs);
+
+      if (!lockAcquired) {
+        for (let i = 0; i < this.redisWaitRetries; i++) {
+          await new Promise((resolve) => setTimeout(resolve, this.redisWaitIntervalMs));
+          const waitedValue = await redisGetJson<T>(key);
+          if (waitedValue !== null) {
+            this.stats.hits++;
+            this.setInternal(key, waitedValue, ttlSeconds, tags);
+            return waitedValue;
+          }
+        }
+      } else {
+        try {
+          const value = await factory();
+          this.setInternal(key, value, ttlSeconds, tags);
+          return value;
+        } catch (error) {
+          logger.warn("Cache", `Factory failed for key: ${key}`);
+          throw error;
+        } finally {
+          await redisReleaseLock(key, lockToken);
+        }
+      }
     }
 
     const pending = this.pendingPromises.get(key);

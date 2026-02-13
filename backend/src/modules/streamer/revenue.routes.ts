@@ -40,7 +40,7 @@ const exportLimiter = rateLimit({
 });
 
 // 所有路由都需要認證，且必須是 Streamer
-router.use((req, res, next) => requireAuth(req, res, next));
+router.use(requireAuth());
 router.use(requireStreamer);
 
 // GET /api/streamer/revenue/overview - 收益總覽

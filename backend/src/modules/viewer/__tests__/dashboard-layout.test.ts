@@ -5,7 +5,7 @@ import { dashboardLayoutService } from "../dashboard-layout.service";
 
 jest.mock("../dashboard-layout.service");
 jest.mock("../../auth/auth.middleware", () => ({
-  requireAuth: (req: any, res: any, next: any) => {
+  requireAuth: () => (req: any, _res: any, next: any) => {
     req.user = { viewerId: "v1", role: "viewer" };
     next();
   },

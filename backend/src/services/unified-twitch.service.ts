@@ -46,6 +46,10 @@ export interface ViewerChannelRelation {
 // ========== 服務實作 ==========
 
 export class UnifiedTwitchService {
+  private channelInfoByIdCache = new Map<string, { value: ChannelInfo | null; expiresAt: number }>();
+  private channelInfoByIdPending = new Map<string, Promise<ChannelInfo | null>>();
+  private readonly channelInfoByIdTtlMs = Number(process.env.CHANNEL_INFO_BY_ID_TTL_MS || 30000);
+
   // ========== 初始化 ==========
 
   /**
@@ -113,35 +117,64 @@ export class UnifiedTwitchService {
    * 透過 Twitch ID 獲取頻道完整資訊（推薦使用，ID 永不改變）
    */
   async getChannelInfoById(twitchId: string): Promise<ChannelInfo | null> {
-    try {
-      const user = await twurpleHelixService.getUserById(twitchId);
-      if (!user) {
-        // 降為 debug：帳號可能被封禁/刪除，這是正常情況
-        logger.debug("Twitch Service", `Helix 找不到用戶 ID: ${twitchId}（可能已封禁或刪除）`);
-        return null;
-      }
-
-      // 並行獲取直播狀態和追蹤者數量
-      const [stream, followerCount] = await Promise.all([
-        twurpleHelixService.getStream(user.id),
-        twurpleHelixService.getFollowerCount(user.id).catch(() => 0),
-      ]);
-
-      return {
-        id: user.id,
-        login: user.login,
-        displayName: user.displayName,
-        avatarUrl: user.profileImageUrl,
-        isLive: stream?.type === "live",
-        currentGame: stream?.gameName,
-        streamTitle: stream?.title,
-        viewerCount: stream?.viewerCount,
-        followerCount,
-      };
-    } catch (error) {
-      logger.error("Twitch Service", `透過 ID 獲取頻道資訊失敗: ${twitchId}`, error);
-      return null;
+    const now = Date.now();
+    const cached = this.channelInfoByIdCache.get(twitchId);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
     }
+
+    const pending = this.channelInfoByIdPending.get(twitchId);
+    if (pending) {
+      return pending;
+    }
+
+    const loadPromise = (async (): Promise<ChannelInfo | null> => {
+      try {
+        const user = await twurpleHelixService.getUserById(twitchId);
+        if (!user) {
+          // 降為 debug：帳號可能被封禁/刪除，這是正常情況
+          logger.debug("Twitch Service", `Helix 找不到用戶 ID: ${twitchId}（可能已封禁或刪除）`);
+          this.channelInfoByIdCache.set(twitchId, {
+            value: null,
+            expiresAt: now + Math.min(this.channelInfoByIdTtlMs, 10000),
+          });
+          return null;
+        }
+
+        // 並行獲取直播狀態和追蹤者數量
+        const [stream, followerCount] = await Promise.all([
+          twurpleHelixService.getStream(user.id),
+          twurpleHelixService.getFollowerCount(user.id).catch(() => 0),
+        ]);
+
+        const payload: ChannelInfo = {
+          id: user.id,
+          login: user.login,
+          displayName: user.displayName,
+          avatarUrl: user.profileImageUrl,
+          isLive: stream?.type === "live",
+          currentGame: stream?.gameName,
+          streamTitle: stream?.title,
+          viewerCount: stream?.viewerCount,
+          followerCount,
+        };
+
+        this.channelInfoByIdCache.set(twitchId, {
+          value: payload,
+          expiresAt: now + this.channelInfoByIdTtlMs,
+        });
+
+        return payload;
+      } catch (error) {
+        logger.error("Twitch Service", `透過 ID 獲取頻道資訊失敗: ${twitchId}`, error);
+        return null;
+      } finally {
+        this.channelInfoByIdPending.delete(twitchId);
+      }
+    })();
+
+    this.channelInfoByIdPending.set(twitchId, loadPromise);
+    return loadPromise;
   }
 
   /**

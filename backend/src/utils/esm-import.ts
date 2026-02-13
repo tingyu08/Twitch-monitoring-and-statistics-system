@@ -14,9 +14,7 @@ async function importEsm<T = unknown>(moduleName: string): Promise<T> {
   if (!allowedEsmModules.has(moduleName)) {
     throw new Error(`[esm-import] Module not allowed: ${moduleName}`);
   }
-  // Avoid TypeScript rewriting import() into require() in CommonJS output.
-  const dynamicImport = new Function("moduleName", "return import(moduleName)");
-  return dynamicImport(moduleName);
+  return import(moduleName) as Promise<T>;
 }
 
 export async function importTwurpleApi() {

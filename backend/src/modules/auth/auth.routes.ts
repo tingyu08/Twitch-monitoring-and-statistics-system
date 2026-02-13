@@ -17,8 +17,8 @@ oauthRouter.post("/exchange", authController.exchange);
 
 // API 路由（需要認證）
 const apiRouter = Router();
-apiRouter.get("/me", (req, res, next) => requireAuth(req, res, next), getMeHandler);
-apiRouter.post("/logout", (req, res, next) => requireAuth(req, res, next), logoutHandler);
+apiRouter.get("/me", requireAuth(), getMeHandler);
+apiRouter.post("/logout", requireAuth(), logoutHandler);
 apiRouter.post("/refresh", authController.refresh);
 
 // Handler 函數（保留原有函數供測試使用）
@@ -69,6 +69,11 @@ export async function logoutHandler(req: AuthRequest, res: Response): Promise<vo
   clearAuthCookies(res);
 
   if (req.user?.role === "viewer" && req.user.viewerId) {
+    await prisma.viewer.update({
+      where: { id: req.user.viewerId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+
     await prisma.twitchToken.deleteMany({
       where: { viewerId: req.user.viewerId },
     });

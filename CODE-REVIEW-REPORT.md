@@ -12,11 +12,10 @@
 
 ### 1) 效能 / 查詢 / 回應
 
-- `[未完成] QUERY-01`：Percentile 排名仍未改為 SQL window function。
 - `[部分完成] QUERY-02`：影片/剪輯同步已做分批並行，但尚未完成真正批次 SQL upsert 策略。
 - `[部分完成] QUERY-03`：已收斂 `channel-stats-sync` 對 session 的寫入，但 live-status 工作仍未完全合併為單一路徑。
-- `[未完成] QUERY-04`：`getChannelInfoById` 仍有序列 API 呼叫模式。
-- `[未完成] QUERY-08`：全域 over-fetch（`include` -> `select`）尚未系統性清理。
+- `[部分完成] QUERY-04`：已加入 `getChannelInfoById` 快取與請求合併，仍待更深層 API 批次化。
+- `[部分完成] QUERY-08`：已清理多條熱路徑 over-fetch，但尚未完成全域掃描。
 - `[未完成] QUERY-10`：aggregate/watch-time 重複掃描尚未整併。
 - `[未完成] QUERY-12`：Prisma `$use` middleware 尚未遷移到 `$extends`。
 
@@ -24,26 +23,19 @@
 
 ### 2) 批次作業 / 記憶體 / 寫入量
 
-- `[未完成] BATCH-04`：write guard 仍偏全域鎖模型，尚未完成 per-job/per-resource。
 
-- `[未完成] MEM-02`：熱門頻道 percentile 記憶體峰值優化未完成（與 QUERY-01 同源）。
+- `[部分完成] MEM-02`：排名計算改為 DB 端更新，記憶體峰值已顯著下降；仍待生產壓測確認。
 - `[未完成] MEM-06`：`estimateSize` 成本優化尚未完成。
-- `[未完成] MEM-10`：cache stampede fallback 路徑補強未完成。
-- `[未完成] MEM-11`：`getOrSetWithTags` distributed lock 未完成。
+- `[部分完成] MEM-10`：`getOrSetWithTags` 已補 Redis lock + wait fallback，待高併發壓測驗證。
 - `[未完成] MEM-12`：overflow 檔案併發讀寫競態未解。
 
 - `[部分完成] WRITE-01`：Session 寫入衝突已再降低，且平均值公式已修正；但 EventSub/排程的單一權威路徑仍待最終收斂。
 
 ### 3) 安全 / Schema / 架構
 
-- `[部分完成] SEC-02`：logout/token 失效流程仍有雙路徑一致性問題。
-- `[部分完成] SEC-05`：`requireAuth` 已改善，但全域路由誤用掃描與統一仍未完成。
-- `[部分完成] SEC-07`：`redirectUri` 白名單已加，但 state/CSRF 全流程仍待收斂。
 
 - `[部分完成] SCHEMA-01`：已產出冗餘索引清理 migration（待在生產環境套用與驗證）。
-- `[未完成] SCHEMA-02`：`CheerDailyAgg` relation/FK 尚未補齊。
 
-- `[部分完成] ARCH-01`：`new Function(import...)` 僅部分移除，尚未全清。
 - `[未完成] ARCH-02`：AuthController dead code 清理尚未完成（需先最終確認使用路徑）。
 - `[未完成] ARCH-03`：template service CRUD 去重未完成。
 - `[未完成] ARCH-07`：註解編碼亂碼尚未全域清理。
@@ -61,9 +53,10 @@
 - `[已完成] STARTUP-01`：Revenue prewarm 改為並行處理。
 - `[已完成] STARTUP-02`：viewer cache warmup 改為分批並行，降低冷啟序列等待。
 - `[已完成] STARTUP-03`：Redis 移除 `lazyConnect` 啟動空窗。
-- `[部分完成] STARTUP-04`：`console.warn` 攔截範圍已縮小，但未完全移除全域覆寫。
+- `[已完成] STARTUP-04`：已移除全域 `console.warn` 覆寫，改回標準 logger 行為。
 
 - `[已完成] QUERY-05`：移除 stream-status 無必要 COUNT 查詢。
+- `[已完成] QUERY-01`：`updatePercentileRankings` 改為 DB 端排名更新，移除全量載入排序。
 - `[已完成] QUERY-06`：`getFollowedChannels` 導入使用者 ApiClient 快取（含容量上限），降低重複初始化成本。
 - `[已完成] QUERY-07`：`channel-stats-sync` 日統計改為 DB 端聚合（`groupBy`），移除 JS 端全量分組。
 - `[已完成] QUERY-09`：extension heartbeat 已加入 channelId 快取。
@@ -103,10 +96,14 @@
 - `[已完成] WRITE-12`：EventSub stream online 已做 session 去重保護。
 - `[已完成] WRITE-13`：`cleanupExpiredExports` 改批次狀態更新（`updateMany`）與並行刪檔。
 - `[已完成] WRITE-08`：viewer-message 批次寫入改為「原始訊息落地 + 聚合交易」縮小交易範圍，降低鎖競爭。
+- `[已完成] BATCH-04`：write guard 已從全域隊列改為資源鍵控寫入鎖。
 
 ### 3) 安全 / Schema / 架構
 
 - `[已完成] SEC-04`：viewer-message-stats IDOR 已封鎖。
+- `[已完成] SEC-02`：logout/token 失效流程已統一，`logoutHandler` 亦會遞增 `tokenVersion`。
+- `[已完成] SEC-05`：主要 production routes 已統一使用 `requireAuth()` / `requireAuth(["viewer"])`，並同步修正測試 mock。
+- `[已完成] SEC-07`：`/auth/exchange` 已補 state cookie 驗證與清理，CSRF 流程收斂。
 - `[已完成] SEC-06`：EventSub 驗簽改用 `rawBody`。
 - `[已完成] SEC-08`：heartbeat `duration` 上限已加 (`max(3600)`)。
 - `[已完成] SEC-09`：proxy 禁止 redirect 跟隨 (`maxRedirects: 0`)。
@@ -118,6 +115,12 @@
 - `[已完成] ARCH-04`：多處控制器型別統一為 `AuthRequest`。
 - `[已完成] ARCH-05`：Cookie 清理/設定邏輯已集中重用，減少重複。
 - `[已完成] ARCH-06`：stream-status running average 改為基於樣本數的正確累計平均。
+- `[已完成] ARCH-01`：已全域移除 backend `new Function(import...)`，統一改用安全動態 import helper。
+
+### 4) 快取與資料模型
+
+- `[已完成] MEM-11`：`getOrSetWithTags` 已補分散式鎖，減少多實例快取擊穿。
+- `[已完成] SCHEMA-02`：`CheerDailyAgg` 已補 relation/FK（待 migration 套用）。
 
 ---
 

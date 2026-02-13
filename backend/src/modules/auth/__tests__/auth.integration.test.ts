@@ -15,8 +15,7 @@ describe("Auth Integration Tests", () => {
     app = express();
     app.use(express.json());
     app.use(cookieParser());
-    // Wrap requireAuth to ensure it's treated as middleware (3 params), not error handler (4 params)
-    app.get("/api/auth/me", (req, res, next) => requireAuth(req, res, next), getMeHandler);
+    app.get("/api/auth/me", requireAuth(), getMeHandler);
   });
 
   describe("GET /api/auth/me", () => {

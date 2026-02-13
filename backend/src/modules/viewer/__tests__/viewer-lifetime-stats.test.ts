@@ -6,7 +6,7 @@ import { viewerLifetimeStatsService } from "../viewer-lifetime-stats.service";
 // Mock dependencies
 jest.mock("../viewer-lifetime-stats.service");
 jest.mock("../../auth/auth.middleware", () => ({
-  requireAuth: (req: any, res: any, next: any) => {
+  requireAuth: () => (req: any, _res: any, next: any) => {
     req.user = { viewerId: "v1", role: "viewer" };
     next();
   },

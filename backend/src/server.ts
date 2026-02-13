@@ -12,21 +12,6 @@ if (process.env.SENTRY_DSN) {
   console.log("✅ Sentry 錯誤追蹤已啟用");
 }
 
-// 過濾 Twurple rate-limiter 警告（來自底層套件，無法通過 logger 配置隱藏）
-const originalWarn = console.warn;
-console.warn = (...args: unknown[]) => {
-  const message = args[0];
-  if (
-    typeof message === "string" &&
-    message.includes("Twurple") &&
-    message.includes("rate") &&
-    message.includes("limit")
-  ) {
-    return; // 忽略 rate-limit 相關警告
-  }
-  originalWarn.apply(console, args);
-};
-
 import http from "http";
 import app from "./app";
 import { unifiedTwitchService } from "./services/unified-twitch.service";

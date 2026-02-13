@@ -192,10 +192,19 @@ export class AuthController {
   public exchange = async (req: Request, res: Response) => {
     const code = req.body?.code as string | undefined;
     const redirectUri = req.body?.redirectUri as string | undefined;
+    const state = req.body?.state as string | undefined;
 
     try {
       if (!code) {
         return res.status(400).json({ message: "Authorization code missing" });
+      }
+
+      const storedState = req.cookies?.[STREAMER_STATE_COOKIE] as string | undefined;
+      if (storedState) {
+        if (!state || state !== storedState) {
+          return res.status(403).json({ message: "Invalid state parameter (CSRF detected)" });
+        }
+        res.clearCookie(STREAMER_STATE_COOKIE);
       }
 
       if (!isAllowedRedirectUri(redirectUri)) {

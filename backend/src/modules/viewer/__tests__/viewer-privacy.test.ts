@@ -54,7 +54,7 @@ import { prisma as mockPrismaClient } from "../../../db/prisma";
 
 // Mock Auth Middleware
 jest.mock("../../auth/auth.middleware", () => ({
-  requireAuth: (req: any, _res: any, next: any) => {
+  requireAuth: () => (req: any, _res: any, next: any) => {
     req.user = { twitchUserId: "test-twitch-id", role: "viewer" };
     next();
   },

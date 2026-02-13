@@ -20,14 +20,14 @@ import { dashboardLayoutController } from "./dashboard-layout.controller";
 const viewerApiRoutes = Router();
 viewerApiRoutes.post(
   "/consent",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.consentSchema),
   controller.consent
 );
 
 viewerApiRoutes.get(
   "/stats/:channelId",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   dynamicCache, // P2 優化：10 秒快取
   controller.getChannelStats
 );
@@ -35,7 +35,7 @@ viewerApiRoutes.get(
 // P0 BFF Endpoint: 聚合詳細頁所有資料
 viewerApiRoutes.get(
   "/channel-detail/:channelId",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   dynamicCache, // P2 優化：10 秒快取（BFF 聚合端點）
   controller.getChannelDetailAll
 );
@@ -43,14 +43,14 @@ viewerApiRoutes.get(
 // New Interaction Stats Route
 viewerApiRoutes.get(
   "/:viewerId/channels/:channelId/message-stats",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   dynamicCache, // P2 優化：10 秒快取
   messageStatsController.getMessageStats
 );
 
 viewerApiRoutes.get(
   "/channels",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   semiStaticCache, // P2 優化：30 秒快取
   controller.getChannels
 );
@@ -58,14 +58,14 @@ viewerApiRoutes.get(
 // Privacy Control Routes (Legacy)
 viewerApiRoutes.get(
   "/privacy/settings",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   noCache, // P2 優化：隱私資料不快取
   privacyController.getPrivacySettings.bind(privacyController)
 );
 
 viewerApiRoutes.put(
   "/privacy/settings",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.updatePrivacySettingsSchema),
   noCache, // P2 優化：隱私資料不快取
   privacyController.updatePrivacySettings.bind(privacyController)
@@ -73,20 +73,20 @@ viewerApiRoutes.put(
 
 viewerApiRoutes.get(
   "/privacy/data-summary",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   noCache, // P2 優化：隱私資料不快取
   privacyController.getDataSummary.bind(privacyController)
 );
 
 viewerApiRoutes.delete(
   "/privacy/messages",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   privacyController.clearAllMessages.bind(privacyController)
 );
 
 viewerApiRoutes.delete(
   "/privacy/messages/:channelId",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.clearChannelMessagesSchema),
   privacyController.clearChannelMessages.bind(privacyController)
 );
@@ -94,94 +94,94 @@ viewerApiRoutes.delete(
 // Story 2.5: Privacy Consent Routes (Fine-grained)
 viewerApiRoutes.get(
   "/pref/status",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   privacyController.getConsentSettings.bind(privacyController)
 );
 
 viewerApiRoutes.patch(
   "/pref/status",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.updateConsentSettingsSchema),
   privacyController.updateConsentSettings.bind(privacyController)
 );
 
 viewerApiRoutes.post(
   "/pref/opt-all",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   privacyController.acceptAllConsent.bind(privacyController)
 );
 
 // Story 2.5: Data Export Routes
 viewerApiRoutes.post(
   "/privacy/export",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.requestExportSchema),
   privacyController.requestExport.bind(privacyController)
 );
 
 viewerApiRoutes.get(
   "/privacy/export/:jobId",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   privacyController.getExportStatus.bind(privacyController)
 );
 
 viewerApiRoutes.get(
   "/privacy/export/:jobId/download",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   privacyController.downloadExport.bind(privacyController)
 );
 
 // Story 2.5: Account Deletion Routes
 viewerApiRoutes.post(
   "/privacy/delete-account",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.deleteAccountSchema),
   privacyController.requestDeleteAccount.bind(privacyController)
 );
 
 viewerApiRoutes.post(
   "/privacy/cancel-deletion",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   privacyController.cancelDeletion.bind(privacyController)
 );
 
 viewerApiRoutes.get(
   "/privacy/deletion-status",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   privacyController.getDeletionStatus.bind(privacyController)
 );
 
 // Lifetime Stats Routes
 viewerApiRoutes.get(
   "/:viewerId/channels/:channelId/lifetime-stats",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   viewerLifetimeStatsController.getLifetimeStats
 );
 
 // Dashboard Layout Routes
 viewerApiRoutes.post(
   "/dashboard-layout",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.saveDashboardLayoutSchema),
   dashboardLayoutController.saveLayout
 );
 
 viewerApiRoutes.get(
   "/dashboard-layout/:channelId",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   dashboardLayoutController.getLayout
 );
 
 viewerApiRoutes.delete(
   "/dashboard-layout/:channelId",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   dashboardLayoutController.resetLayout
 );
 
 // 設定監聽頻道（前端分頁換頁時調用）
 viewerApiRoutes.post(
   "/listen-channels",
-  (req, res, next) => requireAuth(req, res, next, ["viewer"]),
+  requireAuth(["viewer"]),
   validateRequest(schemas.listenChannelsSchema),
   async (req: AuthRequest, res) => {
     try {

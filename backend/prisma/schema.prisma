@@ -26,6 +26,7 @@ model Streamer {
   settingTemplates      StreamerSettingTemplate[]
   subscriptionSnapshots SubscriptionSnapshot[]
   cheerEvents           CheerEvent[]
+  cheerDailyAggs        CheerDailyAgg[]
 
   @@map("streamers")
 }
@@ -650,6 +651,9 @@ model CheerDailyAgg {
   eventCount Int      @default(0)
   updatedAt  DateTime @default(now()) @updatedAt
 
+  streamer   Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+
   @@id([streamerId, date])
+  @@index([streamerId])
   @@map("cheer_daily_agg")
 }

@@ -3,6 +3,7 @@ import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import { viewerApiRoutes } from "../viewer.routes";
 import { getFollowedChannels } from "../viewer.service";
+import type { UserRole } from "../../auth/jwt.utils";
 
 // Mock service
 jest.mock("../viewer.service", () => ({
@@ -10,18 +11,14 @@ jest.mock("../viewer.service", () => ({
   seedChannelStats: jest.fn(),
 }));
 
-// Mock middleware (Auth) - 正確匹配 requireAuth(req, res, next, roles) 簽名
+// Mock middleware (Auth)
 jest.mock("../../auth/auth.middleware", () => ({
-  requireAuth: (
-    req: Request & { user?: { viewerId: string; role: "viewer" } },
-    _res: Response,
-    next: NextFunction,
-    _roles: unknown
-  ) => {
-    // Simulate authenticated user
-    req.user = { viewerId: "viewer_test_1", role: "viewer" };
-    next();
-  },
+  requireAuth:
+    (_roles?: UserRole[]) =>
+    (req: Request & { user?: { viewerId: string; role: "viewer" } }, _res: Response, next: NextFunction) => {
+      req.user = { viewerId: "viewer_test_1", role: "viewer" };
+      next();
+    },
 }));
 
 const app = express();

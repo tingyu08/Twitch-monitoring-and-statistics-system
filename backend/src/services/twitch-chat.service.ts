@@ -18,6 +18,7 @@ import type {
   TwitchGiftSubInfo,
   TwitchRaidInfo,
 } from "../types/twurple-chat.types";
+import { importTwurpleAuth, importTwurpleChat } from "../utils/dynamic-import";
 
 // ========== 服務實作 ==========
 
@@ -193,7 +194,7 @@ export class TwurpleChatService {
    * 內部初始化邏輯（不帶重試）
    */
   private async initializeInternal(): Promise<void> {
-    const { ChatClient } = await new Function('return import("@twurple/chat")')();
+    const { ChatClient } = await importTwurpleChat();
 
     // 從資料庫獲取第一個有 Token 的使用者（通常是您自己）
     const tokenRecord = await prisma.twitchToken.findFirst({
@@ -232,7 +233,7 @@ export class TwurpleChatService {
     const accessToken = decryptToken(tokenRecord.accessToken);
     const refreshToken = decryptToken(tokenRecord.refreshToken);
 
-    const { RefreshingAuthProvider } = await new Function('return import("@twurple/auth")')();
+    const { RefreshingAuthProvider } = await importTwurpleAuth();
 
     const authProvider = new RefreshingAuthProvider({
       clientId,
@@ -283,7 +284,7 @@ export class TwurpleChatService {
       logger: {
         minLevel: "error", // Suppress "Unrecognized usernotice ID" warnings
       },
-    });
+    }) as unknown as ChatClientInterface;
 
     this.setupEventHandlers();
 

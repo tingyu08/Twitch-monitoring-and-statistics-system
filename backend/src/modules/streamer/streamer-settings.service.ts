@@ -33,11 +33,18 @@ export class StreamerSettingsService {
   private async getStreamerWithActiveToken(streamerId: string) {
     const streamer = await prisma.streamer.findUnique({
       where: { id: streamerId },
-      include: {
+      select: {
+        id: true,
+        twitchUserId: true,
         twitchTokens: {
           where: { ownerType: "streamer", status: "active" },
           orderBy: { updatedAt: "desc" },
           take: 1,
+          select: {
+            id: true,
+            accessToken: true,
+            refreshToken: true,
+          },
         },
       },
     });

@@ -6,7 +6,7 @@
  * 安全性措施：
  * 1. 使用白名單機制，只允許導入特定模組
  * 2. 路徑驗證防止路徑遍歷攻擊
- * 3. 使用 Node.js 原生 import() 而非 new Function()
+ * 3. 使用 Node.js 原生 import()
  */
 
 /**
@@ -55,12 +55,6 @@ function getSecurityErrorMessage(modulePath: string): string {
   );
 }
 
-// 快取動態 import 函數，避免重複建立
-// 使用 indirect eval 確保 import() 不被 TypeScript 轉換
-const dynamicImportFn = new Function("modulePath", "return import(modulePath)") as (
-  modulePath: string
-) => Promise<unknown>;
-
 /**
  * 動態導入模組（安全版本）
  *
@@ -76,7 +70,7 @@ export function dynamicImport(modulePath: string): Promise<unknown> {
     return Promise.reject(new Error(getSecurityErrorMessage(modulePath)));
   }
 
-  return dynamicImportFn(modulePath);
+  return import(modulePath);
 }
 
 /**

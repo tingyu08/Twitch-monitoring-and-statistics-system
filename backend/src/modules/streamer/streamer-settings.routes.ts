@@ -7,7 +7,7 @@ import { createTemplateSchema, updateSettingsSchema } from "./streamer-settings.
 const router = Router();
 
 // 所有路由都需要認證
-router.use((req, res, next) => requireAuth(req, res, next));
+router.use(requireAuth());
 
 // ========== 頻道設定 ==========
 

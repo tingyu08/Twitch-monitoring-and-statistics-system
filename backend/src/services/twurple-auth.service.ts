@@ -9,6 +9,7 @@
 
 import type { AppTokenAuthProvider, RefreshingAuthProvider, AccessToken } from "@twurple/auth";
 import { logger } from "../utils/logger";
+import { importTwurpleAuth } from "../utils/dynamic-import";
 
 // ========== 類型定義 ==========
 
@@ -75,7 +76,7 @@ class TwurpleAuthService {
       if (!this.hasCredentials()) {
         throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET");
       }
-      const { AppTokenAuthProvider } = await new Function('return import("@twurple/auth")')();
+      const { AppTokenAuthProvider } = await importTwurpleAuth();
       this.appAuthProvider = new AppTokenAuthProvider(this.clientId, this.clientSecret);
       logger.info("Twurple Auth", "App Auth Provider initialized");
     }
@@ -93,7 +94,7 @@ class TwurpleAuthService {
     tokenData: TokenData,
     onRefresh?: (userId: string, newTokenData: TokenData) => Promise<void>
   ): Promise<RefreshingAuthProvider> {
-    const { RefreshingAuthProvider } = await new Function('return import("@twurple/auth")')();
+    const { RefreshingAuthProvider } = await importTwurpleAuth();
 
     const authProvider = new RefreshingAuthProvider({
       clientId: this.clientId,
