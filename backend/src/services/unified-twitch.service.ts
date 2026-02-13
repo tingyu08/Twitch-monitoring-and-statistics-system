@@ -179,30 +179,51 @@ export class UnifiedTwitchService {
   }
 
   async getChannelInfoByIds(twitchIds: string[]): Promise<Map<string, ChannelInfo>> {
+    if (twitchIds.length === 0) {
+      return new Map();
+    }
+
     const now = Date.now();
     const result = new Map<string, ChannelInfo>();
-    const missing: string[] = [];
+    const pendingPairs: Array<{ twitchId: string; promise: Promise<ChannelInfo | null> }> = [];
+    const missing = new Set<string>();
 
-    for (const twitchId of twitchIds) {
+    for (const twitchId of new Set(twitchIds)) {
       const cached = this.channelInfoByIdCache.get(twitchId);
       if (cached && cached.expiresAt > now && cached.value) {
         result.set(twitchId, cached.value);
         continue;
       }
 
-      missing.push(twitchId);
+      const pending = this.channelInfoByIdPending.get(twitchId);
+      if (pending) {
+        pendingPairs.push({ twitchId, promise: pending });
+        continue;
+      }
+
+      missing.add(twitchId);
     }
 
-    if (missing.length === 0) {
+    if (pendingPairs.length > 0) {
+      const pendingResults = await Promise.all(pendingPairs.map((pair) => pair.promise));
+      pendingResults.forEach((value, index) => {
+        if (value) {
+          result.set(pendingPairs[index].twitchId, value);
+        }
+      });
+    }
+
+    if (missing.size === 0) {
       return result;
     }
 
-    const snapshots = await twurpleHelixService.getChannelSnapshotsByIds(missing);
+    const missingIds = Array.from(missing);
+    const snapshots = await twurpleHelixService.getChannelSnapshotsByIds(missingIds);
     const snapshotById = new Map<string, TwitchChannelSnapshot>(
       snapshots.map((snapshot) => [snapshot.broadcasterId, snapshot])
     );
 
-    for (const twitchId of missing) {
+    for (const twitchId of missingIds) {
       const snapshot = snapshotById.get(twitchId);
 
       if (!snapshot) {

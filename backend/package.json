@@ -21,6 +21,7 @@
     "db:studio": "npx prisma studio",
     "db:push": "npx prisma db push",
     "db:generate": "npx prisma generate",
+    "db:verify:index-cleanup": "ts-node src/scripts/verify-index-cleanup.ts",
     "db:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {

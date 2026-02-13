@@ -482,27 +482,35 @@ class TwurpleHelixService {
   async getChannelSnapshotsByIds(userIds: string[]): Promise<TwitchChannelSnapshot[]> {
     if (userIds.length === 0) return [];
 
-    const normalizedIds = userIds.slice(0, 100);
+    const normalizedIds = Array.from(new Set(userIds.filter((id) => id.length > 0)));
+    const snapshotsByUserId = new Map<string, TwitchChannelSnapshot>();
 
     try {
-      const [users, streams] = await Promise.all([
-        this.getUsersByIds(normalizedIds),
-        this.getStreamsByUserIds(normalizedIds),
-      ]);
+      for (let i = 0; i < normalizedIds.length; i += 100) {
+        const chunk = normalizedIds.slice(i, i + 100);
+        const [users, streams] = await Promise.all([
+          this.getUsersByIds(chunk),
+          this.getStreamsByUserIds(chunk),
+        ]);
 
-      const streamByUserId = new Map(streams.map((stream) => [stream.userId, stream]));
+        const streamByUserId = new Map(streams.map((stream) => [stream.userId, stream]));
 
-      return users.map((user) => {
-        const stream = streamByUserId.get(user.id);
-        return {
-          broadcasterId: user.id,
-          broadcasterLogin: user.login,
-          broadcasterName: user.displayName,
-          gameName: stream?.gameName,
-          title: stream?.title,
-          isLive: stream?.type === "live",
-        };
-      });
+        for (const user of users) {
+          const stream = streamByUserId.get(user.id);
+          snapshotsByUserId.set(user.id, {
+            broadcasterId: user.id,
+            broadcasterLogin: user.login,
+            broadcasterName: user.displayName,
+            gameName: stream?.gameName,
+            title: stream?.title,
+            isLive: stream?.type === "live",
+          });
+        }
+      }
+
+      return normalizedIds
+        .map((id) => snapshotsByUserId.get(id))
+        .filter((snapshot): snapshot is TwitchChannelSnapshot => Boolean(snapshot));
     } catch (error) {
       logger.error("Twurple Helix", "批量獲取頻道快照失敗", error);
       return [];

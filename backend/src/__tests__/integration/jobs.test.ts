@@ -137,11 +137,10 @@ describe("Story 3.3: Jobs Integration", () => {
       });
 
       (prisma.channelDailyStat.upsert as jest.Mock).mockResolvedValue({});
-      (prisma.streamSession.update as jest.Mock).mockResolvedValue({});
 
       await channelStatsSyncJob.execute();
 
-      expect(prisma.streamSession.update).toHaveBeenCalled();
+      expect(prisma.streamSession.update).not.toHaveBeenCalled();
       expect(prisma.streamSession.findMany).toHaveBeenCalled();
       expect(prisma.channelDailyStat.upsert).toHaveBeenCalled();
     });

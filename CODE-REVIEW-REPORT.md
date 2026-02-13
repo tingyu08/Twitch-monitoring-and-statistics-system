@@ -12,22 +12,17 @@
 
 ### 1) 效能 / 查詢 / 回應
 
-- `[部分完成] QUERY-03`：已收斂 `channel-stats-sync` 對 session 的寫入，但 live-status 工作仍未完全合併為單一路徑。
-- `[部分完成] QUERY-04`：已加入 `getChannelInfoById` 快取與請求合併，仍待更深層 API 批次化。
-- `[部分完成] QUERY-08`：已清理多條熱路徑 over-fetch，但尚未完成全域掃描。
+- `[部分完成] QUERY-08`：已補強多條影片/剪輯查詢 `select` 欄位收斂，仍待全域熱路徑掃描完成。
 
 ### 2) 批次作業 / 記憶體 / 寫入量
 
 
 - `[部分完成] MEM-02`：排名計算改為 DB 端更新，記憶體峰值已顯著下降；仍待生產壓測確認。
-- `[未完成] MEM-06`：`estimateSize` 成本優化尚未完成。
+- `[部分完成] MEM-12`：overflow 檔案已補跨程序 lock + stale lock 回收，並新增壓測測試；仍待長時間高併發實測驗證。
 - `[部分完成] MEM-10`：`getOrSetWithTags` 已補 Redis lock + wait fallback，待高併發壓測驗證。
-- `[部分完成] MEM-12`：overflow 檔案已補跨程序 lock + stale lock 回收，仍待高併發壓測驗證。
 
 ### 3) 安全 / Schema / 架構
 
-
-- `[部分完成] SCHEMA-01`：已產出冗餘索引清理 migration（待在生產環境套用與驗證）。
 
 - `[未完成] ARCH-02`：AuthController dead code 清理尚未完成（需先最終確認使用路徑）。
 - `[未完成] ARCH-03`：template service CRUD 去重未完成。
@@ -54,6 +49,8 @@
 - `[已完成] QUERY-07`：`channel-stats-sync` 日統計改為 DB 端聚合（`groupBy`），移除 JS 端全量分組。
 - `[已完成] QUERY-09`：extension heartbeat 已加入 channelId 快取。
 - `[已完成] QUERY-11`：stream-status session 批次與延遲參數已優化。
+- `[已完成] QUERY-03`：`channel-stats-sync` 已停止寫入 stream session，session 寫入權威路徑收斂至 stream-status/EventSub。
+- `[已完成] QUERY-04`：`getChannelInfoByIds` 已補批次快照與 pending/cache 合併，支援大於 100 IDs 分段批次。
 - `[已完成] QUERY-10`：lifetime aggregate/watch-time 重複掃描已整併，移除重複 COUNT 查詢。
 - `[已完成] QUERY-12`：slow query 監控已由 Prisma `$use` 遷移至 `$extends` query extension。
 - `[已完成] QUERY-13`：performance metrics 改 ring-buffer 寫入，移除 `shift()` 熱路徑成本。
@@ -78,6 +75,7 @@
 - `[已完成] MEM-03`：移除重複記憶體監控來源（由單一監控主導）。
 - `[已完成] MEM-04`：cache `get()` 已提升為真 LRU 行為。
 - `[已完成] MEM-05`：調整生產/開發快取容量配置。
+- `[已完成] MEM-06`：`estimateSize` 改為低成本分層估算，移除高成本 `JSON.stringify` 熱路徑。
 - `[已完成] MEM-08`：移除孤兒 queue singleton。
 - `[已完成] MEM-09`：Twurple user auth providers 新增上限與 LRU 淘汰機制。
 
@@ -118,6 +116,7 @@
 ### 4) 快取與資料模型
 
 - `[已完成] MEM-11`：`getOrSetWithTags` 已補分散式鎖，減少多實例快取擊穿。
+- `[已完成] SCHEMA-01`：冗餘索引清理已完成，並以 `db:verify:index-cleanup` 驗證查詢計畫使用唯一索引。
 - `[已完成] SCHEMA-02`：`CheerDailyAgg` 已補 relation/FK（待 migration 套用）。
 
 ---

@@ -117,4 +117,52 @@ describe("TwurpleHelixService", () => {
       expect(result?.id).toBe("s1");
     });
   });
+
+  describe("getChannelSnapshotsByIds", () => {
+    it("should fetch snapshots in chunks when ids exceed 100", async () => {
+      mockUsersApi.getUsersByIds.mockImplementation((ids: string[]) =>
+        Promise.resolve(
+          ids.map((id) => ({
+            id,
+            name: `user-${id}`,
+            displayName: `User ${id}`,
+            type: "",
+            broadcasterType: "",
+            description: "",
+            profilePictureUrl: "",
+            offlinePlaceholderUrl: "",
+            creationDate: new Date(),
+          }))
+        )
+      );
+
+      mockStreamsApi.getStreamsByUserIds.mockImplementation((ids: string[]) =>
+        Promise.resolve(
+          ids.slice(0, 2).map((id) => ({
+            id: `stream-${id}`,
+            userId: id,
+            userName: `user-${id}`,
+            userDisplayName: `User ${id}`,
+            gameId: "1",
+            gameName: "Game",
+            type: "live",
+            title: `Title ${id}`,
+            viewers: 100,
+            startDate: new Date(),
+            language: "zh",
+            thumbnailUrl: "",
+            isMature: false,
+          }))
+        )
+      );
+
+      const ids = Array.from({ length: 120 }, (_, index) => `${index + 1}`);
+      const result = await twurpleHelixService.getChannelSnapshotsByIds(ids);
+
+      expect(mockUsersApi.getUsersByIds).toHaveBeenCalledTimes(2);
+      expect(mockStreamsApi.getStreamsByUserIds).toHaveBeenCalledTimes(2);
+      expect(result).toHaveLength(120);
+      expect(result[0].broadcasterId).toBe("1");
+    });
+  });
 });

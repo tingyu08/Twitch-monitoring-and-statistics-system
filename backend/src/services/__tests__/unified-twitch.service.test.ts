@@ -15,6 +15,7 @@ jest.mock("../twitch-helix.service", () => ({
     getUserByLogin: jest.fn(),
     getStream: jest.fn(),
     getFollowerCount: jest.fn(),
+    getChannelSnapshotsByIds: jest.fn(),
     getStreamsByUserIds: jest.fn().mockResolvedValue([]),
     getStatus: jest.fn().mockReturnValue({ status: "healthy" }),
   },
@@ -34,7 +35,7 @@ jest.mock("../twurple-auth.service", () => ({
   },
 }));
 
-import { unifiedTwitchService } from "../unified-twitch.service";
+import { UnifiedTwitchService, unifiedTwitchService } from "../unified-twitch.service";
 import { twurpleHelixService } from "../twitch-helix.service";
 import { decApiService } from "../decapi.service";
 import { twurpleChatService } from "../twitch-chat.service";
@@ -97,6 +98,38 @@ describe("UnifiedTwitchService Integration Test", () => {
 
       expect(twurpleHelixService.getStreamsByUserIds).toHaveBeenCalledWith(["1", "2", "3"]);
       expect(result).toHaveLength(2);
+    });
+  });
+
+  describe("getChannelInfoByIds", () => {
+    it("should batch fetch and reuse cache", async () => {
+      const service = new UnifiedTwitchService();
+      (twurpleHelixService.getChannelSnapshotsByIds as jest.Mock).mockResolvedValue([
+        {
+          broadcasterId: "1",
+          broadcasterLogin: "foo",
+          broadcasterName: "Foo",
+          gameName: "Game",
+          title: "Live",
+          isLive: true,
+        },
+        {
+          broadcasterId: "2",
+          broadcasterLogin: "bar",
+          broadcasterName: "Bar",
+          gameName: "Music",
+          title: "Show",
+          isLive: false,
+        },
+      ]);
+
+      const first = await service.getChannelInfoByIds(["1", "2", "1"]);
+      const second = await service.getChannelInfoByIds(["1", "2"]);
+
+      expect(first.get("1")?.login).toBe("foo");
+      expect(first.get("2")?.displayName).toBe("Bar");
+      expect(second.get("1")?.isLive).toBe(true);
+      expect(twurpleHelixService.getChannelSnapshotsByIds).toHaveBeenCalledTimes(1);
     });
   });
 

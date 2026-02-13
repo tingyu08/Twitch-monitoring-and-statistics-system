@@ -74,22 +74,6 @@ export class ChannelStatsSyncJob {
       }
 
       // P0 Fix: 使用批次處理同步頻道統計
-      const channelIds = channels.map((c) => c.id);
-      const activeSessions = await prisma.streamSession.findMany({
-        where: {
-          channelId: { in: channelIds },
-          endedAt: null,
-        },
-        orderBy: { startedAt: "desc" },
-        select: {
-          id: true,
-          channelId: true,
-          title: true,
-          category: true,
-        },
-      });
-      const activeSessionMap = new Map(activeSessions.map((s) => [s.channelId, s]));
-
       for (let i = 0; i < channels.length; i += BATCH_SIZE) {
         const batch = channels.slice(i, i + BATCH_SIZE);
         const channelInfoByTwitchId = await unifiedTwitchService.getChannelInfoByIds(
@@ -101,7 +85,6 @@ export class ChannelStatsSyncJob {
             try {
               await this.syncChannelStats(
                 channel,
-                activeSessionMap,
                 channelInfoByTwitchId.get(channel.twitchChannelId) || null
               );
               return { ok: true as const };
@@ -151,15 +134,6 @@ export class ChannelStatsSyncJob {
       channelName: string;
       twitchChannelId: string;
     },
-    activeSessionMap: Map<
-      string,
-      {
-        id: string;
-        channelId: string;
-        title: string | null;
-        category: string | null;
-      }
-    >,
     channelInfo: {
       login: string;
       isLive: boolean;
@@ -183,26 +157,7 @@ export class ChannelStatsSyncJob {
       );
     }
 
-    // 只同步文本欄位，避免重複更新觀眾數統計
-    if (channelInfo.isLive) {
-      const activeSession = activeSessionMap.get(channel.id);
-      if (activeSession) {
-        const nextTitle = channelInfo.streamTitle || null;
-        const nextCategory = channelInfo.currentGame || null;
-        if (activeSession.title !== nextTitle || activeSession.category !== nextCategory) {
-          await runWithWriteGuard("channel-stats-sync:update-session", () =>
-            prisma.streamSession.update({
-              where: { id: activeSession.id },
-              data: {
-                title: nextTitle || "",
-                category: nextCategory || "",
-              },
-            })
-          );
-        }
-      }
-    }
-
+    // Session title/category 寫入已收斂至 stream-status/EventSub 權威路徑。
   }
 
   /**

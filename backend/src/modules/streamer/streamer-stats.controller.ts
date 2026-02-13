@@ -140,6 +140,16 @@ export async function getPublicVideosHandler(req: Request, res: Response): Promi
     const videos = await prisma.viewerChannelVideo.findMany({
       where: { channelId },
       orderBy: { publishedAt: "desc" },
+      select: {
+        id: true,
+        twitchVideoId: true,
+        title: true,
+        url: true,
+        thumbnailUrl: true,
+        viewCount: true,
+        duration: true,
+        publishedAt: true,
+      },
       take: 6, // 最多 6 部
     });
 
@@ -175,6 +185,17 @@ export async function getPublicClipsHandler(req: Request, res: Response): Promis
     const clips = await prisma.viewerChannelClip.findMany({
       where: { channelId },
       orderBy: { viewCount: "desc" },
+      select: {
+        id: true,
+        twitchClipId: true,
+        creatorName: true,
+        title: true,
+        url: true,
+        thumbnailUrl: true,
+        viewCount: true,
+        duration: true,
+        createdAt: true,
+      },
       take: 6, // 最多 6 部
     });
 

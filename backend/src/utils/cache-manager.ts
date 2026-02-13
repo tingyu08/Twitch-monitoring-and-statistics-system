@@ -38,6 +38,9 @@ interface CacheStats {
   pendingRequests?: number;
 }
 
+const ESTIMATE_MAX_DEPTH = 3;
+const ESTIMATE_MAX_ITEMS = 40;
+
 export class CacheManager {
   private cache: Map<string, CacheEntry<unknown>>;
   private stats: CacheStats;
@@ -467,28 +470,98 @@ export class CacheManager {
 
   /**
    * 估算物件大小（bytes）
-   * 使用分層估算策略：基礎型別直接計算，物件使用 JSON 長度 + V8 額外開銷
+   * 使用低成本分層估算策略，避免 JSON.stringify 造成高 CPU 開銷
    */
   private estimateSize(value: unknown): number {
+    return this.estimateSizeInternal(value, 0, new WeakSet<object>());
+  }
+
+  private estimateSizeInternal(value: unknown, depth: number, seen: WeakSet<object>): number {
     if (value === null || value === undefined) return 16;
-    switch (typeof value) {
-      case "boolean":
-        return 16;
-      case "number":
-        return 16;
-      case "string":
-        return 40 + (value as string).length * 2; // V8 string header + UTF-16
-      default:
-        break;
+
+    const valueType = typeof value;
+    if (valueType === "boolean") return 16;
+    if (valueType === "number") return 16;
+    if (valueType === "bigint") return 16;
+    if (valueType === "string") return 40 + (value as string).length * 2;
+    if (valueType === "symbol" || valueType === "function") return 32;
+
+    if (depth >= ESTIMATE_MAX_DEPTH) {
+      return 256;
     }
-    try {
-      const json = JSON.stringify(value);
-      // JSON 字串長度 * 2 (UTF-16) + 每個 key 約 72 bytes V8 overhead
-      const keyCount = typeof value === "object" && value !== null ? Object.keys(value as object).length : 0;
-      return json.length * 2 + keyCount * 72 + 64; // +64 for object header
-    } catch {
-      return 2048;
+
+    if (!(value instanceof Object)) {
+      return 64;
     }
+
+    if (seen.has(value)) {
+      return 64;
+    }
+    seen.add(value);
+
+    if (value instanceof Date) {
+      return 24;
+    }
+
+    if (Array.isArray(value)) {
+      const sampled = value.slice(0, ESTIMATE_MAX_ITEMS);
+      const sampledSize = sampled.reduce(
+        (acc, item) => acc + this.estimateSizeInternal(item, depth + 1, seen),
+        32
+      );
+      if (value.length <= ESTIMATE_MAX_ITEMS) {
+        return sampledSize;
+      }
+
+      const avg = sampled.length > 0 ? Math.max(Math.floor((sampledSize - 32) / sampled.length), 8) : 16;
+      return sampledSize + (value.length - sampled.length) * avg;
+    }
+
+    if (value instanceof Map) {
+      let size = 80;
+      let counted = 0;
+      for (const [key, mapValue] of value.entries()) {
+        if (counted >= ESTIMATE_MAX_ITEMS) {
+          size += (value.size - counted) * 64;
+          break;
+        }
+        size += this.estimateSizeInternal(key, depth + 1, seen);
+        size += this.estimateSizeInternal(mapValue, depth + 1, seen);
+        counted += 1;
+      }
+      return size;
+    }
+
+    if (value instanceof Set) {
+      let size = 64;
+      let counted = 0;
+      for (const setValue of value.values()) {
+        if (counted >= ESTIMATE_MAX_ITEMS) {
+          size += (value.size - counted) * 48;
+          break;
+        }
+        size += this.estimateSizeInternal(setValue, depth + 1, seen);
+        counted += 1;
+      }
+      return size;
+    }
+
+    const entries = Object.entries(value as Record<string, unknown>);
+    let size = 64;
+
+    const sampledEntries = entries.slice(0, ESTIMATE_MAX_ITEMS);
+    for (const [key, nestedValue] of sampledEntries) {
+      size += 40 + key.length * 2;
+      size += this.estimateSizeInternal(nestedValue, depth + 1, seen);
+    }
+
+    if (entries.length > ESTIMATE_MAX_ITEMS) {
+      const sampledAvg =
+        sampledEntries.length > 0 ? Math.max(Math.floor((size - 64) / sampledEntries.length), 24) : 24;
+      size += (entries.length - sampledEntries.length) * sampledAvg;
+    }
+
+    return size;
   }
 
   getMaxMemoryBytes(): number {
