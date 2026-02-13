@@ -1,6 +1,54 @@
 import axios from "axios";
 import { env } from "../../config/env";
 
+const OAUTH_REQUEST_TIMEOUT_MS = Number(process.env.TWITCH_OAUTH_TIMEOUT_MS || 20000);
+const OAUTH_MAX_ATTEMPTS = Math.max(Number(process.env.TWITCH_OAUTH_MAX_ATTEMPTS || 3), 1);
+const OAUTH_RETRY_BASE_DELAY_MS = Number(process.env.TWITCH_OAUTH_RETRY_BASE_DELAY_MS || 400);
+
+function isRetryableOAuthError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+
+  const status = error.response?.status;
+  if (status === 429 || (status !== undefined && status >= 500)) {
+    return true;
+  }
+
+  const code = error.code || "";
+  if (["ECONNABORTED", "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "ENOTFOUND"].includes(code)) {
+    return true;
+  }
+
+  const message = (error.message || "").toLowerCase();
+  return message.includes("timeout") || message.includes("socket hang up");
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withOAuthRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= OAUTH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+
+      if (!isRetryableOAuthError(error) || attempt >= OAUTH_MAX_ATTEMPTS) {
+        throw error;
+      }
+
+      const delayMs = Math.min(OAUTH_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), 3000);
+      await wait(delayMs);
+    }
+  }
+
+  throw lastError;
+}
+
 export interface TwitchUser {
   id: string;
   display_name: string;
@@ -46,27 +94,31 @@ export class TwitchOAuthClient {
     refresh_token: string;
     expires_in: number;
   }> {
-    const response = await axios.post(this.tokenUrl, null, {
-      params: {
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: options?.redirectUri ?? this.redirectUri,
-      },
-      timeout: 10000, // 10 秒超時
-    });
+    const response = await withOAuthRetry(() =>
+      axios.post(this.tokenUrl, null, {
+        params: {
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          code,
+          grant_type: "authorization_code",
+          redirect_uri: options?.redirectUri ?? this.redirectUri,
+        },
+        timeout: OAUTH_REQUEST_TIMEOUT_MS,
+      })
+    );
     return response.data;
   }
 
   public async getUserInfo(accessToken: string): Promise<TwitchUser> {
-    const response = await axios.get(this.userInfoUrl, {
-      headers: {
-        "Client-Id": this.clientId,
-        Authorization: `Bearer ${accessToken}`,
-      },
-      timeout: 10000, // 10 秒超時
-    });
+    const response = await withOAuthRetry(() =>
+      axios.get(this.userInfoUrl, {
+        headers: {
+          "Client-Id": this.clientId,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        timeout: OAUTH_REQUEST_TIMEOUT_MS,
+      })
+    );
     return response.data.data?.[0] as TwitchUser;
   }
 
@@ -84,15 +136,17 @@ export class TwitchOAuthClient {
     expires_in: number;
   }> {
     try {
-      const response = await axios.post(this.tokenUrl, null, {
-        params: {
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          grant_type: "refresh_token",
-          refresh_token: refreshToken,
-        },
-        timeout: 10000, // 10 秒超時
-      });
+      const response = await withOAuthRetry(() =>
+        axios.post(this.tokenUrl, null, {
+          params: {
+            client_id: this.clientId,
+            client_secret: this.clientSecret,
+            grant_type: "refresh_token",
+            refresh_token: refreshToken,
+          },
+          timeout: OAUTH_REQUEST_TIMEOUT_MS,
+        })
+      );
       return response.data;
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {

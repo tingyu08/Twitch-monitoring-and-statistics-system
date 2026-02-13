@@ -50,6 +50,32 @@ describe("TwitchOAuthClient", () => {
       mockedAxios.post.mockRejectedValueOnce(new Error("Failed"));
       await expect(client.getAccessToken("c")).rejects.toThrow();
     });
+
+    it("should retry on timeout and then succeed", async () => {
+      mockedAxios.post
+        .mockRejectedValueOnce({
+          isAxiosError: true,
+          code: "ECONNABORTED",
+          message: "timeout of 10000ms exceeded",
+        })
+        .mockResolvedValueOnce({
+          data: { access_token: "at2", refresh_token: "rt2", expires_in: 3600 },
+        });
+
+      const res = await client.getAccessToken("code-retry");
+      expect(res.access_token).toBe("at2");
+      expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it("should not retry on 400 response", async () => {
+      mockedAxios.post.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 400 },
+      });
+
+      await expect(client.getAccessToken("bad-code")).rejects.toBeDefined();
+      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("getUserInfo", () => {

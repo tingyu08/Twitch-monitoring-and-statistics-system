@@ -219,15 +219,24 @@ export class AuthController {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       const statusCode = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const errorCode = axios.isAxiosError(error) ? error.code : undefined;
       const twitchResponse = axios.isAxiosError(error) ? error.response?.data : undefined;
+      const isTimeout =
+        axios.isAxiosError(error) &&
+        (error.code === "ECONNABORTED" || errorMessage.toLowerCase().includes("timeout"));
 
       authLogger.error("Twitch Exchange Error", {
         errorMessage,
         statusCode,
+        errorCode,
         requestRedirectUri: redirectUri || env.twitchRedirectUri,
         codeLength: code?.length,
         twitchResponse,
       });
+
+      if (isTimeout) {
+        return res.status(504).json({ message: "Token exchange timeout, please retry" });
+      }
 
       return res.status(500).json({ message: "Token exchange failed" });
     }
