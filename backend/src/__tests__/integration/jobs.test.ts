@@ -8,6 +8,7 @@ jest.mock("../../services/unified-twitch.service", () => ({
     getStreamsByUserIds: jest.fn(),
     getChannelInfo: jest.fn(),
     getChannelInfoById: jest.fn(),
+    getChannelInfoByIds: jest.fn(),
   },
 }));
 
@@ -105,18 +106,20 @@ describe("Story 3.3: Jobs Integration", () => {
       (prisma.channel.findMany as jest.Mock).mockResolvedValue([
         { id: "c1", channelName: "User", twitchChannelId: "t1" },
       ]);
-      (unifiedTwitchService.getChannelInfoById as jest.Mock).mockResolvedValue({
-        login: "User",
-        isLive: true,
-        viewerCount: 50,
-        streamTitle: "Hi",
-        currentGame: "IRL",
-      });
-      (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue({
-        id: "s1",
-        peakViewers: 30,
-        avgViewers: 30,
-      });
+      (unifiedTwitchService.getChannelInfoByIds as jest.Mock).mockResolvedValue(
+        new Map([
+          [
+            "t1",
+            {
+              login: "User",
+              isLive: true,
+              viewerCount: 50,
+              streamTitle: "Hi",
+              currentGame: "IRL",
+            },
+          ],
+        ])
+      );
 
       // Mock findMany specifically for updateDailyStats to ensure it returns data
       const mockSessions = [

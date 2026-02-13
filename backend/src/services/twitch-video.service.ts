@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
@@ -18,11 +19,128 @@ export class TwurpleVideoService {
     return this.apiClient;
   }
 
-  private async runBatchedDbOps(ops: Array<() => Promise<unknown>>, batchSize = 25): Promise<void> {
-    for (let i = 0; i < ops.length; i += batchSize) {
-      const batch = ops.slice(i, i + batchSize);
-      await Promise.all(batch.map((op) => op()));
-    }
+  private async batchUpsertVideos(
+    streamerId: string,
+    videos: Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      url: string;
+      thumbnailUrl: string | null;
+      viewCount: number;
+      duration: string;
+      language: string | null;
+      type: string;
+      createdAt: Date;
+      publishedAt: Date;
+    }>
+  ): Promise<void> {
+    if (videos.length === 0) return;
+
+    const rows = Prisma.join(
+      videos.map((video) =>
+        Prisma.sql`(
+          ${video.id},
+          ${streamerId},
+          ${video.title},
+          ${video.description},
+          ${video.url},
+          ${video.thumbnailUrl},
+          ${video.viewCount},
+          ${video.duration},
+          ${video.language},
+          ${video.type},
+          ${video.createdAt.toISOString()},
+          ${video.publishedAt.toISOString()}
+        )`
+      )
+    );
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO videos (
+        twitchVideoId,
+        streamerId,
+        title,
+        description,
+        url,
+        thumbnailUrl,
+        viewCount,
+        duration,
+        language,
+        type,
+        createdAt,
+        publishedAt
+      )
+      VALUES ${rows}
+      ON CONFLICT(twitchVideoId) DO UPDATE SET
+        title = excluded.title,
+        description = excluded.description,
+        thumbnailUrl = excluded.thumbnailUrl,
+        viewCount = excluded.viewCount
+    `);
+  }
+
+  private async batchUpsertClips(
+    streamerId: string,
+    clips: Array<{
+      id: string;
+      creatorId: string | null;
+      creatorName: string | null;
+      videoId: string | null;
+      gameId: string | null;
+      title: string;
+      url: string;
+      embedUrl: string | null;
+      thumbnailUrl: string | null;
+      viewCount: number;
+      duration: number;
+      createdAt: Date;
+    }>
+  ): Promise<void> {
+    if (clips.length === 0) return;
+
+    const rows = Prisma.join(
+      clips.map((clip) =>
+        Prisma.sql`(
+          ${clip.id},
+          ${streamerId},
+          ${clip.creatorId},
+          ${clip.creatorName},
+          ${clip.videoId},
+          ${clip.gameId},
+          ${clip.title},
+          ${clip.url},
+          ${clip.embedUrl},
+          ${clip.thumbnailUrl},
+          ${clip.viewCount},
+          ${clip.duration},
+          ${clip.createdAt.toISOString()}
+        )`
+      )
+    );
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO clips (
+        twitchClipId,
+        streamerId,
+        creatorId,
+        creatorName,
+        videoId,
+        gameId,
+        title,
+        url,
+        embedUrl,
+        thumbnailUrl,
+        viewCount,
+        duration,
+        createdAt
+      )
+      VALUES ${rows}
+      ON CONFLICT(twitchClipId) DO UPDATE SET
+        title = excluded.title,
+        viewCount = excluded.viewCount,
+        thumbnailUrl = excluded.thumbnailUrl
+    `);
   }
 
   /**
@@ -77,32 +195,21 @@ export class TwurpleVideoService {
           break;
         }
 
-        await this.runBatchedDbOps(
-          data.map((video) => async () => {
-            await prisma.video.upsert({
-              where: { twitchVideoId: video.id },
-              create: {
-                twitchVideoId: video.id,
-                streamerId: streamerId,
-                title: video.title,
-                description: video.description,
-                url: video.url,
-                thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
-                viewCount: video.view_count,
-                duration: video.duration,
-                language: video.language,
-                type: video.type,
-                createdAt: new Date(video.created_at),
-                publishedAt: new Date(video.published_at),
-              },
-              update: {
-                title: video.title,
-                description: video.description,
-                thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
-                viewCount: video.view_count,
-              },
-            });
-          })
+        await this.batchUpsertVideos(
+          streamerId,
+          data.map((video) => ({
+            id: video.id,
+            title: video.title,
+            description: video.description,
+            url: video.url,
+            thumbnailUrl: normalizeThumbnail(video.thumbnail_url),
+            viewCount: video.view_count,
+            duration: video.duration,
+            language: video.language,
+            type: video.type,
+            createdAt: new Date(video.created_at),
+            publishedAt: new Date(video.published_at),
+          }))
         );
 
         syncedCount += data.length;
@@ -326,32 +433,22 @@ export class TwurpleVideoService {
           break;
         }
 
-        await this.runBatchedDbOps(
-          data.map((clip) => async () => {
-            await prisma.clip.upsert({
-              where: { twitchClipId: clip.id },
-              create: {
-                twitchClipId: clip.id,
-                streamerId: streamerId,
-                creatorId: clip.creator_id,
-                creatorName: clip.creator_name,
-                videoId: clip.video_id,
-                gameId: clip.game_id,
-                title: clip.title,
-                url: clip.url,
-                embedUrl: clip.embed_url,
-                thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
-                viewCount: clip.view_count,
-                duration: clip.duration,
-                createdAt: new Date(clip.created_at),
-              },
-              update: {
-                title: clip.title,
-                viewCount: clip.view_count,
-                thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
-              },
-            });
-          })
+        await this.batchUpsertClips(
+          streamerId,
+          data.map((clip) => ({
+            id: clip.id,
+            creatorId: clip.creator_id,
+            creatorName: clip.creator_name,
+            videoId: clip.video_id,
+            gameId: clip.game_id,
+            title: clip.title,
+            url: clip.url,
+            embedUrl: clip.embed_url,
+            thumbnailUrl: normalizeThumbnail(clip.thumbnail_url),
+            viewCount: clip.view_count,
+            duration: clip.duration,
+            createdAt: new Date(clip.created_at),
+          }))
         );
 
         syncedCount += data.length;

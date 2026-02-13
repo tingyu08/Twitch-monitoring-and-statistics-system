@@ -19,17 +19,7 @@ export class ViewerLifetimeStatsService {
 
     // 2. 如果沒有，嘗試即時計算 (On-demand aggregation for first visit)
     if (!stat) {
-      await lifetimeStatsAggregator.aggregateStats(viewerId, channelId);
-      stat = await prisma.viewerChannelLifetimeStats.findUnique({
-        where: { viewerId_channelId: { viewerId, channelId } },
-        include: {
-          channel: {
-            select: {
-              channelName: true,
-            },
-          },
-        },
-      });
+      stat = await lifetimeStatsAggregator.aggregateStatsWithChannel(viewerId, channelId);
     }
 
     if (!stat) {

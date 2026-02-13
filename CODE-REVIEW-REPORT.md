@@ -1,8 +1,8 @@
 # Twitch Analytics 平台 - 程式碼審查追蹤報告（中文）
 
-**最後更新**：2026-02-13  
-**範圍**：Backend 全域 99 項  
-**說明**：本檔已改為「追蹤版」。先列**未完成**，再列**已完成**。  
+**最後更新**：2026-02-13
+**範圍**：Backend 全域 99 項
+**說明**：本檔已改為「追蹤版」。先列**未完成**，再列**已完成**。
 
 ---
 
@@ -12,14 +12,9 @@
 
 ### 1) 效能 / 查詢 / 回應
 
-- `[部分完成] QUERY-02`：影片/剪輯同步已做分批並行，但尚未完成真正批次 SQL upsert 策略。
 - `[部分完成] QUERY-03`：已收斂 `channel-stats-sync` 對 session 的寫入，但 live-status 工作仍未完全合併為單一路徑。
 - `[部分完成] QUERY-04`：已加入 `getChannelInfoById` 快取與請求合併，仍待更深層 API 批次化。
 - `[部分完成] QUERY-08`：已清理多條熱路徑 over-fetch，但尚未完成全域掃描。
-- `[未完成] QUERY-10`：aggregate/watch-time 重複掃描尚未整併。
-- `[未完成] QUERY-12`：Prisma `$use` middleware 尚未遷移到 `$extends`。
-
-- `[未完成] RESPONSE-05`：viewer lifetime 首訪 3 次 DB 流程尚未精簡。
 
 ### 2) 批次作業 / 記憶體 / 寫入量
 
@@ -27,9 +22,7 @@
 - `[部分完成] MEM-02`：排名計算改為 DB 端更新，記憶體峰值已顯著下降；仍待生產壓測確認。
 - `[未完成] MEM-06`：`estimateSize` 成本優化尚未完成。
 - `[部分完成] MEM-10`：`getOrSetWithTags` 已補 Redis lock + wait fallback，待高併發壓測驗證。
-- `[未完成] MEM-12`：overflow 檔案併發讀寫競態未解。
-
-- `[部分完成] WRITE-01`：Session 寫入衝突已再降低，且平均值公式已修正；但 EventSub/排程的單一權威路徑仍待最終收斂。
+- `[部分完成] MEM-12`：overflow 檔案已補跨程序 lock + stale lock 回收，仍待高併發壓測驗證。
 
 ### 3) 安全 / Schema / 架構
 
@@ -61,13 +54,17 @@
 - `[已完成] QUERY-07`：`channel-stats-sync` 日統計改為 DB 端聚合（`groupBy`），移除 JS 端全量分組。
 - `[已完成] QUERY-09`：extension heartbeat 已加入 channelId 快取。
 - `[已完成] QUERY-11`：stream-status session 批次與延遲參數已優化。
+- `[已完成] QUERY-10`：lifetime aggregate/watch-time 重複掃描已整併，移除重複 COUNT 查詢。
+- `[已完成] QUERY-12`：slow query 監控已由 Prisma `$use` 遷移至 `$extends` query extension。
 - `[已完成] QUERY-13`：performance metrics 改 ring-buffer 寫入，移除 `shift()` 熱路徑成本。
 - `[已完成] QUERY-14`：performance path 已做動態路徑正規化。
+- `[已完成] QUERY-02`：實況主影片/剪輯同步改為批次 SQL upsert，降低逐筆 upsert 開銷。
 
 - `[已完成] RESPONSE-01`：subscription-sync 改為正確 token 解密（含舊資料相容）。
 - `[已完成] RESPONSE-02`：heartbeat 寫入流程由序列改平行，並升級為緩衝 flush 模式。
 - `[已完成] RESPONSE-03`：登入後 follow sync 已改背景執行，不阻塞主回應。
 - `[已完成] RESPONSE-04`：streamer-settings 已抽出共用 Twitch API 呼叫/刷新邏輯，移除重複流程。
+- `[已完成] RESPONSE-05`：viewer lifetime 首訪流程精簡為查詢 miss 後直接聚合+回傳，減少一次重複查詢。
 - `[已完成] RESPONSE-06`：public game-stats 改直接走 `channelId` 查詢，移除冗餘 lookup chain。
 
 ### 2) 批次作業 / 記憶體 / 寫入量
@@ -96,6 +93,7 @@
 - `[已完成] WRITE-12`：EventSub stream online 已做 session 去重保護。
 - `[已完成] WRITE-13`：`cleanupExpiredExports` 改批次狀態更新（`updateMany`）與並行刪檔。
 - `[已完成] WRITE-08`：viewer-message 批次寫入改為「原始訊息落地 + 聚合交易」縮小交易範圍，降低鎖競爭。
+- `[已完成] WRITE-01`：Session 寫入權威路徑已收斂，預設由 stream-status job 主導（EventSub 可透過環境變數切換）。
 - `[已完成] BATCH-04`：write guard 已從全域隊列改為資源鍵控寫入鎖。
 
 ### 3) 安全 / Schema / 架構

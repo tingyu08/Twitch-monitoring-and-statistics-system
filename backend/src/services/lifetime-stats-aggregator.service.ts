@@ -27,30 +27,34 @@ interface LifetimeStatsResult {
 }
 
 interface DateRow {
-  d: Date | string;
+  d: unknown;
 }
 
-interface CountRow {
-  cnt: number | bigint | string | null;
-}
-
-function normalizeDateToDay(value: Date | string): string {
+function normalizeDateToDay(value: unknown): string | null {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
     return value.slice(0, 10);
   }
 
-  const date = value instanceof Date ? value : new Date(value);
-  return date.toISOString().split("T")[0];
-}
-
-function toNumber(value: number | bigint | string | null | undefined): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
+  if (typeof value === "number") {
+    const fromNumber = new Date(value);
+    if (!Number.isNaN(fromNumber.getTime())) {
+      return fromNumber.toISOString().split("T")[0];
+    }
+    return null;
   }
-  return 0;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().split("T")[0];
+  }
+
+  if (typeof value === "string") {
+    const fromString = new Date(value);
+    if (!Number.isNaN(fromString.getTime())) {
+      return fromString.toISOString().split("T")[0];
+    }
+  }
+
+  return null;
 }
 
 export class LifetimeStatsAggregatorService {
@@ -85,6 +89,34 @@ export class LifetimeStatsAggregatorService {
     }
   }
 
+  public async aggregateStatsWithChannel(viewerId: string, channelId: string) {
+    const stats = await this.calculateStats(viewerId, channelId);
+
+    return prisma.viewerChannelLifetimeStats.upsert({
+      where: {
+        viewerId_channelId: {
+          viewerId,
+          channelId,
+        },
+      },
+      create: {
+        viewerId,
+        channelId,
+        ...stats,
+      },
+      update: {
+        ...stats,
+      },
+      include: {
+        channel: {
+          select: {
+            channelName: true,
+          },
+        },
+      },
+    });
+  }
+
   /**
    * 內部計算邏輯
    * P1 Fix: 使用資料庫聚合函數減少資料傳輸量
@@ -95,8 +127,7 @@ export class LifetimeStatsAggregatorService {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
     // P1 Fix: 使用資料庫聚合函數計算總和，避免載入所有記錄到記憶體
-    const [dailyStatsAgg, messageAggsAgg, activeDateRows, activeDaysLast30Rows, activeDaysLast90Rows] =
-      await Promise.all([
+    const [dailyStatsAgg, messageAggsAgg, activeDateRows] = await Promise.all([
         // 聚合觀看時間統計
         prisma.viewerChannelDailyStat.aggregate({
           where: { viewerId, channelId },
@@ -127,30 +158,6 @@ export class LifetimeStatsAggregatorService {
           WHERE viewerId = ${viewerId} AND channelId = ${channelId}
           ORDER BY d ASC
         `),
-        prisma.$queryRaw<CountRow[]>(Prisma.sql`
-          SELECT COUNT(*) AS cnt
-          FROM (
-            SELECT date
-            FROM viewer_channel_daily_stats
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${thirtyDaysAgo}
-            UNION
-            SELECT date
-            FROM viewer_channel_message_daily_aggs
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${thirtyDaysAgo}
-          )
-        `),
-        prisma.$queryRaw<CountRow[]>(Prisma.sql`
-          SELECT COUNT(*) AS cnt
-          FROM (
-            SELECT date
-            FROM viewer_channel_daily_stats
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${ninetyDaysAgo}
-            UNION
-            SELECT date
-            FROM viewer_channel_message_daily_aggs
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId} AND date >= ${ninetyDaysAgo}
-          )
-        `),
       ]);
 
     // ========== 基礎統計 ==========
@@ -175,7 +182,9 @@ export class LifetimeStatsAggregatorService {
     // ========== 忠誠度與連續簽到 ==========
 
     // 由資料庫去重後回傳的日期列表
-    const activeDates = activeDateRows.map((row) => normalizeDateToDay(row.d));
+    const activeDates = activeDateRows
+      .map((row) => normalizeDateToDay(row.d))
+      .filter((dateStr): dateStr is string => Boolean(dateStr));
 
     const trackingDays = activeDates.length;
     const trackingStartedAt = activeDates.length > 0 ? new Date(activeDates[0]) : new Date();
@@ -221,8 +230,8 @@ export class LifetimeStatsAggregatorService {
     }
 
     // ========== 活躍度 (最近 30/90 天) ==========
-    const activeDaysLast30 = toNumber(activeDaysLast30Rows[0]?.cnt);
-    const activeDaysLast90 = toNumber(activeDaysLast90Rows[0]?.cnt);
+    const activeDaysLast30 = activeDates.filter((dateStr) => new Date(dateStr) >= thirtyDaysAgo).length;
+    const activeDaysLast90 = activeDates.filter((dateStr) => new Date(dateStr) >= ninetyDaysAgo).length;
 
     // 最活躍月份
     const monthCounts = new Map<string, number>();

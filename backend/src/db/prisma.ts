@@ -52,9 +52,9 @@ const prismaOptions = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const prisma = global.prisma || new PrismaClient(prismaOptions as any);
+const basePrisma = global.prisma || new PrismaClient(prismaOptions as any);
 
-setupSlowQueryLogger(prisma);
+export const prisma = setupSlowQueryLogger(basePrisma);
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;

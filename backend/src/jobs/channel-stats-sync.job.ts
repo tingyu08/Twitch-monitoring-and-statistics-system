@@ -92,11 +92,18 @@ export class ChannelStatsSyncJob {
 
       for (let i = 0; i < channels.length; i += BATCH_SIZE) {
         const batch = channels.slice(i, i + BATCH_SIZE);
+        const channelInfoByTwitchId = await unifiedTwitchService.getChannelInfoByIds(
+          batch.map((channel) => channel.twitchChannelId)
+        );
         
         const batchResults = await Promise.all(
           batch.map(async (channel) => {
             try {
-              await this.syncChannelStats(channel, activeSessionMap);
+              await this.syncChannelStats(
+                channel,
+                activeSessionMap,
+                channelInfoByTwitchId.get(channel.twitchChannelId) || null
+              );
               return { ok: true as const };
             } catch (error) {
               logger.error("ChannelStatsSync", `Failed to sync channel ${channel.channelName}:`, error);
@@ -152,11 +159,14 @@ export class ChannelStatsSyncJob {
         title: string | null;
         category: string | null;
       }
-    >
+    >,
+    channelInfo: {
+      login: string;
+      isLive: boolean;
+      streamTitle?: string;
+      currentGame?: string;
+    } | null
   ): Promise<void> {
-    // 使用 twitchChannelId 查詢（ID 永不改變，避免用戶改名後找不到）
-    const channelInfo = await unifiedTwitchService.getChannelInfoById(channel.twitchChannelId);
-
     if (!channelInfo) {
       logger.warn("ChannelStatsSync", `Could not get channel info for ID: ${channel.twitchChannelId} (${channel.channelName})`);
       return;

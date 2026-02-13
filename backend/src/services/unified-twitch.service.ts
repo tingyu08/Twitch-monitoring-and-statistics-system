@@ -11,6 +11,7 @@
 
 import { twurpleChatService } from "./twitch-chat.service";
 import { twurpleHelixService } from "./twitch-helix.service";
+import type { TwitchChannelSnapshot } from "./twitch-helix.service";
 import { decApiService } from "./decapi.service";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { autoJoinLiveChannelsJob } from "../jobs/auto-join-live-channels.job";
@@ -175,6 +176,63 @@ export class UnifiedTwitchService {
 
     this.channelInfoByIdPending.set(twitchId, loadPromise);
     return loadPromise;
+  }
+
+  async getChannelInfoByIds(twitchIds: string[]): Promise<Map<string, ChannelInfo>> {
+    const now = Date.now();
+    const result = new Map<string, ChannelInfo>();
+    const missing: string[] = [];
+
+    for (const twitchId of twitchIds) {
+      const cached = this.channelInfoByIdCache.get(twitchId);
+      if (cached && cached.expiresAt > now && cached.value) {
+        result.set(twitchId, cached.value);
+        continue;
+      }
+
+      missing.push(twitchId);
+    }
+
+    if (missing.length === 0) {
+      return result;
+    }
+
+    const snapshots = await twurpleHelixService.getChannelSnapshotsByIds(missing);
+    const snapshotById = new Map<string, TwitchChannelSnapshot>(
+      snapshots.map((snapshot) => [snapshot.broadcasterId, snapshot])
+    );
+
+    for (const twitchId of missing) {
+      const snapshot = snapshotById.get(twitchId);
+
+      if (!snapshot) {
+        this.channelInfoByIdCache.set(twitchId, {
+          value: null,
+          expiresAt: now + Math.min(this.channelInfoByIdTtlMs, 10000),
+        });
+        continue;
+      }
+
+      const payload: ChannelInfo = {
+        id: snapshot.broadcasterId,
+        login: snapshot.broadcasterLogin,
+        displayName: snapshot.broadcasterName,
+        avatarUrl: "",
+        isLive: snapshot.isLive,
+        currentGame: snapshot.gameName,
+        streamTitle: snapshot.title,
+        followerCount: 0,
+      };
+
+      this.channelInfoByIdCache.set(twitchId, {
+        value: payload,
+        expiresAt: now + this.channelInfoByIdTtlMs,
+      });
+
+      result.set(twitchId, payload);
+    }
+
+    return result;
   }
 
   /**

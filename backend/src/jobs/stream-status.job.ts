@@ -13,6 +13,7 @@ import { memoryMonitor } from "../utils/memory-monitor";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { chatListenerManager } from "../services/chat-listener-manager";
+import { getSessionWriteAuthority } from "../config/session-write-authority";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
@@ -31,6 +32,8 @@ const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
 
 // 降低 stream_metrics 寫入頻率（預設每 10 分鐘採樣一次）
 const METRIC_SAMPLE_MINUTES = Number(process.env.STREAM_METRIC_SAMPLE_MINUTES || 10);
+const SESSION_WRITE_AUTHORITY = getSessionWriteAuthority();
+const STREAM_STATUS_WRITES_SESSION = SESSION_WRITE_AUTHORITY !== "eventsub";
 
 // 避免循環依賴和類型錯誤，定義本地介面
 interface MonitoredChannel {
@@ -207,8 +210,10 @@ export class StreamStatusJob {
       try {
         if (isLive && stream && !activeSession) {
           // 新開播：建立 session
-          await this.createStreamSession(channel, stream);
-          result.newSessions++;
+          if (STREAM_STATUS_WRITES_SESSION) {
+            await this.createStreamSession(channel, stream);
+            result.newSessions++;
+          }
           result.online++;
         } else if (isLive && stream && activeSession) {
           // 持續開播：更新 session 資訊 (直接使用 activeSession 物件，不需再查詢)
@@ -216,10 +221,14 @@ export class StreamStatusJob {
           result.online++;
         } else if (!isLive && activeSession) {
           // 已下播：結束 session (直接使用 activeSession 物件)
-          await this.endStreamSession(activeSession);
+          if (STREAM_STATUS_WRITES_SESSION) {
+            await this.endStreamSession(activeSession);
+          }
           // 釋放 listener slot
           await chatListenerManager.stopListening(channel.channelName);
-          result.endedSessions++;
+          if (STREAM_STATUS_WRITES_SESSION) {
+            result.endedSessions++;
+          }
           result.offline++;
         } else {
           // 未開播且無進行中 session
@@ -368,7 +377,7 @@ export class StreamStatusJob {
       startedAt: Date;
     }
   ): Promise<void> {
-    await runWithWriteGuard("stream-status:create-session", async () => {
+    await runWithWriteGuard("stream-session:create-session", async () => {
       // Upsert 並直接返回結果
       const session = await prisma.streamSession.upsert({
         where: { twitchStreamId: stream.id },
@@ -428,7 +437,7 @@ export class StreamStatusJob {
     const divisor = Math.max(sampleCount + 1, 1);
     const newAvg = Math.round((currentAvg * sampleCount + stream.viewerCount) / divisor);
 
-    await runWithWriteGuard("stream-status:update-session", async () => {
+    await runWithWriteGuard("stream-session:update-session", async () => {
       // 直接更新
       await prisma.streamSession.update({
         where: { id: activeSession.id },
@@ -465,7 +474,7 @@ export class StreamStatusJob {
       (endedAt.getTime() - activeSession.startedAt.getTime()) / 1000
     );
 
-    await runWithWriteGuard("stream-status:end-session", () =>
+    await runWithWriteGuard("stream-session:end-session", () =>
       prisma.streamSession.update({
         where: { id: activeSession.id },
         data: {

@@ -53,6 +53,15 @@ export interface TwitchChannel {
   title: string;
 }
 
+export interface TwitchChannelSnapshot {
+  broadcasterId: string;
+  broadcasterLogin: string;
+  broadcasterName: string;
+  gameName?: string;
+  title?: string;
+  isLive: boolean;
+}
+
 // Story 3.6: 用戶追蹤的頻道資訊
 export interface FollowedChannel {
   broadcasterId: string;
@@ -466,6 +475,36 @@ class TwurpleHelixService {
       return results;
     } catch (error) {
       logger.error("Twurple Helix", `獲取用戶追蹤列表失敗: ${userId}`, error);
+      return [];
+    }
+  }
+
+  async getChannelSnapshotsByIds(userIds: string[]): Promise<TwitchChannelSnapshot[]> {
+    if (userIds.length === 0) return [];
+
+    const normalizedIds = userIds.slice(0, 100);
+
+    try {
+      const [users, streams] = await Promise.all([
+        this.getUsersByIds(normalizedIds),
+        this.getStreamsByUserIds(normalizedIds),
+      ]);
+
+      const streamByUserId = new Map(streams.map((stream) => [stream.userId, stream]));
+
+      return users.map((user) => {
+        const stream = streamByUserId.get(user.id);
+        return {
+          broadcasterId: user.id,
+          broadcasterLogin: user.login,
+          broadcasterName: user.displayName,
+          gameName: stream?.gameName,
+          title: stream?.title,
+          isLive: stream?.type === "live",
+        };
+      });
+    } catch (error) {
+      logger.error("Twurple Helix", "批量獲取頻道快照失敗", error);
       return [];
     }
   }

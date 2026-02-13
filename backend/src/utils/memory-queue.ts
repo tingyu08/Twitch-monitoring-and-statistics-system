@@ -9,7 +9,7 @@
  */
 
 import { logger } from "./logger";
-import { appendFile, mkdir, readFile, writeFile } from "fs/promises";
+import { appendFile, mkdir, open, readFile, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 
 export interface QueueJob<T = unknown> {
@@ -30,6 +30,11 @@ export interface QueueOptions {
 
 type JobProcessor<T> = (data: T) => Promise<void>;
 
+const OVERFLOW_LOCK_WAIT_MS = 25;
+const OVERFLOW_LOCK_MAX_WAIT_MS = 250;
+const OVERFLOW_LOCK_MAX_ATTEMPTS = 120;
+const OVERFLOW_LOCK_STALE_MS = 2 * 60 * 1000;
+
 export class MemoryQueue<T = unknown> {
   private queue: QueueJob<T>[] = [];
   private processing = 0;
@@ -38,6 +43,7 @@ export class MemoryQueue<T = unknown> {
   private overflowRecovering = false;
   private overflowPersisted = 0;
   private overflowRecovered = 0;
+  private overflowFileOpChain: Promise<void> = Promise.resolve();
 
   private readonly concurrency: number;
   private readonly maxRetries: number;
@@ -107,20 +113,113 @@ export class MemoryQueue<T = unknown> {
       return;
     }
 
+    await this.withOverflowFileLock(async () => {
+      try {
+        await mkdir(path.dirname(this.overflowFilePath), { recursive: true });
+        const serialized = JSON.stringify({
+          id: job.id,
+          data: job.data,
+          priority: job.priority,
+          retries: job.retries,
+          createdAt: job.createdAt.toISOString(),
+        });
+        await appendFile(this.overflowFilePath, `${serialized}\n`, "utf8");
+        this.overflowPersisted += 1;
+        logger.warn("MemoryQueue", `Queue full, persisted overflow job ${job.id}`);
+      } catch (error) {
+        logger.error("MemoryQueue", `Failed to persist overflow job ${job.id}`, error);
+      }
+    });
+  }
+
+  private async withOverflowFileLock(work: () => Promise<void>): Promise<void> {
+    const run = this.overflowFileOpChain.then(
+      async () => this.runWithOptionalCrossProcessLock(work),
+      async () => this.runWithOptionalCrossProcessLock(work)
+    );
+    this.overflowFileOpChain = run.then(
+      (): void => undefined,
+      (): void => undefined
+    );
+    await run;
+  }
+
+  private async runWithOptionalCrossProcessLock(work: () => Promise<void>): Promise<void> {
+    if (!this.overflowFilePath) {
+      await work();
+      return;
+    }
+
+    const lockPath = `${this.overflowFilePath}.lock`;
+    let lockHandle: Awaited<ReturnType<typeof open>> | null = null;
+
     try {
-      await mkdir(path.dirname(this.overflowFilePath), { recursive: true });
-      const serialized = JSON.stringify({
-        id: job.id,
-        data: job.data,
-        priority: job.priority,
-        retries: job.retries,
-        createdAt: job.createdAt.toISOString(),
-      });
-      await appendFile(this.overflowFilePath, `${serialized}\n`, "utf8");
-      this.overflowPersisted += 1;
-      logger.warn("MemoryQueue", `Queue full, persisted overflow job ${job.id}`);
+      lockHandle = await this.acquireOverflowLock(lockPath);
+      await work();
+    } finally {
+      if (lockHandle) {
+        try {
+          await lockHandle.close();
+        } catch {
+          // noop
+        }
+        try {
+          await unlink(lockPath);
+        } catch {
+          // noop
+        }
+      }
+    }
+  }
+
+  private async acquireOverflowLock(lockPath: string): Promise<Awaited<ReturnType<typeof open>> | null> {
+    for (let attempt = 1; attempt <= OVERFLOW_LOCK_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        return await open(lockPath, "wx");
+      } catch (error) {
+        const nodeError = error as NodeJS.ErrnoException;
+        if (nodeError.code !== "EEXIST") {
+          logger.warn("MemoryQueue", `Overflow lock unexpected error: ${nodeError.message}`);
+          return null;
+        }
+
+        const removedStale = await this.tryRemoveStaleOverflowLock(lockPath);
+        if (removedStale) {
+          continue;
+        }
+
+        if (attempt < OVERFLOW_LOCK_MAX_ATTEMPTS) {
+          const waitMs = Math.min(
+            OVERFLOW_LOCK_WAIT_MS * 2 ** Math.floor(attempt / 20),
+            OVERFLOW_LOCK_MAX_WAIT_MS
+          );
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+      }
+    }
+
+    logger.warn("MemoryQueue", "Overflow lock acquire timeout, fallback to in-process lock only");
+    return null;
+  }
+
+  private async tryRemoveStaleOverflowLock(lockPath: string): Promise<boolean> {
+    try {
+      const lockStat = await stat(lockPath);
+      const lockAgeMs = Date.now() - lockStat.mtimeMs;
+
+      if (lockAgeMs < OVERFLOW_LOCK_STALE_MS) {
+        return false;
+      }
+
+      await unlink(lockPath);
+      logger.warn("MemoryQueue", `Removed stale overflow lock: ${lockPath}`);
+      return true;
     } catch (error) {
-      logger.error("MemoryQueue", `Failed to persist overflow job ${job.id}`, error);
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        return true;
+      }
+      return false;
     }
   }
 
@@ -136,66 +235,68 @@ export class MemoryQueue<T = unknown> {
     this.overflowRecovering = true;
 
     try {
-      let content: string;
-      try {
-        content = await readFile(this.overflowFilePath, "utf8");
-      } catch (error) {
-        const nodeError = error as NodeJS.ErrnoException;
-        if (nodeError.code === "ENOENT") {
+      await this.withOverflowFileLock(async () => {
+        let content: string;
+        try {
+          content = await readFile(this.overflowFilePath, "utf8");
+        } catch (error) {
+          const nodeError = error as NodeJS.ErrnoException;
+          if (nodeError.code === "ENOENT") {
+            return;
+          }
+          throw error;
+        }
+
+        const lines = content
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+
+        if (lines.length === 0) {
           return;
         }
-        throw error;
-      }
 
-      const lines = content
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+        const remainingLines: string[] = [];
 
-      if (lines.length === 0) {
-        return;
-      }
-
-      const remainingLines: string[] = [];
-
-      for (const line of lines) {
-        if (this.queue.length >= this.maxQueueSize) {
-          remainingLines.push(line);
-          continue;
-        }
-
-        try {
-          const parsed = JSON.parse(line) as {
-            data?: T;
-            priority?: number;
-            retries?: number;
-            createdAt?: string;
-          };
-
-          if (typeof parsed.priority !== "number") {
+        for (const line of lines) {
+          if (this.queue.length >= this.maxQueueSize) {
+            remainingLines.push(line);
             continue;
           }
 
-          const recoveredJob: QueueJob<T> = {
-            id: `job_${++this.jobIdCounter}`,
-            data: parsed.data as T,
-            priority: parsed.priority,
-            retries: typeof parsed.retries === "number" ? parsed.retries : 0,
-            createdAt: parsed.createdAt ? new Date(parsed.createdAt) : new Date(),
-          };
+          try {
+            const parsed = JSON.parse(line) as {
+              data?: T;
+              priority?: number;
+              retries?: number;
+              createdAt?: string;
+            };
 
-          if (this.enqueueJob(recoveredJob)) {
-            this.overflowRecovered += 1;
-          } else {
-            remainingLines.push(line);
+            if (typeof parsed.priority !== "number") {
+              continue;
+            }
+
+            const recoveredJob: QueueJob<T> = {
+              id: `job_${++this.jobIdCounter}`,
+              data: parsed.data as T,
+              priority: parsed.priority,
+              retries: typeof parsed.retries === "number" ? parsed.retries : 0,
+              createdAt: parsed.createdAt ? new Date(parsed.createdAt) : new Date(),
+            };
+
+            if (this.enqueueJob(recoveredJob)) {
+              this.overflowRecovered += 1;
+            } else {
+              remainingLines.push(line);
+            }
+          } catch {
+            logger.warn("MemoryQueue", "Skipped invalid overflow payload line");
           }
-        } catch {
-          logger.warn("MemoryQueue", "Skipped invalid overflow payload line");
         }
-      }
 
-      const nextContent = remainingLines.length > 0 ? `${remainingLines.join("\n")}\n` : "";
-      await writeFile(this.overflowFilePath, nextContent, "utf8");
+        const nextContent = remainingLines.length > 0 ? `${remainingLines.join("\n")}\n` : "";
+        await writeFile(this.overflowFilePath, nextContent, "utf8");
+      });
 
       if (this.processor && this.queue.length > 0) {
         this.tick();

@@ -47,6 +47,11 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { importTwurpleApi, importTwurpleEventSub } from "../utils/dynamic-import";
+import { runWithWriteGuard } from "../jobs/job-write-guard";
+import { getSessionWriteAuthority } from "../config/session-write-authority";
+
+const SESSION_WRITE_AUTHORITY = getSessionWriteAuthority();
+const EVENTSUB_WRITES_SESSION = SESSION_WRITE_AUTHORITY !== "job";
 
 // EventSub 配置介面
 interface EventSubConfig {
@@ -411,39 +416,56 @@ class TwurpleEventSubService {
         return;
       }
 
-      // 使用重試機制檢查是否已有進行中的 session
-      const existingSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
-        prisma.streamSession.findFirst({
-          where: {
-            channelId: channel.id,
-            endedAt: null,
-          },
-        })
-      );
-
-      if (existingSession) {
-        logger.debug("TwurpleEventSub", `Session already exists for ${data.displayName}`);
-        return;
-      }
-
-      // 使用重試機制創建新的 StreamSession 並更新頻道狀態（使用 transaction）
-      await retryDatabaseOperation(() =>
-        prisma.$transaction([
-          prisma.streamSession.create({
-            data: {
-              channelId: channel.id,
-              twitchStreamId: `eventsub_${Date.now()}`,
-              startedAt: data.startedAt,
-              title: "",
-              category: "",
-            },
-          }),
+      if (!EVENTSUB_WRITES_SESSION) {
+        await retryDatabaseOperation(() =>
           prisma.channel.update({
             where: { id: channel.id },
             data: { isLive: true, currentStreamStartedAt: data.startedAt },
-          }),
-        ])
-      );
+          })
+        );
+      } else {
+        let created = false;
+        await runWithWriteGuard("stream-session:create-session", async () => {
+        // 使用重試機制檢查是否已有進行中的 session
+          const existingSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
+            prisma.streamSession.findFirst({
+              where: {
+                channelId: channel.id,
+                endedAt: null,
+              },
+            })
+          );
+
+          if (existingSession) {
+            return;
+          }
+
+          // 使用重試機制創建新的 StreamSession 並更新頻道狀態（使用 transaction）
+          await retryDatabaseOperation(() =>
+            prisma.$transaction([
+              prisma.streamSession.create({
+                data: {
+                  channelId: channel.id,
+                  twitchStreamId: `eventsub_${Date.now()}`,
+                  startedAt: data.startedAt,
+                  title: "",
+                  category: "",
+                },
+              }),
+              prisma.channel.update({
+                where: { id: channel.id },
+                data: { isLive: true, currentStreamStartedAt: data.startedAt },
+              }),
+            ])
+          );
+          created = true;
+        });
+
+        if (!created) {
+          logger.debug("TwurpleEventSub", `Session already exists for ${data.displayName}`);
+          return;
+        }
+      }
 
       // 推送 WebSocket 事件
       webSocketGateway.broadcastStreamStatus("stream.online", {
@@ -481,35 +503,10 @@ class TwurpleEventSubService {
         return;
       }
 
-      // 使用重試機制找到進行中的 session
-      const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
-        prisma.streamSession.findFirst({
-          where: {
-            channelId: channel.id,
-            endedAt: null,
-          },
-          orderBy: { startedAt: "desc" },
-        })
-      );
-
-      if (!openSession) {
-        logger.debug("TwurpleEventSub", `No open session found for ${channel.channelName}`);
-        return;
-      }
-
-      // 計算時長
-      const endedAt = new Date();
-      const durationSeconds = Math.floor(
-        (endedAt.getTime() - openSession.startedAt.getTime()) / 1000
-      );
-
-      // 使用重試機制更新 session 和頻道狀態（使用 transaction）
-      await retryDatabaseOperation(() =>
-        prisma.$transaction([
-          prisma.streamSession.update({
-            where: { id: openSession.id },
-            data: { endedAt, durationSeconds },
-          }),
+      let durationSeconds = 0;
+      let updated = false;
+      if (!EVENTSUB_WRITES_SESSION) {
+        await retryDatabaseOperation(() =>
           prisma.channel.update({
             where: { id: channel.id },
             data: {
@@ -517,9 +514,56 @@ class TwurpleEventSubService {
               currentViewerCount: 0,
               currentStreamStartedAt: null,
             },
-          }),
-        ])
-      );
+          })
+        );
+        updated = true;
+      } else {
+        await runWithWriteGuard("stream-session:end-session", async () => {
+        // 使用重試機制找到進行中的 session
+          const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
+            prisma.streamSession.findFirst({
+              where: {
+                channelId: channel.id,
+                endedAt: null,
+              },
+              orderBy: { startedAt: "desc" },
+            })
+          );
+
+          if (!openSession) {
+            return;
+          }
+
+          // 計算時長
+          const endedAt = new Date();
+          durationSeconds = Math.floor((endedAt.getTime() - openSession.startedAt.getTime()) / 1000);
+
+          // 使用重試機制更新 session 和頻道狀態（使用 transaction）
+          await retryDatabaseOperation(() =>
+            prisma.$transaction([
+              prisma.streamSession.update({
+                where: { id: openSession.id },
+                data: { endedAt, durationSeconds },
+              }),
+              prisma.channel.update({
+                where: { id: channel.id },
+                data: {
+                  isLive: false,
+                  currentViewerCount: 0,
+                  currentStreamStartedAt: null,
+                },
+              }),
+            ])
+          );
+
+          updated = true;
+        });
+      }
+
+      if (!updated) {
+        logger.debug("TwurpleEventSub", `No open session found for ${channel.channelName}`);
+        return;
+      }
 
       // 推送 WebSocket 事件
       webSocketGateway.broadcastStreamStatus("stream.offline", {
@@ -560,18 +604,27 @@ class TwurpleEventSubService {
 
       if (!channel) return;
 
-      // 使用重試機制查詢進行中的 session
-      const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
-        prisma.streamSession.findFirst({
-          where: {
-            channelId: channel.id,
-            endedAt: null,
-          },
-          orderBy: { startedAt: "desc" },
-        })
-      );
+      if (!EVENTSUB_WRITES_SESSION) {
+        return;
+      }
 
-      if (openSession) {
+      let updated = false;
+      await runWithWriteGuard("stream-session:update-session", async () => {
+        // 使用重試機制查詢進行中的 session
+        const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
+          prisma.streamSession.findFirst({
+            where: {
+              channelId: channel.id,
+              endedAt: null,
+            },
+            orderBy: { startedAt: "desc" },
+          })
+        );
+
+        if (!openSession) {
+          return;
+        }
+
         // 使用重試機制更新 session
         await retryDatabaseOperation(() =>
           prisma.streamSession.update({
@@ -582,6 +635,10 @@ class TwurpleEventSubService {
             },
           })
         );
+        updated = true;
+      });
+
+      if (updated) {
         logger.debug("TwurpleEventSub", `Updated session info for ${channel.channelName}`);
       }
     } catch (error) {
