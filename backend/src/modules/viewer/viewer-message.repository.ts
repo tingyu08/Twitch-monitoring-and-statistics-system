@@ -484,6 +484,20 @@ export class ViewerMessageRepository {
           );
 
           await tx.$executeRaw(Prisma.sql`
+            WITH src (
+              viewerId,
+              channelId,
+              date,
+              totalMessages,
+              chatMessages,
+              subscriptions,
+              cheers,
+              giftSubs,
+              raids,
+              totalBits
+            ) AS (
+              VALUES ${Prisma.join(aggValues)}
+            )
             INSERT INTO viewer_channel_message_daily_aggs (
               id,
               viewerId,
@@ -511,18 +525,7 @@ export class ViewerMessageRepository {
               src.raids,
               src.totalBits,
               CURRENT_TIMESTAMP
-            FROM (VALUES ${Prisma.join(aggValues)}) AS src(
-              viewerId,
-              channelId,
-              date,
-              totalMessages,
-              chatMessages,
-              subscriptions,
-              cheers,
-              giftSubs,
-              raids,
-              totalBits
-            )
+            FROM src
             ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
               totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
               chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
@@ -542,6 +545,15 @@ export class ViewerMessageRepository {
           );
 
           await tx.$executeRaw(Prisma.sql`
+            WITH src (
+              viewerId,
+              channelId,
+              date,
+              messageCount,
+              emoteCount
+            ) AS (
+              VALUES ${Prisma.join(dailyValues)}
+            )
             INSERT INTO viewer_channel_daily_stats (
               id,
               viewerId,
@@ -563,13 +575,7 @@ export class ViewerMessageRepository {
               src.emoteCount,
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
-            FROM (VALUES ${Prisma.join(dailyValues)}) AS src(
-              viewerId,
-              channelId,
-              date,
-              messageCount,
-              emoteCount
-            )
+            FROM src
             ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
               messageCount = viewer_channel_daily_stats.messageCount + excluded.messageCount,
               emoteCount = viewer_channel_daily_stats.emoteCount + excluded.emoteCount,
@@ -588,6 +594,18 @@ export class ViewerMessageRepository {
           );
 
           await tx.$executeRaw(Prisma.sql`
+            WITH src (
+              viewerId,
+              channelId,
+              totalMessages,
+              totalChatMessages,
+              totalSubscriptions,
+              totalCheers,
+              totalBits,
+              lastWatchedAt
+            ) AS (
+              VALUES ${Prisma.join(lifetimeValues)}
+            )
             INSERT INTO viewer_channel_lifetime_stats (
               id,
               viewerId,
@@ -635,16 +653,7 @@ export class ViewerMessageRepository {
               0,
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
-            FROM (VALUES ${Prisma.join(lifetimeValues)}) AS src(
-              viewerId,
-              channelId,
-              totalMessages,
-              totalChatMessages,
-              totalSubscriptions,
-              totalCheers,
-              totalBits,
-              lastWatchedAt
-            )
+            FROM src
             ON CONFLICT(viewerId, channelId) DO UPDATE SET
               totalMessages = viewer_channel_lifetime_stats.totalMessages + excluded.totalMessages,
               totalChatMessages = viewer_channel_lifetime_stats.totalChatMessages + excluded.totalChatMessages,

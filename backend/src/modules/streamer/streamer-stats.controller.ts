@@ -1,7 +1,12 @@
 import type { Request, Response } from "express";
 import type { AuthRequest } from "../auth/auth.middleware";
 import { prisma } from "../../db/prisma";
-import { getStreamerGameStats, getStreamerVideos, getStreamerClips } from "./streamer.service";
+import {
+  getChannelGameStats,
+  getStreamerGameStats,
+  getStreamerVideos,
+  getStreamerClips,
+} from "./streamer.service";
 import { streamerLogger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 
@@ -55,16 +60,7 @@ export async function getPublicGameStatsHandler(req: Request, res: Response): Pr
     const stats = await cacheManager.getOrSetWithTags(
       cacheKey,
       async () => {
-        const channel = await prisma.channel.findUnique({
-          where: { id: channelId },
-          select: { streamerId: true },
-        });
-
-        if (!channel?.streamerId) {
-          throw new Error("Streamer not found for this channel");
-        }
-
-        return await getStreamerGameStats(channel.streamerId, range as "7d" | "30d" | "90d");
+        return await getChannelGameStats(channelId, range as "7d" | "30d" | "90d");
       },
       ttl,
       [`channel:${channelId}`, "streamer:public-game-stats"]

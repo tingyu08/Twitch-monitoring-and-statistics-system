@@ -69,6 +69,21 @@ export class RevenueService {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  private async withQueryTimeout<T>(operation: () => Promise<T>, timeoutMs = 20000): Promise<T> {
+    let timer: NodeJS.Timeout | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), timeoutMs);
+    });
+
+    try {
+      return await Promise.race([operation(), timeoutPromise]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  }
+
   private async runBitsDailyAggWithRetry(operationName: string, operation: () => Promise<void>): Promise<void> {
     for (let attempt = 1; attempt <= BITS_DAILY_AGG_MAX_RETRIES; attempt += 1) {
       try {
@@ -449,13 +464,8 @@ export class RevenueService {
         startDate.setDate(startDate.getDate() - effectiveDays);
         startDate.setHours(0, 0, 0, 0);
 
-        // Zeabur 免費層: 查詢超時保護（20 秒）
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
-        });
-
         try {
-          const snapshots = await Promise.race([
+          const snapshots = await this.withQueryTimeout(() =>
             prisma.$queryRaw<
               Array<{
                 snapshotDate: string;
@@ -478,9 +488,8 @@ export class RevenueService {
                 AND snapshotDate >= ${startDate.toISOString()}
               ORDER BY snapshotDate ASC
               LIMIT 90
-            `,
-            timeoutPromise,
-          ]);
+            `
+          );
 
           return snapshots.map((snap) => ({
             date: new Date(snap.snapshotDate).toISOString().split("T")[0],
@@ -531,16 +540,11 @@ export class RevenueService {
         startDate.setHours(0, 0, 0, 0);
         const startDateKey = this.toDateKey(startDate);
 
-        // Zeabur 免費層: 查詢超時保護（20 秒）
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
-        });
-
         try {
           // 先刷新日聚合表，再從聚合表讀取，避免每次掃描 cheer_events
           await this.ensureBitsDailyAggFresh(streamerId, startDateKey);
 
-          const results = await Promise.race([
+          const results = await this.withQueryTimeout(() =>
             prisma.$queryRaw<
               Array<{
                 date: string | Date;
@@ -557,9 +561,8 @@ export class RevenueService {
                 AND date >= ${startDateKey}
               ORDER BY date ASC
               LIMIT 90
-            `,
-            timeoutPromise,
-          ]);
+            `
+          );
 
           return results.map((row) => ({
             date:
@@ -608,16 +611,11 @@ export class RevenueService {
         startOfMonth.setHours(0, 0, 0, 0);
         const startOfMonthKey = this.toDateKey(startOfMonth);
 
-        // Zeabur 免費層: 查詢超時保護（20 秒）
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("DB_QUERY_TIMEOUT")), 20000);
-        });
-
         try {
           await this.ensureBitsDailyAggFresh(streamerId, startOfMonthKey);
 
           // 使用 Promise.all 平行查詢，避免 SQLite 事務鎖定
-          const [latestSnapshot, bitsRows] = await Promise.race([
+          const [latestSnapshot, bitsRows] = await this.withQueryTimeout(() =>
             Promise.all([
               prisma.subscriptionSnapshot.findFirst({
                 where: { streamerId },
@@ -631,9 +629,8 @@ export class RevenueService {
                 WHERE streamerId = ${streamerId}
                   AND date >= ${startOfMonthKey}
               `,
-            ]),
-            timeoutPromise,
-          ]);
+            ])
+          );
 
           const totalBits = Number(bitsRows[0]?.totalBits || 0);
           const bitsEventCount = Number(bitsRows[0]?.eventCount || 0);

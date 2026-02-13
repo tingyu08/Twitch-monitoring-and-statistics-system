@@ -73,6 +73,31 @@ export interface UserTokenInfo {
 
 class TwurpleHelixService {
   private apiClient: ApiClient | null = null;
+  private readonly userApiClients = new Map<string, { apiClient: ApiClient; lastUsedAt: number }>();
+  private readonly USER_API_CLIENT_CACHE_LIMIT = 50;
+
+  private rememberUserApiClient(cacheKey: string, apiClient: ApiClient): ApiClient {
+    this.userApiClients.delete(cacheKey);
+    this.userApiClients.set(cacheKey, { apiClient, lastUsedAt: Date.now() });
+
+    if (this.userApiClients.size > this.USER_API_CLIENT_CACHE_LIMIT) {
+      const oldestKey = this.userApiClients.keys().next().value as string | undefined;
+      if (oldestKey) {
+        this.userApiClients.delete(oldestKey);
+      }
+    }
+
+    return apiClient;
+  }
+
+  private getRememberedUserApiClient(cacheKey: string): ApiClient | null {
+    const cached = this.userApiClients.get(cacheKey);
+    if (!cached) {
+      return null;
+    }
+
+    return this.rememberUserApiClient(cacheKey, cached.apiClient);
+  }
 
   /**
    * 獲取或初始化 API Client
@@ -308,85 +333,103 @@ class TwurpleHelixService {
     userAccessToken?: string,
     tokenInfo?: UserTokenInfo
   ): Promise<FollowedChannel[]> {
-    // 記憶體優化：使用臨時變數追蹤需要釋放的資源
-    let tempApiClient: ApiClient | null = null;
-
     try {
       let api: ApiClient;
 
       // 優先使用 tokenInfo（支援自動刷新）
       if (tokenInfo) {
-        const { ApiClient } = await importTwurpleApi();
-        const { RefreshingAuthProvider } = await importTwurpleAuth();
-        const clientId = twurpleAuthService.getClientId();
-        const clientSecret = twurpleAuthService.getClientSecret();
+        const cacheKey = `token:${tokenInfo.tokenId}`;
+        const cachedClient = this.getRememberedUserApiClient(cacheKey);
+        if (cachedClient) {
+          api = cachedClient;
+        } else {
+          const { ApiClient } = await importTwurpleApi();
+          const { RefreshingAuthProvider } = await importTwurpleAuth();
+          const clientId = twurpleAuthService.getClientId();
+          const clientSecret = twurpleAuthService.getClientSecret();
 
-        const authProvider = new RefreshingAuthProvider({
-          clientId,
-          clientSecret,
-        });
+          const authProvider = new RefreshingAuthProvider({
+            clientId,
+            clientSecret,
+          });
 
-        // 設定 Token 刷新回調（刷新後更新資料庫）
-        authProvider.onRefresh(async (_userId: string, newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData) => {
-          logger.info(
-            "Twurple Helix",
-            `Token 已自動刷新 (User: ${userId}, TokenID: ${tokenInfo.tokenId})`
+          // 設定 Token 刷新回調（刷新後更新資料庫）
+          authProvider.onRefresh(
+            async (
+              _userId: string,
+              newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData
+            ) => {
+              logger.info(
+                "Twurple Helix",
+                `Token 已自動刷新 (User: ${userId}, TokenID: ${tokenInfo.tokenId})`
+              );
+
+              try {
+                // 動態導入以避免循環依賴
+                const { prisma } = await import("../db/prisma");
+                const { encryptToken } = await import("../utils/crypto.utils");
+
+                await prisma.twitchToken.update({
+                  where: { id: tokenInfo.tokenId },
+                  data: {
+                    accessToken: encryptToken(newTokenData.accessToken),
+                    refreshToken: newTokenData.refreshToken
+                      ? encryptToken(newTokenData.refreshToken)
+                      : undefined,
+                    expiresAt: newTokenData.expiresIn
+                      ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+                      : null,
+                    status: "active",
+                    failureCount: 0,
+                    lastValidatedAt: new Date(),
+                  },
+                });
+              } catch (dbError) {
+                logger.error("Twurple Helix", `Token 刷新後更新資料庫失敗`, dbError);
+              }
+            }
           );
 
-          try {
-            // 動態導入以避免循環依賴
-            const { prisma } = await import("../db/prisma");
-            const { encryptToken } = await import("../utils/crypto.utils");
+          // 添加使用者的 Token
+          await authProvider.addUserForToken(
+            {
+              accessToken: tokenInfo.accessToken,
+              refreshToken: tokenInfo.refreshToken,
+              expiresIn: tokenInfo.expiresAt
+                ? Math.floor((tokenInfo.expiresAt.getTime() - Date.now()) / 1000)
+                : null,
+              obtainmentTimestamp: Date.now(),
+            },
+            ["user:read:follows"]
+          );
 
-            await prisma.twitchToken.update({
-              where: { id: tokenInfo.tokenId },
-              data: {
-                accessToken: encryptToken(newTokenData.accessToken),
-                refreshToken: newTokenData.refreshToken
-                  ? encryptToken(newTokenData.refreshToken)
-                  : undefined,
-                expiresAt: newTokenData.expiresIn
-                  ? new Date(Date.now() + newTokenData.expiresIn * 1000)
-                  : null,
-                status: "active",
-                failureCount: 0,
-                lastValidatedAt: new Date(),
-              },
-            });
-          } catch (dbError) {
-            logger.error("Twurple Helix", `Token 刷新後更新資料庫失敗`, dbError);
-          }
-        });
-
-        // 添加使用者的 Token
-        await authProvider.addUserForToken(
-          {
-            accessToken: tokenInfo.accessToken,
-            refreshToken: tokenInfo.refreshToken,
-            expiresIn: tokenInfo.expiresAt
-              ? Math.floor((tokenInfo.expiresAt.getTime() - Date.now()) / 1000)
-              : null,
-            obtainmentTimestamp: Date.now(),
-          },
-          ["user:read:follows"]
-        );
-
-        tempApiClient = new ApiClient({
-          authProvider: authProvider,
-          logger: { minLevel: "error" },
-        });
-        api = tempApiClient;
+          api = this.rememberUserApiClient(
+            cacheKey,
+            new ApiClient({
+              authProvider,
+              logger: { minLevel: "error" },
+            })
+          );
+        }
       } else if (userAccessToken) {
         // 向後兼容：使用 StaticAuthProvider（不支援自動刷新）
-        const { ApiClient } = await importTwurpleApi();
-        const { StaticAuthProvider } = await importTwurpleAuth();
-        const clientId = twurpleAuthService.getClientId();
-        const authProvider = new StaticAuthProvider(clientId, userAccessToken);
-        tempApiClient = new ApiClient({
-          authProvider: authProvider,
-          logger: { minLevel: "error" },
-        });
-        api = tempApiClient;
+        const cacheKey = `legacy:${userId}:${userAccessToken.slice(0, 16)}`;
+        const cachedClient = this.getRememberedUserApiClient(cacheKey);
+        if (cachedClient) {
+          api = cachedClient;
+        } else {
+          const { ApiClient } = await importTwurpleApi();
+          const { StaticAuthProvider } = await importTwurpleAuth();
+          const clientId = twurpleAuthService.getClientId();
+          const authProvider = new StaticAuthProvider(clientId, userAccessToken);
+          api = this.rememberUserApiClient(
+            cacheKey,
+            new ApiClient({
+              authProvider,
+              logger: { minLevel: "error" },
+            })
+          );
+        }
         // 登入時使用的 token 是新的，不需要刷新，所以用 debug 級別
         logger.debug("Twurple Helix", `使用 StaticAuthProvider（不支援自動刷新）`);
       } else {
@@ -424,10 +467,6 @@ class TwurpleHelixService {
     } catch (error) {
       logger.error("Twurple Helix", `獲取用戶追蹤列表失敗: ${userId}`, error);
       return [];
-    } finally {
-      // 記憶體優化：確保臨時資源被釋放
-      // 將引用設為 null，讓 GC 可以回收
-      tempApiClient = null;
     }
   }
 

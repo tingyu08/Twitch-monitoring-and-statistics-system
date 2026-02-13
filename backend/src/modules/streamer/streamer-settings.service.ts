@@ -26,6 +26,82 @@ export class StreamerSettingsService {
     this.twitchClient = new TwitchOAuthClient();
   }
 
+  private getChannelApiUrl(broadcasterId: string): string {
+    return `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`;
+  }
+
+  private async getStreamerWithActiveToken(streamerId: string) {
+    const streamer = await prisma.streamer.findUnique({
+      where: { id: streamerId },
+      include: {
+        twitchTokens: {
+          where: { ownerType: "streamer", status: "active" },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!streamer || streamer.twitchTokens.length === 0) {
+      return null;
+    }
+
+    return {
+      streamer,
+      tokenRecord: streamer.twitchTokens[0],
+      broadcasterId: streamer.twitchUserId,
+    };
+  }
+
+  private async executeChannelApiRequest(
+    streamerId: string,
+    tokenRecord: {
+      id: string;
+      accessToken: string;
+      refreshToken: string | null;
+    },
+    broadcasterId: string,
+    options: {
+      method?: "GET" | "PATCH";
+      body?: string;
+    }
+  ): Promise<Response> {
+    let accessToken = decryptToken(tokenRecord.accessToken);
+
+    const sendRequest = (token: string) =>
+      fetch(this.getChannelApiUrl(broadcasterId), {
+        method: options.method ?? "GET",
+        headers: {
+          "Client-Id": env.twitchClientId,
+          Authorization: `Bearer ${token}`,
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+        },
+        ...(options.body ? { body: options.body } : {}),
+      });
+
+    let response = await sendRequest(accessToken);
+
+    if (response.status === 401 && tokenRecord.refreshToken) {
+      logger.info(
+        "StreamerSettings",
+        `Token expired for streamer ${streamerId}, attempting refresh...`
+      );
+      try {
+        accessToken = await this.refreshAndSaveToken(tokenRecord.id, tokenRecord.refreshToken);
+        response = await sendRequest(accessToken);
+      } catch (refreshError) {
+        logger.error("StreamerSettings", "Token refresh failed:", refreshError);
+        await prisma.twitchToken.update({
+          where: { id: tokenRecord.id },
+          data: { status: "expired", failureCount: { increment: 1 } },
+        });
+        throw new Error("Token expired and refresh failed. Please re-authenticate.");
+      }
+    }
+
+    return response;
+  }
+
   /**
    * 內部方法：刷新 Token 並更新資料庫
    */
@@ -56,66 +132,22 @@ export class StreamerSettingsService {
    * 從 Twitch API 獲取實況主當前頻道設定
    */
   async getChannelInfo(streamerId: string): Promise<ChannelInfo | null> {
-    const streamer = await prisma.streamer.findUnique({
-      where: { id: streamerId },
-      include: {
-        twitchTokens: {
-          where: { ownerType: "streamer", status: "active" },
-          orderBy: { updatedAt: "desc" },
-          take: 1,
-        },
-      },
-    });
-
-    if (!streamer || streamer.twitchTokens.length === 0) {
+    const streamerData = await this.getStreamerWithActiveToken(streamerId);
+    if (!streamerData) {
       logger.warn("StreamerSettings", `No active token found for streamer ${streamerId}`);
       return null;
     }
 
-    const tokenRecord = streamer.twitchTokens[0];
-    let accessToken = decryptToken(tokenRecord.accessToken);
-    const broadcasterId = streamer.twitchUserId;
-
-    // 嘗試呼叫 Twitch API
-    let response = await fetch(
-      `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+    const response = await this.executeChannelApiRequest(
+      streamerId,
       {
-        headers: {
-          "Client-Id": env.twitchClientId,
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
+        id: streamerData.tokenRecord.id,
+        accessToken: streamerData.tokenRecord.accessToken,
+        refreshToken: streamerData.tokenRecord.refreshToken,
+      },
+      streamerData.broadcasterId,
+      { method: "GET" }
     );
-
-    // 如果 Token 過期 (401)，嘗試刷新
-    if (response.status === 401 && tokenRecord.refreshToken) {
-      logger.info(
-        "StreamerSettings",
-        `Token expired for streamer ${streamerId}, attempting refresh...`
-      );
-      try {
-        accessToken = await this.refreshAndSaveToken(tokenRecord.id, tokenRecord.refreshToken);
-
-        // 重試請求
-        response = await fetch(
-          `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
-          {
-            headers: {
-              "Client-Id": env.twitchClientId,
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
-        );
-      } catch (refreshError) {
-        logger.error("StreamerSettings", "Token refresh failed:", refreshError);
-        // 標記 Token 為失效
-        await prisma.twitchToken.update({
-          where: { id: tokenRecord.id },
-          data: { status: "expired", failureCount: { increment: 1 } },
-        });
-        throw new Error("Token expired and refresh failed. Please re-authenticate.");
-      }
-    }
 
     if (!response.ok) {
       throw new Error(`Twitch API error: ${response.status}`);
@@ -141,24 +173,10 @@ export class StreamerSettingsService {
    * 更新實況主頻道設定到 Twitch
    */
   async updateChannelInfo(streamerId: string, data: UpdateChannelInfoDto): Promise<boolean> {
-    const streamer = await prisma.streamer.findUnique({
-      where: { id: streamerId },
-      include: {
-        twitchTokens: {
-          where: { ownerType: "streamer", status: "active" },
-          orderBy: { updatedAt: "desc" },
-          take: 1,
-        },
-      },
-    });
-
-    if (!streamer || streamer.twitchTokens.length === 0) {
+    const streamerData = await this.getStreamerWithActiveToken(streamerId);
+    if (!streamerData) {
       throw new Error("Streamer not found or no valid token");
     }
-
-    const tokenRecord = streamer.twitchTokens[0];
-    let accessToken = decryptToken(tokenRecord.accessToken);
-    const broadcasterId = streamer.twitchUserId;
 
     // Twitch API 要求的 body 格式
     const body: Record<string, unknown> = {};
@@ -167,51 +185,19 @@ export class StreamerSettingsService {
     if (data.tags !== undefined) body.tags = data.tags;
     if (data.language !== undefined) body.broadcaster_language = data.language;
 
-    // 發送 PATCH 請求
-    let response = await fetch(
-      `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
+    const response = await this.executeChannelApiRequest(
+      streamerId,
+      {
+        id: streamerData.tokenRecord.id,
+        accessToken: streamerData.tokenRecord.accessToken,
+        refreshToken: streamerData.tokenRecord.refreshToken,
+      },
+      streamerData.broadcasterId,
       {
         method: "PATCH",
-        headers: {
-          "Client-Id": env.twitchClientId,
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify(body),
       }
     );
-
-    // 如果 Token 過期 (401)，嘗試刷新
-    if (response.status === 401 && tokenRecord.refreshToken) {
-      logger.info(
-        "StreamerSettings",
-        `Token expired for streamer ${streamerId}, attempting refresh...`
-      );
-      try {
-        accessToken = await this.refreshAndSaveToken(tokenRecord.id, tokenRecord.refreshToken);
-
-        // 重試請求
-        response = await fetch(
-          `https://api.twitch.tv/helix/channels?broadcaster_id=${broadcasterId}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Client-Id": env.twitchClientId,
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
-          }
-        );
-      } catch (refreshError) {
-        logger.error("StreamerSettings", "Token refresh failed:", refreshError);
-        await prisma.twitchToken.update({
-          where: { id: tokenRecord.id },
-          data: { status: "expired", failureCount: { increment: 1 } },
-        });
-        throw new Error("Token expired and refresh failed. Please re-authenticate.");
-      }
-    }
 
     if (!response.ok) {
       const errorText = await response.text();

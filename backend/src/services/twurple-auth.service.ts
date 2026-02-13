@@ -32,7 +32,21 @@ class TwurpleAuthService {
   private readonly clientSecret: string;
   private appAuthProvider: AppTokenAuthProvider | null = null;
   private userAuthProviders: Map<string, RefreshingAuthProvider> = new Map();
+  private readonly maxUserProviders = Number(process.env.MAX_TWURPLE_USER_PROVIDERS || 50);
   private onTokenFailure: TokenFailureCallback | null = null;
+
+  private touchUserProvider(userId: string, provider: RefreshingAuthProvider): void {
+    this.userAuthProviders.delete(userId);
+    this.userAuthProviders.set(userId, provider);
+
+    if (this.userAuthProviders.size > this.maxUserProviders) {
+      const oldestUserId = this.userAuthProviders.keys().next().value as string | undefined;
+      if (oldestUserId) {
+        this.userAuthProviders.delete(oldestUserId);
+        logger.warn("Twurple Auth", `Evicted stale user auth provider: ${oldestUserId}`);
+      }
+    }
+  }
 
   constructor() {
     this.clientId = process.env.TWITCH_CLIENT_ID || "";
@@ -139,7 +153,7 @@ class TwurpleAuthService {
       this.userAuthProviders.delete(userId);
     });
 
-    this.userAuthProviders.set(userId, authProvider);
+    this.touchUserProvider(userId, authProvider);
     return authProvider;
   }
 
@@ -147,7 +161,11 @@ class TwurpleAuthService {
    * 獲取已存在的用戶 Auth Provider
    */
   getUserAuthProvider(userId: string): RefreshingAuthProvider | null {
-    return this.userAuthProviders.get(userId) || null;
+    const provider = this.userAuthProviders.get(userId) || null;
+    if (provider) {
+      this.touchUserProvider(userId, provider);
+    }
+    return provider;
   }
 
   /**

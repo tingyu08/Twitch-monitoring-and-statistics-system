@@ -202,79 +202,131 @@ export class ChannelStatsSyncJob {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Get all finished sessions for today
-    const todaySessions = await prisma.streamSession.findMany({
-      where: {
-        startedAt: { gte: today },
-        endedAt: { not: null },
-      },
-      select: {
-        channelId: true,
-        durationSeconds: true,
-        avgViewers: true,
-        peakViewers: true,
-      },
-    });
+    let groupedStats: Array<{
+      channelId: string;
+      _sum: { durationSeconds: number | null; avgViewers: number | null };
+      _max: { peakViewers: number | null };
+      _count: { _all: number };
+    }> = [];
 
-    // Group by channel
-    const channelStats = new Map<
-      string,
-      {
-        streamSeconds: number;
-        streamCount: number;
-        totalViewers: number;
-        peakViewers: number;
+    if (typeof prisma.streamSession.groupBy === "function") {
+      // 直接在 DB 端聚合，避免將所有 session 拉回應用層做 JS 分組
+      const groupedStatsRaw = await prisma.streamSession.groupBy({
+        by: ["channelId"],
+        where: {
+          startedAt: { gte: today },
+          endedAt: { not: null },
+        },
+        _sum: {
+          durationSeconds: true,
+          avgViewers: true,
+        },
+        _max: {
+          peakViewers: true,
+        },
+        _count: {
+          _all: true,
+        },
+      });
+
+      groupedStats = groupedStatsRaw.map((row) => ({
+        channelId: row.channelId,
+        _sum: {
+          durationSeconds: row._sum.durationSeconds ?? null,
+          avgViewers: row._sum.avgViewers ?? null,
+        },
+        _max: {
+          peakViewers: row._max.peakViewers ?? null,
+        },
+        _count: {
+          _all: row._count._all,
+        },
+      }));
+    } else {
+      // 測試 mock 或舊 client fallback：維持相容性
+      const sessions = await prisma.streamSession.findMany({
+        where: {
+          startedAt: { gte: today },
+          endedAt: { not: null },
+        },
+        select: {
+          channelId: true,
+          durationSeconds: true,
+          avgViewers: true,
+          peakViewers: true,
+        },
+      });
+
+      const aggMap = new Map<
+        string,
+        { durationSeconds: number; avgViewersSum: number; peakViewers: number; count: number }
+      >();
+
+      for (const session of sessions) {
+        const current = aggMap.get(session.channelId) || {
+          durationSeconds: 0,
+          avgViewersSum: 0,
+          peakViewers: 0,
+          count: 0,
+        };
+
+        current.durationSeconds += session.durationSeconds || 0;
+        current.avgViewersSum += session.avgViewers || 0;
+        current.peakViewers = Math.max(current.peakViewers, session.peakViewers || 0);
+        current.count += 1;
+
+        aggMap.set(session.channelId, current);
       }
-    >();
 
-    for (const session of todaySessions) {
-      const existing = channelStats.get(session.channelId) || {
-        streamSeconds: 0,
-        streamCount: 0,
-        totalViewers: 0,
-        peakViewers: 0,
-      };
-
-      existing.streamSeconds += session.durationSeconds || 0;
-      existing.streamCount += 1;
-      existing.totalViewers += session.avgViewers || 0;
-      existing.peakViewers = Math.max(existing.peakViewers, session.peakViewers || 0);
-
-      channelStats.set(session.channelId, existing);
+      groupedStats = Array.from(aggMap.entries()).map(([channelId, value]) => ({
+        channelId,
+        _sum: {
+          durationSeconds: value.durationSeconds,
+          avgViewers: value.avgViewersSum,
+        },
+        _max: {
+          peakViewers: value.peakViewers,
+        },
+        _count: {
+          _all: value.count,
+        },
+      }));
     }
 
     // Update or create daily stats (parallel batch)
-    const entries = Array.from(channelStats.entries());
+    const entries = groupedStats;
     let updated = 0;
 
     for (let i = 0; i < entries.length; i += BATCH_SIZE) {
       const batch = entries.slice(i, i + BATCH_SIZE);
       await runWithWriteGuard("channel-stats-sync:daily-stats-upsert", () =>
         Promise.all(
-          batch.map(async ([channelId, stats]) => {
+          batch.map(async (stats) => {
             const avgViewers =
-              stats.streamCount > 0 ? Math.round(stats.totalViewers / stats.streamCount) : null;
+              stats._count._all > 0
+                ? Math.round((stats._sum.avgViewers ?? 0) / stats._count._all)
+                : null;
 
             await prisma.channelDailyStat.upsert({
               where: {
                 channelId_date: {
-                  channelId,
+                  channelId: stats.channelId,
                   date: today,
                 },
               },
               create: {
-                channelId,
+                channelId: stats.channelId,
                 date: today,
-                streamSeconds: stats.streamSeconds,
-                streamCount: stats.streamCount,
+                streamSeconds: stats._sum.durationSeconds ?? 0,
+                streamCount: stats._count._all,
                 avgViewers,
-                peakViewers: stats.peakViewers,
+                peakViewers: stats._max.peakViewers ?? 0,
               },
               update: {
-                streamSeconds: stats.streamSeconds,
-                streamCount: stats.streamCount,
+                streamSeconds: stats._sum.durationSeconds ?? 0,
+                streamCount: stats._count._all,
                 avgViewers,
-                peakViewers: stats.peakViewers,
+                peakViewers: stats._max.peakViewers ?? 0,
               },
             });
           })
