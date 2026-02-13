@@ -461,19 +461,25 @@ export class ViewerMessageRepository {
 
     }
 
+    let messagesPersisted = false;
+
     try {
+      const messageRows = batch.map((msg) => ({
+        viewerId: msg.viewerId,
+        channelId: msg.channelId,
+        messageText: msg.messageText,
+        messageType: msg.messageType,
+        timestamp: msg.timestamp,
+        badges: msg.badges,
+        emotesUsed: msg.emotesUsed,
+        bitsAmount: msg.bitsAmount,
+      }));
+
+      // 先落地原始訊息，縮短後續聚合交易範圍
+      await prisma.viewerChannelMessage.createMany({ data: messageRows });
+      messagesPersisted = true;
+
       await prisma.$transaction(async (tx) => {
-        const messageRows = batch.map((msg) => ({
-          viewerId: msg.viewerId,
-          channelId: msg.channelId,
-          messageText: msg.messageText,
-          messageType: msg.messageType,
-          timestamp: msg.timestamp,
-          badges: msg.badges,
-          emotesUsed: msg.emotesUsed,
-          bitsAmount: msg.bitsAmount,
-        }));
-        await tx.viewerChannelMessage.createMany({ data: messageRows });
 
         const messageAggRows = Array.from(messageAggIncrements.values());
         if (messageAggRows.length > 0) {
@@ -682,6 +688,15 @@ export class ViewerMessageRepository {
       return true;
     } catch (error) {
       logger.error("ViewerMessage", "Failed to flush message batch", error);
+
+      // 原始訊息已寫入時，不可整批重送，避免重複訊息；僅記錄並交由後續增量聚合收斂
+      if (messagesPersisted) {
+        logger.warn(
+          "ViewerMessage",
+          "Raw messages persisted but aggregate updates failed; skipped batch requeue to avoid duplicates"
+        );
+        return true;
+      }
 
       const retryableMessages = batch
         .map((message) => ({

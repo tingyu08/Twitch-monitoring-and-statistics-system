@@ -405,7 +405,11 @@ export class StreamStatusJob {
    * 更新進行中的 StreamSession（優化版：使用已有的 session 物件）
    */
   private async updateStreamSession(
-    activeSession: { id: string; peakViewers: number | null; avgViewers: number | null },
+    activeSession: {
+      id: string;
+      peakViewers: number | null;
+      avgViewers: number | null;
+    },
     stream: {
       title: string;
       gameName: string;
@@ -414,8 +418,15 @@ export class StreamStatusJob {
   ): Promise<void> {
     // 計算數值
     const newPeak = Math.max(activeSession.peakViewers || 0, stream.viewerCount);
-    const currentAvg = activeSession.avgViewers || stream.viewerCount;
-    const newAvg = Math.round((currentAvg + stream.viewerCount) / 2);
+    const sampleCount =
+      typeof prisma.streamMetric.count === "function"
+        ? await prisma.streamMetric.count({
+            where: { streamSessionId: activeSession.id },
+          })
+        : 1;
+    const currentAvg = activeSession.avgViewers ?? stream.viewerCount;
+    const divisor = Math.max(sampleCount + 1, 1);
+    const newAvg = Math.round((currentAvg * sampleCount + stream.viewerCount) / divisor);
 
     await runWithWriteGuard("stream-status:update-session", async () => {
       // 直接更新

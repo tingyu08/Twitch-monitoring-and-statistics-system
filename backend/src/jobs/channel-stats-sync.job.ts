@@ -173,7 +173,7 @@ export class ChannelStatsSyncJob {
       );
     }
 
-    // 僅同步標題/分類文字，避免與 stream-status 重複寫入觀眾數統計。
+    // 只同步文本欄位，避免重複更新觀眾數統計
     if (channelInfo.isLive) {
       const activeSession = activeSessionMap.get(channel.id);
       if (activeSession) {

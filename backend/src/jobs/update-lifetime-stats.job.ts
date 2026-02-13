@@ -15,6 +15,7 @@ const TARGET_QUERY_BATCH_SIZE = 2000;
 
 // P0 Fix: 限制並行度，避免同時發送過多 DB 查詢
 const CONCURRENCY_LIMIT = 5;
+const MAX_RUNTIME_MS = Number(process.env.LIFETIME_UPDATE_MAX_RUNTIME_MS || 20 * 60 * 1000);
 
 function appendPairTarget(targets: Set<string>, viewerId: string, channelId: string): void {
   targets.add(`${viewerId}|${channelId}`);
@@ -22,11 +23,14 @@ function appendPairTarget(targets: Set<string>, viewerId: string, channelId: str
 
 async function collectTargetsFromDailyStats(
   targets: Set<string>,
-  where?: Prisma.ViewerChannelDailyStatWhereInput
+  where?: Prisma.ViewerChannelDailyStatWhereInput,
+  shouldStop: () => boolean = () => false
 ): Promise<void> {
   let cursorId: string | undefined;
 
   while (true) {
+    if (shouldStop()) break;
+
     const rows = await prisma.viewerChannelDailyStat.findMany({
       where,
       select: {
@@ -57,11 +61,14 @@ async function collectTargetsFromDailyStats(
 
 async function collectTargetsFromMessageAgg(
   targets: Set<string>,
-  where?: Prisma.ViewerChannelMessageDailyAggWhereInput
+  where?: Prisma.ViewerChannelMessageDailyAggWhereInput,
+  shouldStop: () => boolean = () => false
 ): Promise<void> {
   let cursorId: string | undefined;
 
   while (true) {
+    if (shouldStop()) break;
+
     const rows = await prisma.viewerChannelMessageDailyAgg.findMany({
       where,
       select: {
@@ -100,6 +107,8 @@ export const updateLifetimeStatsJob = () => {
 export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
   logger.info("CronJob", `開始執行 Lifetime Stats 更新 (完整更新: ${fullUpdate})...`);
   const startTime = Date.now();
+  const shouldStop = () => Date.now() - startTime > MAX_RUNTIME_MS;
+  let timedOut = false;
 
   try {
     let targets = new Set<string>();
@@ -107,16 +116,16 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     if (fullUpdate) {
       // 全量更新：使用分頁掃描，避免無上限查詢導致 OOM
       await Promise.all([
-        collectTargetsFromDailyStats(targets),
-        collectTargetsFromMessageAgg(targets),
+        collectTargetsFromDailyStats(targets, undefined, shouldStop),
+        collectTargetsFromMessageAgg(targets, undefined, shouldStop),
       ]);
     } else {
       // 增量更新：找出過去 26 小時有變動的 (多留一點緩衝)
       const checkTime = new Date(Date.now() - 26 * 60 * 60 * 1000);
 
       await Promise.all([
-        collectTargetsFromDailyStats(targets, { updatedAt: { gte: checkTime } }),
-        collectTargetsFromMessageAgg(targets, { updatedAt: { gte: checkTime } }),
+        collectTargetsFromDailyStats(targets, { updatedAt: { gte: checkTime } }, shouldStop),
+        collectTargetsFromMessageAgg(targets, { updatedAt: { gte: checkTime } }, shouldStop),
       ]);
     }
 
@@ -132,6 +141,12 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     const targetArray = Array.from(targets);
 
     for (let i = 0; i < targetArray.length; i += BATCH_SIZE) {
+      if (shouldStop()) {
+        timedOut = true;
+        logger.warn("CronJob", `Lifetime Stats 更新達到執行時間上限，已處理 ${processed}/${targets.size}`);
+        break;
+      }
+
       const batch = targetArray.slice(i, i + BATCH_SIZE);
 
       await Promise.all(
@@ -162,6 +177,12 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     const channelArray = Array.from(affectedChannels);
 
     for (let i = 0; i < channelArray.length; i += BATCH_SIZE) {
+      if (shouldStop()) {
+        timedOut = true;
+        logger.warn("CronJob", `Ranking 更新達到執行時間上限，已處理 ${i}/${channelArray.length}`);
+        break;
+      }
+
       const batch = channelArray.slice(i, i + BATCH_SIZE);
       await Promise.all(
         batch.map((channelId) =>
@@ -180,6 +201,12 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     logger.info("CronJob", `正在刷新 ${viewerArray.length} 位觀眾的頻道摘要...`);
 
     for (let i = 0; i < viewerArray.length; i += BATCH_SIZE) {
+      if (shouldStop()) {
+        timedOut = true;
+        logger.warn("CronJob", `摘要刷新達到執行時間上限，已處理 ${i}/${viewerArray.length}`);
+        break;
+      }
+
       const batch = viewerArray.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map((viewerId) => limit(() => refreshViewerChannelSummaryForViewer(viewerId))));
 
@@ -189,7 +216,11 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
     }
 
     const duration = Date.now() - startTime;
-    logger.info("CronJob", `Lifetime Stats 更新完成，耗時 ${duration}ms`);
+    if (timedOut) {
+      logger.warn("CronJob", `Lifetime Stats 部分完成（超時中止），耗時 ${duration}ms`);
+    } else {
+      logger.info("CronJob", `Lifetime Stats 更新完成，耗時 ${duration}ms`);
+    }
   } catch (error) {
     logger.error("CronJob", "Lifetime Stats 更新失敗:", error);
     captureJobError("update-lifetime-stats", error, { fullUpdate });
