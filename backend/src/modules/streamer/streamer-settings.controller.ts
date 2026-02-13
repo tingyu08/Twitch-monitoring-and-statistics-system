@@ -83,8 +83,23 @@ export class StreamerSettingsController {
   }
 
   // 更新模板
-  async updateTemplate(_req: AuthRequest, res: Response) {
-    return res.status(501).json({ error: "Not implemented" });
+  async updateTemplate(req: AuthRequest, res: Response) {
+    try {
+      const streamerId = req.user?.streamerId;
+      if (!streamerId) {
+        return res.status(403).json({ error: "Not a streamer or not authenticated" });
+      }
+
+      const templateId = req.params.id;
+      const updatedTemplate = await streamerSettingsService.updateTemplate(streamerId, templateId, req.body);
+      return res.json(updatedTemplate);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Template not found")) {
+        return res.status(404).json({ error: error.message });
+      }
+      logger.error("StreamerSettings", "Update template error:", error);
+      return res.status(500).json({ error: "Failed to update template" });
+    }
   }
 
   // 刪除模板
@@ -98,6 +113,9 @@ export class StreamerSettingsController {
       await streamerSettingsService.deleteTemplate(streamerId, templateId);
       return res.json({ success: true });
     } catch (error) {
+      if (error instanceof Error && error.message.includes("Template not found")) {
+        return res.status(404).json({ error: error.message });
+      }
       logger.error("StreamerSettings", "Delete template error:", error);
       return res.status(500).json({ error: "Failed to delete template" });
     }

@@ -300,8 +300,18 @@ export async function handleStreamerTwitchCallback(
 export async function getStreamerById(streamerId: string): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { id: streamerId },
-    include: {
-      channels: true,
+    select: {
+      id: true,
+      twitchUserId: true,
+      displayName: true,
+      avatarUrl: true,
+      channels: {
+        select: {
+          channelUrl: true,
+          channelName: true,
+        },
+        take: 1,
+      },
     },
   });
 
@@ -326,8 +336,18 @@ export async function getStreamerById(streamerId: string): Promise<Streamer | nu
 export async function getStreamerByTwitchId(twitchUserId: string): Promise<Streamer | null> {
   const streamerRecord = await prisma.streamer.findUnique({
     where: { twitchUserId },
-    include: {
-      channels: true,
+    select: {
+      id: true,
+      twitchUserId: true,
+      displayName: true,
+      avatarUrl: true,
+      channels: {
+        select: {
+          channelUrl: true,
+          channelName: true,
+        },
+        take: 1,
+      },
     },
   });
 

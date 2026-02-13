@@ -104,6 +104,7 @@ export class DataExportService {
     // 檢查觀眾是否存在
     const viewer = await prisma.viewer.findUnique({
       where: { id: viewerId },
+      select: { id: true },
     });
 
     if (!viewer) {

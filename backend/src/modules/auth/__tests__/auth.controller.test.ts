@@ -3,11 +3,16 @@ import { Request, Response } from "express";
 import { TwitchOAuthClient } from "../twitch-oauth.client";
 import * as AuthService from "../auth.service";
 import * as JwtUtils from "../jwt.utils";
+import * as ViewerAuthSnapshotService from "../../viewer/viewer-auth-snapshot.service";
 import crypto from "crypto";
 
 jest.mock("../auth.service");
 jest.mock("../jwt.utils");
 jest.mock("crypto");
+jest.mock("../../viewer/viewer-auth-snapshot.service", () => ({
+  getViewerAuthSnapshotById: jest.fn(),
+  invalidateViewerAuthSnapshot: jest.fn(),
+}));
 
 describe("AuthController", () => {
   let controller: AuthController;
@@ -52,6 +57,14 @@ describe("AuthController", () => {
     } as unknown as Partial<Response>;
 
     jest.clearAllMocks();
+    (ViewerAuthSnapshotService.getViewerAuthSnapshotById as jest.Mock).mockResolvedValue({
+      id: "viewer-1",
+      twitchUserId: "twitch-1",
+      tokenVersion: 1,
+      consentedAt: null,
+      consentVersion: 1,
+      isAnonymized: false,
+    });
   });
 
   describe("login", () => {
@@ -147,38 +160,6 @@ describe("AuthController", () => {
       await controller.twitchCallback(mockReq as Request, mockRes as Response);
       expect(redirectMock).toHaveBeenCalledWith(
         expect.stringContaining("/auth/error?reason=access_denied")
-      );
-    });
-  });
-
-  describe("me", () => {
-    it("should return user info", async () => {
-      const user = { userId: "u1" };
-      mockReq.user = user;
-      await controller.me(mockReq as Request, mockRes as Response);
-      expect(jsonMock).toHaveBeenCalledWith({ user });
-    });
-
-    it("should return 401 if no user", async () => {
-      mockReq.user = undefined;
-      await controller.me(mockReq as Request, mockRes as Response);
-      expect(statusMock).toHaveBeenCalledWith(401);
-    });
-  });
-
-  describe("logout", () => {
-    it("should clear cookies", async () => {
-      await controller.logout(mockReq as Request, mockRes as Response);
-      // The controller uses res.cookie with maxAge: -1 to clear cookies
-      expect(cookieMock).toHaveBeenCalledWith(
-        "auth_token",
-        "deleted",
-        expect.objectContaining({ maxAge: -1 })
-      );
-      expect(cookieMock).toHaveBeenCalledWith(
-        "refresh_token",
-        "deleted",
-        expect.objectContaining({ maxAge: -1 })
       );
     });
   });

@@ -491,7 +491,7 @@ async function buildFollowedChannelsFromSource(viewerId: string): Promise<Follow
 
   const channelIdChunks = chunkArray(allChannelIds, SQLITE_IN_CHUNK_SIZE);
 
-  const [channelChunkResults, activeSessionChunkResults] = await Promise.all([
+  const [channelChunkResults, activeSessions] = await Promise.all([
     Promise.all(
       channelIdChunks.map((chunk) =>
         prisma.channel.findMany({
@@ -516,24 +516,19 @@ async function buildFollowedChannelsFromSource(viewerId: string): Promise<Follow
         })
       )
     ),
-    Promise.all(
-      channelIdChunks.map((chunk) =>
-        prisma.streamSession.findMany({
-          where: {
-            channelId: { in: chunk },
-            endedAt: null,
-          },
-          select: {
-            channelId: true,
-          },
-          distinct: ["channelId"],
-        })
-      )
-    ),
+    prisma.streamSession.findMany({
+      where: {
+        channelId: { in: allChannelIds },
+        endedAt: null,
+      },
+      select: {
+        channelId: true,
+      },
+      distinct: ["channelId"],
+    }),
   ]);
 
   const channels = channelChunkResults.flat();
-  const activeSessions = activeSessionChunkResults.flat();
 
   const activeSessionChannelIds = new Set(activeSessions.map((session) => session.channelId));
   const statsMap = new Map<string, LifetimeStatResult>(

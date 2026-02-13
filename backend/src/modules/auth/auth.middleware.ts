@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, type JWTPayload, type UserRole } from "./jwt.utils";
-import { prisma } from "../../db/prisma";
 import { cacheManager } from "../../utils/cache-manager";
+import { getViewerAuthSnapshotById } from "../viewer/viewer-auth-snapshot.service";
 
 // 擴展 Express Request 類型以包含 user 資訊
 export interface AuthRequest extends Request {
@@ -35,11 +35,8 @@ async function requireAuthHandler(
       const currentVersion = await cacheManager.getOrSetWithTags(
         cacheKey,
         async () => {
-          const viewer = await prisma.viewer.findUnique({
-            where: { id: decoded.viewerId },
-            select: { tokenVersion: true },
-          });
-          return viewer?.tokenVersion ?? null;
+          const snapshot = await getViewerAuthSnapshotById(decoded.viewerId);
+          return snapshot?.tokenVersion ?? null;
         },
         60, // 快取 60 秒
         [`viewer:${decoded.viewerId}`, "auth:token-version"]

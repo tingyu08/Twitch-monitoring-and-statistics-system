@@ -10,6 +10,7 @@ import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
 import { signExtensionToken, verifyAccessToken } from "../auth/jwt.utils";
 import type { ExtensionAuthRequest } from "./extension.middleware";
+import { getViewerAuthSnapshotById } from "../viewer/viewer-auth-snapshot.service";
 
 interface HeartbeatBody {
   channelName: string;
@@ -169,10 +170,7 @@ export async function getExtensionTokenHandler(req: Request, res: Response): Pro
     }
 
     // Verify viewer exists and get tokenVersion
-    const viewer = await prisma.viewer.findUnique({
-      where: { id: payload.viewerId },
-      select: { id: true, tokenVersion: true },
-    });
+    const viewer = await getViewerAuthSnapshotById(payload.viewerId);
 
     if (!viewer) {
       res.status(401).json({ error: "Viewer not found" });

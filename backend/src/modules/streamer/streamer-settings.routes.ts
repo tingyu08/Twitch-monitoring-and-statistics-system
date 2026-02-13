@@ -2,7 +2,11 @@ import { Router } from "express";
 import { streamerSettingsController } from "./streamer-settings.controller";
 import { requireAuth } from "../auth/auth.middleware";
 import { validateRequest } from "../../middlewares/validate.middleware";
-import { createTemplateSchema, updateSettingsSchema } from "./streamer-settings.schema";
+import {
+  createTemplateSchema,
+  updateSettingsSchema,
+  updateTemplateSchema,
+} from "./streamer-settings.schema";
 
 const router = Router();
 
@@ -37,7 +41,11 @@ router.post(
 );
 
 // PUT /api/streamer/templates/:id - 更新模板
-router.put("/templates/:id", (req, res) => streamerSettingsController.updateTemplate(req, res));
+router.put(
+  "/templates/:id",
+  validateRequest(updateTemplateSchema),
+  (req, res) => streamerSettingsController.updateTemplate(req, res)
+);
 
 // DELETE /api/streamer/templates/:id - 刪除模板
 router.delete("/templates/:id", (req, res) => streamerSettingsController.deleteTemplate(req, res));

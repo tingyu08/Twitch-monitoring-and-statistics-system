@@ -5,7 +5,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import { verifyExtensionToken, type ExtensionJWTPayload } from "../auth/jwt.utils";
-import { prisma } from "../../db/prisma";
+import { getViewerAuthSnapshotById } from "../viewer/viewer-auth-snapshot.service";
 
 // Extend Express Request to include extension user
 export interface ExtensionAuthRequest extends Request {
@@ -45,10 +45,7 @@ export async function extensionAuthMiddleware(
     }
 
     // P1 Fix: Validate that viewer exists and tokenVersion matches
-    const viewer = await prisma.viewer.findUnique({
-      where: { id: payload.viewerId },
-      select: { id: true, tokenVersion: true },
-    });
+    const viewer = await getViewerAuthSnapshotById(payload.viewerId);
 
     if (!viewer) {
       res.status(401).json({ error: "Viewer not found" });

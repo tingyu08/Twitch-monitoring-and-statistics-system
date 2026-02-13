@@ -7,12 +7,13 @@ import {
   signAccessToken,
   signRefreshToken,
   verifyRefreshToken,
-  verifyAccessToken,
 } from "./jwt.utils";
 import { env } from "../../config/env";
 import { authLogger } from "../../utils/logger";
-import { prisma } from "../../db/prisma";
-import type { AuthRequest } from "./auth.middleware";
+import {
+  getViewerAuthSnapshotById,
+  invalidateViewerAuthSnapshot,
+} from "../viewer/viewer-auth-snapshot.service";
 
 const STREAMER_STATE_COOKIE = "twitch_auth_state";
 
@@ -232,56 +233,6 @@ export class AuthController {
     }
   };
 
-  public me = async (req: AuthRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    // 立即回傳使用者資料，不阻塞回應
-    const response = res.json({ user: req.user });
-
-    // 非同步執行聊天室監聽（不阻塞回應）
-    // 當前端查詢個人資料時，順便確保該使用者的聊天室已被監聽
-    // 這是一個保險機制，確保即時互動能被記錄
-    // 注意：必須使用英文 login (從 channelUrl 提取)，而非中文 displayName
-    if (req.user.channelUrl) {
-      // 延遲執行，避免阻塞回應
-      setImmediate(() => {
-        const channelLogin = req.user.channelUrl.split("/").pop();
-        if (channelLogin) {
-          import("../../services/twitch-chat.service")
-            .then(({ twurpleChatService }) => {
-              twurpleChatService.joinChannel(channelLogin).catch(() => {});
-            })
-            .catch(() => {});
-        }
-      });
-    }
-
-    return response;
-  };
-
-  public logout = async (req: Request, res: Response) => {
-    try {
-      // 從 cookie 中讀取 token 並解碼，增加 tokenVersion 使舊 Token 失效
-      const token = req.cookies?.auth_token;
-      if (token) {
-        const decoded = verifyAccessToken(token);
-        if (decoded?.viewerId) {
-          await prisma.viewer.update({
-            where: { id: decoded.viewerId },
-            data: { tokenVersion: { increment: 1 } },
-          });
-        }
-      }
-    } catch {
-      // 即使失敗也繼續清除 Cookie
-    }
-
-    clearAuthCookies(res);
-    return res.status(200).json({ message: "Logged out successfully" });
-  };
-
   public refresh = async (req: Request, res: Response) => {
     const refreshToken = req.cookies?.refresh_token;
     if (!refreshToken) {
@@ -296,10 +247,7 @@ export class AuthController {
     // P0 Security Fix: Validate tokenVersion to prevent use of invalidated tokens
     // After logout, tokenVersion is incremented, making old tokens invalid
     if (payload.viewerId) {
-      const viewer = await prisma.viewer.findUnique({
-        where: { id: payload.viewerId },
-        select: { tokenVersion: true },
-      });
+      const viewer = await getViewerAuthSnapshotById(payload.viewerId);
 
       if (!viewer) {
         return res.status(401).json({ error: "User not found" });
@@ -307,6 +255,7 @@ export class AuthController {
 
       // If tokenVersion in JWT doesn't match DB, token has been invalidated (user logged out)
       if (payload.tokenVersion !== viewer.tokenVersion) {
+        invalidateViewerAuthSnapshot(payload.viewerId, viewer.twitchUserId);
         clearAuthCookies(res);
         return res.status(401).json({ error: "Token has been invalidated" });
       }

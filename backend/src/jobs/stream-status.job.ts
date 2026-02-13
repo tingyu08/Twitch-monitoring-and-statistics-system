@@ -21,12 +21,6 @@ const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
 
-// P0-6: Active session 查詢批次大小
-const SESSION_QUERY_BATCH_SIZE = 200;
-
-// P0-6: 批次間休息時間
-const BATCH_DELAY_MS = 100;
-
 // 超時時間（毫秒）- 優化：增加到 4 分鐘以處理大量頻道（286+）
 const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
 
@@ -335,33 +329,28 @@ export class StreamStatusJob {
    * 分批查詢 active sessions（降低 DB 壓力）
    */
   private async fetchActiveSessions(channelIds: string[]): Promise<ActiveStreamSession[]> {
-    const sessions: ActiveStreamSession[] = [];
-
-    for (let i = 0; i < channelIds.length; i += SESSION_QUERY_BATCH_SIZE) {
-      const batch = channelIds.slice(i, i + SESSION_QUERY_BATCH_SIZE);
-
-      const batchSessions = (await prisma.streamSession.findMany({
-        where: {
-          channelId: { in: batch },
-          endedAt: null,
-        },
-        select: {
-          id: true,
-          channelId: true,
-          startedAt: true,
-          avgViewers: true,
-          peakViewers: true,
-        },
-      })) as ActiveStreamSession[];
-
-      sessions.push(...batchSessions);
-
-      if (i + SESSION_QUERY_BATCH_SIZE < channelIds.length) {
-        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
-      }
+    if (channelIds.length === 0) {
+      return [];
     }
 
-    return sessions;
+    const monitoredChannelIdSet = new Set(channelIds);
+
+    // 查所有 active sessions，再以記憶體集合過濾監控清單
+    // 避免對超大 IN 列表做重複分批查詢，降低慢查詢風險
+    const activeSessions = (await prisma.streamSession.findMany({
+      where: {
+        endedAt: null,
+      },
+      select: {
+        id: true,
+        channelId: true,
+        startedAt: true,
+        avgViewers: true,
+        peakViewers: true,
+      },
+    })) as ActiveStreamSession[];
+
+    return activeSessions.filter((session) => monitoredChannelIdSet.has(session.channelId));
   }
 
   /**

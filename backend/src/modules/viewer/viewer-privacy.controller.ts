@@ -15,6 +15,7 @@ import { accountDeletionService } from "../../services/account-deletion.service"
 import { dataExportService } from "../../services/data-export.service";
 import { dataExportQueue } from "../../utils/data-export-queue";
 import { logger } from "../../utils/logger";
+import { getViewerAuthSnapshotByTwitchUserId } from "./viewer-auth-snapshot.service";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -26,9 +27,7 @@ const getViewerFromRequest = async (req: Request) => {
     return null;
   }
 
-  return prisma.viewer.findUnique({
-    where: { twitchUserId },
-  });
+  return getViewerAuthSnapshotByTwitchUserId(twitchUserId);
 };
 
 export class ViewerPrivacyController {

@@ -5,6 +5,10 @@ import type { Response } from "express";
 import { prisma } from "../../db/prisma";
 import { getFollowedChannels } from "../viewer/viewer.service";
 import { logger } from "../../utils/logger";
+import {
+  getViewerAuthSnapshotById,
+  invalidateViewerAuthSnapshot,
+} from "../viewer/viewer-auth-snapshot.service";
 
 // 建立 AuthController 實例
 const authController = new AuthController();
@@ -28,10 +32,7 @@ export async function getMeHandler(req: AuthRequest, res: Response): Promise<voi
     let consentVersion: number | null = null;
 
     if (req.user?.role === "viewer" && req.user.viewerId) {
-      const viewerRecord = await prisma.viewer.findUnique({
-        where: { id: req.user.viewerId },
-        select: { consentedAt: true, consentVersion: true },
-      });
+      const viewerRecord = await getViewerAuthSnapshotById(req.user.viewerId);
 
       consentedAt = viewerRecord?.consentedAt?.toISOString() ?? null;
       consentVersion = viewerRecord?.consentVersion ?? null;
@@ -73,6 +74,8 @@ export async function logoutHandler(req: AuthRequest, res: Response): Promise<vo
       where: { id: req.user.viewerId },
       data: { tokenVersion: { increment: 1 } },
     });
+
+    invalidateViewerAuthSnapshot(req.user.viewerId, req.user.twitchUserId);
 
     await prisma.twitchToken.deleteMany({
       where: { viewerId: req.user.viewerId },

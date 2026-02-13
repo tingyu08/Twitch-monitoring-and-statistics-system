@@ -38,7 +38,18 @@ export class AccountDeletionService {
     // 檢查觀眾是否存在
     const viewer = await prisma.viewer.findUnique({
       where: { id: viewerId },
-      include: { deletionRequest: true },
+      select: {
+        id: true,
+        deletionRequest: {
+          select: {
+            id: true,
+            viewerId: true,
+            requestedAt: true,
+            status: true,
+            executionScheduledAt: true,
+          },
+        },
+      },
     });
 
     if (!viewer) {
@@ -172,6 +183,7 @@ export class AccountDeletionService {
   async executeAnonymization(viewerId: string): Promise<AnonymizationResult> {
     const viewer = await prisma.viewer.findUnique({
       where: { id: viewerId },
+      select: { id: true, isAnonymized: true },
     });
 
     if (!viewer) {

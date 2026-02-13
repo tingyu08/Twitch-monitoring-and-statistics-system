@@ -12,22 +12,15 @@
 
 ### 1) 效能 / 查詢 / 回應
 
-- `[部分完成] QUERY-08`：已補強多條影片/剪輯查詢 `select` 欄位收斂，仍待全域熱路徑掃描完成。
+- 目前無未完成項目。
 
 ### 2) 批次作業 / 記憶體 / 寫入量
 
-
-- `[部分完成] MEM-02`：排名計算改為 DB 端更新，記憶體峰值已顯著下降；仍待生產壓測確認。
-- `[部分完成] MEM-12`：overflow 檔案已補跨程序 lock + stale lock 回收，並新增壓測測試；仍待長時間高併發實測驗證。
-- `[部分完成] MEM-10`：`getOrSetWithTags` 已補 Redis lock + wait fallback，待高併發壓測驗證。
+- 目前無未完成項目。
 
 ### 3) 安全 / Schema / 架構
 
-
-- `[未完成] ARCH-02`：AuthController dead code 清理尚未完成（需先最終確認使用路徑）。
-- `[未完成] ARCH-03`：template service CRUD 去重未完成。
-- `[未完成] ARCH-07`：註解編碼亂碼尚未全域清理。
-- `[未完成] ARCH-08`：logger 結構化與等級治理未完成。
+- 目前無未完成項目。
 
 ---
 
@@ -56,6 +49,7 @@
 - `[已完成] QUERY-13`：performance metrics 改 ring-buffer 寫入，移除 `shift()` 熱路徑成本。
 - `[已完成] QUERY-14`：performance path 已做動態路徑正規化。
 - `[已完成] QUERY-02`：實況主影片/剪輯同步改為批次 SQL upsert，降低逐筆 upsert 開銷。
+- `[已完成] QUERY-08`：auth/viewer/extension 等熱路徑查詢已收斂 `findUnique/select` 與共用快取，並優化 stream-status active session 掃描策略。
 
 - `[已完成] RESPONSE-01`：subscription-sync 改為正確 token 解密（含舊資料相容）。
 - `[已完成] RESPONSE-02`：heartbeat 寫入流程由序列改平行，並升級為緩衝 flush 模式。
@@ -75,9 +69,12 @@
 - `[已完成] MEM-03`：移除重複記憶體監控來源（由單一監控主導）。
 - `[已完成] MEM-04`：cache `get()` 已提升為真 LRU 行為。
 - `[已完成] MEM-05`：調整生產/開發快取容量配置。
+- `[已完成] MEM-02`：lifetime ranking 已補壓測驗證（`test:pressure:lifetime-ranking`），記憶體增幅維持低水位。
 - `[已完成] MEM-06`：`estimateSize` 改為低成本分層估算，移除高成本 `JSON.stringify` 熱路徑。
 - `[已完成] MEM-08`：移除孤兒 queue singleton。
 - `[已完成] MEM-09`：Twurple user auth providers 新增上限與 LRU 淘汰機制。
+- `[已完成] MEM-10`：`getOrSetWithTags` 已完成高併發壓測（`test:pressure:cache-memory`），cache stampede 合併驗證通過。
+- `[已完成] MEM-12`：overflow 檔案跨程序鎖與 recovery 已完成壓測驗證（`test:pressure:cache-memory`）。
 
 - `[已完成] WRITE-02`：`update-live-status` 已有批次/節流優化，顯著降低固定寫入壓力。
 - `[已完成] WRITE-03`：retention 刪除改分批刪除，避免長鎖。
@@ -112,6 +109,10 @@
 - `[已完成] ARCH-05`：Cookie 清理/設定邏輯已集中重用，減少重複。
 - `[已完成] ARCH-06`：stream-status running average 改為基於樣本數的正確累計平均。
 - `[已完成] ARCH-01`：已全域移除 backend `new Function(import...)`，統一改用安全動態 import helper。
+- `[已完成] ARCH-02`：AuthController dead code（`me`/`logout`）已清理，統一路由 handler 路徑。
+- `[已完成] ARCH-03`：template CRUD 已收斂至 `template.service`，移除 streamer settings 模組內重複實作。
+- `[已完成] ARCH-07`：新增全域註解編碼檢查（`lint:comment-encoding`），並完成亂碼掃描清理。
+- `[已完成] ARCH-08`：logger 已補結構化輸出（`LOG_FORMAT=json`）與等級治理（`LOG_LEVEL`/分類覆寫/分類靜音）。
 
 ### 4) 快取與資料模型
 
