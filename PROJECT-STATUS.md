@@ -1,6 +1,6 @@
 # Twitch Analytics - 專案狀態報告
 
-**版本**: v1.9.0 (Production) | **最後更新**: 2026-02-03
+**版本**: v2.0.0 (Production) | **最後更新**: 2026-02-14
 
 ---
 
@@ -8,44 +8,167 @@
 
 本專案旨在打造一個深度的 Twitch 數據分析平台，專注於**觀眾個人觀看履歷**、**即時互動通知**以及**社群健康度分析**。
 
-**整體進度**: **78%** (Phase 2 完成)
+**整體進度**: **82%** (Phase 2 完成，基礎架構持續強化中)
 
 ```
-[█████████████████████████████████████░░░] 78%
+[█████████████████████████████████████████░░░░] 82%
 ```
 
-**⚠️ 最新狀態**: 2026-02-03 已完成效能/寫入優化與測試修正，移除記憶體監控噪音日誌
+**⚠️ 最新狀態**: 2026-02-13 完成大規模 Code Review 收斂、生產環境穩定性修復、Redis/Queue 基礎設施導入、OAuth 韌性強化
 
 ---
 
-## 🚀 最新發布 (v1.9.0 - Performance & Stability) - 2026-02-03
+## 🚀 最新發布 (v2.0.0 - Production Stability & Code Review) - 2026-02-13
 
-**核心重點**: 觀眾/後端排程效能優化、批次寫入、測試修正、移除記憶體監控噪音
+**核心重點**: 全面 Code Review 收斂、查詢/寫入路徑優化、生產環境穩定性大幅提升
 
 ### 🔧 關鍵變更
 
-1.  **排程並發控制與延遲優化**
+1.  **Code Review 全面收斂 (02-10 ~ 02-13)**
+    - **查詢熱點**: viewer 驗證路徑改為共用快取快照，降低重複查詢與慢查詢風險
+    - **寫入路徑**: 批次化關鍵同步流程（訊息、直播狀態、lifetime stats），降低鎖競爭
+    - **Session 競態**: 新增 session-write-authority 機制，避免多實例重複寫入
+    - **Overflow 檔案**: 補強跨程序鎖保護，提升高負載穩定性
+    - **慢查詢節流**: 加入告警節流機制，避免重複慢查詢造成日誌洗版
+
+2.  **OAuth 網路韌性強化**
+    - **重試退避**: Twitch OAuth code exchange 加入可配置 timeout 與指數退避重試
+    - **錯誤診斷**: 統一 OAuth 交換失敗的診斷資訊與錯誤回應格式
+    - **測試覆蓋**: 補齊 timeout 錯誤場景的測試
+
+3.  **生產環境 SQL/查詢修復**
+    - **修正**: SQL 解析錯誤與查詢逾時未處理拒絕（訊息批次寫入、收益查詢）
+    - **索引清理**: 落地多項 migration 清理低效索引
+    - **Twurple 快取**: 優化客戶端快取，降低重複初始化與資料庫負載
+
+4.  **Logger 與可觀測性提升**
+    - **結構化輸出**: logger 支援結構化 JSON 輸出
+    - **壓測腳本**: 新增壓測/編碼檢查/索引驗證腳本
+    - **任務錯誤追蹤**: 新增 job-error-tracker 與寫入護欄 (job-write-guard)
+
+---
+
+## 🚀 前一版本 (v1.12.0 - Redis & Queue Infrastructure) - 2026-02-11
+
+**核心重點**: 導入 Redis/Queue 基礎設施、修復認證高峰失敗、Listener 穩定性
+
+### 🔧 關鍵變更
+
+1.  **Redis 與 Queue 基礎設施**
+    - **導入**: Redis 客戶端封裝與 Queue 工具（data-export-queue、revenue-sync-queue）
+    - **匯出非同步化**: 資料匯出任務改為 Queue 非同步處理
+    - **即時同步**: 強化多實例間 WebSocket 即時同步
+    - **回壓保護**: 補齊 Queue 回壓保護與事件節流機制
+
+2.  **認證高峰修復**
+    - **問題**: 晚上高峰時段登入 100% 失敗
+    - **修復**: 優化 auth.service 的並發處理與 token 管理
+    - **影響**: 登入成功率恢復正常
+
+3.  **Listener Slot 洩漏修復**
+    - **修正**: listener slot 洩漏問題
+    - **強化**: 安全性（auth middleware、CSRF 保護）、效能（connection pool）與穩定性
+    - **優化**: env 設定精簡、memory-thresholds 調整
+
+4.  **背景任務穩定性**
+    - **Auto Join Job**: 修正缺少 prisma import 導致的 ReferenceError
+    - **寫入收斂**: 降低免費層資料庫的鎖競爭風險
+    - **設定驗證**: 新增 streamer-settings.schema 輸入驗證
+
+---
+
+## 🚀 前一版本 (v1.11.0 - Performance Optimization) - 2026-02-10
+
+**核心重點**: 兩輪 Code Review 效能優化、批次寫入/查詢下推、Bits 日聚合
+
+### 🔧 關鍵變更
+
+1.  **Code Review 效能優化 (兩輪)**
+    - **連線治理**: Prisma 連線池監控與優雅關閉
+    - **批次並行**: channel-stats-sync 改為批次並行處理
+    - **Timeout 保護**: 所有外部呼叫加入 timeout 機制
+    - **前端效能**: 儀表板載入瀑布收斂、路由快取策略
+
+2.  **Bits 日聚合增量更新**
+    - **新增**: cheer_daily_agg 表納入 Prisma schema
+    - **增量**: Bits 日聚合改為增量更新，降低高峰讀寫壓力
+    - **讀路徑**: 補上 Bits 日聚合讀路徑與啟動重試保護
+
+3.  **查詢上限治理**
+    - **Migration**: 落地手動 migration 優化索引
+    - **防呆**: 背景任務在高資料量下的全表掃描防護
+    - **快取 TTL**: 補齊快取 TTL 基準與寫入護欄
+
+4.  **前端優化**
+    - **FootprintDashboard**: 收斂狀態更新路徑，避免不必要重渲染
+    - **儀表板**: 批次查詢上限、即時更新與資源載入負擔降低
+
+---
+
+## 🚀 前一版本 (v1.10.0 - Query Performance) - 2026-02-06
+
+**核心重點**: 效能優化 B1-B7/P1-P8 系列、聚合表/查詢下推、OAuth 診斷強化
+
+### 🔧 關鍵變更
+
+1.  **效能優化 B1-B7 與 P1-P8**
+    - **聚合表**: 新增摘要/聚合表 (channel_summary 等) 與查詢下推
+    - **快取預熱**: 伺服器啟動時預熱關鍵快取
+    - **排程同步**: 優化排程任務間的同步機制
+    - **索引**: 新增 channelName 索引與頻道分析合併查詢
+
+2.  **高頻資料處理優化**
+    - **寫入放大**: 降低資料庫寫入放大，縮短查詢延遲
+    - **watchSeconds**: 收斂單寫入策略
+    - **live-status**: 自適應降載，降低每分鐘輪詢壓力
+    - **訊息批次**: 優化 viewer-message.repository 批次處理
+
+3.  **OAuth 與認證流程重構**
+    - **BFF 模式**: 前端改為 BFF (Backend For Frontend) 登入流程
+    - **同網域轉發**: API 改用 Next.js rewrites 同網域轉發
+    - **Cookie 保留**: 修正相對路徑以保留認證 Cookie
+    - **跨瀏覽器**: 修復 OAuth 跨瀏覽器相容性問題
+
+4.  **影片/剪輯同步強化**
+    - **分頁同步**: 擴充分頁同步實況主影片與剪輯
+    - **效能比較**: 新增 perf-compare 壓測腳本
+
+---
+
+## 🚀 前一版本 (v1.9.0 - Performance & Stability) - 2026-02-03
+
+**核心重點**: 觀眾/後端排程效能優化、批次寫入、測試修正、WebSocket 通知上線
+
+### � 關鍵變更
+
+1.  **WebSocket 實時通知與影片同步**
+    - **WebSocket**: 實作 WebSocket 實時通知基礎設施
+    - **影片同步**: 新增觀眾頻道影片/剪輯同步功能
+    - **資料庫遷移**: 新增 viewer_channel_video/clip 表
+
+2.  **排程並發控制與延遲優化**
     - **修正**: Stream Status Job 並發控制確實生效
     - **調整**: 可透過 `STREAM_STATUS_CONCURRENCY_LIMIT` 調整並發上限
     - **效果**: 降低峰值壓力，同時維持接近原先的排程延遲
 
-2.  **DB 寫入與記憶體優化**
+3.  **DB 寫入與記憶體優化**
     - **批次**: 觀看時間、追蹤同步改為批次 transaction/upsert
     - **聚合**: 日訊息統計改 DB 端 `INSERT...SELECT...ON CONFLICT`
     - **節流**: 分散式協調器清理節流，降低固定寫入量
 
-3.  **前端穩定性與測試修正**
+4.  **部署與監控**
+    - **Docker**: 新增 .dockerignore、更新 Dockerfile
+    - **監控**: 導入 API 效能與記憶體監控 (slow-query-logger, query-metrics)
+    - **工具**: 新增錯誤處理工具 (errors.ts)、記憶體閾值 (memory-thresholds.ts)、timeout 工具 (timeout.utils.ts)
+
+5.  **前端穩定性與測試修正**
     - **修正**: 測試翻譯 key、路由參數與 fetch/mock 行為
     - **新增**: 補齊前端測試依賴 `@testing-library/dom`
     - **驗證**: Backend/Frontend 測試皆通過
 
-4.  **記憶體監控日誌降噪**
-    - **移除**: MemoryMonitor/PerformanceMonitor 記憶體警告與 GC 提示日誌
-    - **保留**: 監控行為與保護機制
-
 ---
 
-## 🚀 前一版本 (v1.8.0 - Infrastructure) - 2026-02-02
+## � 前一版本 (v1.8.0 - Infrastructure) - 2026-02-02
 
 **核心重點**: 遷移至 Zeabur 單一後端部署架構
 
@@ -63,75 +186,6 @@
 3.  **Extension API URL 更新**
     - **變更**: 從舊 URL 改為 Zeabur URL
     - **影響**: Chrome Extension 需要重新安裝
-
----
-
-## 🚀 前一版本 (v1.7.0 - Performance) - 2026-01-28
-
-**核心重點**: 記憶體優化（已遷移至 Zeabur，此優化仍適用）
-
-### 🔧 關鍵成果
-
-1.  **sync-videos.job 批次處理優化**
-    - **問題**: 一次處理 328 個實況主，累積 24,928 筆資料導致記憶體超限
-    - **解決**: 改為每批 10 個實況主，批次間休息 2 秒讓 GC 清理
-    - **效果**: 記憶體峰值從 ~350MB 降至 ~150MB (節省 57%)
-
-2.  **update-live-status.job 記憶體優化**
-    - **優化**: 保持每分鐘執行（確保即時性）
-    - **策略**: 已實作批次處理，記憶體使用已優化
-
-3.  **Cache Manager 清理頻率提升**
-    - **調整**: 從每 5 分鐘改為每 2 分鐘清理過期項目
-    - **效果**: 更及時釋放記憶體
-
-4.  **全局記憶體監控系統**
-    - **監控**: 每 30 秒檢查記憶體使用量
-    - **警戒線**: 400MB 觸發警告，480MB 觸發強制 GC
-    - **日誌**: 記錄記憶體使用趨勢，便於診斷問題
-
-**部署建議**:
-```env
-NODE_OPTIONS=--expose-gc --max-old-space-size=480
-MEMORY_WARNING_MB=400
-MEMORY_CRITICAL_MB=480
-```
-
-詳細文檔：[MEMORY-OPTIMIZATION.md](./MEMORY-OPTIMIZATION.md)
-
-## 🚀 前一版本 (v1.6.1 - Hotfix) - 2026-01-28
-
-**核心重點**: 資料庫安全性強化與自動備份機制
-
-### 🔒 關鍵成果
-
-1.  **資料恢復完成**
-    - **事件**: 2026-01-27 發生資料遺失（留言與觀看時數記錄被清空）
-    - **恢復**: 成功從 Turso 24 小時前的 branch 恢復 1,014 筆留言與 43 筆觀看時數記錄
-    - **影響**: 僅遺失 2026-01-27 一天的資料
-2.  **自動備份機制**
-    - **GitHub Actions**: 每日凌晨 2 點（UTC）自動執行資料庫備份
-    - **保留期限**: 30 天備份歷史
-    - **格式**: JSON 格式，支援完整資料恢復
-3.  **Migration 安全性改善**
-    - **移除**: 刪除使用危險 `DROP TABLE` 操作的 migration 檔案
-    - **預防**: 避免未來再次發生資料遺失問題
-
-### 📋 前一版本 (v1.6.0) - 2026-01-25
-
-**核心重點**: Epic 4 實況主快速操作中心完成
-
-### ✨ 關鍵成果
-
-1.  **收益總覽面板 (Revenue Overview)**
-    - **機制**: 新增收益總覽頁面，整合訂閱與 Bits 收益數據。
-    - **特色**: PieChart 收益來源佔比視覺化，一目了然收益分布。
-2.  **報表匯出功能 (Export)**
-    - **CSV**: 詳細日期數據，便於 Excel 分析。
-    - **PDF**: 可讀報表格式，方便分享與存檔。
-3.  **UI/UX 優化**
-    - **Tab 切換**: 新增「總覽」Tab 作為預設視圖。
-    - **匯出選單**: 下拉式格式選擇 (CSV/PDF)。
 
 ---
 
@@ -161,6 +215,7 @@ MEMORY_CRITICAL_MB=480
 | **Epic 6**  | 資料自動化         | VOD/Clips 同步、真實數據採集           | ✅   |
 | **Epic 10** | 瀏覽器擴充         | Chrome Extension 觀看時長追蹤          | ✅   |
 | —           | 生產環境部署       | Vercel (FE) + Zeabur (BE) + Turso (DB) | ✅   |
+| —           | 效能優化與穩定性   | Code Review、Redis/Queue、批次寫入     | ✅   |
 
 ---
 
@@ -168,6 +223,63 @@ MEMORY_CRITICAL_MB=480
 
 <details>
 <summary><b>點擊展開過往更新詳情</b></summary>
+
+### 2026-02-13 (v2.0.0 - Production Stability)
+
+- **Code Review**: 完成全面 Code Review 收斂（查詢熱點、寫入路徑、Session 競態）
+- **OAuth**: 強化 Twitch OAuth code exchange 網路韌性（timeout + 重試退避）
+- **SQL 修復**: 修正生產環境 SQL 解析錯誤與查詢逾時未處理拒絕
+- **可觀測性**: logger 結構化輸出、壓測腳本、索引驗證腳本
+- **viewer**: 驗證路徑改為共用快取快照，降低慢查詢風險
+- **lifetime**: 補上任務可中斷機制，避免長時間執行阻塞
+- **索引**: 多項 migration 清理低效索引並補強查詢效能
+
+### 2026-02-12 (v1.12.1 - Hotfix)
+
+- **修復**: Auto Join Job 缺少 prisma import 導致 ReferenceError
+- **收斂**: 背景任務重複寫入與高頻心跳壓力
+- **強化**: listener slot 洩漏修復、安全性與效能穩定性提升
+- **設定**: 新增 streamer-settings.schema 輸入驗證
+
+### 2026-02-11 (v1.12.0 - Redis Infrastructure)
+
+- **基礎設施**: 導入 Redis 與 Queue（data-export-queue、revenue-sync-queue）
+- **修復**: 晚上高峰時段登入 100% 失敗問題
+- **穩定性**: Queue 回壓保護、事件節流、多實例 WebSocket 同步
+
+### 2026-02-10 (v1.11.0 - Code Review Performance)
+
+- **效能**: 兩輪 Code Review 優化（連線治理、批次並行、timeout 保護）
+- **Bits**: 日聚合增量更新、聚合表納入 Prisma schema
+- **查詢**: 查詢上限治理、Migration 索引優化
+- **前端**: FootprintDashboard 重渲染收斂、儀表板載入優化
+
+### 2026-02-06 (v1.10.0 - Query Performance)
+
+- **效能**: 完成 B1-B7 與 P1-P8 優化，新增聚合表與查詢下推
+- **OAuth**: 前端改為 BFF 登入流程，修復跨瀏覽器相容性
+- **影片**: 擴充分頁同步實況主影片與剪輯
+- **文件**: 統一專案註解為 Zeabur 架構描述
+
+### 2026-02-03 ~ 02-05 (v1.9.0 - Performance & Stability)
+
+- **WebSocket**: 實作 WebSocket 實時通知與觀眾頻道數據管理
+- **排程**: 並發控制、批次寫入、P0/P1 效能優化
+- **部署**: Docker 配置優化（Dockerfile、.dockerignore）
+- **監控**: 導入效能監控（slow-query-logger、query-metrics）
+- **測試**: 修正前後端測試（mock、翻譯 key、路由參數）
+
+### 2026-02-02 (v1.8.0 - Infrastructure)
+
+- **架構**: 遷移至 Zeabur 單一後端部署
+- **健康檢查**: UptimeRobot 直連 Zeabur
+- **Extension**: API URL 更新為 Zeabur URL
+
+### 2026-01-28 (v1.7.0 - Memory Optimization)
+
+- **記憶體**: sync-videos.job 批次處理優化，峰值從 ~350MB 降至 ~150MB
+- **監控**: 全局記憶體監控系統（400MB 警告、480MB 強制 GC）
+- **快取**: Cache Manager 清理頻率提升至每 2 分鐘
 
 ### 2026-01-28 (v1.6.1 - Critical Hotfix)
 
@@ -218,9 +330,10 @@ MEMORY_CRITICAL_MB=480
 | **Frontend**    | Next.js 14 (App Router), TailwindCSS, Zustand, Recharts  |
 | **Backend**     | Express, TypeScript, Prisma ORM, Socket.IO               |
 | **Database**    | Turso (LibSQL) - Edge Compatible                         |
+| **Cache/Queue** | Redis, Memory Queue (回壓保護)                           |
 | **Integration** | Twurple (Twitch API), Google Analytics                   |
 | **CI/CD**       | GitHub Actions (自動備份、測試、部署)                     |
-| **Monitoring**  | Sentry (錯誤追蹤), 每日自動資料庫備份                     |
+| **Monitoring**  | Sentry (錯誤追蹤), Slow Query Logger, 每日自動資料庫備份 |
 
 ---
 
@@ -233,6 +346,8 @@ MEMORY_CRITICAL_MB=480
 | **手動備份**    | ✅ 已實施 | 提供手動備份腳本，隨時可執行               |
 | **Branch 恢復** | ✅ 已驗證 | Turso PITR 功能可恢復到任意時間點          |
 | **Migration 審查** | ✅ 已強化 | 禁止使用 DROP TABLE 等危險操作          |
+| **寫入護欄**    | ✅ 已實施 | job-write-guard 防止異常批次寫入           |
+| **Auth 強化**   | ✅ 已實施 | OAuth timeout/重試退避、CSRF 保護          |
 
 ---
 
