@@ -1,6 +1,8 @@
 import { logger } from "../utils/logger";
 
 const DEFAULT_WRITE_GAP_MS = 1000;
+const isTursoDatabase = (process.env.DATABASE_URL || "").startsWith("libsql://");
+const DEFAULT_GUARD_MODE = process.env.NODE_ENV === "production" || isTursoDatabase ? "global" : "keyed";
 
 const parsedGapMs = Number.parseInt(process.env.JOB_WRITE_GAP_MS || `${DEFAULT_WRITE_GAP_MS}`, 10);
 const WRITE_GAP_MS = Number.isFinite(parsedGapMs) && parsedGapMs >= 0 ? parsedGapMs : DEFAULT_WRITE_GAP_MS;
@@ -49,7 +51,7 @@ export async function runWithWriteGuard<T>(jobName: string, operation: () => Pro
 }
 
 function resolveGuardKey(jobName: string): string | null {
-  const configured = process.env.JOB_WRITE_GUARD_MODE || "keyed";
+  const configured = process.env.JOB_WRITE_GUARD_MODE || DEFAULT_GUARD_MODE;
   if (configured === "global") {
     return null;
   }

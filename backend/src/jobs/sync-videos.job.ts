@@ -76,20 +76,14 @@ async function loadStreamersForSync(): Promise<StreamerSyncTarget[]> {
 }
 
 async function loadFollowedChannelsForSync(): Promise<FollowedChannelSyncTarget[]> {
-  const channels: FollowedChannelSyncTarget[] = [];
+  const uniqueChannelIds = new Set<string>();
   let cursorId: string | undefined;
 
   while (true) {
-    const batch = await prisma.channel.findMany({
-      where: {
-        userFollows: {
-          some: {},
-        },
-      },
+    const batch = await prisma.userFollow.findMany({
       select: {
         id: true,
-        twitchChannelId: true,
-        channelName: true,
+        channelId: true,
       },
       orderBy: { id: "asc" },
       take: ENTITY_QUERY_BATCH_SIZE,
@@ -103,10 +97,38 @@ async function loadFollowedChannelsForSync(): Promise<FollowedChannelSyncTarget[
 
     if (batch.length === 0) break;
 
-    channels.push(...batch);
+    for (const follow of batch) {
+      uniqueChannelIds.add(follow.channelId);
+    }
+
     cursorId = batch[batch.length - 1]?.id;
 
     if (batch.length < ENTITY_QUERY_BATCH_SIZE) break;
+  }
+
+  if (uniqueChannelIds.size === 0) {
+    return [];
+  }
+
+  const channels: FollowedChannelSyncTarget[] = [];
+  const channelIds = Array.from(uniqueChannelIds);
+
+  for (let i = 0; i < channelIds.length; i += ENTITY_QUERY_BATCH_SIZE) {
+    const idBatch = channelIds.slice(i, i + ENTITY_QUERY_BATCH_SIZE);
+    const channelBatch = await prisma.channel.findMany({
+      where: {
+        id: { in: idBatch },
+        twitchChannelId: { not: "" },
+      },
+      select: {
+        id: true,
+        twitchChannelId: true,
+        channelName: true,
+      },
+      orderBy: { id: "asc" },
+    });
+
+    channels.push(...channelBatch);
   }
 
   return channels;

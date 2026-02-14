@@ -189,7 +189,7 @@ export class StreamStatusJob {
     // 5. 處理每個頻道的狀態變化（並行處理，限制並發數）
     // 優化：並發上限可調，預設提升以降低排程延遲
     const envLimit = Number(process.env.STREAM_STATUS_CONCURRENCY_LIMIT);
-    const defaultLimit = process.env.NODE_ENV === "production" ? 4 : 4;
+    const defaultLimit = process.env.NODE_ENV === "production" ? 2 : 4;
     const CONCURRENCY_LIMIT = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : defaultLimit;
 
     // 將任務分組進行並行處理

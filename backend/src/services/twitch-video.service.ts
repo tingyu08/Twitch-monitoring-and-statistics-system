@@ -1,9 +1,11 @@
+import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { importTwurpleApi } from "../utils/dynamic-import";
+import { runWithWriteGuard } from "../jobs/job-write-guard";
 
 export class TwurpleVideoService {
   // ApiClient 透過動態導入，使用 unknown 類型
@@ -40,6 +42,7 @@ export class TwurpleVideoService {
     const rows = Prisma.join(
       videos.map((video) =>
         Prisma.sql`(
+          ${randomUUID()},
           ${video.id},
           ${streamerId},
           ${video.title},
@@ -56,8 +59,11 @@ export class TwurpleVideoService {
       )
     );
 
-    await prisma.$executeRaw(Prisma.sql`
+    await runWithWriteGuard("sync-videos:videos-upsert", () =>
+      retryDatabaseOperation(() =>
+        prisma.$executeRaw(Prisma.sql`
       INSERT INTO videos (
+        id,
         twitchVideoId,
         streamerId,
         title,
@@ -77,7 +83,9 @@ export class TwurpleVideoService {
         description = excluded.description,
         thumbnailUrl = excluded.thumbnailUrl,
         viewCount = excluded.viewCount
-    `);
+    `)
+      )
+    );
   }
 
   private async batchUpsertClips(
@@ -102,6 +110,7 @@ export class TwurpleVideoService {
     const rows = Prisma.join(
       clips.map((clip) =>
         Prisma.sql`(
+          ${randomUUID()},
           ${clip.id},
           ${streamerId},
           ${clip.creatorId},
@@ -119,8 +128,11 @@ export class TwurpleVideoService {
       )
     );
 
-    await prisma.$executeRaw(Prisma.sql`
+    await runWithWriteGuard("sync-videos:clips-upsert", () =>
+      retryDatabaseOperation(() =>
+        prisma.$executeRaw(Prisma.sql`
       INSERT INTO clips (
+        id,
         twitchClipId,
         streamerId,
         creatorId,
@@ -140,7 +152,9 @@ export class TwurpleVideoService {
         title = excluded.title,
         viewCount = excluded.viewCount,
         thumbnailUrl = excluded.thumbnailUrl
-    `);
+    `)
+      )
+    );
   }
 
   /**
@@ -225,12 +239,16 @@ export class TwurpleVideoService {
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-      const deleteResult = await prisma.video.deleteMany({
-        where: {
-          streamerId: streamerId,
-          publishedAt: { lt: ninetyDaysAgo },
-        },
-      });
+      const deleteResult = await runWithWriteGuard("sync-videos:videos-cleanup", () =>
+        retryDatabaseOperation(() =>
+          prisma.video.deleteMany({
+            where: {
+              streamerId: streamerId,
+              publishedAt: { lt: ninetyDaysAgo },
+            },
+          })
+        )
+      );
 
       if (deleteResult.count > 0) {
         logger.debug(
@@ -287,9 +305,10 @@ export class TwurpleVideoService {
       );
 
       // 優化：差異化更新，避免每次全刪全建
-      await retryDatabaseOperation(async () => {
-        await prisma.$transaction(
-          async (tx) => {
+      await runWithWriteGuard("sync-videos:viewer-videos", () =>
+        retryDatabaseOperation(async () => {
+          await prisma.$transaction(
+            async (tx) => {
             const existing = await tx.viewerChannelVideo.findMany({
               where: { channelId },
               select: {
@@ -363,12 +382,13 @@ export class TwurpleVideoService {
               }
             }
           },
-          {
-            maxWait: 10000, // 最多等待 10 秒獲取 transaction
-            timeout: 15000, // transaction 超時時間 15 秒
-          }
-        );
-      });
+            {
+              maxWait: 10000, // 最多等待 10 秒獲取 transaction
+              timeout: 15000, // transaction 超時時間 15 秒
+            }
+          );
+        })
+      );
 
       logger.debug(
         "TwitchVideo",
@@ -514,9 +534,10 @@ export class TwurpleVideoService {
       );
 
       // 優化：差異化更新，避免每次全刪全建
-      await retryDatabaseOperation(async () => {
-        await prisma.$transaction(
-          async (tx) => {
+      await runWithWriteGuard("sync-videos:viewer-clips", () =>
+        retryDatabaseOperation(async () => {
+          await prisma.$transaction(
+            async (tx) => {
             const existing = await tx.viewerChannelClip.findMany({
               where: { channelId },
               select: {
@@ -594,12 +615,13 @@ export class TwurpleVideoService {
               }
             }
           },
-          {
-            maxWait: 10000, // 最多等待 10 秒獲取 transaction
-            timeout: 15000, // transaction 超時時間 15 秒
-          }
-        );
-      });
+            {
+              maxWait: 10000, // 最多等待 10 秒獲取 transaction
+              timeout: 15000, // transaction 超時時間 15 秒
+            }
+          );
+        })
+      );
 
       logger.debug(
         "TwitchVideo",
