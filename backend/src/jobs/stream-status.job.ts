@@ -414,17 +414,18 @@ export class StreamStatusJob {
       viewerCount: number;
     }
   ): Promise<void> {
-    // 計算數值
+    // 計算數值（避免每次都 count stream_metrics）
     const newPeak = Math.max(activeSession.peakViewers || 0, stream.viewerCount);
-    const sampleCount =
-      typeof prisma.streamMetric.count === "function"
-        ? await prisma.streamMetric.count({
-            where: { streamSessionId: activeSession.id },
-          })
-        : 1;
-    const currentAvg = activeSession.avgViewers ?? stream.viewerCount;
-    const divisor = Math.max(sampleCount + 1, 1);
-    const newAvg = Math.round((currentAvg * sampleCount + stream.viewerCount) / divisor);
+    const now = new Date();
+    const shouldSampleMetric =
+      METRIC_SAMPLE_MINUTES <= 1 || now.getMinutes() % METRIC_SAMPLE_MINUTES === 0;
+
+    // 以 EMA 近似更新平均值，避免高成本 count 查詢
+    const currentAvg = activeSession.avgViewers;
+    const newAvg =
+      currentAvg === null
+        ? stream.viewerCount
+        : Math.round(currentAvg * 0.8 + stream.viewerCount * 0.2);
 
     await runWithWriteGuard("stream-session:update-session", async () => {
       // 直接更新
@@ -433,14 +434,10 @@ export class StreamStatusJob {
         data: {
           title: stream.title,
           category: stream.gameName,
-          avgViewers: newAvg,
+          ...(shouldSampleMetric || currentAvg === null ? { avgViewers: newAvg } : {}),
           peakViewers: newPeak,
         },
       });
-
-      const now = new Date();
-      const shouldSampleMetric =
-        METRIC_SAMPLE_MINUTES <= 1 || now.getMinutes() % METRIC_SAMPLE_MINUTES === 0;
 
       if (shouldSampleMetric) {
         await prisma.streamMetric.create({

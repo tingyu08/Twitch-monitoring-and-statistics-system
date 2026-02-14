@@ -30,6 +30,8 @@ const MESSAGE_BATCH_SOFT_THRESHOLD = Math.max(
 );
 const MESSAGE_BATCH_MAX_RETRIES = 3;
 const BUFFER_OVERFLOW_WARN_INTERVAL_MS = 30 * 1000;
+const CACHE_NULL_SENTINEL = "__NULL__";
+const NULL_LOOKUP_TTL_SECONDS = CacheTTL.SHORT;
 
 interface BufferedMessage {
   viewerId: string;
@@ -161,8 +163,11 @@ export class ViewerMessageRepository {
     const cacheKey = CacheKeys.viewerLookup(twitchUserId);
 
     // Try to get from cache first
-    const cached = cacheManager.get<string | null>(cacheKey);
+    const cached = cacheManager.get<string>(cacheKey);
     if (cached !== null) {
+      if (cached === CACHE_NULL_SENTINEL) {
+        return null;
+      }
       return cached;
     }
 
@@ -178,6 +183,7 @@ export class ViewerMessageRepository {
 
     // Handle null from retry failure or viewer not found
     if (!result) {
+      cacheManager.set(cacheKey, CACHE_NULL_SENTINEL, NULL_LOOKUP_TTL_SECONDS);
       return null;
     }
 
@@ -197,8 +203,11 @@ export class ViewerMessageRepository {
     const cacheKey = CacheKeys.channelLookup(channelName);
 
     // Try to get from cache first
-    const cached = cacheManager.get<string | null>(cacheKey);
+    const cached = cacheManager.get<string>(cacheKey);
     if (cached !== null) {
+      if (cached === CACHE_NULL_SENTINEL) {
+        return null;
+      }
       return cached;
     }
 
@@ -215,6 +224,7 @@ export class ViewerMessageRepository {
 
     // Handle null from retry failure or channel not found
     if (!result) {
+      cacheManager.set(cacheKey, CACHE_NULL_SENTINEL, NULL_LOOKUP_TTL_SECONDS);
       return null;
     }
 
@@ -532,6 +542,7 @@ export class ViewerMessageRepository {
               src.totalBits,
               CURRENT_TIMESTAMP
             FROM src
+            WHERE 1 = 1
             ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
               totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
               chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
@@ -582,6 +593,7 @@ export class ViewerMessageRepository {
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
             FROM src
+            WHERE 1 = 1
             ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
               messageCount = viewer_channel_daily_stats.messageCount + excluded.messageCount,
               emoteCount = viewer_channel_daily_stats.emoteCount + excluded.emoteCount,
@@ -660,6 +672,7 @@ export class ViewerMessageRepository {
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
             FROM src
+            WHERE 1 = 1
             ON CONFLICT(viewerId, channelId) DO UPDATE SET
               totalMessages = viewer_channel_lifetime_stats.totalMessages + excluded.totalMessages,
               totalChatMessages = viewer_channel_lifetime_stats.totalChatMessages + excluded.totalChatMessages,

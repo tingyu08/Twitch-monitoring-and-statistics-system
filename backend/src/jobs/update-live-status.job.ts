@@ -1,4 +1,5 @@
-﻿import { prisma, isConnectionReady } from "../db/prisma";
+import { prisma, isConnectionReady } from "../db/prisma";
+import { Prisma } from "@prisma/client";
 
 import { webSocketGateway } from "../services/websocket.gateway";
 import { logger } from "../utils/logger";
@@ -198,7 +199,49 @@ async function updateChannelsWithChanges(
   let successCount = 0;
   let failCount = 0;
 
-  const combinedUpdates = [...changedUpdates, ...liveUpdates];
+  const mergedUpdatesByTwitchId = new Map<
+    string,
+    {
+      twitchId: string;
+      isLive?: boolean;
+      viewerCount: number;
+      title: string;
+      gameName: string;
+      startedAt: Date | null;
+    }
+  >();
+
+  for (const update of [...changedUpdates, ...liveUpdates]) {
+    const nextIsLive =
+      typeof (update as { isLive?: unknown }).isLive === "boolean"
+        ? ((update as { isLive?: boolean }).isLive ?? undefined)
+        : undefined;
+
+    const existing = mergedUpdatesByTwitchId.get(update.twitchId);
+
+    if (!existing) {
+      mergedUpdatesByTwitchId.set(update.twitchId, {
+        twitchId: update.twitchId,
+        isLive: nextIsLive,
+        viewerCount: update.viewerCount,
+        title: update.title,
+        gameName: update.gameName,
+        startedAt: update.startedAt,
+      });
+      continue;
+    }
+
+    existing.viewerCount = update.viewerCount;
+    existing.title = update.title;
+    existing.gameName = update.gameName;
+    existing.startedAt = update.startedAt;
+
+    if (typeof nextIsLive === "boolean") {
+      existing.isLive = nextIsLive;
+    }
+  }
+
+  const combinedUpdates = Array.from(mergedUpdatesByTwitchId.values());
   const TX_BATCH_SIZE =
     combinedUpdates.length > 800 ? 10 : combinedUpdates.length > 300 ? 12 : 15;
 
@@ -219,21 +262,82 @@ async function updateChannelsWithChanges(
     try {
       await runWithWriteGuard("update-live-status:batch-channel-update", () =>
         retryDatabaseOperation(async () => {
-          const updatePromises = batch.map((update) =>
-            prisma.channel.update({
-              where: { twitchChannelId: update.twitchId },
-              data: {
-                ...("isLive" in update ? { isLive: update.isLive } : {}),
-                currentViewerCount: update.viewerCount,
-                currentTitle: update.title || undefined,
-                currentGameName: update.gameName || undefined,
-                currentStreamStartedAt: update.startedAt,
-                lastLiveCheckAt: now,
-              },
-            })
-          );
+          if (batch.length === 0) {
+            return;
+          }
 
-          await prisma.$transaction(updatePromises);
+          const values = batch.map((update) => {
+            const isLiveValue =
+              typeof update.isLive === "boolean" ? (update.isLive ? 1 : 0) : null;
+
+            return Prisma.sql`(
+              ${update.twitchId},
+              ${isLiveValue},
+              ${update.viewerCount},
+              ${update.title || null},
+              ${update.gameName || null},
+              ${update.startedAt},
+              ${now}
+            )`;
+          });
+
+          await prisma.$executeRaw(
+            Prisma.sql`
+              WITH updates (
+                twitchChannelId,
+                isLiveValue,
+                viewerCount,
+                titleValue,
+                gameNameValue,
+                startedAtValue,
+                checkedAt
+              ) AS (
+                VALUES ${Prisma.join(values)}
+              )
+              UPDATE channels
+              SET
+                isLive = COALESCE(
+                  (
+                    SELECT CASE WHEN updates.isLiveValue = 1 THEN 1 ELSE 0 END
+                    FROM updates
+                    WHERE updates.twitchChannelId = channels.twitchChannelId
+                  ),
+                  isLive
+                ),
+                currentViewerCount = (
+                  SELECT updates.viewerCount
+                  FROM updates
+                  WHERE updates.twitchChannelId = channels.twitchChannelId
+                ),
+                currentTitle = COALESCE(
+                  (
+                    SELECT updates.titleValue
+                    FROM updates
+                    WHERE updates.twitchChannelId = channels.twitchChannelId
+                  ),
+                  currentTitle
+                ),
+                currentGameName = COALESCE(
+                  (
+                    SELECT updates.gameNameValue
+                    FROM updates
+                    WHERE updates.twitchChannelId = channels.twitchChannelId
+                  ),
+                  currentGameName
+                ),
+                currentStreamStartedAt = (
+                  SELECT updates.startedAtValue
+                  FROM updates
+                  WHERE updates.twitchChannelId = channels.twitchChannelId
+                ),
+                lastLiveCheckAt = (
+                  SELECT updates.checkedAt
+                  FROM updates
+                  WHERE updates.twitchChannelId = channels.twitchChannelId
+                )
+              WHERE twitchChannelId IN (SELECT twitchChannelId FROM updates)
+            `
+          );
         })
       );
 

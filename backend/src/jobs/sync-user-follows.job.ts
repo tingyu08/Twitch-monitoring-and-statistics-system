@@ -771,81 +771,131 @@ export async function triggerFollowSyncForUser(
     let created = 0;
     let removed = 0;
     let processed = 0;
-    const followsToUpsert: Array<{
-      userId: string;
-      userType: "viewer";
-      channelId: string;
-      followedAt: Date;
-    }> = [];
 
-    // 收集所有新建立的 streamers，稍後批次抓取資料
-    const newStreamerIds: string[] = [];
+    const streamersToUpsert = new Map<
+      string,
+      {
+        twitchUserId: string;
+        displayName: string;
+        avatarUrl: string;
+      }
+    >();
+    const channelsToUpsert = new Map<
+      string,
+      {
+        twitchChannelId: string;
+        channelName: string;
+        channelUrl: string;
+      }
+    >();
+    const channelIdsToEnable = new Set<string>();
+    const newFollowBroadcasterIds = new Set<string>();
 
-    // 處理每個追蹤的頻道（批次處理）
+    // 先做收集，不在迴圈中直接寫 DB
     for (const follow of followedChannels) {
+      const existingFollow = existingFollowMap.get(follow.broadcasterId);
+      if (existingFollow) {
+        existingFollowMap.delete(follow.broadcasterId);
+      } else {
+        newFollowBroadcasterIds.add(follow.broadcasterId);
+      }
+
+      const existingChannel = existingChannelMap.get(follow.broadcasterId);
+
+      if (!existingChannel) {
+        if (!existingStreamerMap.has(follow.broadcasterId)) {
+          streamersToUpsert.set(follow.broadcasterId, {
+            twitchUserId: follow.broadcasterId,
+            displayName: follow.broadcasterLogin,
+            avatarUrl: "",
+          });
+        }
+
+        channelsToUpsert.set(follow.broadcasterId, {
+          twitchChannelId: follow.broadcasterId,
+          channelName: follow.broadcasterLogin,
+          channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
+        });
+      } else if (!existingChannel.isMonitored) {
+        channelIdsToEnable.add(existingChannel.id);
+      }
+
+      processed++;
+      if (processed % BATCH_SIZE === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    // 批次抓取新 Streamer 的完整資料（頭貼、顯示名稱）
+    if (streamersToUpsert.size > 0) {
       try {
-        const existingFollow = existingFollowMap.get(follow.broadcasterId);
+        const twitchIds = Array.from(streamersToUpsert.keys());
+        const twitchUsers = await twurpleHelixService.getUsersByIds(twitchIds);
+        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
 
-        // P1 Fix: 使用預先載入的 Map，避免 N+1 查詢
-        const existingChannel = existingChannelMap.get(follow.broadcasterId);
-
-        let channelId = existingChannel?.id;
-        let streamerId = existingChannel?.streamerId;
-
-        // 如果頻道不存在，或者需要更新監控狀態
-        if (!existingChannel || !existingChannel.isMonitored) {
-          // 確保 Streamer 存在
-          if (!existingChannel) {
-            // P1 Fix: 先檢查 Map，避免查詢
-            let streamer = existingStreamerMap.get(follow.broadcasterId);
-
-            if (!streamer) {
-              const displayName = follow.broadcasterLogin;
-              const newStreamer = await prisma.streamer.upsert({
-                where: { twitchUserId: follow.broadcasterId },
-                create: {
-                  twitchUserId: follow.broadcasterId,
-                  displayName,
-                  avatarUrl: "",
-                },
-                update: {},
-              });
-              streamer = { id: newStreamer.id, twitchUserId: newStreamer.twitchUserId };
-              // 加入 Map 以便後續使用
-              existingStreamerMap.set(follow.broadcasterId, streamer);
-              // 記錄新建立的 streamer ID，稍後批次抓取資料
-              newStreamerIds.push(follow.broadcasterId);
-            }
-            streamerId = streamer.id;
+        for (const streamerData of streamersToUpsert.values()) {
+          const twitchUser = userMap.get(streamerData.twitchUserId);
+          if (twitchUser) {
+            streamerData.displayName = twitchUser.displayName;
+            streamerData.avatarUrl = twitchUser.profileImageUrl;
           }
+        }
 
-          // 建立或更新頻道
-          // P0 Fix: 確保 streamerId 存在，避免 N+1 查詢
-          const resolvedStreamerId = streamerId || existingStreamerMap.get(follow.broadcasterId)?.id;
-          
-          if (!resolvedStreamerId) {
-            logger.warn("Jobs", `無法解析 streamerId for ${follow.broadcasterLogin}, 跳過此頻道`);
+        logger.info(
+          "Jobs",
+          `✅ 已抓取 ${twitchUsers.length}/${streamersToUpsert.size} 個新 Streamer 的完整資料`
+        );
+      } catch (error) {
+        logger.warn("Jobs", "抓取新 Streamer 資料失敗，使用預設值", error);
+      }
+    }
+
+    // 批量寫入 streamers/channels，避免逐筆 N+1
+    if (streamersToUpsert.size > 0 || channelsToUpsert.size > 0 || channelIdsToEnable.size > 0) {
+      await prisma.$transaction(async (tx: TransactionClient) => {
+        for (const streamerData of streamersToUpsert.values()) {
+          const upserted = await tx.streamer.upsert({
+            where: { twitchUserId: streamerData.twitchUserId },
+            create: streamerData,
+            update: {
+              displayName: streamerData.displayName,
+              avatarUrl: streamerData.avatarUrl,
+            },
+          });
+
+          existingStreamerMap.set(upserted.twitchUserId, {
+            id: upserted.id,
+            twitchUserId: upserted.twitchUserId,
+            avatarUrl: upserted.avatarUrl,
+          });
+        }
+
+        for (const channelData of channelsToUpsert.values()) {
+          const streamerId = existingStreamerMap.get(channelData.twitchChannelId)?.id;
+
+          if (!streamerId) {
+            logger.warn("Jobs", `無法解析 streamerId for ${channelData.channelName}, 跳過此頻道`);
             continue;
           }
 
-          const channel = await prisma.channel.upsert({
-            where: { twitchChannelId: follow.broadcasterId },
+          const channel = await tx.channel.upsert({
+            where: { twitchChannelId: channelData.twitchChannelId },
             create: {
-              twitchChannelId: follow.broadcasterId,
-              channelName: follow.broadcasterLogin,
-              channelUrl: `https://www.twitch.tv/${follow.broadcasterLogin}`,
+              twitchChannelId: channelData.twitchChannelId,
+              channelName: channelData.channelName,
+              channelUrl: channelData.channelUrl,
               source: "external",
               isMonitored: true,
-              streamerId: resolvedStreamerId,
+              streamerId,
             },
             update: {
-              channelName: follow.broadcasterLogin,
+              channelName: channelData.channelName,
               isMonitored: true,
+              streamerId,
             },
           });
-          channelId = channel.id;
-          // 加入 Map 以便後續使用
-          existingChannelMap.set(follow.broadcasterId, {
+
+          existingChannelMap.set(channel.twitchChannelId, {
             id: channel.id,
             twitchChannelId: channel.twitchChannelId,
             isMonitored: true,
@@ -853,33 +903,39 @@ export async function triggerFollowSyncForUser(
           });
         }
 
-        if (!channelId) {
-          throw new Error(`Failed to resolve channelId for ${follow.broadcasterLogin}`);
-        }
-
-        if (existingFollow) {
-          // 已存在的追蹤，從 map 中移除（避免被刪除）
-          existingFollowMap.delete(follow.broadcasterId);
-        } else {
-          // 新追蹤：先收集，稍後批次 upsert
-          followsToUpsert.push({
-            userId: viewerId,
-            userType: "viewer",
-            channelId: channelId,
-            followedAt: follow.followedAt,
+        if (channelIdsToEnable.size > 0) {
+          await tx.channel.updateMany({
+            where: { id: { in: Array.from(channelIdsToEnable) } },
+            data: { isMonitored: true },
           });
         }
-      } catch (err) {
-        logger.warn("Jobs", `同步頻道 ${follow.broadcasterLogin} 失敗`, err);
-        // Continue to verify next channel even if one fails
+      });
+    }
+
+    const followsToUpsert: Array<{
+      userId: string;
+      userType: "viewer";
+      channelId: string;
+      followedAt: Date;
+    }> = [];
+
+    for (const follow of followedChannels) {
+      if (!newFollowBroadcasterIds.has(follow.broadcasterId)) {
+        continue;
       }
 
-      processed++;
-
-      // 每處理 BATCH_SIZE 個頻道，等待一下讓系統喘息
-      if (processed % BATCH_SIZE === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      const channel = existingChannelMap.get(follow.broadcasterId);
+      if (!channel) {
+        logger.warn("Jobs", `找不到頻道 ${follow.broadcasterLogin}，跳過追蹤記錄建立`);
+        continue;
       }
+
+      followsToUpsert.push({
+        userId: viewerId,
+        userType: "viewer",
+        channelId: channel.id,
+        followedAt: follow.followedAt,
+      });
     }
 
     // 批次建立追蹤記錄（避免逐筆寫入）
@@ -916,37 +972,6 @@ export async function triggerFollowSyncForUser(
 
       if (i + UPSERT_BATCH_SIZE < followsToUpsert.length) {
         await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-    }
-
-    // 修復：批量抓取新建立 Streamers 的完整資料（頭貼、顯示名稱）
-    if (newStreamerIds.length > 0) {
-      try {
-        const twitchUsers = await twurpleHelixService.getUsersByIds(newStreamerIds);
-        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
-
-        // 批量更新新建立的 streamers
-        const updatePromises = newStreamerIds.map((twitchUserId) => {
-          const twitchUser = userMap.get(twitchUserId);
-          if (twitchUser) {
-            return prisma.streamer.update({
-              where: { twitchUserId },
-              data: {
-                displayName: twitchUser.displayName,
-                avatarUrl: twitchUser.profileImageUrl,
-              },
-            });
-          }
-          return Promise.resolve();
-        });
-
-        await Promise.all(updatePromises);
-        logger.info(
-          "Jobs",
-          `✅ 已抓取 ${twitchUsers.length}/${newStreamerIds.length} 個新 Streamer 的完整資料`
-        );
-      } catch (error) {
-        logger.warn("Jobs", "抓取新 Streamer 資料失敗，使用預設值", error);
       }
     }
 

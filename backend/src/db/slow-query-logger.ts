@@ -8,7 +8,20 @@ type SlowQueryLogState = {
   maxSuppressedDuration: number;
 };
 
+type SlowQueryAggregate = {
+  model: string | undefined;
+  operation: string;
+  count: number;
+  maxDuration: number;
+  totalDuration: number;
+  lastDuration: number;
+};
+
 const SLOW_QUERY_LOG_THROTTLE_MS = Number(process.env.SLOW_QUERY_LOG_THROTTLE_MS || 120000);
+const SLOW_QUERY_TOP_N = Math.max(0, Number(process.env.SLOW_QUERY_TOP_N || 0));
+const SLOW_QUERY_TOP_N_WINDOW_MS = Number(
+  process.env.SLOW_QUERY_TOP_N_WINDOW_MS || SLOW_QUERY_LOG_THROTTLE_MS
+);
 const SLOW_QUERY_LOG_IGNORE_KEYS = new Set(
   (process.env.SLOW_QUERY_LOG_IGNORE || "")
     .split(",")
@@ -17,11 +30,93 @@ const SLOW_QUERY_LOG_IGNORE_KEYS = new Set(
 );
 
 const slowQueryLogStates = new Map<string, SlowQueryLogState>();
+const slowQueryAggregates = new Map<string, SlowQueryAggregate>();
+let topNFlushTimer: NodeJS.Timeout | null = null;
+
+function getQueryKey(model: string | undefined, operation: string): string {
+  return `${model ?? "Raw"}.${operation}`;
+}
+
+function isIgnored(queryKey: string): boolean {
+  return SLOW_QUERY_LOG_IGNORE_KEYS.has(queryKey);
+}
+
+function recordSlowQueryAggregate(model: string | undefined, operation: string, duration: number): void {
+  const queryKey = getQueryKey(model, operation);
+  if (isIgnored(queryKey)) {
+    return;
+  }
+
+  const current = slowQueryAggregates.get(queryKey);
+  if (!current) {
+    slowQueryAggregates.set(queryKey, {
+      model,
+      operation,
+      count: 1,
+      maxDuration: duration,
+      totalDuration: duration,
+      lastDuration: duration,
+    });
+    return;
+  }
+
+  current.count += 1;
+  current.maxDuration = Math.max(current.maxDuration, duration);
+  current.totalDuration += duration;
+  current.lastDuration = duration;
+  slowQueryAggregates.set(queryKey, current);
+}
+
+function flushTopNSlowQueries(): void {
+  if (slowQueryAggregates.size === 0) {
+    return;
+  }
+
+  const rows = Array.from(slowQueryAggregates.entries())
+    .map(([queryKey, row]) => ({
+      queryKey,
+      count: row.count,
+      maxDuration: row.maxDuration,
+      avgDuration: Math.round(row.totalDuration / row.count),
+      lastDuration: row.lastDuration,
+    }))
+    .sort((a, b) => {
+      if (b.maxDuration !== a.maxDuration) {
+        return b.maxDuration - a.maxDuration;
+      }
+      return b.count - a.count;
+    })
+    .slice(0, SLOW_QUERY_TOP_N);
+
+  logger.warn("SlowQuery", `Top ${SLOW_QUERY_TOP_N} slow queries in last ${Math.round(
+    SLOW_QUERY_TOP_N_WINDOW_MS / 1000
+  )}s`, {
+    mode: "top-n",
+    topQueries: rows,
+  });
+
+  slowQueryAggregates.clear();
+}
+
+function ensureTopNFlushTimer(): void {
+  if (SLOW_QUERY_TOP_N <= 0 || topNFlushTimer) {
+    return;
+  }
+
+  const intervalMs = Math.max(1000, SLOW_QUERY_TOP_N_WINDOW_MS);
+  topNFlushTimer = setInterval(() => {
+    flushTopNSlowQueries();
+  }, intervalMs);
+
+  if (topNFlushTimer.unref) {
+    topNFlushTimer.unref();
+  }
+}
 
 function logSlowQueryWithThrottle(model: string | undefined, operation: string, duration: number): void {
-  const queryKey = `${model ?? "Raw"}.${operation}`;
+  const queryKey = getQueryKey(model, operation);
 
-  if (SLOW_QUERY_LOG_IGNORE_KEYS.has(queryKey)) {
+  if (isIgnored(queryKey)) {
     return;
   }
 
@@ -64,6 +159,8 @@ declare global {
 }
 
 export function setupSlowQueryLogger(prisma: PrismaClient, thresholdMs = 1000): PrismaClient {
+  ensureTopNFlushTimer();
+
   if (global.slowQueryLoggerInitialized) {
     return prisma;
   }
@@ -95,7 +192,11 @@ export function setupSlowQueryLogger(prisma: PrismaClient, thresholdMs = 1000): 
           recordQueryDuration(duration);
 
           if (duration >= thresholdMs) {
-            logSlowQueryWithThrottle(model, operation, duration);
+            if (SLOW_QUERY_TOP_N > 0) {
+              recordSlowQueryAggregate(model, operation, duration);
+            } else {
+              logSlowQueryWithThrottle(model, operation, duration);
+            }
           }
 
           return result;
