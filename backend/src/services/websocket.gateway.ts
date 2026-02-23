@@ -54,35 +54,32 @@ export class WebSocketGateway {
   private async setupRedisAdapter(): Promise<void> {
     if (!this.io) return;
 
-    const baseClient = getRedisClient();
-    if (!baseClient) {
-      logger.info("WebSocket", "Redis adapter not enabled (REDIS_URL missing)");
+    const { initRedis } = await import("../utils/redis-client");
+    const connected = await initRedis();
+    if (!connected) {
+      logger.info("WebSocket", "Redis adapter not enabled (Redis unavailable)");
       return;
     }
 
+    const baseClient = getRedisClient();
+    if (!baseClient) return;
+
     try {
-      // duplicate() 預設 autoConnect=true，不需要手動 connect()
-      // 等待 ready 事件確認連線就緒即可
-      const pubClient = baseClient.duplicate();
-      const subClient = baseClient.duplicate();
+      const pubClient = baseClient.duplicate({ lazyConnect: true });
+      const subClient = baseClient.duplicate({ lazyConnect: true });
+
+      // 持久 error handler，避免 unhandled error 崩潰進程
+      pubClient.on("error", (err) => logger.warn("WebSocket", "Redis pub error", err));
+      subClient.on("error", (err) => logger.warn("WebSocket", "Redis sub error", err));
+
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+
       this.pubClient = pubClient;
       this.subClient = subClient;
-
-      await Promise.all([
-        new Promise<void>((resolve, reject) => {
-          pubClient.once("ready", resolve);
-          pubClient.once("error", reject);
-        }),
-        new Promise<void>((resolve, reject) => {
-          subClient.once("ready", resolve);
-          subClient.once("error", reject);
-        }),
-      ]);
-
       this.io.adapter(createAdapter(this.pubClient, this.subClient));
       logger.info("WebSocket", "Redis adapter enabled for cross-instance broadcast");
     } catch (error) {
-      logger.warn("WebSocket", "Failed to enable Redis adapter", error);
+      logger.warn("WebSocket", "Failed to enable Redis adapter, using standalone mode", error);
     }
   }
 

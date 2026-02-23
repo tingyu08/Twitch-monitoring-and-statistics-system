@@ -23,32 +23,64 @@ function getRedisUrl(): string | null {
   return url && url.length > 0 ? url : null;
 }
 
+let redisReady = false;
+let redisInitPromise: Promise<void> | null = null;
+
 export function isRedisEnabled(): boolean {
   return Boolean(getRedisUrl());
 }
 
+export function isRedisReady(): boolean {
+  return redisReady;
+}
+
 export function getRedisClient(): Redis | null {
-  const redisUrl = getRedisUrl();
-  if (!redisUrl) {
+  if (!redisReady || !redisClient) {
     return null;
   }
+  return redisClient;
+}
 
-  if (redisClient) {
-    return redisClient;
+/**
+ * 初始化 Redis 連線（嘗試連線，失敗時 graceful fallback）
+ * 呼叫多次是安全的，只會初始化一次
+ */
+export async function initRedis(): Promise<boolean> {
+  if (redisReady) return true;
+  if (redisInitPromise) {
+    await redisInitPromise;
+    return redisReady;
   }
 
-  redisClient = new Redis(redisUrl, {
-    maxRetriesPerRequest: 1,
-    enableReadyCheck: true,
-  });
+  const redisUrl = getRedisUrl();
+  if (!redisUrl) return false;
 
-  redisClient.on("error", (error: unknown) => {
-    logger.warn("Redis", "Redis client error", error);
-  });
+  redisInitPromise = (async () => {
+    try {
+      const client = new Redis(redisUrl, {
+        maxRetriesPerRequest: 1,
+        enableReadyCheck: true,
+        lazyConnect: true, // 不自動連線，等手動 connect()
+        retryStrategy: () => null, // 連不上就放棄，不無限重試
+      });
 
-  redisClient.once("ready", () => logger.info("Redis", "Redis connected"));
+      client.on("error", (error: unknown) => {
+        logger.warn("Redis", "Redis client error", error);
+      });
 
-  return redisClient;
+      await client.connect();
+      redisClient = client;
+      redisReady = true;
+      logger.info("Redis", "Redis connected");
+    } catch (error) {
+      logger.warn("Redis", "Redis 無法連線，將使用 In-Memory 模式", error);
+      redisClient = null;
+      redisReady = false;
+    }
+  })();
+
+  await redisInitPromise;
+  return redisReady;
 }
 
 function isRedisCircuitOpen(): boolean {
@@ -267,6 +299,8 @@ export async function redisReleaseLock(key: string, token: string): Promise<void
 }
 
 export function getBullMQConnectionOptions(): RedisOptions | null {
+  if (!redisReady) return null;
+
   const redisUrl = getRedisUrl();
   if (!redisUrl) {
     return null;

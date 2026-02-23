@@ -25,7 +25,7 @@ import { viewerMessageRepository } from "./modules/viewer/viewer-message.reposit
 import { revenueSyncQueue } from "./utils/revenue-sync-queue";
 import { dataExportQueue } from "./utils/data-export-queue";
 
-const PORT = parseInt(process.env.PORT || '4000', 10);
+const PORT = parseInt(process.env.PORT || "4000", 10);
 const JOB_START_RETRY_DELAY_MS = 5 * 60 * 1000;
 const JOB_START_MAX_RETRIES = 12;
 
@@ -124,7 +124,7 @@ function gracefulShutdown(signal: string) {
   // 停止接受新連線
   httpServer.close(async () => {
     console.log("✅ HTTP 伺服器已關閉");
-    
+
     try {
       await viewerMessageRepository.flushPendingMessages();
       console.log("✅ 已刷新訊息緩衝區");
@@ -184,7 +184,7 @@ process.on("unhandledRejection", (reason) => {
   // 不關閉，只記錄
 });
 
-httpServer.listen(PORT, '0.0.0.0', async () => {
+httpServer.listen(PORT, "0.0.0.0", async () => {
   console.log(`伺服器運行於 http://0.0.0.0:${PORT}`);
   console.log(`🚀 環境: ${process.env.NODE_ENV || "development"}`);
 
@@ -205,36 +205,48 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
         logger.warn("Server", "Prisma 連線預熱失敗，將在首次請求時重試");
       }
 
+      // 0.05 嘗試連線 Redis（連不上則自動 fallback 到 In-Memory 模式）
+      const { initRedis } = await import("./utils/redis-client");
+      await initRedis();
+
       // 0.1 啟動後預熱活躍觀眾快取，降低首批請求延遲
-      scheduleStartupTimeout(async () => {
-        try {
-          const { warmViewerChannelsCache } = await import("./modules/viewer/viewer.service");
-          await warmViewerChannelsCache(100);
-          logger.info("Server", "活躍觀眾 channels 快取預熱完成");
-        } catch (error) {
-          logger.warn("Server", "活躍觀眾快取預熱失敗", error);
-        }
-      }, process.env.NODE_ENV === "production" ? 15000 : 3000);
+      scheduleStartupTimeout(
+        async () => {
+          try {
+            const { warmViewerChannelsCache } = await import("./modules/viewer/viewer.service");
+            await warmViewerChannelsCache(100);
+            logger.info("Server", "活躍觀眾 channels 快取預熱完成");
+          } catch (error) {
+            logger.warn("Server", "活躍觀眾快取預熱失敗", error);
+          }
+        },
+        process.env.NODE_ENV === "production" ? 15000 : 3000
+      );
 
       // 0.2 預熱 Revenue 快取（有 Streamer token 時），降低首請求延遲
-      scheduleStartupTimeout(async () => {
-        try {
-          const { revenueService } = await import("./modules/streamer/revenue.service");
-          const streamers = await (await import("./db/prisma")).prisma.streamer.findMany({
-            where: { twitchTokens: { some: { status: "active" } } },
-            select: { id: true },
-            take: 5,
-          });
-          await Promise.allSettled(
-            streamers.map((streamer) => revenueService.prewarmRevenueCache(streamer.id))
-          );
-          if (streamers.length > 0) {
-            logger.info("Server", `Revenue 快取預熱完成 (${streamers.length} streamers)`);
+      scheduleStartupTimeout(
+        async () => {
+          try {
+            const { revenueService } = await import("./modules/streamer/revenue.service");
+            const streamers = await (
+              await import("./db/prisma")
+            ).prisma.streamer.findMany({
+              where: { twitchTokens: { some: { status: "active" } } },
+              select: { id: true },
+              take: 5,
+            });
+            await Promise.allSettled(
+              streamers.map((streamer) => revenueService.prewarmRevenueCache(streamer.id))
+            );
+            if (streamers.length > 0) {
+              logger.info("Server", `Revenue 快取預熱完成 (${streamers.length} streamers)`);
+            }
+          } catch (error) {
+            logger.warn("Server", "Revenue 快取預熱失敗", error);
           }
-        } catch (error) {
-          logger.warn("Server", "Revenue 快取預熱失敗", error);
-        }
-      }, process.env.NODE_ENV === "production" ? 20000 : 5000);
+        },
+        process.env.NODE_ENV === "production" ? 20000 : 5000
+      );
 
       // 1. 先啟動定時任務（輕量級）- 但在生產環境延遲啟動
       if (process.env.NODE_ENV === "production") {
@@ -267,7 +279,6 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
           await unifiedTwitchService.initialize();
           await chatListenerManager.start();
           logger.info("Server", "Twitch 服務初始化完成");
-
         } catch (error) {
           logger.error("Server", "Twitch 服務初始化失敗", error);
         }

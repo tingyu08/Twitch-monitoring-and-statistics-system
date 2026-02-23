@@ -9,7 +9,7 @@
 
 import { logger } from "./logger";
 import {
-  isRedisEnabled,
+  isRedisReady,
   redisAcquireLock,
   redisDeleteByPrefix,
   redisDeleteBySuffix,
@@ -48,7 +48,10 @@ export class CacheManager {
   private currentMemoryUsage: number;
   // P1 Fix: 防止快取擊穿 (Cache Stampede) 的等待隊列
   private pendingPromises: Map<string, Promise<unknown>>;
-  private redisEnabled: boolean;
+  /** 動態判斷 Redis 是否已連線 */
+  private get redisEnabled(): boolean {
+    return isRedisReady();
+  }
   private tagIndex: Map<string, Set<string>>;
   private readonly redisLockTtlMs = 15000;
   private readonly redisWaitRetries = 8;
@@ -57,7 +60,7 @@ export class CacheManager {
   constructor(maxMemoryMB: number = 50) {
     this.cache = new Map();
     this.pendingPromises = new Map();
-    this.redisEnabled = isRedisEnabled();
+
     this.tagIndex = new Map();
     this.stats = {
       hits: 0,
@@ -84,7 +87,12 @@ export class CacheManager {
   /**
    * 設定快取項目
    */
-  private setInternal<T>(key: string, value: T, ttlSeconds: number = 300, tags: string[] = []): void {
+  private setInternal<T>(
+    key: string,
+    value: T,
+    ttlSeconds: number = 300,
+    tags: string[] = []
+  ): void {
     const size = this.estimateSize(value);
 
     // 如果單個項目超過最大記憶體限制的 25%，拒絕快取 (Zeabur 免費層優化)
@@ -427,7 +435,7 @@ export class CacheManager {
    */
   getStats(): CacheStats {
     const total = this.stats.hits + this.stats.misses;
-    const hitRate = total > 0 ? Math.round(((this.stats.hits / total) * 100) * 100) / 100 : 0;
+    const hitRate = total > 0 ? Math.round((this.stats.hits / total) * 100 * 100) / 100 : 0;
 
     return {
       ...this.stats,
@@ -513,7 +521,8 @@ export class CacheManager {
         return sampledSize;
       }
 
-      const avg = sampled.length > 0 ? Math.max(Math.floor((sampledSize - 32) / sampled.length), 8) : 16;
+      const avg =
+        sampled.length > 0 ? Math.max(Math.floor((sampledSize - 32) / sampled.length), 8) : 16;
       return sampledSize + (value.length - sampled.length) * avg;
     }
 
@@ -557,7 +566,9 @@ export class CacheManager {
 
     if (entries.length > ESTIMATE_MAX_ITEMS) {
       const sampledAvg =
-        sampledEntries.length > 0 ? Math.max(Math.floor((size - 64) / sampledEntries.length), 24) : 24;
+        sampledEntries.length > 0
+          ? Math.max(Math.floor((size - 64) / sampledEntries.length), 24)
+          : 24;
       size += (entries.length - sampledEntries.length) * sampledAvg;
     }
 
@@ -624,10 +635,7 @@ function parsePositiveNumber(value: string | undefined, fallback: number): numbe
   if (!value) return fallback;
   const parsed = Number.parseFloat(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    logger.warn(
-      "CacheManager",
-      `Invalid numeric env value '${value}', fallback to ${fallback}`
-    );
+    logger.warn("CacheManager", `Invalid numeric env value '${value}', fallback to ${fallback}`);
     return fallback;
   }
   return parsed;
