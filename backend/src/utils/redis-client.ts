@@ -14,7 +14,12 @@ const REDIS_FAILURE_THRESHOLD = Number(process.env.REDIS_FAILURE_THRESHOLD || 5)
 const REDIS_CIRCUIT_BREAKER_MS = Number(process.env.REDIS_CIRCUIT_BREAKER_MS || 30000);
 
 function getRedisUrl(): string | null {
-  const url = process.env.REDIS_URL?.trim();
+  // 支援多種環境變數名稱（Zeabur 自動產生 REDIS_URI / REDIS_CONNECTION_STRING）
+  const url = (
+    process.env.REDIS_URL ||
+    process.env.REDIS_URI ||
+    process.env.REDIS_CONNECTION_STRING
+  )?.trim();
   return url && url.length > 0 ? url : null;
 }
 

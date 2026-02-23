@@ -19,9 +19,14 @@ export class WebSocketGateway {
   private io: Server | null = null;
   private pubClient: Redis | null = null;
   private subClient: Redis | null = null;
-  private pendingChannelUpdates: Map<string, { channelId?: string; twitchChannelId?: string; [key: string]: unknown }> = new Map();
+  private pendingChannelUpdates: Map<
+    string,
+    { channelId?: string; twitchChannelId?: string; [key: string]: unknown }
+  > = new Map();
   private channelUpdateFlushTimer: NodeJS.Timeout | null = null;
-  private readonly CHANNEL_UPDATE_DEBOUNCE_MS = Number(process.env.CHANNEL_UPDATE_DEBOUNCE_MS || 800);
+  private readonly CHANNEL_UPDATE_DEBOUNCE_MS = Number(
+    process.env.CHANNEL_UPDATE_DEBOUNCE_MS || 800
+  );
   private readonly CORS_ORIGIN = process.env.FRONTEND_URL || "http://localhost:3000";
 
   public initialize(httpServer: HttpServer) {
@@ -56,10 +61,24 @@ export class WebSocketGateway {
     }
 
     try {
-      this.pubClient = baseClient.duplicate();
-      this.subClient = baseClient.duplicate();
+      // duplicate() 預設 autoConnect=true，不需要手動 connect()
+      // 等待 ready 事件確認連線就緒即可
+      const pubClient = baseClient.duplicate();
+      const subClient = baseClient.duplicate();
+      this.pubClient = pubClient;
+      this.subClient = subClient;
 
-      await Promise.all([this.pubClient.connect(), this.subClient.connect()]);
+      await Promise.all([
+        new Promise<void>((resolve, reject) => {
+          pubClient.once("ready", resolve);
+          pubClient.once("error", reject);
+        }),
+        new Promise<void>((resolve, reject) => {
+          subClient.once("ready", resolve);
+          subClient.once("error", reject);
+        }),
+      ]);
+
       this.io.adapter(createAdapter(this.pubClient, this.subClient));
       logger.info("WebSocket", "Redis adapter enabled for cross-instance broadcast");
     } catch (error) {
@@ -116,7 +135,10 @@ export class WebSocketGateway {
   /**
    * Send stats update to a specific viewer
    */
-  public emitViewerStats(viewerId: string, stats: { channelId: string; messageCountDelta: number }) {
+  public emitViewerStats(
+    viewerId: string,
+    stats: { channelId: string; messageCountDelta: number }
+  ) {
     if (!this.io) return;
     this.io.to(`viewer:${viewerId}`).emit("stats-update", stats);
   }
