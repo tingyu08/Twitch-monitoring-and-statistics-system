@@ -96,12 +96,14 @@ export async function batchOperation<T, R>(
     batchSize?: number;
     delayBetweenBatchesMs?: number;
     onBatchComplete?: (batchIndex: number, total: number) => void;
+    fallbackToSingleOnBatchFailure?: boolean;
   } = {}
 ): Promise<R[]> {
   const {
     batchSize = 10, // Turso Free Tier 優化：減小批次大小
     delayBetweenBatchesMs = 200,
     onBatchComplete,
+    fallbackToSingleOnBatchFailure = true,
   } = options;
 
   const results: R[] = [];
@@ -124,6 +126,20 @@ export async function batchOperation<T, R>(
         `批次 ${batchIndex}/${totalBatches} 處理失敗`,
         error
       );
+
+      if (fallbackToSingleOnBatchFailure && batch.length > 1) {
+        logger.warn("DB Batch", `批次 ${batchIndex} 進入逐筆降級重試模式`);
+
+        for (const item of batch) {
+          try {
+            const singleResult = await retryDatabaseOperation(() => operation([item]));
+            results.push(singleResult);
+          } catch (singleError) {
+            logger.error("DB Batch", `批次 ${batchIndex} 逐筆重試仍失敗，已跳過一筆資料`, singleError);
+          }
+        }
+      }
+
       // 繼續處理下一批，不中斷整個流程
     }
 

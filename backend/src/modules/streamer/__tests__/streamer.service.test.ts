@@ -90,7 +90,7 @@ describe("StreamerService", () => {
 
   describe("getStreamerHeatmap", () => {
     beforeEach(() => {
-      // loadHeatmapAggregate 使用 $queryRaw：回傳空陣列使其 fallback 到 findMany
+      // loadHeatmapAggregate 使用 $queryRaw：回傳空陣列使其 fallback 到 SQL 重算
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
       // persistHeatmapAggregate 使用 $executeRaw
       (prisma.$executeRaw as jest.Mock).mockResolvedValue(0);
@@ -115,6 +115,13 @@ describe("StreamerService", () => {
     it("should generate heatmap matrix with data", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
       const sundayMorning = new Date("2025-12-14T10:00:00Z");
+
+      // 第 1 次 $queryRaw: loadHeatmapAggregate -> []
+      // 第 2 次 $queryRaw: buildHeatmapFromSessionsSql -> throw，觸發 fallback
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error("SQL failed"));
+
       (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
         { durationSeconds: 3600, startedAt: sundayMorning },
       ]);

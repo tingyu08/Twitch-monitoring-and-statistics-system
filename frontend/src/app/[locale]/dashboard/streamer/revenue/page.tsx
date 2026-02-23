@@ -238,15 +238,11 @@ export default function RevenuePage() {
 
         {/* 內容區域 */}
         <div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/50">
-          <div className={activeTab === "overview" ? "block" : "hidden"}>
-            <RevenueOverview key={`overview-${refreshKey}`} />
-          </div>
-          <div className={activeTab === "subscriptions" ? "block" : "hidden"}>
+          {activeTab === "overview" && <RevenueOverview key={`overview-${refreshKey}`} />}
+          {activeTab === "subscriptions" && (
             <SubscriptionStats key={`subs-${refreshKey}`} days={days} />
-          </div>
-          <div className={activeTab === "bits" ? "block" : "hidden"}>
-            <BitsStats key={`bits-${refreshKey}`} days={days} />
-          </div>
+          )}
+          {activeTab === "bits" && <BitsStats key={`bits-${refreshKey}`} days={days} />}
         </div>
       </div>
     </div>

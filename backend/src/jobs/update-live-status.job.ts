@@ -6,7 +6,6 @@ import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { cacheManager } from "../utils/cache-manager";
 import { memoryMonitor } from "../utils/memory-monitor";
-import { refreshViewerChannelSummaryForChannels } from "../modules/viewer/viewer.service";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 
@@ -29,7 +28,11 @@ const TARGET_SLOW_CHANNELS_PER_CYCLE = 250;
 const MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE = 300;
 const BASE_API_BATCH_SIZE = 100;
 const CHANNEL_QUERY_BATCH_SIZE = 500;
+const CHANNEL_UPDATE_MIN_INTERVAL_MS = Number(
+  process.env.CHANNEL_UPDATE_MIN_INTERVAL_MS || 15000
+);
 let slowPollIndex = 0;
+const channelUpdateLastEmittedAt = new Map<string, number>();
 
 type MonitoredChannelRow = {
   id: string;
@@ -56,90 +59,75 @@ function getAdaptiveSlowPollGroups(slowChannelCount: number): number {
   return Math.max(SLOW_POLL_GROUPS, Math.min(MAX_SLOW_POLL_GROUPS, dynamicGroups || SLOW_POLL_GROUPS));
 }
 
+function shouldEmitChannelUpdate(channelId: string, force: boolean, nowMs: number): boolean {
+  if (channelUpdateLastEmittedAt.size > 50000) {
+    const staleBefore = nowMs - CHANNEL_UPDATE_MIN_INTERVAL_MS * 10;
+    for (const [id, emittedAt] of channelUpdateLastEmittedAt) {
+      if (emittedAt < staleBefore) {
+        channelUpdateLastEmittedAt.delete(id);
+      }
+    }
+  }
+
+  if (force) {
+    channelUpdateLastEmittedAt.set(channelId, nowMs);
+    return true;
+  }
+
+  const lastEmittedAt = channelUpdateLastEmittedAt.get(channelId) ?? 0;
+  if (nowMs - lastEmittedAt < CHANNEL_UPDATE_MIN_INTERVAL_MS) {
+    return false;
+  }
+
+  channelUpdateLastEmittedAt.set(channelId, nowMs);
+  return true;
+}
+
 function selectChannelsForCheckUpdate(
   channels: Array<{ id: string; twitchChannelId: string }>,
   groups: number,
-  currentIndex: number
+  currentIndex: number,
+  maxItems: number = MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE
 ) {
   const filtered = channels.filter(
     (channel) => getPollGroup(channel.twitchChannelId, groups) === currentIndex
   );
 
-  if (filtered.length <= MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE) {
+  if (filtered.length <= maxItems) {
     return filtered;
   }
 
-  return filtered.slice(0, MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE);
+  return filtered.slice(0, maxItems);
 }
 
-async function loadMonitoredChannelsByBatch(): Promise<{
-  activeChannels: MonitoredChannelRow[];
-  slowChannels: MonitoredChannelRow[];
-  previousStatusMap: Map<string, boolean>;
-  scannedCount: number;
-}> {
-  const activeChannels: MonitoredChannelRow[] = [];
-  const slowChannels: MonitoredChannelRow[] = [];
-  const previousStatusMap = new Map<string, boolean>();
-  let scannedCount = 0;
-  let cursorId: string | undefined;
-
-  while (true) {
-    const batch = await retryDatabaseOperation(() =>
-      prisma.channel.findMany({
-        where: {
-          twitchChannelId: { not: "" },
-          isMonitored: true,
-        },
-        select: {
-          id: true,
-          twitchChannelId: true,
-          channelName: true,
-          isLive: true,
-          lastLiveCheckAt: true,
-          currentViewerCount: true,
-          currentTitle: true,
-          currentGameName: true,
-          currentStreamStartedAt: true,
-        },
-        orderBy: { id: "asc" },
-        take: CHANNEL_QUERY_BATCH_SIZE,
-        ...(cursorId
-          ? {
-              cursor: { id: cursorId },
-              skip: 1,
-            }
-          : {}),
-      })
-    );
-
-    if (batch.length === 0) {
-      break;
-    }
-
-    scannedCount += batch.length;
-
-    for (const channel of batch) {
-      previousStatusMap.set(channel.twitchChannelId, channel.isLive);
-      if (channel.isLive) {
-        activeChannels.push(channel);
-      } else {
-        slowChannels.push(channel);
-      }
-    }
-
-    cursorId = batch[batch.length - 1]?.id;
-    if (batch.length < CHANNEL_QUERY_BATCH_SIZE) {
-      break;
-    }
-  }
-
-  return {
-    activeChannels,
-    slowChannels,
-    previousStatusMap,
-    scannedCount,
-  };
+async function fetchMonitoredChannelBatch(cursorId?: string): Promise<MonitoredChannelRow[]> {
+  return retryDatabaseOperation(() =>
+    prisma.channel.findMany({
+      where: {
+        twitchChannelId: { not: "" },
+        isMonitored: true,
+      },
+      select: {
+        id: true,
+        twitchChannelId: true,
+        channelName: true,
+        isLive: true,
+        lastLiveCheckAt: true,
+        currentViewerCount: true,
+        currentTitle: true,
+        currentGameName: true,
+        currentStreamStartedAt: true,
+      },
+      orderBy: { id: "asc" },
+      take: CHANNEL_QUERY_BATCH_SIZE,
+      ...(cursorId
+        ? {
+            cursor: { id: cursorId },
+            skip: 1,
+          }
+        : {}),
+    })
+  ) as Promise<MonitoredChannelRow[]>;
 }
 
 /**
@@ -359,7 +347,7 @@ async function updateChannelsWithChanges(
 
   // 清除快取
   if (liveUpdates.length > 0) {
-    cacheManager.deleteSuffix(":channels_list");
+    await cacheManager.invalidateTag("viewer:channels");
   }
 
   // 更新未變化但需要更新檢查時間的頻道
@@ -410,9 +398,26 @@ export async function updateLiveStatusFn() {
   logger.debug("Jobs", "🔄 開始執行 Update Live Status Job...");
 
   try {
-    // 1. 批次獲取所有需要監控的頻道，避免單次無上限查詢
-    const { activeChannels, slowChannels, previousStatusMap, scannedCount } =
-      await loadMonitoredChannelsByBatch();
+    // 1. 先取得監控總量與慢速輪詢總量，再做串流分頁處理
+    const [scannedCount, slowChannelCount] = await Promise.all([
+      retryDatabaseOperation(() =>
+        prisma.channel.count({
+          where: {
+            twitchChannelId: { not: "" },
+            isMonitored: true,
+          },
+        })
+      ),
+      retryDatabaseOperation(() =>
+        prisma.channel.count({
+          where: {
+            twitchChannelId: { not: "" },
+            isMonitored: true,
+            isLive: false,
+          },
+        })
+      ),
+    ]);
 
     if (scannedCount === 0) {
       logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
@@ -437,155 +442,21 @@ export async function updateLiveStatusFn() {
           : BASE_API_BATCH_SIZE;
     const now = new Date();
 
-    const adaptiveSlowPollGroups = getAdaptiveSlowPollGroups(slowChannels.length);
+    const adaptiveSlowPollGroups = getAdaptiveSlowPollGroups(slowChannelCount);
     slowPollIndex = (slowPollIndex + 1) % adaptiveSlowPollGroups;
-    const slowPollBatch = slowChannels.filter(
-      (channel) => getPollGroup(channel.twitchChannelId, adaptiveSlowPollGroups) === slowPollIndex
-    );
 
-    const channels = [...activeChannels, ...slowPollBatch];
-
-    if (channels.length === 0) {
-      logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
-      return;
-    }
-
-    // 只儲存狀態有變化的頻道，避免累積全量更新資料
-    const changedUpdates: {
-      channelId: string;
-      channelName: string;
-      twitchId: string;
-      isLive: boolean;
-      viewerCount: number;
-      title: string;
-      gameName: string;
-      startedAt: Date | null;
-    }[] = [];
-    const liveUpdates: {
-      channelId: string;
-      twitchId: string;
-      viewerCount: number;
-      title: string;
-      gameName: string;
-      startedAt: Date | null;
-    }[] = [];
-    const changedTwitchIds = new Set<string>();
-    const summarySnapshots = new Map<
-      string,
-      {
-        channelId: string;
-        isLive: boolean;
-        viewerCount: number;
-        streamStartedAt: Date | null;
-        category: string;
-      }
-    >();
-    let liveCount = 0;
-    let offlineCount = 0;
-
-    for (let i = 0; i < channels.length; i += BATCH_SIZE) {
-      const batch = channels.slice(i, i + BATCH_SIZE);
-      const twitchIds = batch.map((c: { twitchChannelId: string }) => c.twitchChannelId);
-
-      try {
-        // 使用 twurpleHelixService (內部已管理 ApiClient)
-        const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);
-
-        // 建立一個 Map 方便查詢
-        const streamMap = new Map();
-        for (const stream of streams) {
-          streamMap.set(stream.userId, stream);
-        }
-
-        // 遍歷這一批的所有頻道，判斷是否開台
-        for (const channel of batch) {
-          const stream = streamMap.get(channel.twitchChannelId);
-
-          const isLive = !!stream;
-          if (isLive) {
-            liveCount++;
-            webSocketGateway.broadcastStreamStatus("channel.update", {
-              channelId: channel.id,
-              channelName: channel.channelName,
-              twitchChannelId: channel.twitchChannelId,
-              title: stream.title,
-              gameName: stream.gameName,
-              viewerCount: stream.viewerCount,
-              startedAt: stream.startedAt,
-            });
-          } else {
-            offlineCount++;
-          }
-
-          const wasLive = previousStatusMap.get(channel.twitchChannelId);
-          if (typeof wasLive === "undefined" || wasLive !== isLive) {
-            changedUpdates.push({
-              channelId: channel.id,
-              channelName: channel.channelName,
-              twitchId: channel.twitchChannelId,
-              isLive,
-              viewerCount: isLive ? stream.viewerCount : 0,
-              title: isLive ? stream.title : "",
-              gameName: isLive ? stream.gameName : "",
-              startedAt: isLive ? stream.startedAt : null,
-            });
-            changedTwitchIds.add(channel.twitchChannelId);
-            summarySnapshots.set(channel.id, {
-              channelId: channel.id,
-              isLive,
-              viewerCount: isLive ? stream.viewerCount : 0,
-              streamStartedAt: isLive ? stream.startedAt ?? null : null,
-              category: isLive ? stream.gameName || "Just Chatting" : "Just Chatting",
-            });
-          }
-
-          if (isLive) {
-            const viewerCount = stream.viewerCount;
-            const title = stream.title;
-            const gameName = stream.gameName;
-            const startedAt = stream.startedAt ?? null;
-
-            if (
-              channel.currentViewerCount !== viewerCount ||
-              channel.currentTitle !== title ||
-              channel.currentGameName !== gameName ||
-              channel.currentStreamStartedAt?.getTime() !== startedAt?.getTime()
-            ) {
-              liveUpdates.push({
-                channelId: channel.id,
-                twitchId: channel.twitchChannelId,
-                viewerCount,
-                title,
-                gameName,
-                startedAt,
-              });
-              summarySnapshots.set(channel.id, {
-                channelId: channel.id,
-                isLive,
-                viewerCount,
-                streamStartedAt: startedAt,
-                category: gameName || "Just Chatting",
-              });
-            }
-          }
-        }
-      } catch (err) {
-        logger.error("Jobs", `第 ${i} 批次獲取直播狀態失敗`, err);
-      }
-
-      // 記憶體/CPU 優化：批次之間休息一下
-      if (i + BATCH_SIZE < channels.length) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
-
-    if (summarySnapshots.size > 0) {
-      await refreshViewerChannelSummaryForChannels(Array.from(summarySnapshots.values()));
-    }
-
-    // 4. 批量更新 DB（只更新有變化的頻道）
+    // 3. 分頁串流處理，避免累積全量頻道資料
     let updateSuccessCount = 0;
     let updateFailCount = 0;
+    let totalChangedUpdates = 0;
+    let liveCount = 0;
+    let offlineCount = 0;
+    let processedCount = 0;
+    let onlineChanges = 0;
+    let offlineChanges = 0;
+    let checkUpdateBudget = MAX_UNCHANGED_CHECK_WRITES_PER_CYCLE;
+
+    let cursorId: string | undefined;
 
     // 檢查資料庫連線狀態
     if (!isConnectionReady()) {
@@ -593,109 +464,210 @@ export async function updateLiveStatusFn() {
       return;
     }
 
-    // P0 Optimization: 只更新超過 5 分鐘未檢查的頻道，減少 80% 寫入
-    const channelsNeedingCheckUpdate = channels.filter(
-      (c) =>
-        !c.lastLiveCheckAt ||
-        now.getTime() - c.lastLiveCheckAt.getTime() > LAST_CHECK_UPDATE_INTERVAL_MS
-    );
+    while (true) {
+      const fetchedBatch = await fetchMonitoredChannelBatch(cursorId);
+      if (fetchedBatch.length === 0) {
+        break;
+      }
 
-    const checkUpdateCandidates = selectChannelsForCheckUpdate(
-      channelsNeedingCheckUpdate,
-      adaptiveSlowPollGroups,
-      slowPollIndex
-    );
+      cursorId = fetchedBatch[fetchedBatch.length - 1]?.id;
 
-    // 根據變化情況選擇更新策略
-    if (changedUpdates.length === 0 && liveUpdates.length === 0) {
-      // 場景 1: 無任何變化，只更新檢查時間
-      await updateChannelsCheckTimeOnly(checkUpdateCandidates, now, channels.length);
-    } else {
-      // 場景 2: 有變化，執行完整更新
-      const result = await updateChannelsWithChanges(
-        changedUpdates,
-        liveUpdates,
-        checkUpdateCandidates,
-        changedTwitchIds,
-        now
+      const channels = fetchedBatch.filter(
+        (channel) =>
+          channel.isLive ||
+          getPollGroup(channel.twitchChannelId, adaptiveSlowPollGroups) === slowPollIndex
       );
-      updateSuccessCount = result.successCount;
-      updateFailCount = result.failCount;
+
+      if (channels.length === 0) {
+        if (fetchedBatch.length < CHANNEL_QUERY_BATCH_SIZE) {
+          break;
+        }
+        continue;
+      }
+
+      processedCount += channels.length;
+
+      for (let i = 0; i < channels.length; i += BATCH_SIZE) {
+        const batch = channels.slice(i, i + BATCH_SIZE);
+        const twitchIds = batch.map((c: { twitchChannelId: string }) => c.twitchChannelId);
+
+        const changedUpdates: {
+          channelId: string;
+          channelName: string;
+          twitchId: string;
+          wasLive: boolean;
+          isLive: boolean;
+          viewerCount: number;
+          title: string;
+          gameName: string;
+          startedAt: Date | null;
+        }[] = [];
+        const liveUpdates: {
+          channelId: string;
+          twitchId: string;
+          viewerCount: number;
+          title: string;
+          gameName: string;
+          startedAt: Date | null;
+        }[] = [];
+        const changedTwitchIds = new Set<string>();
+
+        try {
+          const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);
+          const streamMap = new Map(streams.map((stream) => [stream.userId, stream]));
+
+          for (const channel of batch) {
+            const stream = streamMap.get(channel.twitchChannelId);
+            const isLive = !!stream;
+            const wasLive = channel.isLive;
+
+            if (isLive) {
+              liveCount++;
+              const viewerCount = stream.viewerCount;
+              const title = stream.title;
+              const gameName = stream.gameName;
+              const startedAt = stream.startedAt ?? null;
+              const nowMs = Date.now();
+              const metadataChanged =
+                channel.currentViewerCount !== viewerCount ||
+                channel.currentTitle !== title ||
+                channel.currentGameName !== gameName ||
+                channel.currentStreamStartedAt?.getTime() !== startedAt?.getTime();
+
+              if (
+                (!wasLive || metadataChanged) &&
+                shouldEmitChannelUpdate(channel.id, !wasLive, nowMs)
+              ) {
+                webSocketGateway.broadcastStreamStatus("channel.update", {
+                  channelId: channel.id,
+                  channelName: channel.channelName,
+                  twitchChannelId: channel.twitchChannelId,
+                  title,
+                  gameName,
+                  viewerCount,
+                  startedAt,
+                });
+              }
+
+              if (metadataChanged) {
+                liveUpdates.push({
+                  channelId: channel.id,
+                  twitchId: channel.twitchChannelId,
+                  viewerCount,
+                  title,
+                  gameName,
+                  startedAt,
+                });
+              }
+            } else {
+              offlineCount++;
+            }
+
+            if (wasLive !== isLive) {
+              changedUpdates.push({
+                channelId: channel.id,
+                channelName: channel.channelName,
+                twitchId: channel.twitchChannelId,
+                wasLive,
+                isLive,
+                viewerCount: isLive ? stream.viewerCount : 0,
+                title: isLive ? stream.title : "",
+                gameName: isLive ? stream.gameName : "",
+                startedAt: isLive ? stream.startedAt : null,
+              });
+              changedTwitchIds.add(channel.twitchChannelId);
+            }
+          }
+
+          const channelsNeedingCheckUpdate = batch.filter(
+            (c) =>
+              !c.lastLiveCheckAt ||
+              now.getTime() - c.lastLiveCheckAt.getTime() > LAST_CHECK_UPDATE_INTERVAL_MS
+          );
+          const checkUpdateCandidates = selectChannelsForCheckUpdate(
+            channelsNeedingCheckUpdate,
+            adaptiveSlowPollGroups,
+            slowPollIndex,
+            Math.max(0, checkUpdateBudget)
+          );
+          checkUpdateBudget = Math.max(0, checkUpdateBudget - checkUpdateCandidates.length);
+
+          if (changedUpdates.length === 0 && liveUpdates.length === 0) {
+            await updateChannelsCheckTimeOnly(checkUpdateCandidates, now, batch.length);
+          } else {
+            const result = await updateChannelsWithChanges(
+              changedUpdates,
+              liveUpdates,
+              checkUpdateCandidates,
+              changedTwitchIds,
+              now
+            );
+            updateSuccessCount += result.successCount;
+            updateFailCount += result.failCount;
+            totalChangedUpdates += changedUpdates.length;
+          }
+
+          if (changedUpdates.length > 0) {
+            for (const update of changedUpdates) {
+              if (!update.wasLive && update.isLive) {
+                webSocketGateway.broadcastStreamStatus("stream.online", {
+                  channelId: update.channelId,
+                  channelName: update.channelName,
+                  twitchChannelId: update.twitchId,
+                  title: update.title,
+                  gameName: update.gameName,
+                  viewerCount: update.viewerCount,
+                  startedAt: update.startedAt,
+                });
+                onlineChanges++;
+              } else if (update.wasLive && !update.isLive) {
+                webSocketGateway.broadcastStreamStatus("stream.offline", {
+                  channelId: update.channelId,
+                  channelName: update.channelName,
+                  twitchChannelId: update.twitchId,
+                });
+                offlineChanges++;
+              }
+            }
+          }
+        } catch (err) {
+          logger.error("Jobs", `批次獲取直播狀態失敗 (cursor=${cursorId ?? "start"})`, err);
+        }
+
+        if (i + BATCH_SIZE < channels.length) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+
+      if (fetchedBatch.length < CHANNEL_QUERY_BATCH_SIZE) {
+        break;
+      }
+    }
+
+    if (processedCount === 0) {
+      logger.debug("Jobs", "本輪 slow poll 未命中頻道，略過更新");
+      return;
     }
 
     // 記錄更新結果
     if (updateFailCount > 0) {
       logger.warn(
         "Jobs",
-        `批次更新完成: 成功 ${updateSuccessCount}/${changedUpdates.length}, 失敗 ${updateFailCount}`
+        `批次更新完成: 成功 ${updateSuccessCount}/${processedCount}, 失敗 ${updateFailCount}`
       );
     }
 
-    // 5. 推送 WebSocket 事件（只推送狀態變更：online/offline）
-    // P1 Optimization: Removed channel.update broadcast - now handled by React Query refetchInterval
-    let onlineChanges = 0;
-    let offlineChanges = 0;
-    const onlineEvents: Array<{
-      channelId: string;
-      channelName: string;
-      twitchChannelId: string;
-      title: string;
-      gameName: string;
-      viewerCount: number;
-      startedAt: Date | null;
-    }> = [];
-    const offlineEvents: Array<{
-      channelId: string;
-      channelName: string;
-      twitchChannelId: string;
-    }> = [];
-
-    for (const update of changedUpdates) {
-      const previousStatus = previousStatusMap.get(update.twitchId);
-
-      if (!previousStatus && update.isLive) {
-        onlineEvents.push({
-          channelId: update.channelId,
-          channelName: update.channelName,
-          twitchChannelId: update.twitchId,
-          title: update.title,
-          gameName: update.gameName,
-          viewerCount: update.viewerCount,
-          startedAt: update.startedAt,
-        });
-        onlineChanges++;
-      } else if (previousStatus && !update.isLive) {
-        offlineEvents.push({
-          channelId: update.channelId,
-          channelName: update.channelName,
-          twitchChannelId: update.twitchId,
-        });
-        offlineChanges++;
-      }
-    }
-
-    if (onlineEvents.length > 0 || offlineEvents.length > 0) {
-      // 簡單防抖：批次收集後延遲廣播，避免密集推送
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      for (const payload of onlineEvents) {
-        webSocketGateway.broadcastStreamStatus("stream.online", payload);
-      }
-      for (const payload of offlineEvents) {
-        webSocketGateway.broadcastStreamStatus("stream.offline", payload);
-      }
-    }
-
-    // 只在有狀態變更時輸出 info
+    // 4. 輸出結果
     const duration = Date.now() - startTime;
     if (onlineChanges > 0 || offlineChanges > 0) {
       logger.info(
         "Jobs",
-        `直播狀態更新: ${onlineChanges} 個上線, ${offlineChanges} 個下線 (${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length}/${channels.length}) [${duration}ms]`
+        `直播狀態更新: ${onlineChanges} 個上線, ${offlineChanges} 個下線 (${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${totalChangedUpdates}/${processedCount}) [${duration}ms]`
       );
     } else {
       logger.debug(
         "Jobs",
-        `✅ 直播狀態更新完成: 已檢查 ${channels.length} 個頻道, ${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${changedUpdates.length} [${duration}ms]`
+        `✅ 直播狀態更新完成: 已檢查 ${processedCount} 個頻道, ${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${totalChangedUpdates} [${duration}ms]`
       );
     }
   } catch (error) {

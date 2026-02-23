@@ -29,6 +29,10 @@ const MESSAGE_BATCH_SOFT_THRESHOLD = Math.max(
   Math.floor(MESSAGE_BATCH_MAX_SIZE * 0.8)
 );
 const MESSAGE_BATCH_MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 250;
+const RETRY_MAX_DELAY_MS = 5000;
+const RETRY_JITTER_MS = 300;
+const RETRY_BUFFER_MAX_SIZE = MESSAGE_BATCH_MAX_SIZE;
 const BUFFER_OVERFLOW_WARN_INTERVAL_MS = 30 * 1000;
 const CACHE_NULL_SENTINEL = "__NULL__";
 const NULL_LOOKUP_TTL_SECONDS = CacheTTL.SHORT;
@@ -133,6 +137,7 @@ const CacheKeys = {
 
 export class ViewerMessageRepository {
   private messageBuffer: BufferedMessage[] = [];
+  private retryBuffer: Array<{ message: BufferedMessage; readyAt: number }> = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private flushInProgress = false;
   private flushRequested = false;
@@ -332,6 +337,45 @@ export class ViewerMessageRepository {
     }, MESSAGE_BATCH_FLUSH_MS);
   }
 
+  private getRetryDelayMs(retryCount: number): number {
+    const expDelay = Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(0, retryCount - 1), RETRY_MAX_DELAY_MS);
+    const jitter = Math.floor(Math.random() * RETRY_JITTER_MS);
+    return expDelay + jitter;
+  }
+
+  private enqueueRetryMessages(messages: BufferedMessage[]): void {
+    const now = Date.now();
+    for (const message of messages) {
+      if (this.retryBuffer.length >= RETRY_BUFFER_MAX_SIZE) {
+        this.retryBuffer.shift();
+        this.logOverflowDrop();
+      }
+      this.retryBuffer.push({
+        message,
+        readyAt: now + this.getRetryDelayMs(message.retryCount),
+      });
+    }
+  }
+
+  private promoteReadyRetryMessages(): void {
+    if (this.retryBuffer.length === 0 || this.messageBuffer.length >= MESSAGE_BATCH_MAX_SIZE) {
+      return;
+    }
+
+    const now = Date.now();
+    const pending: Array<{ message: BufferedMessage; readyAt: number }> = [];
+
+    for (const entry of this.retryBuffer) {
+      if (entry.readyAt <= now && this.messageBuffer.length < MESSAGE_BATCH_MAX_SIZE) {
+        this.messageBuffer.push(entry.message);
+      } else {
+        pending.push(entry);
+      }
+    }
+
+    this.retryBuffer = pending;
+  }
+
   private async flushBuffers(): Promise<void> {
     if (this.flushInProgress) {
       this.flushRequested = true;
@@ -347,7 +391,12 @@ export class ViewerMessageRepository {
     }
 
     try {
-      while (this.messageBuffer.length > 0) {
+      while (true) {
+        this.promoteReadyRetryMessages();
+        if (this.messageBuffer.length === 0) {
+          break;
+        }
+
         const batch = this.messageBuffer.splice(0, MESSAGE_BATCH_SIZE);
         const success = await this.flushBatch(batch);
         if (!success) {
@@ -356,7 +405,7 @@ export class ViewerMessageRepository {
       }
     } finally {
       this.flushInProgress = false;
-      if (this.messageBuffer.length > 0 || this.flushRequested) {
+      if (this.messageBuffer.length > 0 || this.retryBuffer.length > 0 || this.flushRequested) {
         this.flushRequested = false;
         this.scheduleFlush();
       }
@@ -702,12 +751,124 @@ export class ViewerMessageRepository {
     } catch (error) {
       logger.error("ViewerMessage", "Failed to flush message batch", error);
 
-      // 原始訊息已寫入時，不可整批重送，避免重複訊息；僅記錄並交由後續增量聚合收斂
+      // 原始訊息已寫入時，不可整批重送，避免重複訊息
       if (messagesPersisted) {
         logger.warn(
           "ViewerMessage",
-          "Raw messages persisted but aggregate updates failed; skipped batch requeue to avoid duplicates"
+          `Raw messages persisted but aggregate transaction failed for ${lifetimeIncrements.size} viewer-channel pairs; attempting standalone lifetime_stats retry`
         );
+
+        // 嘗試單獨重試 lifetime_stats 更新（最關鍵的聚合）
+        try {
+          const lifetimeRows = Array.from(lifetimeIncrements.values());
+          if (lifetimeRows.length > 0) {
+            const lifetimeValues = lifetimeRows.map((lifetime) =>
+              Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}, ${
+                lifetime.totalChatMessages
+              }, ${lifetime.totalSubscriptions}, ${lifetime.totalCheers}, ${lifetime.totalBits}, ${
+                lifetime.lastWatchedAt
+              })`
+            );
+
+            await prisma.$executeRaw(Prisma.sql`
+              WITH src (
+                viewerId,
+                channelId,
+                totalMessages,
+                totalChatMessages,
+                totalSubscriptions,
+                totalCheers,
+                totalBits,
+                lastWatchedAt
+              ) AS (
+                VALUES ${Prisma.join(lifetimeValues)}
+              )
+              INSERT INTO viewer_channel_lifetime_stats (
+                id,
+                viewerId,
+                channelId,
+                totalWatchTimeMinutes,
+                totalSessions,
+                avgSessionMinutes,
+                firstWatchedAt,
+                lastWatchedAt,
+                totalMessages,
+                totalChatMessages,
+                totalSubscriptions,
+                totalCheers,
+                totalBits,
+                trackingStartedAt,
+                trackingDays,
+                longestStreakDays,
+                currentStreakDays,
+                activeDaysLast30,
+                activeDaysLast90,
+                mostActiveMonthCount,
+                createdAt,
+                updatedAt
+              )
+              SELECT
+                lower(hex(randomblob(16))) AS id,
+                src.viewerId,
+                src.channelId,
+                0,
+                0,
+                0,
+                src.lastWatchedAt,
+                src.lastWatchedAt,
+                src.totalMessages,
+                src.totalChatMessages,
+                src.totalSubscriptions,
+                src.totalCheers,
+                src.totalBits,
+                CURRENT_TIMESTAMP,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+              FROM src
+              WHERE 1 = 1
+              ON CONFLICT(viewerId, channelId) DO UPDATE SET
+                totalMessages = viewer_channel_lifetime_stats.totalMessages + excluded.totalMessages,
+                totalChatMessages = viewer_channel_lifetime_stats.totalChatMessages + excluded.totalChatMessages,
+                totalSubscriptions = viewer_channel_lifetime_stats.totalSubscriptions + excluded.totalSubscriptions,
+                totalCheers = viewer_channel_lifetime_stats.totalCheers + excluded.totalCheers,
+                totalBits = viewer_channel_lifetime_stats.totalBits + excluded.totalBits,
+                lastWatchedAt = CASE
+                  WHEN viewer_channel_lifetime_stats.lastWatchedAt IS NULL THEN excluded.lastWatchedAt
+                  WHEN excluded.lastWatchedAt > viewer_channel_lifetime_stats.lastWatchedAt THEN excluded.lastWatchedAt
+                  ELSE viewer_channel_lifetime_stats.lastWatchedAt
+                END,
+                updatedAt = CURRENT_TIMESTAMP
+            `);
+            logger.info(
+              "ViewerMessage",
+              `Standalone lifetime_stats retry succeeded for ${lifetimeRows.length} pairs`
+            );
+          }
+        } catch (retryError) {
+          logger.error(
+            "ViewerMessage",
+            "Standalone lifetime_stats retry also failed; data will be recovered by periodic aggregation jobs",
+            retryError
+          );
+        }
+
+        // 無論 retry 成功與否，都清除受影響觀眾的快取，確保下次 API 請求取得最新資料
+        const affectedViewerIds = new Set<string>();
+        for (const daily of dailyStatIncrements.values()) {
+          if (daily.messageCount > 0) {
+            affectedViewerIds.add(daily.viewerId);
+          }
+        }
+        for (const viewerId of affectedViewerIds) {
+          cacheManager.delete(`viewer:${viewerId}:channels_list`);
+        }
+
         return true;
       }
 
@@ -721,7 +882,7 @@ export class ViewerMessageRepository {
       const droppedMessages = batch.length - retryableMessages.length;
 
       if (retryableMessages.length > 0) {
-        this.messageBuffer.unshift(...retryableMessages);
+        this.enqueueRetryMessages(retryableMessages);
       }
 
       if (droppedMessages > 0) {

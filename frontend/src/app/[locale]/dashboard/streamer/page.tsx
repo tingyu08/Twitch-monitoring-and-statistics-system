@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
-import { getMe, isStreamer, type StreamerInfo } from "@/lib/api/auth";
+import { isStreamer, type StreamerInfo } from "@/lib/api/auth";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { StreamSummaryCards } from "@/features/streamer-dashboard/components/StreamSummaryCards";
 import { DisplayPreferences } from "@/features/streamer-dashboard/components/DisplayPreferences";
@@ -64,7 +64,7 @@ export default function StreamerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const router = useRouter();
-  const { logout } = useAuthSession();
+  const { logout, user: authUser, loading: authLoading } = useAuthSession();
   const { mutate } = useSWRConfig();
 
   const [chartRange, setChartRange] = useState<ChartRange>("30d");
@@ -117,38 +117,30 @@ export default function StreamerDashboard() {
   );
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await getMe();
-        if (isStreamer(data)) {
-          setUser(data);
-        } else {
-          setError("目前登入的角色不是實況主");
-          setTimeout(() => router.push("/"), 1500);
-          return;
-        }
-      } catch (err: unknown) {
-        authLogger.error("Dashboard fetch error:", err);
-        const errorMessage =
-          err instanceof Error ? err.message : "無法獲取資料";
-        setError(errorMessage);
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
 
-        const errMsg = errorMessage.toLowerCase();
-        if (
-          errMsg.includes("unauthorized") ||
-          errMsg.includes("auth") ||
-          errMsg.includes("token") ||
-          errMsg.includes("status 401")
-        ) {
-          setTimeout(() => router.push("/"), 2000);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!authUser) {
+      setError("無法獲取資料");
+      setLoading(false);
+      setTimeout(() => router.push("/"), 1500);
+      return;
+    }
 
-    fetchData();
-  }, [router]);
+    if (isStreamer(authUser)) {
+      setUser(authUser as StreamerInfo);
+      setError("");
+      setLoading(false);
+      return;
+    }
+
+    authLogger.warn("Dashboard role mismatch", { userId: "viewerId" in authUser ? authUser.viewerId : null });
+    setError("目前登入的角色不是實況主");
+    setLoading(false);
+    setTimeout(() => router.push("/"), 1500);
+  }, [authLoading, authUser, router]);
 
   useEffect(() => {
     if (!user) return;

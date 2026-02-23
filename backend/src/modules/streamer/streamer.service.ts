@@ -95,49 +95,141 @@ function buildHeatmapResponseFromCells(range: string, cells: HeatmapCell[]): Hea
   };
 }
 
-function buildHeatmapFromSessions(
-  range: string,
-  sessions: Array<{ durationSeconds: number | null; startedAt: Date }>
-): HeatmapResponse {
-  const heatmapMatrix = new Map<string, number>();
+interface HeatmapSqlRow {
+  dayOfWeek: number | bigint | string;
+  hour: number | bigint | string;
+  totalHours: number | bigint | string;
+}
+
+async function buildHeatmapFromSessionsSql(
+  channelId: string,
+  cutoffDate: Date,
+  range: string
+): Promise<HeatmapResponse> {
+  const rows = await prisma.$queryRaw<HeatmapSqlRow[]>(Prisma.sql`
+    WITH RECURSIVE expanded(sessionId, bucketStart, endedAt) AS (
+      SELECT
+        id,
+        startedAt,
+        DATETIME(startedAt, '+' || durationSeconds || ' seconds')
+      FROM stream_sessions
+      WHERE channelId = ${channelId}
+        AND startedAt >= ${cutoffDate}
+        AND durationSeconds IS NOT NULL
+        AND durationSeconds > 0
+      UNION ALL
+      SELECT
+        sessionId,
+        DATETIME(bucketStart, '+1 hour'),
+        endedAt
+      FROM expanded
+      WHERE DATETIME(bucketStart, '+1 hour') < endedAt
+    ),
+    hourly AS (
+      SELECT
+        CAST(STRFTIME('%w', bucketStart) AS INTEGER) AS dayOfWeek,
+        CAST(STRFTIME('%H', bucketStart) AS INTEGER) AS hour,
+        (
+          JULIANDAY(MIN(endedAt, DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart), '+1 hour')))
+          - JULIANDAY(MAX(bucketStart, DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart))))
+        ) * 24.0 AS durationHours
+      FROM expanded
+    )
+    SELECT dayOfWeek, hour, SUM(durationHours) AS totalHours
+    FROM hourly
+    GROUP BY dayOfWeek, hour
+  `);
+
+  const matrix = new Map<string, number>();
   for (let day = 0; day < 7; day++) {
     for (let hour = 0; hour < 24; hour++) {
-      heatmapMatrix.set(`${day}-${hour}`, 0);
+      matrix.set(`${day}-${hour}`, 0);
     }
   }
 
-  sessions.forEach((session) => {
-    const startDate = new Date(session.startedAt);
-    let remainingSeconds = session.durationSeconds || 0;
-    let currentTempDate = new Date(startDate);
-
-    while (remainingSeconds > 0) {
-      const dWeek = currentTempDate.getDay();
-      const hr = currentTempDate.getHours();
-      const key = `${dWeek}-${hr}`;
-
-      const secondsToNextHour =
-        3600 - currentTempDate.getMinutes() * 60 - currentTempDate.getSeconds();
-      const secondsInThisHour = Math.min(remainingSeconds, secondsToNextHour);
-      const contribution = secondsInThisHour / 3600;
-
-      const val = heatmapMatrix.get(key) || 0;
-      heatmapMatrix.set(key, val + contribution);
-
-      remainingSeconds -= secondsInThisHour;
-      currentTempDate = new Date(currentTempDate.getTime() + secondsInThisHour * 1000 + 100);
+  for (const row of rows) {
+    const day = Number(row.dayOfWeek);
+    const hour = Number(row.hour);
+    const hours = Number(row.totalHours);
+    if (!Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(hours)) {
+      continue;
     }
-  });
+    matrix.set(`${day}-${hour}`, Math.round(hours * 10) / 10);
+  }
 
   const data: HeatmapCell[] = [];
   for (let day = 0; day < 7; day++) {
     for (let hour = 0; hour < 24; hour++) {
-      const key = `${day}-${hour}`;
-      const value = heatmapMatrix.get(key) || 0;
       data.push({
         dayOfWeek: day,
         hour,
-        value: Math.round(value * 10) / 10,
+        value: matrix.get(`${day}-${hour}`) || 0,
+      });
+    }
+  }
+
+  return buildHeatmapResponseFromCells(range, data);
+}
+
+async function buildHeatmapFromSessionsFallback(
+  channelId: string,
+  cutoffDate: Date,
+  range: string
+): Promise<HeatmapResponse> {
+  const sessions = await prisma.streamSession.findMany({
+    where: {
+      channelId,
+      startedAt: { gte: cutoffDate },
+      durationSeconds: { not: null },
+    },
+    select: {
+      startedAt: true,
+      durationSeconds: true,
+    },
+  });
+
+  const matrix = new Map<string, number>();
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      matrix.set(`${day}-${hour}`, 0);
+    }
+  }
+
+  for (const session of sessions) {
+    let remainingSeconds = session.durationSeconds ?? 0;
+    if (remainingSeconds <= 0) {
+      continue;
+    }
+
+    let cursor = new Date(session.startedAt);
+
+    while (remainingSeconds > 0) {
+      const dayOfWeek = cursor.getDay();
+      const hour = cursor.getHours();
+
+      const hourEnd = new Date(cursor);
+      hourEnd.setMinutes(0, 0, 0);
+      hourEnd.setHours(hour + 1);
+
+      const maxSegmentSeconds = Math.max(1, Math.floor((hourEnd.getTime() - cursor.getTime()) / 1000));
+      const segmentSeconds = Math.min(remainingSeconds, maxSegmentSeconds);
+
+      const key = `${dayOfWeek}-${hour}`;
+      const current = matrix.get(key) || 0;
+      matrix.set(key, current + segmentSeconds / 3600);
+
+      remainingSeconds -= segmentSeconds;
+      cursor = hourEnd;
+    }
+  }
+
+  const data: HeatmapCell[] = [];
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      data.push({
+        dayOfWeek: day,
+        hour,
+        value: Math.round((matrix.get(`${day}-${hour}`) || 0) * 10) / 10,
       });
     }
   }
@@ -451,20 +543,12 @@ export async function getStreamerHeatmap(
     return aggregated;
   }
 
-  const sessions = await prisma.streamSession.findMany({
-    where: {
-      channelId: channel.id,
-      startedAt: {
-        gte: cutoffDate,
-      },
-    },
-    select: {
-      durationSeconds: true,
-      startedAt: true,
-    },
-  });
-
-  const response = buildHeatmapFromSessions(range, sessions);
+  let response: HeatmapResponse;
+  try {
+    response = await buildHeatmapFromSessionsSql(channel.id, cutoffDate, range);
+  } catch {
+    response = await buildHeatmapFromSessionsFallback(channel.id, cutoffDate, range);
+  }
   await persistHeatmapAggregate(channel.id, range, response.data);
   return response;
 }

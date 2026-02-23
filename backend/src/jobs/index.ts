@@ -9,11 +9,17 @@ import { updateLifetimeStatsJob } from "./update-lifetime-stats.job";
 import { dataRetentionJob } from "./data-retention.job";
 import { streamStatusJob } from "./stream-status.job";
 import { channelStatsSyncJob } from "./channel-stats-sync.job";
-import { syncUserFollowsJob } from "./sync-user-follows.job";
+import {
+  syncUserFollowsJob,
+  flushPendingFollowSyncMaintenance,
+  initializeFollowSyncMaintenance,
+} from "./sync-user-follows.job";
 import { validateTokensJob } from "./validate-tokens.job";
 import { syncVideosJob } from "./sync-videos.job";
 import { syncSubscriptionsJob } from "./sync-subscriptions.job";
 import { updateLiveStatusJob } from "./update-live-status.job";
+import { cleanupExtensionHeartbeatDedupJob } from "./cleanup-extension-heartbeat-dedup.job";
+import { watchTimeIncrementJob } from "./watch-time-increment.job";
 import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
 import { captureJobError } from "./job-error-tracker";
@@ -52,7 +58,7 @@ function startChannelStatsSyncWithMemoryGuard(attempt: number = 1): void {
     `記憶體偏高 (${heapUsedMB.toFixed(1)}MB)，第 ${attempt}/${CHANNEL_STATS_MAX_DELAYED_START_ATTEMPTS} 次延遲啟動 Channel Stats Sync Job`
   );
 
-  setTimeout(() => {
+  scheduleJobTimeout(() => {
     startChannelStatsSyncWithMemoryGuard(attempt + 1);
   }, CHANNEL_STATS_START_RETRY_MS);
 }
@@ -62,6 +68,7 @@ function startChannelStatsSyncWithMemoryGuard(attempt: number = 1): void {
  */
 export function startAllJobs(): void {
   logger.info("Jobs", "正在啟動定時任務（分階段啟動以減少記憶體壓力）...");
+  initializeFollowSyncMaintenance();
 
   // === 階段 1: 立即啟動核心任務 ===
 
@@ -70,6 +77,9 @@ export function startAllJobs(): void {
 
   // 優化: 即時直播狀態更新任務（核心功能）
   updateLiveStatusJob.start();
+
+  // 觀看時數增量任務（提早啟動，避免依賴 Twitch 初始化流程）
+  watchTimeIncrementJob.start();
 
   // Token 驗證任務 - 每天凌晨 4 點執行（低流量時段）
   const tokenValidationTask = cron.schedule("0 4 * * *", async () => {
@@ -113,6 +123,9 @@ export function startAllJobs(): void {
 
       // Epic 4: 訂閱快照同步任務
       syncSubscriptionsJob.start();
+
+      // 清理 heartbeat dedup 舊資料
+      cleanupExtensionHeartbeatDedupJob.start();
     }, 10 * 60 * 1000); // 延長到 10 分鐘
 
   logger.info("Jobs", "核心定時任務已啟動（其他任務將在背景分階段啟動）");
@@ -134,4 +147,8 @@ export function stopAllJobs(): void {
     clearTimeout(timeoutHandle);
   }
   startupTimeoutHandles.clear();
+
+  void flushPendingFollowSyncMaintenance().catch((error) => {
+    logger.warn("Jobs", "停止時刷新 follow-sync 維護任務失敗", error);
+  });
 }

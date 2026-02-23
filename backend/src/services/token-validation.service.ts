@@ -41,10 +41,67 @@ class TokenValidationService {
   private readonly TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate";
   private readonly MAX_FAILURE_COUNT = 3;
   private readonly TOKEN_SCAN_BATCH_SIZE = 200;
+  private readonly DEFAULT_VALIDATION_CONCURRENCY =
+    process.env.NODE_ENV === "production" ? 3 : 5;
+  private readonly TOKEN_VALIDATION_DELAY_MS = Number.parseInt(
+    process.env.TOKEN_VALIDATION_DELAY_MS || "100",
+    10
+  );
   private readonly TOKENS_NEEDING_REFRESH_LIMIT = Number.parseInt(
     process.env.TOKENS_NEEDING_REFRESH_LIMIT || "500",
     10
   );
+  private readonly ACTIVE_TOKEN_TOUCH_INTERVAL_MS =
+    Number.parseInt(process.env.ACTIVE_TOKEN_TOUCH_INTERVAL_HOURS || "72", 10) *
+    60 *
+    60 *
+    1000;
+
+  private getValidationConcurrencyLimit(): number {
+    const parsed = Number.parseInt(process.env.TOKEN_VALIDATION_CONCURRENCY || "", 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+    return this.DEFAULT_VALIDATION_CONCURRENCY;
+  }
+
+  private async validateBatchWithConcurrency(
+    batch: Array<{
+      id: string;
+      ownerType: string;
+    }>,
+    onResult: (result: ValidationResult, token: { id: string; ownerType: string }) => void,
+    onError: (errorMessage: string) => void
+  ): Promise<void> {
+    const workerCount = Math.max(1, Math.min(this.getValidationConcurrencyLimit(), batch.length));
+    let nextIndex = 0;
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+
+        if (currentIndex >= batch.length) {
+          return;
+        }
+
+        const token = batch[currentIndex];
+
+        try {
+          const result = await this.validateAndUpdateToken(token.id);
+          onResult(result, token);
+        } catch (error) {
+          onError(`Token ${token.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
+
+        if (this.TOKEN_VALIDATION_DELAY_MS > 0) {
+          await new Promise((resolve) => setTimeout(resolve, this.TOKEN_VALIDATION_DELAY_MS));
+        }
+      }
+    });
+
+    await Promise.all(workers);
+  }
 
   /**
    * 驗證單個 Token 是否有效
@@ -132,15 +189,24 @@ class TokenValidationService {
     const result = await this.validateToken(decryptedToken);
 
     if (result.isValid) {
-      // Token 有效，更新驗證時間並重置失敗計數
-      await prisma.twitchToken.update({
-        where: { id: tokenId },
-        data: {
-          status: TokenStatus.ACTIVE,
-          lastValidatedAt: new Date(),
-          failureCount: 0,
-        },
-      });
+      const now = new Date();
+      const shouldSkipUpdate =
+        token.status === TokenStatus.ACTIVE &&
+        token.failureCount === 0 &&
+        token.lastValidatedAt !== null &&
+        now.getTime() - token.lastValidatedAt.getTime() < this.ACTIVE_TOKEN_TOUCH_INTERVAL_MS;
+
+      if (!shouldSkipUpdate) {
+        // Token 有效，更新驗證時間並重置失敗計數
+        await prisma.twitchToken.update({
+          where: { id: tokenId },
+          data: {
+            status: TokenStatus.ACTIVE,
+            lastValidatedAt: now,
+            failureCount: 0,
+          },
+        });
+      }
     } else {
       // Token 無效，增加失敗計數
       const newFailureCount = token.failureCount + 1;
@@ -209,9 +275,9 @@ class TokenValidationService {
 
       total += batch.length;
 
-      for (const token of batch) {
-        try {
-          const result = await this.validateAndUpdateToken(token.id);
+      await this.validateBatchWithConcurrency(
+        batch,
+        (result, token) => {
           if (result.isValid) {
             valid++;
           } else {
@@ -219,19 +285,19 @@ class TokenValidationService {
             errors.push(`Token ${token.id} (${token.ownerType}): ${result.message}`);
           }
 
-          // 避免速率限制，每個請求間隔 100ms
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        } catch (error) {
+          if (errors.length > 200) {
+            errors.splice(0, errors.length - 200);
+          }
+        },
+        (errorMessage) => {
           invalid++;
-          errors.push(
-            `Token ${token.id}: ${error instanceof Error ? error.message : "Unknown error"}`
-          );
-        }
+          errors.push(errorMessage);
 
-        if (errors.length > 200) {
-          errors.splice(0, errors.length - 200);
+          if (errors.length > 200) {
+            errors.splice(0, errors.length - 200);
+          }
         }
-      }
+      );
 
       cursorId = batch[batch.length - 1]?.id;
       if (batch.length < this.TOKEN_SCAN_BATCH_SIZE) {

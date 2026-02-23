@@ -24,6 +24,9 @@ export class MemoryMonitor {
   private criticalThresholdMB: number;
   private lastWarningTime: number = 0;
   private warningCooldownMs: number = 60000; // 1 分鐘內不重複警告
+  private cachedStats: MemoryStats | null = null;
+  private lastCachedAt = 0;
+  private readonly CACHE_TTL_MS = 5000;
 
   constructor(warningThresholdMB: number = 400, criticalThresholdMB: number = 480) {
     this.warningThresholdMB = warningThresholdMB;
@@ -150,20 +153,27 @@ export class MemoryMonitor {
     }
   }
 
+  private getCachedStats(): MemoryStats {
+    const now = Date.now();
+    if (!this.cachedStats || now - this.lastCachedAt > this.CACHE_TTL_MS) {
+      this.cachedStats = this.check();
+      this.lastCachedAt = now;
+    }
+    return this.cachedStats;
+  }
+
   /**
    * 檢查是否接近記憶體限制
    */
   isNearLimit(): boolean {
-    const stats = this.check();
-    return stats.rss >= this.warningThresholdMB;
+    return this.getCachedStats().rss >= this.warningThresholdMB;
   }
 
   /**
    * 檢查是否超過記憶體限制
    */
   isOverLimit(): boolean {
-    const stats = this.check();
-    return stats.rss >= this.criticalThresholdMB;
+    return this.getCachedStats().rss >= this.criticalThresholdMB;
   }
 }
 

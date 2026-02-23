@@ -8,7 +8,7 @@ import { z } from "zod";
 export const heartbeatSchema = {
   body: z.object({
     channelName: z.string().min(1),
-    timestamp: z.string().optional(),
+    timestamp: z.string().min(1),
     duration: z.number().int().positive().max(3600),
   }),
 };

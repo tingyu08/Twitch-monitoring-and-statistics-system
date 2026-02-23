@@ -13,6 +13,41 @@ import type {
   ViewerTrendPoint,
 } from "@/lib/api/viewer";
 
+export function mergeFollowedChannels(
+  fresh: FollowedChannel[],
+  prev?: FollowedChannel[]
+): FollowedChannel[] {
+  if (!prev || prev.length === 0) return fresh;
+  const prevMap = new Map(prev.map((ch) => [ch.id, ch]));
+
+  return fresh.map((channel) => {
+    const previous = prevMap.get(channel.id);
+    if (!previous) return channel;
+
+    const prevViewer = previous.viewerCount ?? previous.currentViewerCount ?? 0;
+    const freshViewer = channel.viewerCount ?? channel.currentViewerCount ?? 0;
+    const mergedViewer =
+      channel.isLive && previous.isLive ? Math.max(freshViewer, prevViewer) : freshViewer;
+
+    const mergedMessageCount = Math.max(channel.messageCount ?? 0, previous.messageCount ?? 0);
+    const mergedWatchMinutes = Math.max(
+      channel.totalWatchMinutes ?? 0,
+      previous.totalWatchMinutes ?? 0
+    );
+
+    return {
+      ...channel,
+      totalWatchMinutes: mergedWatchMinutes,
+      viewerCount: mergedViewer || channel.viewerCount,
+      currentViewerCount: mergedViewer || channel.currentViewerCount,
+      currentTitle: channel.currentTitle || previous.currentTitle,
+      currentGameName: channel.currentGameName || previous.currentGameName,
+      currentStreamStartedAt: channel.currentStreamStartedAt || previous.currentStreamStartedAt,
+      messageCount: mergedMessageCount,
+    };
+  });
+}
+
 /**
  * 取得追蹤的頻道列表
  * P1 Optimization: 使用 refetchInterval 自動更新觀眾數
@@ -21,40 +56,19 @@ import type {
 export function useChannels() {
   const queryClient = useQueryClient();
 
-  const mergeChannels = (fresh: FollowedChannel[], prev?: FollowedChannel[]) => {
-    if (!prev || prev.length === 0) return fresh;
-    const prevMap = new Map(prev.map((ch) => [ch.id, ch]));
-
-    return fresh.map((channel) => {
-      const previous = prevMap.get(channel.id);
-      if (!previous) return channel;
-
-      const prevViewer = previous.viewerCount ?? previous.currentViewerCount ?? 0;
-      const freshViewer = channel.viewerCount ?? channel.currentViewerCount ?? 0;
-      const mergedViewer =
-        channel.isLive && previous.isLive ? Math.max(freshViewer, prevViewer) : freshViewer;
-
-      return {
-        ...channel,
-        viewerCount: mergedViewer || channel.viewerCount,
-        currentViewerCount: mergedViewer || channel.currentViewerCount,
-        currentTitle: channel.currentTitle || previous.currentTitle,
-        currentGameName: channel.currentGameName || previous.currentGameName,
-        currentStreamStartedAt: channel.currentStreamStartedAt || previous.currentStreamStartedAt,
-        messageCount: Math.max(channel.messageCount ?? 0, previous.messageCount ?? 0),
-      };
-    });
-  };
-
   return useQuery<FollowedChannel[], Error>({
     queryKey: ["viewer", "channels"],
     queryFn: () => viewerApi.getFollowedChannels(),
-    staleTime: 30 * 1000, // 30 秒內視為新鮮
+    staleTime: 15 * 1000, // 15 秒內視為新鮮
     gcTime: 5 * 60 * 1000, // 5 分鐘後清除快取
-    refetchInterval: false,
+    refetchInterval: 20 * 1000,
     refetchIntervalInBackground: false, // 背景時不輪詢，節省資源
     refetchOnWindowFocus: false, // 避免與可見性手動刷新重複
-    select: (data) => mergeChannels(data, queryClient.getQueryData(["viewer", "channels"]) as FollowedChannel[] | undefined),
+    select: (data) =>
+      mergeFollowedChannels(
+        data,
+        queryClient.getQueryData(["viewer", "channels"]) as FollowedChannel[] | undefined
+      ),
   });
 }
 

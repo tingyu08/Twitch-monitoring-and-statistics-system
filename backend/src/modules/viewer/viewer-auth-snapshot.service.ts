@@ -2,7 +2,7 @@ import { prisma } from "../../db/prisma";
 import { cacheManager } from "../../utils/cache-manager";
 
 const VIEWER_AUTH_SNAPSHOT_TTL_SECONDS = Number(
-  process.env.VIEWER_AUTH_SNAPSHOT_TTL_SECONDS || 120
+  process.env.VIEWER_AUTH_SNAPSHOT_TTL_SECONDS || 600
 );
 
 export interface ViewerAuthSnapshot {

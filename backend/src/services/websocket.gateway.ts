@@ -22,6 +22,7 @@ export class WebSocketGateway {
   private pendingChannelUpdates: Map<string, { channelId?: string; twitchChannelId?: string; [key: string]: unknown }> = new Map();
   private channelUpdateFlushTimer: NodeJS.Timeout | null = null;
   private readonly CHANNEL_UPDATE_DEBOUNCE_MS = Number(process.env.CHANNEL_UPDATE_DEBOUNCE_MS || 800);
+  private readonly MAX_PENDING_UPDATES = Number(process.env.MAX_PENDING_CHANNEL_UPDATES || 5000);
   private readonly CORS_ORIGIN = process.env.FRONTEND_URL || "http://localhost:3000";
 
   public initialize(httpServer: HttpServer) {
@@ -167,6 +168,17 @@ export class WebSocketGateway {
     }
 
     this.pendingChannelUpdates.set(key, channelData);
+
+    if (this.pendingChannelUpdates.size > this.MAX_PENDING_UPDATES) {
+      const overflow = this.pendingChannelUpdates.size - this.MAX_PENDING_UPDATES;
+      for (let i = 0; i < overflow; i += 1) {
+        const oldestKey = this.pendingChannelUpdates.keys().next().value;
+        if (!oldestKey) {
+          break;
+        }
+        this.pendingChannelUpdates.delete(oldestKey);
+      }
+    }
 
     if (this.channelUpdateFlushTimer) {
       return;

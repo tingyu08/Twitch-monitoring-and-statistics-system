@@ -49,15 +49,74 @@ export interface ViewerChannelRelation {
 export class UnifiedTwitchService {
   private channelInfoByIdCache = new Map<string, { value: ChannelInfo | null; expiresAt: number }>();
   private channelInfoByIdPending = new Map<string, Promise<ChannelInfo | null>>();
+  private cacheCleanupTimer: NodeJS.Timeout | null = null;
   private readonly channelInfoByIdTtlMs = Number(process.env.CHANNEL_INFO_BY_ID_TTL_MS || 30000);
+  private readonly channelInfoByIdMaxEntries = Number(
+    process.env.CHANNEL_INFO_BY_ID_MAX_ENTRIES || 2000
+  );
+  private readonly channelInfoByIdCleanupIntervalMs = 60000;
+  private lastChannelInfoCleanupAt = 0;
+
+  private setChannelInfoCache(twitchId: string, value: ChannelInfo | null, expiresAt: number): void {
+    this.channelInfoByIdCache.set(twitchId, { value, expiresAt });
+    this.cleanupChannelInfoCacheIfNeeded();
+  }
+
+  private cleanupChannelInfoCacheIfNeeded(force = false): void {
+    const now = Date.now();
+    if (
+      !force &&
+      this.channelInfoByIdCache.size <= this.channelInfoByIdMaxEntries &&
+      now - this.lastChannelInfoCleanupAt < this.channelInfoByIdCleanupIntervalMs
+    ) {
+      return;
+    }
+
+    this.lastChannelInfoCleanupAt = now;
+
+    for (const [key, entry] of this.channelInfoByIdCache) {
+      if (entry.expiresAt <= now) {
+        this.channelInfoByIdCache.delete(key);
+      }
+    }
+
+    while (this.channelInfoByIdCache.size > this.channelInfoByIdMaxEntries) {
+      const oldestKey = this.channelInfoByIdCache.keys().next().value;
+      if (!oldestKey) {
+        break;
+      }
+      this.channelInfoByIdCache.delete(oldestKey);
+    }
+  }
 
   // ========== 初始化 ==========
+
+  private startCacheCleanup(): void {
+    if (this.cacheCleanupTimer) {
+      return;
+    }
+
+    this.cacheCleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.channelInfoByIdCache) {
+        if (entry.expiresAt <= now) {
+          this.channelInfoByIdCache.delete(key);
+        }
+      }
+    }, 60_000);
+
+    if (this.cacheCleanupTimer.unref) {
+      this.cacheCleanupTimer.unref();
+    }
+  }
 
   /**
    * 初始化所有 Twitch 服務
    */
   async initialize(): Promise<void> {
     logger.info("Twitch Service", "初始化統一 Twitch 服務 (Twurple)...");
+
+    this.startCacheCleanup();
 
     // 初始化聊天服務
     await twurpleChatService.initialize();
@@ -124,6 +183,10 @@ export class UnifiedTwitchService {
       return cached.value;
     }
 
+    if (cached && cached.expiresAt <= now) {
+      this.channelInfoByIdCache.delete(twitchId);
+    }
+
     const pending = this.channelInfoByIdPending.get(twitchId);
     if (pending) {
       return pending;
@@ -135,10 +198,7 @@ export class UnifiedTwitchService {
         if (!user) {
           // 降為 debug：帳號可能被封禁/刪除，這是正常情況
           logger.debug("Twitch Service", `Helix 找不到用戶 ID: ${twitchId}（可能已封禁或刪除）`);
-          this.channelInfoByIdCache.set(twitchId, {
-            value: null,
-            expiresAt: now + Math.min(this.channelInfoByIdTtlMs, 10000),
-          });
+          this.setChannelInfoCache(twitchId, null, now + Math.min(this.channelInfoByIdTtlMs, 10000));
           return null;
         }
 
@@ -160,10 +220,7 @@ export class UnifiedTwitchService {
           followerCount,
         };
 
-        this.channelInfoByIdCache.set(twitchId, {
-          value: payload,
-          expiresAt: now + this.channelInfoByIdTtlMs,
-        });
+        this.setChannelInfoCache(twitchId, payload, now + this.channelInfoByIdTtlMs);
 
         return payload;
       } catch (error) {
@@ -193,6 +250,10 @@ export class UnifiedTwitchService {
       if (cached && cached.expiresAt > now && cached.value) {
         result.set(twitchId, cached.value);
         continue;
+      }
+
+      if (cached && cached.expiresAt <= now) {
+        this.channelInfoByIdCache.delete(twitchId);
       }
 
       const pending = this.channelInfoByIdPending.get(twitchId);
@@ -227,10 +288,7 @@ export class UnifiedTwitchService {
       const snapshot = snapshotById.get(twitchId);
 
       if (!snapshot) {
-        this.channelInfoByIdCache.set(twitchId, {
-          value: null,
-          expiresAt: now + Math.min(this.channelInfoByIdTtlMs, 10000),
-        });
+        this.setChannelInfoCache(twitchId, null, now + Math.min(this.channelInfoByIdTtlMs, 10000));
         continue;
       }
 
@@ -245,10 +303,7 @@ export class UnifiedTwitchService {
         followerCount: 0,
       };
 
-      this.channelInfoByIdCache.set(twitchId, {
-        value: payload,
-        expiresAt: now + this.channelInfoByIdTtlMs,
-      });
+      this.setChannelInfoCache(twitchId, payload, now + this.channelInfoByIdTtlMs);
 
       result.set(twitchId, payload);
     }

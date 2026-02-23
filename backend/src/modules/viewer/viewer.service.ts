@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
+import { twurpleHelixService } from "../../services/twitch-helix.service";
 
 async function getOrSetWithOptionalTags<T>(
   key: string,
@@ -25,36 +26,12 @@ async function getOrSetWithOptionalTags<T>(
 }
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 
-// Type definitions for query results
-interface LifetimeStatResult {
-  channelId: string;
-  totalWatchTimeMinutes: number;
-  totalMessages: number;
-  lastWatchedAt: Date | null;
-}
-
-interface FollowResult {
-  channelId: string;
-  followedAt: Date;
-}
-
 // P2 Note: GroupByStatResult 保留供未來 groupBy 查詢使用
 // interface GroupByStatResult {
 //   channelId: string;
 //   _sum: { watchSeconds: number | null; messageCount: number | null };
 //   _max: { date: Date | null };
 // }
-
-interface ChannelWithRelations {
-  id: string;
-  channelName: string;
-  isLive: boolean;
-  currentViewerCount: number | null;
-  currentStreamStartedAt: Date | null;
-  currentGameName: string | null;
-  source: string;
-  streamer: { displayName: string; avatarUrl: string | null } | null;
-}
 
 interface FollowedChannelResult {
   id: string;
@@ -76,6 +53,7 @@ interface FollowedChannelResult {
 interface ViewerChannelSummaryRow {
   viewerId: string;
   channelId: string;
+  twitchChannelId: string | null;
   channelName: string;
   displayName: string;
   avatarUrl: string;
@@ -100,13 +78,22 @@ interface SummaryChannelSnapshot {
 }
 
 const SQLITE_IN_CHUNK_SIZE = 100;
+const SQLITE_SUMMARY_WRITE_CHUNK_SIZE = 50;
 
-function chunkArray<T>(items: T[], chunkSize: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += chunkSize) {
-    chunks.push(items.slice(i, i + chunkSize));
-  }
-  return chunks;
+interface PersistableSummaryRow {
+  channelId: string;
+  channelName: string;
+  displayName: string;
+  avatarUrl: string;
+  category: string | null;
+  isLive: boolean;
+  viewerCount: number | null;
+  streamStartedAt: string | Date | null;
+  lastWatched: string | Date | null;
+  totalWatchMin: number;
+  messageCount: number;
+  isExternal: boolean;
+  followedAt: string | Date | null;
 }
 
 export interface ViewerDailyStat {
@@ -190,7 +177,7 @@ export async function getChannelStats(
   const cacheKey = `viewer:${viewerId}:channel:${channelId}:stats:${actualDays}d`;
 
   // 使用適應性 TTL 快取
-  const ttl = getAdaptiveTTL(CacheTTL.MEDIUM, cacheManager);
+  const ttl = getAdaptiveTTL(CacheTTL.SHORT, cacheManager);
   return getOrSetWithOptionalTags(
     cacheKey,
     async () => {
@@ -281,8 +268,12 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         const summaryRows = await fetchSummaryRows(viewerId);
 
         if (summaryRows.length > 0) {
-          const mapped = mapSummaryRowsToFollowedChannels(summaryRows);
+          const reconciledRows = await reconcileLiveStatus(summaryRows);
+          const mapped = mapSummaryRowsToFollowedChannels(reconciledRows);
           const sorted = sortFollowedChannels(mapped);
+
+          // 背景同步 summary 表的 messageCount/totalWatchMin，避免 LEFT JOIN 失效時顯示舊值
+          void syncSummaryStatsFromLifetime(viewerId);
 
           const totalTime = Date.now() - startTime;
           logger.debug(
@@ -316,6 +307,32 @@ function sortFollowedChannels(channels: FollowedChannel[]): FollowedChannel[] {
   return [...channels].sort((a, b) => {
     if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
 
+    const messageDiff = (b.messageCount || 0) - (a.messageCount || 0);
+    if (messageDiff !== 0) {
+      return messageDiff;
+    }
+
+    if (a.isLive && b.isLive) {
+      const aStarted = a.streamStartedAt ? new Date(a.streamStartedAt).getTime() : 0;
+      const bStarted = b.streamStartedAt ? new Date(b.streamStartedAt).getTime() : 0;
+      if (aStarted !== bStarted) {
+        return bStarted - aStarted;
+      }
+
+      const aFollowed = a.followedAt ? new Date(a.followedAt).getTime() : 0;
+      const bFollowed = b.followedAt ? new Date(b.followedAt).getTime() : 0;
+      if (aFollowed !== bFollowed) {
+        return bFollowed - aFollowed;
+      }
+
+      const displayCompare = a.displayName.localeCompare(b.displayName, "zh-Hant");
+      if (displayCompare !== 0) {
+        return displayCompare;
+      }
+
+      return a.id.localeCompare(b.id);
+    }
+
     const aLast = a.lastWatched ? new Date(a.lastWatched).getTime() : null;
     const bLast = b.lastWatched ? new Date(b.lastWatched).getTime() : null;
 
@@ -323,7 +340,18 @@ function sortFollowedChannels(channels: FollowedChannel[]): FollowedChannel[] {
     if (aLast !== null && bLast === null) return -1;
     if (aLast === null && bLast !== null) return 1;
 
-    return 0;
+    const aFollowed = a.followedAt ? new Date(a.followedAt).getTime() : 0;
+    const bFollowed = b.followedAt ? new Date(b.followedAt).getTime() : 0;
+    if (aFollowed !== bFollowed) {
+      return bFollowed - aFollowed;
+    }
+
+    const displayCompare = a.displayName.localeCompare(b.displayName, "zh-Hant");
+    if (displayCompare !== 0) {
+      return displayCompare;
+    }
+
+    return a.id.localeCompare(b.id);
   });
 }
 
@@ -354,28 +382,121 @@ function mapSummaryRowsToFollowedChannels(rows: ViewerChannelSummaryRow[]): Foll
 async function fetchSummaryRows(viewerId: string): Promise<ViewerChannelSummaryRow[]> {
   try {
     return await prisma.$queryRaw<ViewerChannelSummaryRow[]>(Prisma.sql`
+      WITH daily_watch AS (
+        SELECT viewerId, channelId, SUM(watchSeconds) / 60 AS dailyWatchMin
+        FROM viewer_channel_daily_stats
+        WHERE viewerId = ${viewerId}
+        GROUP BY viewerId, channelId
+      )
       SELECT
-        viewerId,
-        channelId,
-        channelName,
-        displayName,
-        avatarUrl,
-        category,
-        isLive,
-        viewerCount,
-        streamStartedAt,
-        lastWatched,
-        totalWatchMin,
-        messageCount,
-        isExternal,
-        followedAt,
-        updatedAt
-      FROM viewer_channel_summary
-      WHERE viewerId = ${viewerId}
+        vcs.viewerId,
+        vcs.channelId,
+        c.twitchChannelId,
+        COALESCE(c.channelName, vcs.channelName) AS channelName,
+        COALESCE(s.displayName, vcs.displayName) AS displayName,
+        COALESCE(s.avatarUrl, vcs.avatarUrl) AS avatarUrl,
+        COALESCE(c.currentGameName, vcs.category) AS category,
+        COALESCE(c.isLive, vcs.isLive) AS isLive,
+        COALESCE(c.currentViewerCount, vcs.viewerCount) AS viewerCount,
+        COALESCE(c.currentStreamStartedAt, vcs.streamStartedAt) AS streamStartedAt,
+        vcs.lastWatched,
+        MAX(
+          COALESCE(l.totalWatchTimeMinutes, 0),
+          COALESCE(dw.dailyWatchMin, 0),
+          COALESCE(vcs.totalWatchMin, 0)
+        ) AS totalWatchMin,
+        COALESCE(l.totalMessages, vcs.messageCount) AS messageCount,
+        vcs.isExternal,
+        vcs.followedAt,
+        vcs.updatedAt
+      FROM viewer_channel_summary vcs
+      LEFT JOIN channels c ON c.id = vcs.channelId
+      LEFT JOIN streamers s ON s.id = c.streamerId
+      LEFT JOIN viewer_channel_lifetime_stats l ON l.viewerId = vcs.viewerId AND l.channelId = vcs.channelId
+      LEFT JOIN daily_watch dw ON dw.viewerId = vcs.viewerId AND dw.channelId = vcs.channelId
+      WHERE vcs.viewerId = ${viewerId}
     `);
   } catch (error) {
     logger.debug("ViewerService", "viewer_channel_summary table not ready, fallback to source queries", error);
     return [];
+  }
+}
+
+async function reconcileLiveStatus(rows: ViewerChannelSummaryRow[]): Promise<ViewerChannelSummaryRow[]> {
+  const twitchIds = Array.from(
+    new Set(rows.map((row) => row.twitchChannelId).filter((id): id is string => Boolean(id)))
+  );
+
+  if (twitchIds.length === 0) {
+    return rows;
+  }
+
+  try {
+    const streams = await twurpleHelixService.getStreamsByUserIds(twitchIds);
+    const existingLiveCount = rows.reduce((count, row) => count + (Boolean(row.isLive) ? 1 : 0), 0);
+
+    // 若 Twitch 回傳空清單但目前有既有直播中資料，視為暫時不一致，避免整批誤判為關台
+    if (streams.length === 0 && existingLiveCount > 0) {
+      logger.warn(
+        "ViewerService",
+        "Skip live-status reconciliation due to empty Twitch stream response while local rows contain live channels"
+      );
+      return rows;
+    }
+
+    const streamMap = new Map(streams.map((stream) => [stream.userId, stream]));
+
+    const changedRows: Array<{
+      channelId: string;
+      isLive: boolean;
+      viewerCount: number;
+      streamStartedAt: Date | null;
+      category: string;
+    }> = [];
+
+    const reconciled = rows.map((row) => {
+      const stream = row.twitchChannelId ? streamMap.get(row.twitchChannelId) : undefined;
+      const nextIsLive = Boolean(stream);
+      const nextViewerCount = stream?.viewerCount ?? 0;
+      const nextStartedAt = stream?.startedAt ?? null;
+      const nextCategory = stream?.gameName || "Just Chatting";
+
+      const currentIsLive = Boolean(row.isLive);
+      const currentViewerCount = row.viewerCount ?? 0;
+      const currentStartedAt = normalizeComparableDate(row.streamStartedAt);
+      const nextStartedTs = normalizeComparableDate(nextStartedAt);
+
+      if (
+        currentIsLive !== nextIsLive ||
+        currentViewerCount !== nextViewerCount ||
+        currentStartedAt !== nextStartedTs
+      ) {
+        changedRows.push({
+          channelId: row.channelId,
+          isLive: nextIsLive,
+          viewerCount: nextViewerCount,
+          streamStartedAt: nextStartedAt,
+          category: nextCategory,
+        });
+      }
+
+      return {
+        ...row,
+        isLive: nextIsLive,
+        viewerCount: nextIsLive ? nextViewerCount : 0,
+        streamStartedAt: nextStartedAt,
+        category: nextCategory,
+      };
+    });
+
+    if (changedRows.length > 0) {
+      await refreshViewerChannelSummaryForChannels(changedRows);
+    }
+
+    return reconciled;
+  } catch (error) {
+    logger.warn("ViewerService", "Failed to reconcile followed channel live status", error);
+    return rows;
   }
 }
 
@@ -389,182 +510,335 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
       return;
     }
 
-    const channelIds = rows.map((row) => row.id);
+    const nextRows = new Map<string, PersistableSummaryRow>();
+    for (const row of rows) {
+      nextRows.set(row.id, {
+        channelId: row.id,
+        channelName: row.channelName,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        category: row.category,
+        isLive: row.isLive,
+        viewerCount: row.viewerCount,
+        streamStartedAt: row.streamStartedAt,
+        lastWatched: row.lastWatched,
+        totalWatchMin: row.totalWatchMinutes,
+        messageCount: row.messageCount,
+        isExternal: row.isExternal,
+        followedAt: row.followedAt,
+      });
+    }
 
-    await prisma.$executeRaw(Prisma.sql`
-      DELETE FROM viewer_channel_summary
-      WHERE viewerId = ${viewerId}
-        AND channelId NOT IN (${Prisma.join(channelIds)})
-    `);
+    const existingRows = await prisma.viewerChannelSummary.findMany({
+      where: { viewerId },
+      select: {
+        channelId: true,
+        channelName: true,
+        displayName: true,
+        avatarUrl: true,
+        category: true,
+        isLive: true,
+        viewerCount: true,
+        streamStartedAt: true,
+        lastWatched: true,
+        totalWatchMin: true,
+        messageCount: true,
+        isExternal: true,
+        followedAt: true,
+      },
+    });
 
-    const values = rows.map((row) =>
-      Prisma.sql`(
-        ${viewerId},
-        ${row.id},
-        ${row.channelName},
-        ${row.displayName},
-        ${row.avatarUrl},
-        ${row.category},
-        ${row.isLive ? 1 : 0},
-        ${row.viewerCount},
-        ${row.streamStartedAt},
-        ${row.lastWatched},
-        ${row.totalWatchMinutes},
-        ${row.messageCount},
-        ${row.isExternal ? 1 : 0},
-        ${row.followedAt},
-        CURRENT_TIMESTAMP
-      )`
-    );
+    const existingByChannelId = new Map(existingRows.map((row) => [row.channelId, row]));
+    const deletes: string[] = [];
+    const inserts: PersistableSummaryRow[] = [];
+    const updates: PersistableSummaryRow[] = [];
 
-    await prisma.$executeRaw(Prisma.sql`
-      INSERT INTO viewer_channel_summary (
-        viewerId,
-        channelId,
-        channelName,
-        displayName,
-        avatarUrl,
-        category,
-        isLive,
-        viewerCount,
-        streamStartedAt,
-        lastWatched,
-        totalWatchMin,
-        messageCount,
-        isExternal,
-        followedAt,
-        updatedAt
-      )
-      VALUES ${Prisma.join(values)}
-      ON CONFLICT(viewerId, channelId) DO UPDATE SET
-        channelName = excluded.channelName,
-        displayName = excluded.displayName,
-        avatarUrl = excluded.avatarUrl,
-        category = excluded.category,
-        isLive = excluded.isLive,
-        viewerCount = excluded.viewerCount,
-        streamStartedAt = excluded.streamStartedAt,
-        lastWatched = excluded.lastWatched,
-        totalWatchMin = excluded.totalWatchMin,
-        messageCount = excluded.messageCount,
-        isExternal = excluded.isExternal,
-        followedAt = excluded.followedAt,
-        updatedAt = CURRENT_TIMESTAMP
-    `);
+    for (const existing of existingRows) {
+      if (!nextRows.has(existing.channelId)) {
+        deletes.push(existing.channelId);
+      }
+    }
+
+    for (const nextRow of nextRows.values()) {
+      const existing = existingByChannelId.get(nextRow.channelId);
+
+      if (!existing) {
+        inserts.push(nextRow);
+        continue;
+      }
+
+      if (hasSummaryRowChanges(existing, nextRow)) {
+        updates.push(nextRow);
+      }
+    }
+
+    for (let i = 0; i < deletes.length; i += SQLITE_IN_CHUNK_SIZE) {
+      const deleteChunk = deletes.slice(i, i + SQLITE_IN_CHUNK_SIZE);
+      await prisma.$executeRaw(Prisma.sql`
+        DELETE FROM viewer_channel_summary
+        WHERE viewerId = ${viewerId}
+          AND channelId IN (${Prisma.join(deleteChunk)})
+      `);
+    }
+
+    for (let i = 0; i < inserts.length; i += SQLITE_SUMMARY_WRITE_CHUNK_SIZE) {
+      const insertChunk = inserts.slice(i, i + SQLITE_SUMMARY_WRITE_CHUNK_SIZE);
+      const values = insertChunk.map((row) =>
+        Prisma.sql`(
+          ${viewerId},
+          ${row.channelId},
+          ${row.channelName},
+          ${row.displayName},
+          ${row.avatarUrl},
+          ${row.category},
+          ${row.isLive ? 1 : 0},
+          ${row.viewerCount},
+          ${row.streamStartedAt},
+          ${row.lastWatched},
+          ${row.totalWatchMin},
+          ${row.messageCount},
+          ${row.isExternal ? 1 : 0},
+          ${row.followedAt},
+          CURRENT_TIMESTAMP
+        )`
+      );
+
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO viewer_channel_summary (
+          viewerId,
+          channelId,
+          channelName,
+          displayName,
+          avatarUrl,
+          category,
+          isLive,
+          viewerCount,
+          streamStartedAt,
+          lastWatched,
+          totalWatchMin,
+          messageCount,
+          isExternal,
+          followedAt,
+          updatedAt
+        )
+        VALUES ${Prisma.join(values)}
+      `);
+    }
+
+    for (let i = 0; i < updates.length; i += SQLITE_SUMMARY_WRITE_CHUNK_SIZE) {
+      const updateChunk = updates.slice(i, i + SQLITE_SUMMARY_WRITE_CHUNK_SIZE);
+      const values = updateChunk.map((row) =>
+        Prisma.sql`(
+          ${row.channelId},
+          ${row.channelName},
+          ${row.displayName},
+          ${row.avatarUrl},
+          ${row.category},
+          ${row.isLive ? 1 : 0},
+          ${row.viewerCount},
+          ${row.streamStartedAt},
+          ${row.lastWatched},
+          ${row.totalWatchMin},
+          ${row.messageCount},
+          ${row.isExternal ? 1 : 0},
+          ${row.followedAt}
+        )`
+      );
+
+      await prisma.$executeRaw(Prisma.sql`
+        WITH updates(
+          channelId,
+          channelName,
+          displayName,
+          avatarUrl,
+          category,
+          isLive,
+          viewerCount,
+          streamStartedAt,
+          lastWatched,
+          totalWatchMin,
+          messageCount,
+          isExternal,
+          followedAt
+        ) AS (
+          VALUES ${Prisma.join(values)}
+        )
+        UPDATE viewer_channel_summary
+        SET
+          channelName = (SELECT updates.channelName FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          displayName = (SELECT updates.displayName FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          avatarUrl = (SELECT updates.avatarUrl FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          category = (SELECT updates.category FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          isLive = (SELECT updates.isLive FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          viewerCount = (SELECT updates.viewerCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          streamStartedAt = (SELECT updates.streamStartedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          lastWatched = (SELECT updates.lastWatched FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          totalWatchMin = (SELECT updates.totalWatchMin FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          messageCount = (SELECT updates.messageCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          isExternal = (SELECT updates.isExternal FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          followedAt = (SELECT updates.followedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
+          updatedAt = CURRENT_TIMESTAMP
+        WHERE viewerId = ${viewerId}
+          AND channelId IN (SELECT channelId FROM updates)
+      `);
+    }
   } catch (error) {
     logger.warn("ViewerService", "Failed to persist viewer_channel_summary", error);
   }
 }
 
-async function buildFollowedChannelsFromSource(viewerId: string): Promise<FollowedChannelResult[]> {
-  const lifetimeStats = await prisma.viewerChannelLifetimeStats.findMany({
-    where: { viewerId },
-    select: {
-      channelId: true,
-      totalWatchTimeMinutes: true,
-      totalMessages: true,
-      lastWatchedAt: true,
-    },
-    orderBy: {
-      lastWatchedAt: "desc",
-    },
-  });
+function hasSummaryRowChanges(
+  existing: {
+    channelName: string;
+    displayName: string;
+    avatarUrl: string;
+    category: string | null;
+    isLive: boolean;
+    viewerCount: number | null;
+    streamStartedAt: Date | null;
+    lastWatched: Date | null;
+    totalWatchMin: number;
+    messageCount: number;
+    isExternal: boolean;
+    followedAt: Date | null;
+  },
+  next: PersistableSummaryRow
+): boolean {
+  return (
+    existing.channelName !== next.channelName ||
+    existing.displayName !== next.displayName ||
+    existing.avatarUrl !== next.avatarUrl ||
+    existing.category !== next.category ||
+    existing.isLive !== next.isLive ||
+    existing.viewerCount !== next.viewerCount ||
+    normalizeComparableDate(existing.streamStartedAt) !==
+      normalizeComparableDate(next.streamStartedAt) ||
+    normalizeComparableDate(existing.lastWatched) !== normalizeComparableDate(next.lastWatched) ||
+    existing.totalWatchMin !== next.totalWatchMin ||
+    existing.messageCount !== next.messageCount ||
+    existing.isExternal !== next.isExternal ||
+    normalizeComparableDate(existing.followedAt) !== normalizeComparableDate(next.followedAt)
+  );
+}
 
-  const follows = await prisma.userFollow.findMany({
-    where: {
-      userId: viewerId,
-      userType: "viewer",
-    },
-    select: {
-      channelId: true,
-      followedAt: true,
-    },
-  });
-
-  const statsChannelIds = new Set(lifetimeStats.map((s: LifetimeStatResult) => s.channelId));
-  const followChannelIds = new Set(follows.map((f: FollowResult) => f.channelId));
-  const allChannelIds = Array.from(new Set([...statsChannelIds, ...followChannelIds]));
-
-  if (allChannelIds.length === 0) {
-    return [];
+function normalizeComparableDate(value: Date | string | null): number | null {
+  if (!value) {
+    return null;
   }
 
-  const channelIdChunks = chunkArray(allChannelIds, SQLITE_IN_CHUNK_SIZE);
+  const date = value instanceof Date ? value : new Date(value);
+  const timestamp = date.getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
 
-  const [channelChunkResults, activeSessions] = await Promise.all([
-    Promise.all(
-      channelIdChunks.map((chunk) =>
-        prisma.channel.findMany({
-          where: {
-            id: { in: chunk },
-          },
-          select: {
-            id: true,
-            channelName: true,
-            isLive: true,
-            currentViewerCount: true,
-            currentStreamStartedAt: true,
-            currentGameName: true,
-            source: true,
-            streamer: {
-              select: {
-                displayName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        })
-      )
+function toIsoStringOrNull(value: Date | string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
+async function buildFollowedChannelsFromSource(viewerId: string): Promise<FollowedChannelResult[]> {
+  type SourceRow = {
+    id: string;
+    channelName: string;
+    isLive: number | boolean;
+    hasActiveSession: number | boolean;
+    currentViewerCount: number | null;
+    currentStreamStartedAt: Date | string | null;
+    currentGameName: string | null;
+    source: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    totalWatchTimeMinutes: number | null;
+    totalMessages: number | null;
+    lastWatchedAt: Date | string | null;
+    followedAt: Date | string | null;
+  };
+
+  const rows = await prisma.$queryRaw<SourceRow[]>(Prisma.sql`
+    WITH stat_rows AS (
+      SELECT channelId, totalWatchTimeMinutes, totalMessages, lastWatchedAt
+      FROM viewer_channel_lifetime_stats
+      WHERE viewerId = ${viewerId}
     ),
-    prisma.streamSession.findMany({
-      where: {
-        channelId: { in: allChannelIds },
-        endedAt: null,
-      },
-      select: {
-        channelId: true,
-      },
-      distinct: ["channelId"],
-    }),
-  ]);
+    daily_watch AS (
+      SELECT channelId, SUM(watchSeconds) / 60 AS dailyWatchMin
+      FROM viewer_channel_daily_stats
+      WHERE viewerId = ${viewerId}
+      GROUP BY channelId
+    ),
+    follow_rows AS (
+      SELECT channelId, followedAt
+      FROM user_follows
+      WHERE userId = ${viewerId} AND userType = 'viewer'
+    ),
+    merged_channels AS (
+      SELECT channelId FROM stat_rows
+      UNION
+      SELECT channelId FROM daily_watch
+      UNION
+      SELECT channelId FROM follow_rows
+    ),
+    active_sessions AS (
+      SELECT channelId, 1 AS hasActiveSession
+      FROM stream_sessions
+      WHERE endedAt IS NULL
+        AND channelId IN (SELECT channelId FROM merged_channels)
+      GROUP BY channelId
+    )
+    SELECT
+      c.id,
+      c.channelName,
+      c.isLive,
+      COALESCE(a.hasActiveSession, 0) AS hasActiveSession,
+      c.currentViewerCount,
+      c.currentStreamStartedAt,
+      c.currentGameName,
+      c.source,
+      s.displayName,
+      s.avatarUrl,
+      MAX(COALESCE(st.totalWatchTimeMinutes, 0), COALESCE(dw.dailyWatchMin, 0)) AS totalWatchTimeMinutes,
+      st.totalMessages,
+      st.lastWatchedAt,
+      f.followedAt
+    FROM merged_channels mc
+    JOIN channels c ON c.id = mc.channelId
+    LEFT JOIN streamers s ON s.id = c.streamerId
+    LEFT JOIN stat_rows st ON st.channelId = c.id
+    LEFT JOIN daily_watch dw ON dw.channelId = c.id
+    LEFT JOIN follow_rows f ON f.channelId = c.id
+    LEFT JOIN active_sessions a ON a.channelId = c.id
+    ORDER BY COALESCE(st.lastWatchedAt, f.followedAt, c.updatedAt) DESC
+  `);
 
-  const channels = channelChunkResults.flat();
-
-  const activeSessionChannelIds = new Set(activeSessions.map((session) => session.channelId));
-  const statsMap = new Map<string, LifetimeStatResult>(
-    lifetimeStats.map((s: LifetimeStatResult) => [s.channelId, s])
-  );
-  const followsMap = new Map<string, Date>(
-    follows.map((f: FollowResult) => [f.channelId, f.followedAt])
-  );
-
-  return channels.map((channel: ChannelWithRelations) => {
-    const stat = statsMap.get(channel.id);
-    const followedAt = followsMap.get(channel.id);
-
-    const hasActiveSession = activeSessionChannelIds.has(channel.id);
-    const isLive = channel.isLive || hasActiveSession;
-
-    const displayName = channel.streamer?.displayName || channel.channelName;
+  return rows.map((row) => {
+    const displayName = row.displayName || row.channelName;
     const avatarUrl =
-      channel.streamer?.avatarUrl ||
+      row.avatarUrl ||
       `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff&size=150`;
 
     return {
-      id: channel.id,
-      channelName: channel.channelName,
+      id: row.id,
+      channelName: row.channelName,
       displayName,
       avatarUrl,
-      category: channel.currentGameName || "Just Chatting",
-      isLive,
-      viewerCount: channel.currentViewerCount ?? null,
-      streamStartedAt: channel.currentStreamStartedAt?.toISOString() ?? null,
-      followedAt: followedAt?.toISOString() ?? null,
+      category: row.currentGameName || "Just Chatting",
+      isLive: Boolean(row.isLive) || Boolean(row.hasActiveSession),
+      viewerCount: row.currentViewerCount ?? null,
+      streamStartedAt: toIsoStringOrNull(row.currentStreamStartedAt),
+      followedAt: toIsoStringOrNull(row.followedAt),
       tags: ["中文", "遊戲"],
-      lastWatched: stat?.lastWatchedAt?.toISOString() ?? null,
-      totalWatchMinutes: stat?.totalWatchTimeMinutes ?? 0,
-      messageCount: stat?.totalMessages ?? 0,
-      isExternal: channel.source === "external",
+      lastWatched: toIsoStringOrNull(row.lastWatchedAt),
+      totalWatchMinutes: row.totalWatchTimeMinutes ?? 0,
+      messageCount: row.totalMessages ?? 0,
+      isExternal: row.source === "external",
     };
   });
 }
@@ -573,6 +847,47 @@ export async function refreshViewerChannelSummaryForViewer(viewerId: string): Pr
   const rows = await buildFollowedChannelsFromSource(viewerId);
   await persistSummaryRows(viewerId, rows);
   cacheManager.delete(`viewer:${viewerId}:channels_list`);
+}
+
+/**
+ * 從 lifetime_stats 同步 messageCount 和 totalWatchMin 到 summary 表
+ * 確保即使 LEFT JOIN 失效，summary 表也有合理的最新值
+ */
+export async function syncSummaryStatsFromLifetime(viewerId: string): Promise<void> {
+  try {
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE viewer_channel_summary
+      SET
+        messageCount = COALESCE(
+          (SELECT l.totalMessages
+           FROM viewer_channel_lifetime_stats l
+           WHERE l.viewerId = viewer_channel_summary.viewerId
+             AND l.channelId = viewer_channel_summary.channelId),
+          messageCount
+        ),
+        totalWatchMin = MAX(
+          totalWatchMin,
+          COALESCE(
+            (SELECT l.totalWatchTimeMinutes
+             FROM viewer_channel_lifetime_stats l
+             WHERE l.viewerId = viewer_channel_summary.viewerId
+               AND l.channelId = viewer_channel_summary.channelId),
+            0
+          ),
+          COALESCE(
+            (SELECT SUM(d.watchSeconds) / 60
+             FROM viewer_channel_daily_stats d
+             WHERE d.viewerId = viewer_channel_summary.viewerId
+               AND d.channelId = viewer_channel_summary.channelId),
+            0
+          )
+        ),
+        updatedAt = CURRENT_TIMESTAMP
+      WHERE viewerId = ${viewerId}
+    `);
+  } catch (error) {
+    logger.debug("ViewerService", "Failed to sync summary stats from lifetime_stats", error);
+  }
 }
 
 export async function refreshViewerChannelSummaryForChannels(
@@ -608,6 +923,12 @@ export async function refreshViewerChannelSummaryForChannels(
           category = (SELECT updates.category FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
           updatedAt = CURRENT_TIMESTAMP
         WHERE channelId IN (SELECT channelId FROM updates)
+          AND (
+            isLive != (SELECT updates.isLive FROM updates WHERE updates.channelId = viewer_channel_summary.channelId)
+            OR COALESCE(viewerCount, -1) != COALESCE((SELECT updates.viewerCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId), -1)
+            OR COALESCE(streamStartedAt, '1970-01-01 00:00:00') != COALESCE((SELECT updates.streamStartedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId), '1970-01-01 00:00:00')
+            OR COALESCE(category, '') != COALESCE((SELECT updates.category FROM updates WHERE updates.channelId = viewer_channel_summary.channelId), '')
+          )
       `);
     }
   } catch (error) {

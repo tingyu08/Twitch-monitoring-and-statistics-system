@@ -40,9 +40,14 @@ interface CacheStats {
 
 const ESTIMATE_MAX_DEPTH = 3;
 const ESTIMATE_MAX_ITEMS = 40;
+const CLEANUP_SCAN_LIMIT = 1000;
+const HIGH_PRESSURE_RATIO = 0.9;
+const TARGET_PRESSURE_RATIO = 0.75;
 
 export class CacheManager {
   private cache: Map<string, CacheEntry<unknown>>;
+  private expiryBuckets: Map<number, Set<string>>;
+  private keyToExpiryBucket: Map<string, number>;
   private stats: CacheStats;
   private maxMemoryBytes: number;
   private currentMemoryUsage: number;
@@ -50,15 +55,22 @@ export class CacheManager {
   private pendingPromises: Map<string, Promise<unknown>>;
   private redisEnabled: boolean;
   private tagIndex: Map<string, Set<string>>;
+  private prefixIndex: Map<string, Set<string>>;
+  private lastSegmentIndex: Map<string, Set<string>>;
   private readonly redisLockTtlMs = 15000;
   private readonly redisWaitRetries = 8;
   private readonly redisWaitIntervalMs = 120;
+  private readonly cleanupScanLimit = CLEANUP_SCAN_LIMIT;
 
   constructor(maxMemoryMB: number = 50) {
     this.cache = new Map();
+    this.expiryBuckets = new Map();
+    this.keyToExpiryBucket = new Map();
     this.pendingPromises = new Map();
     this.redisEnabled = isRedisEnabled();
     this.tagIndex = new Map();
+    this.prefixIndex = new Map();
+    this.lastSegmentIndex = new Map();
     this.stats = {
       hits: 0,
       misses: 0,
@@ -87,6 +99,10 @@ export class CacheManager {
   private setInternal<T>(key: string, value: T, ttlSeconds: number = 300, tags: string[] = []): void {
     const size = this.estimateSize(value);
 
+    if (this.currentMemoryUsage > this.maxMemoryBytes * HIGH_PRESSURE_RATIO) {
+      this.cleanup(this.cleanupScanLimit);
+    }
+
     // 如果單個項目超過最大記憶體限制的 25%，拒絕快取 (Zeabur 免費層優化)
     if (size > this.maxMemoryBytes * 0.25) {
       logger.warn(
@@ -111,9 +127,13 @@ export class CacheManager {
     const existing = this.cache.get(key);
     if (existing) {
       this.currentMemoryUsage -= existing.size;
+      this.untrackKeyIndexes(key);
+      this.untrackExpiry(key);
     }
 
     this.cache.set(key, entry as CacheEntry<unknown>);
+    this.trackKeyIndexes(key);
+    this.trackExpiry(key, entry.expiresAt);
     this.currentMemoryUsage += size;
     this.stats.itemCount = this.cache.size;
     this.stats.memoryUsage = this.currentMemoryUsage;
@@ -178,6 +198,8 @@ export class CacheManager {
     if (entry) {
       this.currentMemoryUsage -= entry.size;
       this.cache.delete(key);
+      this.untrackKeyIndexes(key);
+      this.untrackExpiry(key);
       this.stats.itemCount = this.cache.size;
       this.stats.memoryUsage = this.currentMemoryUsage;
     }
@@ -199,11 +221,15 @@ export class CacheManager {
    */
   clear(): void {
     this.cache.clear();
+    this.expiryBuckets.clear();
+    this.keyToExpiryBucket.clear();
     this.pendingPromises.clear();
     this.currentMemoryUsage = 0;
     this.stats.itemCount = 0;
     this.stats.memoryUsage = 0;
     this.tagIndex.clear();
+    this.prefixIndex.clear();
+    this.lastSegmentIndex.clear();
 
     if (this.redisEnabled) {
       void redisDeleteByPrefix("");
@@ -216,8 +242,11 @@ export class CacheManager {
    * @returns 刪除的項目數量
    */
   deletePattern(pattern: string): number {
+    const indexedKeys = this.prefixIndex.get(pattern);
+    const candidateKeys = indexedKeys ? Array.from(indexedKeys) : Array.from(this.cache.keys());
+
     let count = 0;
-    for (const key of this.cache.keys()) {
+    for (const key of candidateKeys) {
       if (key.startsWith(pattern)) {
         this.delete(key);
         count++;
@@ -237,8 +266,12 @@ export class CacheManager {
    * @returns 刪除的項目數量
    */
   deleteSuffix(suffix: string): number {
+    const useIndexedLookup = suffix.startsWith(":") && suffix.indexOf(":", 1) === -1;
+    const indexedKeys = useIndexedLookup ? this.lastSegmentIndex.get(suffix) : null;
+    const candidateKeys = indexedKeys ? Array.from(indexedKeys) : Array.from(this.cache.keys());
+
     let count = 0;
-    for (const key of this.cache.keys()) {
+    for (const key of candidateKeys) {
       if (key.endsWith(suffix)) {
         this.delete(key);
         count++;
@@ -442,19 +475,61 @@ export class CacheManager {
   /**
    * 清理過期項目
    */
-  private cleanup(): void {
+  private cleanup(maxScanEntries: number = Number.POSITIVE_INFINITY): void {
     const now = Date.now();
     let cleaned = 0;
+    let scanned = 0;
 
-    for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.expiresAt) {
-        this.delete(key);
-        cleaned++;
+    const expiredBucketKeys: number[] = [];
+    for (const bucketKey of this.expiryBuckets.keys()) {
+      if (bucketKey * 1000 <= now) {
+        expiredBucketKeys.push(bucketKey);
       }
+    }
+
+    for (const bucketKey of expiredBucketKeys) {
+      if (scanned >= maxScanEntries) {
+        break;
+      }
+
+      const bucket = this.expiryBuckets.get(bucketKey);
+      if (!bucket) {
+        continue;
+      }
+
+      for (const key of Array.from(bucket)) {
+        if (scanned >= maxScanEntries) {
+          break;
+        }
+
+        scanned += 1;
+        const entry = this.cache.get(key);
+        if (entry && now > entry.expiresAt) {
+          this.delete(key);
+          cleaned++;
+        } else {
+          bucket.delete(key);
+        }
+      }
+
+      if (bucket.size === 0) {
+        this.expiryBuckets.delete(bucketKey);
+      }
+    }
+
+    if (this.currentMemoryUsage > this.maxMemoryBytes * HIGH_PRESSURE_RATIO) {
+      const targetBytes = Math.floor(this.maxMemoryBytes * TARGET_PRESSURE_RATIO);
+      this.evictToTargetUsage(targetBytes);
     }
 
     if (cleaned > 0) {
       logger.debug("Cache", `Cleaned up ${cleaned} expired items`);
+    }
+  }
+
+  private evictToTargetUsage(targetBytes: number): void {
+    while (this.currentMemoryUsage > targetBytes && this.cache.size > 0) {
+      this.evictOldest();
     }
   }
 
@@ -474,6 +549,92 @@ export class CacheManager {
    */
   private estimateSize(value: unknown): number {
     return this.estimateSizeInternal(value, 0, new WeakSet<object>());
+  }
+
+  private trackKeyIndexes(key: string): void {
+    const prefixes = this.getKeyPrefixes(key);
+    for (const prefix of prefixes) {
+      const bucket = this.prefixIndex.get(prefix) || new Set<string>();
+      bucket.add(key);
+      this.prefixIndex.set(prefix, bucket);
+    }
+
+    const lastSegment = this.getLastSegment(key);
+    const segmentBucket = this.lastSegmentIndex.get(lastSegment) || new Set<string>();
+    segmentBucket.add(key);
+    this.lastSegmentIndex.set(lastSegment, segmentBucket);
+  }
+
+  private untrackKeyIndexes(key: string): void {
+    const prefixes = this.getKeyPrefixes(key);
+    for (const prefix of prefixes) {
+      const bucket = this.prefixIndex.get(prefix);
+      if (!bucket) {
+        continue;
+      }
+
+      bucket.delete(key);
+      if (bucket.size === 0) {
+        this.prefixIndex.delete(prefix);
+      }
+    }
+
+    const lastSegment = this.getLastSegment(key);
+    const segmentBucket = this.lastSegmentIndex.get(lastSegment);
+    if (!segmentBucket) {
+      return;
+    }
+
+    segmentBucket.delete(key);
+    if (segmentBucket.size === 0) {
+      this.lastSegmentIndex.delete(lastSegment);
+    }
+  }
+
+  private toExpiryBucket(expiresAt: number): number {
+    return Math.floor(expiresAt / 1000);
+  }
+
+  private trackExpiry(key: string, expiresAt: number): void {
+    const bucketKey = this.toExpiryBucket(expiresAt);
+    const bucket = this.expiryBuckets.get(bucketKey) || new Set<string>();
+    bucket.add(key);
+    this.expiryBuckets.set(bucketKey, bucket);
+    this.keyToExpiryBucket.set(key, bucketKey);
+  }
+
+  private untrackExpiry(key: string): void {
+    const bucketKey = this.keyToExpiryBucket.get(key);
+    if (typeof bucketKey !== "number") {
+      return;
+    }
+
+    const bucket = this.expiryBuckets.get(bucketKey);
+    if (bucket) {
+      bucket.delete(key);
+      if (bucket.size === 0) {
+        this.expiryBuckets.delete(bucketKey);
+      }
+    }
+
+    this.keyToExpiryBucket.delete(key);
+  }
+
+  private getKeyPrefixes(key: string): string[] {
+    const prefixes: string[] = [];
+    let index = key.indexOf(":");
+
+    while (index !== -1) {
+      prefixes.push(key.slice(0, index + 1));
+      index = key.indexOf(":", index + 1);
+    }
+
+    return prefixes;
+  }
+
+  private getLastSegment(key: string): string {
+    const lastColonIndex = key.lastIndexOf(":");
+    return lastColonIndex >= 0 ? key.slice(lastColonIndex) : key;
   }
 
   private estimateSizeInternal(value: unknown, depth: number, seen: WeakSet<object>): number {
@@ -665,6 +826,8 @@ const CACHE_TTL_MIN_SECONDS = parsePositiveNumber(
   process.env.CACHE_TTL_MIN_SECONDS,
   DEFAULT_CACHE_TTL_MIN_SECONDS
 );
+const CACHE_ADAPTIVE_TTL_ENABLED =
+  (process.env.CACHE_ADAPTIVE_TTL_ENABLED || "false").toLowerCase() === "true";
 
 /**
  * 根據快取壓力動態調整 TTL
@@ -672,6 +835,10 @@ const CACHE_TTL_MIN_SECONDS = parsePositiveNumber(
  * 這可確保壓力計算與實際快取上限一致。
  */
 export function getAdaptiveTTL(baseTTL: number, cacheManager: CacheManager): number {
+  if (!CACHE_ADAPTIVE_TTL_ENABLED) {
+    return baseTTL;
+  }
+
   if (!Number.isFinite(baseTTL) || baseTTL <= 0) {
     return baseTTL;
   }

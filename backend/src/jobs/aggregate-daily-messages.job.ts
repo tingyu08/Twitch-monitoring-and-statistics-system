@@ -16,13 +16,21 @@ import { captureJobError } from "./job-error-tracker";
 
 const LAST_AGGREGATED_AT_KEY = "message_agg_last_aggregated_at";
 const AGGREGATE_DAILY_MESSAGES_CRON = process.env.AGGREGATE_DAILY_MESSAGES_CRON || "15 * * * *";
+type AggregationMode = "increment" | "replace";
+let isAggregating = false;
 
 /**
  * 執行訊息聚合
  */
-export async function aggregateDailyMessages(): Promise<void> {
+export async function aggregateDailyMessages(mode: AggregationMode = "increment"): Promise<void> {
+  if (isAggregating) {
+    logger.warn("Cron", `訊息聚合仍在進行中，略過本次觸發 (mode=${mode})`);
+    return;
+  }
+
+  isAggregating = true;
   const startTime = Date.now();
-  logger.info("Cron", "開始執行每日訊息聚合任務...");
+  logger.info("Cron", `開始執行每日訊息聚合任務... (mode=${mode})`);
 
   try {
     const now = new Date();
@@ -40,30 +48,33 @@ export async function aggregateDailyMessages(): Promise<void> {
       return;
     }
 
-    const rows = await prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
-      SELECT COUNT(*) AS count
-      FROM (
-        SELECT viewerId, channelId
-        FROM viewer_channel_messages
-        WHERE timestamp >= ${fromDate} AND timestamp < ${now}
-        GROUP BY viewerId, channelId, datetime(date(timestamp))
-      )
-    `);
+    let upsertCount = 0;
 
-    const upsertCount = rows[0]?.count ?? 0;
-
-    if (upsertCount === 0) {
-      await prisma.systemSetting.upsert({
-        where: { key: LAST_AGGREGATED_AT_KEY },
-        create: { key: LAST_AGGREGATED_AT_KEY, value: now.toISOString() },
-        update: { value: now.toISOString() },
-      });
-      logger.info("Cron", "沒有需要聚合的資料");
-      return;
-    }
+    const conflictUpdateSql =
+      mode === "replace"
+        ? Prisma.sql`
+            totalMessages = excluded.totalMessages,
+            chatMessages = excluded.chatMessages,
+            subscriptions = excluded.subscriptions,
+            cheers = excluded.cheers,
+            giftSubs = excluded.giftSubs,
+            raids = excluded.raids,
+            totalBits = COALESCE(excluded.totalBits, 0),
+            updatedAt = CURRENT_TIMESTAMP
+          `
+        : Prisma.sql`
+            totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
+            chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
+            subscriptions = viewer_channel_message_daily_aggs.subscriptions + excluded.subscriptions,
+            cheers = viewer_channel_message_daily_aggs.cheers + excluded.cheers,
+            giftSubs = viewer_channel_message_daily_aggs.giftSubs + excluded.giftSubs,
+            raids = viewer_channel_message_daily_aggs.raids + excluded.raids,
+            totalBits = COALESCE(viewer_channel_message_daily_aggs.totalBits, 0) + COALESCE(excluded.totalBits, 0),
+            updatedAt = CURRENT_TIMESTAMP
+          `;
 
     await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`
+      const affectedRows = await tx.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_message_daily_aggs (
           id,
           viewerId,
@@ -95,15 +106,9 @@ export async function aggregateDailyMessages(): Promise<void> {
         WHERE timestamp >= ${fromDate} AND timestamp < ${now}
         GROUP BY viewerId, channelId, datetime(date(timestamp))
         ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-          totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
-          chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
-          subscriptions = viewer_channel_message_daily_aggs.subscriptions + excluded.subscriptions,
-          cheers = viewer_channel_message_daily_aggs.cheers + excluded.cheers,
-          giftSubs = viewer_channel_message_daily_aggs.giftSubs + excluded.giftSubs,
-          raids = viewer_channel_message_daily_aggs.raids + excluded.raids,
-          totalBits = COALESCE(viewer_channel_message_daily_aggs.totalBits, 0) + COALESCE(excluded.totalBits, 0),
-          updatedAt = CURRENT_TIMESTAMP
+          ${conflictUpdateSql}
       `);
+      upsertCount = Number(affectedRows);
 
       await tx.systemSetting.upsert({
         where: { key: LAST_AGGREGATED_AT_KEY },
@@ -113,11 +118,17 @@ export async function aggregateDailyMessages(): Promise<void> {
     });
 
     const duration = Date.now() - startTime;
-    logger.info("Cron", `訊息聚合完成: ${upsertCount} 筆記錄已更新 (耗時 ${duration}ms)`);
+    if (upsertCount === 0) {
+      logger.info("Cron", `沒有需要聚合的資料 (mode=${mode}, 耗時 ${duration}ms)`);
+    } else {
+      logger.info("Cron", `訊息聚合完成: ${upsertCount} 筆記錄已更新 (mode=${mode}, 耗時 ${duration}ms)`);
+    }
   } catch (error) {
     logger.error("Cron", "訊息聚合失敗:", error);
     captureJobError("aggregate-daily-messages", error);
     throw error;
+  } finally {
+    isAggregating = false;
   }
 }
 
@@ -141,13 +152,13 @@ export function startMessageAggregationJob(): void {
 /**
  * 手動觸發聚合（用於測試或管理員操作）
  */
-export async function manualAggregation(): Promise<{
+export async function manualAggregation(mode: AggregationMode = "increment"): Promise<{
   success: boolean;
   message: string;
 }> {
   try {
-    await aggregateDailyMessages();
-    return { success: true, message: "聚合任務執行成功" };
+    await aggregateDailyMessages(mode);
+    return { success: true, message: `聚合任務執行成功 (mode=${mode})` };
   } catch (error) {
     return {
       success: false,

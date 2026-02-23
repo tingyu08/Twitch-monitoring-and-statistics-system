@@ -6,6 +6,7 @@
  */
 
 import cron from "node-cron";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
@@ -258,44 +259,58 @@ export class ChannelStatsSyncJob {
       }));
     }
 
-    // Update or create daily stats (parallel batch)
+    // Update or create daily stats（set-based SQL upsert）
     const entries = groupedStats;
     let updated = 0;
 
     for (let i = 0; i < entries.length; i += BATCH_SIZE) {
       const batch = entries.slice(i, i + BATCH_SIZE);
-      await runWithWriteGuard("channel-stats-sync:daily-stats-upsert", () =>
-        Promise.all(
-          batch.map(async (stats) => {
-            const avgViewers =
-              stats._count._all > 0
-                ? Math.round((stats._sum.avgViewers ?? 0) / stats._count._all)
-                : null;
+      const values = batch.map((stats) => {
+        const avgViewers =
+          stats._count._all > 0 ? Math.round((stats._sum.avgViewers ?? 0) / stats._count._all) : null;
 
-            await prisma.channelDailyStat.upsert({
-              where: {
-                channelId_date: {
-                  channelId: stats.channelId,
-                  date: today,
-                },
-              },
-              create: {
-                channelId: stats.channelId,
-                date: today,
-                streamSeconds: stats._sum.durationSeconds ?? 0,
-                streamCount: stats._count._all,
-                avgViewers,
-                peakViewers: stats._max.peakViewers ?? 0,
-              },
-              update: {
-                streamSeconds: stats._sum.durationSeconds ?? 0,
-                streamCount: stats._count._all,
-                avgViewers,
-                peakViewers: stats._max.peakViewers ?? 0,
-              },
-            });
-          })
-        )
+        return Prisma.sql`(
+          ${stats.channelId},
+          ${today},
+          ${stats._sum.durationSeconds ?? 0},
+          ${stats._count._all},
+          ${avgViewers},
+          ${stats._max.peakViewers ?? 0}
+        )`;
+      });
+
+      await runWithWriteGuard("channel-stats-sync:daily-stats-upsert", () =>
+        prisma.$executeRaw(Prisma.sql`
+          WITH src(channelId, date, streamSeconds, streamCount, avgViewers, peakViewers) AS (
+            VALUES ${Prisma.join(values)}
+          )
+          INSERT INTO channel_daily_stats (
+            id,
+            channelId,
+            date,
+            streamSeconds,
+            streamCount,
+            avgViewers,
+            peakViewers,
+            updatedAt
+          )
+          SELECT
+            lower(hex(randomblob(16))) AS id,
+            src.channelId,
+            src.date,
+            src.streamSeconds,
+            src.streamCount,
+            src.avgViewers,
+            src.peakViewers,
+            CURRENT_TIMESTAMP
+          FROM src
+          ON CONFLICT(channelId, date) DO UPDATE SET
+            streamSeconds = excluded.streamSeconds,
+            streamCount = excluded.streamCount,
+            avgViewers = excluded.avgViewers,
+            peakViewers = excluded.peakViewers,
+            updatedAt = CURRENT_TIMESTAMP
+        `)
       );
       updated += batch.length;
     }

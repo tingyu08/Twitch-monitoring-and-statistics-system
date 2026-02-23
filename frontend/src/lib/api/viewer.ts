@@ -45,6 +45,77 @@ export interface FollowedChannel {
   currentStreamStartedAt?: string;
 }
 
+function toNumberOrFallback(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+function toStringOrFallback(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function toOptionalString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export function normalizeFollowedChannel(raw: unknown): FollowedChannel {
+  const item = (raw || {}) as Record<string, unknown>;
+
+  const id = toStringOrFallback(item.id, "");
+  const channelName = toStringOrFallback(item.channelName, "");
+  const displayName = toStringOrFallback(item.displayName, channelName || "Unknown");
+  const avatarUrl = toStringOrFallback(item.avatarUrl, "");
+  const category = toStringOrFallback(item.category, "Just Chatting");
+
+  const totalWatchMinutes = toNumberOrFallback(
+    item.totalWatchMinutes ?? item.totalWatchMin ?? item.totalWatchTimeMinutes,
+    0
+  );
+  const messageCount = toNumberOrFallback(item.messageCount ?? item.totalMessages, 0);
+
+  const viewerCountRaw = item.viewerCount ?? item.currentViewerCount;
+  const viewerCount =
+    viewerCountRaw === null || viewerCountRaw === undefined ? null : toNumberOrFallback(viewerCountRaw, 0);
+
+  return {
+    id,
+    channelName,
+    displayName,
+    avatarUrl,
+    category,
+    isLive: Boolean(item.isLive),
+    viewerCount,
+    streamStartedAt: toOptionalString(item.streamStartedAt),
+    followedAt: toOptionalString(item.followedAt),
+    tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
+    lastWatched: toOptionalString(item.lastWatched),
+    totalWatchMinutes,
+    messageCount,
+    currentTitle: toOptionalString(item.currentTitle) || undefined,
+    currentGameName: toOptionalString(item.currentGameName) || undefined,
+    currentViewerCount:
+      item.currentViewerCount === undefined || item.currentViewerCount === null
+        ? undefined
+        : toNumberOrFallback(item.currentViewerCount, 0),
+    currentStreamStartedAt: toOptionalString(item.currentStreamStartedAt) || undefined,
+  };
+}
+
+export function normalizeFollowedChannelsResponse(raw: unknown): FollowedChannel[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.map((item) => normalizeFollowedChannel(item));
+}
+
 export interface RealViewerDailyStat {
   date: string;
   watchHours: number;
@@ -210,7 +281,8 @@ export interface ViewerMessageStatsResponse {
 
 export async function getFollowedChannels(): Promise<FollowedChannel[]> {
   try {
-    return await httpClient<FollowedChannel[]>("/api/viewer/channels");
+    const response = await httpClient<unknown>("/api/viewer/channels");
+    return normalizeFollowedChannelsResponse(response);
   } catch (error) {
     console.warn("Failed to fetch followed channels, returning empty list", error);
     return [];
@@ -226,39 +298,8 @@ export const viewerApi = {
   },
 
   async getFollowedChannels(): Promise<FollowedChannel[]> {
-    // P1 Opt: 加入簡單快取以避免重複請求轟炸 Turso
-    const CACHE_KEY = "viewer_followed_channels";
-    const CACHE_TTL = 30000; // 30 seconds
-
-    // 檢查快取
-    if (typeof window !== "undefined") {
-      const cached = sessionStorage.getItem(CACHE_KEY);
-      if (cached) {
-        try {
-          const { data, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < CACHE_TTL) {
-            return data;
-          }
-        } catch (e) {
-          sessionStorage.removeItem(CACHE_KEY);
-        }
-      }
-    }
-
-    const channels = await getFollowedChannels();
-
-    // 寫入快取
-    if (typeof window !== "undefined" && channels.length > 0) {
-      sessionStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({
-          data: channels,
-          timestamp: Date.now(),
-        })
-      );
-    }
-
-    return channels;
+    // 由 React Query 負責快取，避免多層快取造成直播狀態不同步
+    return getFollowedChannels();
   },
 
   async searchChannels(query: string): Promise<FollowedChannel[]> {

@@ -26,12 +26,11 @@ export async function runWithWriteGuard<T>(jobName: string, operation: () => Pro
   let releaseCurrent: (() => void) | null = null;
   const previous = writeTailsByKey.get(guardKey) || Promise.resolve();
 
-  writeTailsByKey.set(
-    guardKey,
-    new Promise<void>((resolve) => {
-      releaseCurrent = resolve;
-    })
-  );
+  let ourTail!: Promise<void>;
+  ourTail = new Promise<void>((resolve) => {
+    releaseCurrent = resolve;
+  });
+  writeTailsByKey.set(guardKey, ourTail);
 
   await previous;
 
@@ -46,6 +45,9 @@ export async function runWithWriteGuard<T>(jobName: string, operation: () => Pro
   } finally {
     lastWriteCompletedAtByKey.set(guardKey, Date.now());
     releaseCurrent?.();
+    if (writeTailsByKey.get(guardKey) === ourTail) {
+      writeTailsByKey.delete(guardKey);
+    }
     logger.debug("JobWriteGuard", `Write slot released by ${jobName} (key=${guardKey})`);
   }
 }

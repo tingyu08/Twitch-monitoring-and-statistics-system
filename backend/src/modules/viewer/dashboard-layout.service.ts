@@ -1,15 +1,42 @@
 import { prisma } from "../../db/prisma";
+import { z } from "zod";
+
+const layoutItemSchema = z.object({
+  i: z.string(),
+  x: z.number().int(),
+  y: z.number().int(),
+  w: z.number().int().positive(),
+  h: z.number().int().positive(),
+  minW: z.number().int().positive().optional(),
+  maxW: z.number().int().positive().optional(),
+  minH: z.number().int().positive().optional(),
+  maxH: z.number().int().positive().optional(),
+});
+
+const dashboardLayoutSchema = z.array(layoutItemSchema).max(100);
 
 export class DashboardLayoutService {
   async getLayout(viewerId: string, channelId: string) {
     const layout = await prisma.viewerDashboardLayout.findUnique({
       where: { viewerId_channelId: { viewerId, channelId } },
     });
-    return layout ? JSON.parse(layout.layout) : null;
+
+    if (!layout) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(layout.layout);
+      const validated = dashboardLayoutSchema.safeParse(parsed);
+      return validated.success ? validated.data : null;
+    } catch {
+      return null;
+    }
   }
 
   async saveLayout(viewerId: string, channelId: string, layout: unknown) {
-    const layoutStr = JSON.stringify(layout);
+    const validatedLayout = dashboardLayoutSchema.parse(layout);
+    const layoutStr = JSON.stringify(validatedLayout);
     return prisma.viewerDashboardLayout.upsert({
       where: { viewerId_channelId: { viewerId, channelId } },
       create: {

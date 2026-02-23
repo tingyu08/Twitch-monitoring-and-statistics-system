@@ -4,6 +4,7 @@ import { recordQueryDuration } from "./query-metrics";
 
 type SlowQueryLogState = {
   lastLoggedAt: number;
+  lastSeenAt: number;
   suppressedCount: number;
   maxSuppressedDuration: number;
 };
@@ -18,9 +19,20 @@ type SlowQueryAggregate = {
 };
 
 const SLOW_QUERY_LOG_THROTTLE_MS = Number(process.env.SLOW_QUERY_LOG_THROTTLE_MS || 120000);
+const SLOW_QUERY_LOG_STATE_TTL_MS = Number(
+  process.env.SLOW_QUERY_LOG_STATE_TTL_MS || Math.max(10 * 60 * 1000, SLOW_QUERY_LOG_THROTTLE_MS * 10)
+);
 const SLOW_QUERY_TOP_N = Math.max(0, Number(process.env.SLOW_QUERY_TOP_N || 0));
 const SLOW_QUERY_TOP_N_WINDOW_MS = Number(
   process.env.SLOW_QUERY_TOP_N_WINDOW_MS || SLOW_QUERY_LOG_THROTTLE_MS
+);
+const SLOW_QUERY_LOG_STATE_MAX_ENTRIES = Math.max(
+  100,
+  Number(process.env.SLOW_QUERY_LOG_STATE_MAX_ENTRIES || 5000)
+);
+const SLOW_QUERY_AGGREGATE_MAX_ENTRIES = Math.max(
+  100,
+  Number(process.env.SLOW_QUERY_AGGREGATE_MAX_ENTRIES || 5000)
 );
 const SLOW_QUERY_LOG_IGNORE_KEYS = new Set(
   (process.env.SLOW_QUERY_LOG_IGNORE || "")
@@ -32,6 +44,7 @@ const SLOW_QUERY_LOG_IGNORE_KEYS = new Set(
 const slowQueryLogStates = new Map<string, SlowQueryLogState>();
 const slowQueryAggregates = new Map<string, SlowQueryAggregate>();
 let topNFlushTimer: NodeJS.Timeout | null = null;
+let statesCleanupTimer: NodeJS.Timeout | null = null;
 
 function getQueryKey(model: string | undefined, operation: string): string {
   return `${model ?? "Raw"}.${operation}`;
@@ -49,6 +62,13 @@ function recordSlowQueryAggregate(model: string | undefined, operation: string, 
 
   const current = slowQueryAggregates.get(queryKey);
   if (!current) {
+    if (slowQueryAggregates.size >= SLOW_QUERY_AGGREGATE_MAX_ENTRIES) {
+      const oldestKey = slowQueryAggregates.keys().next().value;
+      if (oldestKey) {
+        slowQueryAggregates.delete(oldestKey);
+      }
+    }
+
     slowQueryAggregates.set(queryKey, {
       model,
       operation,
@@ -64,6 +84,7 @@ function recordSlowQueryAggregate(model: string | undefined, operation: string, 
   current.maxDuration = Math.max(current.maxDuration, duration);
   current.totalDuration += duration;
   current.lastDuration = duration;
+  slowQueryAggregates.delete(queryKey);
   slowQueryAggregates.set(queryKey, current);
 }
 
@@ -98,6 +119,32 @@ function flushTopNSlowQueries(): void {
   slowQueryAggregates.clear();
 }
 
+function cleanupSlowQueryLogStates(now = Date.now()): void {
+  if (slowQueryLogStates.size === 0) {
+    return;
+  }
+
+  for (const [queryKey, state] of slowQueryLogStates.entries()) {
+    if (now - state.lastSeenAt > SLOW_QUERY_LOG_STATE_TTL_MS) {
+      slowQueryLogStates.delete(queryKey);
+    }
+  }
+}
+
+function ensureStatesCleanupTimer(): void {
+  if (statesCleanupTimer) {
+    return;
+  }
+
+  statesCleanupTimer = setInterval(() => {
+    cleanupSlowQueryLogStates();
+  }, SLOW_QUERY_LOG_STATE_TTL_MS);
+
+  if (statesCleanupTimer.unref) {
+    statesCleanupTimer.unref();
+  }
+}
+
 function ensureTopNFlushTimer(): void {
   if (SLOW_QUERY_TOP_N <= 0 || topNFlushTimer) {
     return;
@@ -121,6 +168,7 @@ function logSlowQueryWithThrottle(model: string | undefined, operation: string, 
   }
 
   const now = Date.now();
+  cleanupSlowQueryLogStates(now);
   const current = slowQueryLogStates.get(queryKey);
 
   if (!current || now - current.lastLoggedAt >= SLOW_QUERY_LOG_THROTTLE_MS) {
@@ -141,15 +189,25 @@ function logSlowQueryWithThrottle(model: string | undefined, operation: string, 
 
     slowQueryLogStates.set(queryKey, {
       lastLoggedAt: now,
+      lastSeenAt: now,
       suppressedCount: 0,
       maxSuppressedDuration: duration,
     });
+
+    if (slowQueryLogStates.size > SLOW_QUERY_LOG_STATE_MAX_ENTRIES) {
+      const oldestKey = slowQueryLogStates.keys().next().value;
+      if (oldestKey) {
+        slowQueryLogStates.delete(oldestKey);
+      }
+    }
 
     return;
   }
 
   current.suppressedCount += 1;
+  current.lastSeenAt = now;
   current.maxSuppressedDuration = Math.max(current.maxSuppressedDuration, duration);
+  slowQueryLogStates.delete(queryKey);
   slowQueryLogStates.set(queryKey, current);
 }
 
@@ -160,6 +218,7 @@ declare global {
 
 export function setupSlowQueryLogger(prisma: PrismaClient, thresholdMs = 1000): PrismaClient {
   ensureTopNFlushTimer();
+  ensureStatesCleanupTimer();
 
   if (global.slowQueryLoggerInitialized) {
     return prisma;

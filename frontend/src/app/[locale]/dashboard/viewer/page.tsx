@@ -396,7 +396,7 @@ export default function ViewerDashboardPage() {
     };
 
     const handleStatsUpdate = (data: { channelId: string; messageCountDelta: number }) => {
-      if (data.messageCountDelta === 0) return;
+      if (data.messageCountDelta <= 0) return;
 
       updateSingleChannel(
         (ch) => ch.id === data.channelId,
@@ -422,6 +422,12 @@ export default function ViewerDashboardPage() {
       socket.off("stats-update", handleStatsUpdate);
     };
   }, [socket, socketConnected, queryClient]);
+
+  useEffect(() => {
+    if (socketConnected) {
+      void refetchChannels();
+    }
+  }, [socketConnected, refetchChannels]);
 
   // P1 優化：React Query 自動處理輪詢，不需要手動設置 interval
   // 只需要在頁面可見時定期重新驗證資料
@@ -457,10 +463,36 @@ export default function ViewerDashboardPage() {
       if (a.isLive && !b.isLive) return -1;
       if (!a.isLive && b.isLive) return 1;
 
-      const watchDiff = b.totalWatchMinutes - a.totalWatchMinutes;
-      if (watchDiff !== 0) return watchDiff;
+      const messageDiff = (b.messageCount || 0) - (a.messageCount || 0);
+      if (messageDiff !== 0) return messageDiff;
 
-      return a.displayName.localeCompare(b.displayName, "zh-Hant");
+      if (a.isLive && b.isLive) {
+        const aStarted = a.streamStartedAt ? new Date(a.streamStartedAt).getTime() : 0;
+        const bStarted = b.streamStartedAt ? new Date(b.streamStartedAt).getTime() : 0;
+        if (aStarted !== bStarted) return bStarted - aStarted;
+
+        const aFollowed = a.followedAt ? new Date(a.followedAt).getTime() : 0;
+        const bFollowed = b.followedAt ? new Date(b.followedAt).getTime() : 0;
+        if (aFollowed !== bFollowed) return bFollowed - aFollowed;
+
+        const displayDiff = a.displayName.localeCompare(b.displayName, "zh-Hant");
+        if (displayDiff !== 0) return displayDiff;
+
+        return a.id.localeCompare(b.id);
+      }
+
+      const aLast = a.lastWatched ? new Date(a.lastWatched).getTime() : 0;
+      const bLast = b.lastWatched ? new Date(b.lastWatched).getTime() : 0;
+      if (aLast !== bLast) return bLast - aLast;
+
+      const aFollowed = a.followedAt ? new Date(a.followedAt).getTime() : 0;
+      const bFollowed = b.followedAt ? new Date(b.followedAt).getTime() : 0;
+      if (aFollowed !== bFollowed) return bFollowed - aFollowed;
+
+      const displayDiff = a.displayName.localeCompare(b.displayName, "zh-Hant");
+      if (displayDiff !== 0) return displayDiff;
+
+      return a.id.localeCompare(b.id);
     });
 
     return filtered;
@@ -476,7 +508,7 @@ export default function ViewerDashboardPage() {
   const endIndex = startIndex + CHANNELS_PER_PAGE;
   const currentPageChannels = filteredChannels.slice(startIndex, endIndex);
 
-  // 通知後端監聽當前頁面的開台頻道
+  // 通知後端監聽追蹤清單中的所有開台頻道（避免翻頁後停止計數）
   const notifyListenChannels = useCallback(async (channelsToListen: FollowedChannel[]) => {
     const liveChannels = channelsToListen
       .filter((ch) => ch.isLive)
@@ -497,13 +529,12 @@ export default function ViewerDashboardPage() {
     }
   }, []);
 
-  // 當頁面變更時通知後端（只在頁碼變化時執行）
+  // 當追蹤清單變更時通知後端（含初次載入與直播狀態切換）
   useEffect(() => {
-    if (currentPageChannels.length > 0) {
-      notifyListenChannels(currentPageChannels);
+    if (channels.length > 0) {
+      notifyListenChannels(channels);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  }, [channels, notifyListenChannels]);
 
   // Subscribe/unsubscribe by diff to avoid full reconnect storms on every channels update.
   useEffect(() => {

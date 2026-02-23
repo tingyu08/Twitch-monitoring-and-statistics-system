@@ -32,76 +32,79 @@ model Streamer {
 }
 
 model Viewer {
-  id           String                   @id @default(uuid())
-  twitchUserId String                   @unique
-  displayName  String?
-  avatarUrl    String?
-  tokenVersion Int                      @default(0)  // 用於 Token 失效機制
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  isAnonymized Boolean                  @default(false)
-  anonymizedAt DateTime?
-  consentedAt  DateTime?
+  id             String                   @id @default(uuid())
+  twitchUserId   String                   @unique
+  displayName    String?
+  avatarUrl      String?
+  tokenVersion   Int                      @default(0) // 用於 Token 失效機制
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  isAnonymized   Boolean                  @default(false)
+  anonymizedAt   DateTime?
+  consentedAt    DateTime?
   consentVersion Int?
-  deletedAt    DateTime?                // Story 2.5: 軟刪除時間戳
-  twitchTokens TwitchToken[]
-  dailyStats   ViewerChannelDailyStat[]
+  deletedAt      DateTime? // Story 2.5: 軟刪除時間戳
+  twitchTokens   TwitchToken[]
+  dailyStats     ViewerChannelDailyStat[]
 
-  messages     ViewerChannelMessage[]
-  messageAggs  ViewerChannelMessageDailyAgg[]
-  lifetimeStats ViewerChannelLifetimeStats[]
-  channelSummaries ViewerChannelSummary[]
-  dashboardLayouts ViewerDashboardLayout[]
+  messages                 ViewerChannelMessage[]
+  messageAggs              ViewerChannelMessageDailyAgg[]
+  lifetimeStats            ViewerChannelLifetimeStats[]
+  extensionHeartbeatDedups ExtensionHeartbeatDedup[]
+  channelSummaries         ViewerChannelSummary[]
+  dashboardLayouts         ViewerDashboardLayout[]
 
   // Story 2.5: Privacy Control Relations
-  privacyConsent   ViewerPrivacyConsent?
-  deletionRequest  DeletionRequest?
-  exportJobs       ExportJob[]
+  privacyConsent  ViewerPrivacyConsent?
+  deletionRequest DeletionRequest?
+  exportJobs      ExportJob[]
 
   @@map("viewers")
 }
 
 model Channel {
-  id              String                   @id @default(uuid())
-  streamerId      String?                  // Optional for external channels
-  twitchChannelId String                   @unique
-  channelName     String
-  channelUrl      String?
-  isMonitored     Boolean                  @default(true)   // Story 3.6: 是否監控中
-  isLive          Boolean                  @default(false)
-  currentViewerCount Int?                  @default(0)      // 優化: 快取觀眾數
-  currentStreamStartedAt DateTime?                          // 優化: 快取開台時間
-  currentGameName String?                                   // 優化: 快取遊戲名稱
-  currentTitle    String?                                   // 優化: 快取標題
-  lastLiveCheckAt DateTime?                                 // 優化: 最後檢查時間
-  source          String                   @default("platform")
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  dailyStats      ChannelDailyStat[]
-  streamer        Streamer?                @relation(fields: [streamerId], references: [id], onDelete: Cascade)
-  streamSessions  StreamSession[]
-  viewerStats     ViewerChannelDailyStat[]
-  viewerMessages  ViewerChannelMessage[]
-  viewerMessageAggs ViewerChannelMessageDailyAgg[]
-  viewerLifetimeStats ViewerChannelLifetimeStats[]
-  viewerChannelSummaries ViewerChannelSummary[]
-  channelHourlyStats ChannelHourlyStat[]
-  viewerDashboardLayouts ViewerDashboardLayout[]
-  userFollows     UserFollow[]             // Story 3.6: 追蹤此頻道的用戶
-  viewerVideos    ViewerChannelVideo[]     // 觀眾追蹤名單用的影片
-  viewerClips     ViewerChannelClip[]      // 觀眾追蹤名單用的剪輯
+  id                       String                         @id @default(uuid())
+  streamerId               String? // Optional for external channels
+  twitchChannelId          String                         @unique
+  channelName              String
+  channelUrl               String?
+  isMonitored              Boolean                        @default(true) // Story 3.6: 是否監控中
+  isLive                   Boolean                        @default(false)
+  currentViewerCount       Int?                           @default(0) // 優化: 快取觀眾數
+  currentStreamStartedAt   DateTime? // 優化: 快取開台時間
+  currentGameName          String? // 優化: 快取遊戲名稱
+  currentTitle             String? // 優化: 快取標題
+  lastLiveCheckAt          DateTime? // 優化: 最後檢查時間
+  source                   String                         @default("platform")
+  createdAt                DateTime                       @default(now())
+  updatedAt                DateTime                       @updatedAt
+  dailyStats               ChannelDailyStat[]
+  streamer                 Streamer?                      @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamSessions           StreamSession[]
+  viewerStats              ViewerChannelDailyStat[]
+  viewerMessages           ViewerChannelMessage[]
+  viewerMessageAggs        ViewerChannelMessageDailyAgg[]
+  viewerLifetimeStats      ViewerChannelLifetimeStats[]
+  extensionHeartbeatDedups ExtensionHeartbeatDedup[]
+  viewerChannelSummaries   ViewerChannelSummary[]
+  channelHourlyStats       ChannelHourlyStat[]
+  viewerDashboardLayouts   ViewerDashboardLayout[]
+  userFollows              UserFollow[] // Story 3.6: 追蹤此頻道的用戶
+  viewerVideos             ViewerChannelVideo[] // 觀眾追蹤名單用的影片
+  viewerClips              ViewerChannelClip[] // 觀眾追蹤名單用的剪輯
 
-  @@index([isLive])                // P0: 優化直播狀態篩選查詢
-  @@index([lastLiveCheckAt])       // P0: 優化最後檢查時間排序
-  @@index([channelName])           // P0: hot path lookup by normalized channel name
+  @@index([isLive]) // P0: 優化直播狀態篩選查詢
+  @@index([lastLiveCheckAt]) // P0: 優化最後檢查時間排序
+  @@index([channelName]) // P0: hot path lookup by normalized channel name
+  @@index([isMonitored, id]) // 優化監控頻道 cursor scan (isMonitored + orderBy id)
   @@index([isMonitored, twitchChannelId]) // 優化 update-live-status 監控頻道掃描
   @@map("channels")
 }
 
 model StreamSession {
-  id              String    @id @default(uuid())
+  id              String         @id @default(uuid())
   channelId       String
-  twitchStreamId  String?   @unique
+  twitchStreamId  String?        @unique
   startedAt       DateTime
   endedAt         DateTime?
   durationSeconds Int?
@@ -109,25 +112,25 @@ model StreamSession {
   category        String?
   avgViewers      Int?
   peakViewers     Int?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  channel         Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  channel         Channel        @relation(fields: [channelId], references: [id], onDelete: Cascade)
   metrics         StreamMetric[]
 
   @@index([channelId, startedAt])
   @@index([channelId, endedAt])
-  @@index([endedAt])               // P0: 優化 WHERE endedAt IS NULL 查詢
+  @@index([endedAt]) // P0: 優化 WHERE endedAt IS NULL 查詢
   @@map("stream_sessions")
 }
 
 model StreamMetric {
-  id              String        @id @default(uuid())
+  id              String   @id @default(uuid())
   streamSessionId String
-  timestamp       DateTime      @default(now())
-  viewerCount     Int           @default(0)
-  chatCount       Int?          @default(0)
-  
-  streamSession   StreamSession @relation(fields: [streamSessionId], references: [id], onDelete: Cascade)
+  timestamp       DateTime @default(now())
+  viewerCount     Int      @default(0)
+  chatCount       Int?     @default(0)
+
+  streamSession StreamSession @relation(fields: [streamSessionId], references: [id], onDelete: Cascade)
 
   @@index([streamSessionId, timestamp])
   @@map("stream_metrics")
@@ -191,6 +194,23 @@ model ViewerChannelMessage {
   @@map("viewer_channel_messages")
 }
 
+model ExtensionHeartbeatDedup {
+  id                 String   @id @default(uuid())
+  dedupKey           String   @unique
+  viewerId           String
+  channelId          String
+  heartbeatTimestamp DateTime
+  durationSeconds    Int
+  createdAt          DateTime @default(now())
+
+  viewer  Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId, channelId])
+  @@index([createdAt])
+  @@map("extension_heartbeat_dedups")
+}
+
 model ViewerChannelMessageDailyAgg {
   id            String   @id @default(uuid())
   viewerId      String
@@ -216,28 +236,28 @@ model ViewerChannelMessageDailyAgg {
 }
 
 model TwitchToken {
-  id           String    @id @default(uuid())
-  ownerType    String
-  streamerId   String?
-  viewerId     String?
-  accessToken  String
-  refreshToken String?
-  expiresAt    DateTime?
-  scopes       String    @default("[]")
-  status       String    @default("active") // "active" | "expired" | "revoked" | "invalid"
-  lastValidatedAt DateTime?                 // 最後一次驗證成功的時間
-  failureCount Int       @default(0)        // 連續驗證失敗次數
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  viewer       Viewer?   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
-  streamer     Streamer? @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  id              String    @id @default(uuid())
+  ownerType       String
+  streamerId      String?
+  viewerId        String?
+  accessToken     String
+  refreshToken    String?
+  expiresAt       DateTime?
+  scopes          String    @default("[]")
+  status          String    @default("active") // "active" | "expired" | "revoked" | "invalid"
+  lastValidatedAt DateTime? // 最後一次驗證成功的時間
+  failureCount    Int       @default(0) // 連續驗證失敗次數
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  viewer          Viewer?   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  streamer        Streamer? @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([ownerType])
   @@index([status])
   @@index([streamerId])
   @@index([viewerId])
-  @@index([ownerType, status])     // P0: 優化組合查詢（Token 驗證任務）
-  @@index([expiresAt])             // P0: 優化過期 Token 查詢
+  @@index([ownerType, status]) // P0: 優化組合查詢（Token 驗證任務）
+  @@index([expiresAt]) // P0: 優化過期 Token 查詢
   @@map("twitch_tokens")
 }
 
@@ -284,13 +304,13 @@ model ChannelListenerLock {
 
 model UserFollow {
   id         String   @id @default(uuid())
-  userId     String   // Can be streamerId or viewerId
-  userType   String   // "streamer" | "viewer"
+  userId     String // Can be streamerId or viewerId
+  userType   String // "streamer" | "viewer"
   channelId  String
   followedAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([userId, channelId])
   @@index([userId])
@@ -302,45 +322,45 @@ model UserFollow {
 // ========== Story 2.4 Models ==========
 
 model ViewerChannelLifetimeStats {
-  id                    String   @id @default(uuid())
-  viewerId              String
-  channelId             String
+  id        String @id @default(uuid())
+  viewerId  String
+  channelId String
 
   // 觀看統計
-  totalWatchTimeMinutes Int      @default(0)
-  totalSessions         Int      @default(0)
-  avgSessionMinutes     Int      @default(0)
+  totalWatchTimeMinutes Int       @default(0)
+  totalSessions         Int       @default(0)
+  avgSessionMinutes     Int       @default(0)
   firstWatchedAt        DateTime?
   lastWatchedAt         DateTime?
 
   // 留言統計
-  totalMessages         Int      @default(0)
-  totalChatMessages     Int      @default(0)
-  totalSubscriptions    Int      @default(0)
-  totalCheers           Int      @default(0)
-  totalBits             Int      @default(0)
+  totalMessages      Int @default(0)
+  totalChatMessages  Int @default(0)
+  totalSubscriptions Int @default(0)
+  totalCheers        Int @default(0)
+  totalBits          Int @default(0)
 
   // 忠誠度
-  trackingStartedAt     DateTime @default(now())
-  trackingDays          Int      @default(0)
-  longestStreakDays     Int      @default(0)
-  currentStreakDays     Int      @default(0)
+  trackingStartedAt DateTime @default(now())
+  trackingDays      Int      @default(0)
+  longestStreakDays Int      @default(0)
+  currentStreakDays Int      @default(0)
 
   // 活躍度
-  activeDaysLast30      Int      @default(0)
-  activeDaysLast90      Int      @default(0)
-  mostActiveMonth       String?  // "YYYY-MM"
-  mostActiveMonthCount  Int      @default(0)
+  activeDaysLast30     Int     @default(0)
+  activeDaysLast90     Int     @default(0)
+  mostActiveMonth      String? // "YYYY-MM"
+  mostActiveMonthCount Int     @default(0)
 
   // 排名 (百分位 0.0 - 100.0)
-  watchTimePercentile   Float?
-  messagePercentile     Float?
+  watchTimePercentile Float?
+  messagePercentile   Float?
 
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  viewer                Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
-  channel               Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  viewer  Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([viewerId, channelId])
   @@index([viewerId]) // 優化：支援 getFollowedChannels 查詢
@@ -350,23 +370,23 @@ model ViewerChannelLifetimeStats {
 }
 
 model ViewerChannelSummary {
-  viewerId       String
-  channelId      String
-  channelName    String
-  displayName    String
-  avatarUrl      String
-  category       String?
-  isLive         Boolean
-  viewerCount    Int?
+  viewerId        String
+  channelId       String
+  channelName     String
+  displayName     String
+  avatarUrl       String
+  category        String?
+  isLive          Boolean
+  viewerCount     Int?
   streamStartedAt DateTime?
-  lastWatched    DateTime?
-  totalWatchMin  Int      @default(0)
-  messageCount   Int      @default(0)
-  isExternal     Boolean  @default(false)
-  followedAt     DateTime?
-  updatedAt      DateTime @updatedAt
+  lastWatched     DateTime?
+  totalWatchMin   Int       @default(0)
+  messageCount    Int       @default(0)
+  isExternal      Boolean   @default(false)
+  followedAt      DateTime?
+  updatedAt       DateTime  @updatedAt
 
-  viewer Viewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  viewer  Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@id([viewerId, channelId])
@@ -394,11 +414,11 @@ model ViewerDashboardLayout {
   id        String   @id @default(uuid())
   viewerId  String
   channelId String
-  layout    String   // JSON string of grid layout
+  layout    String // JSON string of grid layout
   updatedAt DateTime @updatedAt
 
-  viewer    Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  viewer  Viewer  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([viewerId, channelId])
   @@index([viewerId])
@@ -408,43 +428,43 @@ model ViewerDashboardLayout {
 // ========== Story 2.5 Privacy Control Models ==========
 
 model ViewerPrivacyConsent {
-  id                           String   @id @default(uuid())
-  viewerId                     String   @unique
-  consentVersion               String   @default("v1.0")
-  consentGivenAt               DateTime @default(now())
+  id             String   @id @default(uuid())
+  viewerId       String   @unique
+  consentVersion String   @default("v1.0")
+  consentGivenAt DateTime @default(now())
 
   // 觀看時數類別
-  collectDailyWatchTime        Boolean  @default(true)
-  collectWatchTimeDistribution Boolean  @default(true)
-  collectMonthlyAggregates     Boolean  @default(true)
+  collectDailyWatchTime        Boolean @default(true)
+  collectWatchTimeDistribution Boolean @default(true)
+  collectMonthlyAggregates     Boolean @default(true)
 
   // 留言與互動類別
-  collectChatMessages          Boolean  @default(true)
-  collectInteractions          Boolean  @default(true)
-  collectInteractionFrequency  Boolean  @default(true)
+  collectChatMessages         Boolean @default(true)
+  collectInteractions         Boolean @default(true)
+  collectInteractionFrequency Boolean @default(true)
 
   // 成就與徽章類別
-  collectBadgeProgress         Boolean  @default(true)
-  collectFootprintData         Boolean  @default(true)
+  collectBadgeProgress Boolean @default(true)
+  collectFootprintData Boolean @default(true)
 
   // 分析與排名類別
-  collectRankings              Boolean  @default(true)
-  collectRadarAnalysis         Boolean  @default(true)
+  collectRankings      Boolean @default(true)
+  collectRadarAnalysis Boolean @default(true)
 
-  updatedAt                    DateTime @updatedAt
-  viewer                       Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+  viewer    Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@map("viewer_privacy_consents")
 }
 
 model DeletionRequest {
-  id                    String   @id @default(uuid())
-  viewerId              String   @unique
-  requestedAt           DateTime @default(now())
-  executionScheduledAt  DateTime
-  status                String   @default("pending") // "pending", "cancelled", "executed"
+  id                   String   @id @default(uuid())
+  viewerId             String   @unique
+  requestedAt          DateTime @default(now())
+  executionScheduledAt DateTime
+  status               String   @default("pending") // "pending", "cancelled", "executed"
 
-  viewer                Viewer   @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  viewer Viewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@index([executionScheduledAt, status])
   @@map("deletion_requests")
@@ -459,7 +479,7 @@ model ExportJob {
   errorMessage String?
   createdAt    DateTime  @default(now())
 
-  viewer       Viewer    @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  viewer Viewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@index([viewerId])
   @@index([expiresAt])
@@ -469,7 +489,7 @@ model ExportJob {
 model DataRetentionLog {
   id         String   @id @default(uuid())
   viewerId   String
-  action     String   // "auto_archive", "auto_delete", "user_delete", "user_cancel"
+  action     String // "auto_archive", "auto_delete", "user_delete", "user_cancel"
   reason     String
   executedAt DateTime @default(now())
 
@@ -479,36 +499,35 @@ model DataRetentionLog {
 }
 
 model PrivacyAuditLog {
-  id         String   @id @default(uuid())
-  viewerId   String
-  action     String   // "consent_updated", "data_exported", "account_deleted", "deletion_cancelled"
-  details    String   // JSON string
-  ipAddress  String?
-  userAgent  String?
-  timestamp  DateTime @default(now())
+  id        String   @id @default(uuid())
+  viewerId  String
+  action    String // "consent_updated", "data_exported", "account_deleted", "deletion_cancelled"
+  details   String // JSON string
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
 
   @@index([viewerId])
   @@index([timestamp])
   @@map("privacy_audit_logs")
 }
 
-
 // ========== Story 6.4: VOD & Clips ==========
 
 // 觀眾追蹤名單用的精簡影片表（每個 Channel 最多 6 部，效能優化）
 model ViewerChannelVideo {
-  id              String   @id @default(uuid())
-  twitchVideoId   String   @unique
-  channelId       String
-  title           String
-  url             String
-  thumbnailUrl    String?
-  viewCount       Int
-  duration        String
-  publishedAt     DateTime
-  syncedAt        DateTime @default(now())
+  id            String   @id @default(uuid())
+  twitchVideoId String   @unique
+  channelId     String
+  title         String
+  url           String
+  thumbnailUrl  String?
+  viewCount     Int
+  duration      String
+  publishedAt   DateTime
+  syncedAt      DateTime @default(now())
 
-  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([channelId])
   @@index([publishedAt])
@@ -517,43 +536,43 @@ model ViewerChannelVideo {
 
 // 觀眾追蹤名單用的精簡剪輯表（每個 Channel 只保留觀看次數最高的 6 部）
 model ViewerChannelClip {
-  id              String   @id @default(uuid())
-  twitchClipId    String   @unique
-  channelId       String
-  creatorName     String?
-  title           String
-  url             String
-  thumbnailUrl    String?
-  viewCount       Int
-  duration        Float    // Seconds
-  createdAt       DateTime // Clip creation time on Twitch
-  syncedAt        DateTime @default(now())
+  id           String   @id @default(uuid())
+  twitchClipId String   @unique
+  channelId    String
+  creatorName  String?
+  title        String
+  url          String
+  thumbnailUrl String?
+  viewCount    Int
+  duration     Float // Seconds
+  createdAt    DateTime // Clip creation time on Twitch
+  syncedAt     DateTime @default(now())
 
-  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([channelId])
-  @@index([viewCount(sort: Desc)])  // 優化：按觀看次數降序查詢
+  @@index([viewCount(sort: Desc)]) // 優化：按觀看次數降序查詢
   @@map("viewer_channel_clips")
 }
 
 // 實況主用的完整影片表（保留 90 天）
 model Video {
-  id              String   @id @default(uuid())
-  twitchVideoId   String   @unique
-  streamerId      String
-  title           String
-  description     String?
-  url             String
-  thumbnailUrl    String?
-  viewCount       Int
-  duration        String
-  language        String?
-  type            String   // 'upload', 'archive', 'highlight'
-  createdAt       DateTime // Video creation time on Twitch
-  publishedAt     DateTime // When it was published
-  scrapedAt       DateTime @default(now())
+  id            String   @id @default(uuid())
+  twitchVideoId String   @unique
+  streamerId    String
+  title         String
+  description   String?
+  url           String
+  thumbnailUrl  String?
+  viewCount     Int
+  duration      String
+  language      String?
+  type          String // 'upload', 'archive', 'highlight'
+  createdAt     DateTime // Video creation time on Twitch
+  publishedAt   DateTime // When it was published
+  scrapedAt     DateTime @default(now())
 
-  streamer        Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamer Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([streamerId])
   @@index([createdAt])
@@ -561,30 +580,29 @@ model Video {
 }
 
 model Clip {
-  id              String   @id @default(uuid())
-  twitchClipId    String   @unique
-  streamerId      String   // Broadcaster
-  creatorId       String?  // Who created the clip
-  creatorName     String?  // Store name for display
-  videoId         String?  // Source video ID if available
-  gameId          String?
-  title           String
-  url             String
-  embedUrl        String?
-  thumbnailUrl    String?
-  viewCount       Int
-  duration        Float    // Seconds
-  createdAt       DateTime // Clip creation time
-  scrapedAt       DateTime @default(now())
+  id           String   @id @default(uuid())
+  twitchClipId String   @unique
+  streamerId   String // Broadcaster
+  creatorId    String? // Who created the clip
+  creatorName  String? // Store name for display
+  videoId      String? // Source video ID if available
+  gameId       String?
+  title        String
+  url          String
+  embedUrl     String?
+  thumbnailUrl String?
+  viewCount    Int
+  duration     Float // Seconds
+  createdAt    DateTime // Clip creation time
+  scrapedAt    DateTime @default(now())
 
-  streamer        Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamer Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([streamerId])
   @@index([createdAt])
   @@index([viewCount])
   @@map("clips")
 }
-
 
 // ========== Epic 4: Streamer Quick Actions ==========
 
@@ -595,12 +613,12 @@ model StreamerSettingTemplate {
   title        String?
   gameId       String?
   gameName     String?
-  tags         String?  // JSON array
+  tags         String? // JSON array
   language     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  streamer     Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamer Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([streamerId])
   @@map("streamer_setting_templates")
@@ -617,7 +635,7 @@ model SubscriptionSnapshot {
   estimatedRevenue Float?
   createdAt        DateTime @default(now())
 
-  streamer         Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamer Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@unique([streamerId, snapshotDate])
   @@index([streamerId])
@@ -625,18 +643,18 @@ model SubscriptionSnapshot {
 }
 
 model CheerEvent {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   streamerId   String
   twitchUserId String?
   userName     String?
   bits         Int
   message      String?
-  isAnonymous  Boolean  @default(false)
+  isAnonymous  Boolean   @default(false)
   cheeredAt    DateTime
   cheeredDate  DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
-  streamer     Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamer Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@index([streamerId, cheeredAt])
   @@index([streamerId, cheeredDate])
@@ -651,7 +669,7 @@ model CheerDailyAgg {
   eventCount Int      @default(0)
   updatedAt  DateTime @default(now()) @updatedAt
 
-  streamer   Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
+  streamer Streamer @relation(fields: [streamerId], references: [id], onDelete: Cascade)
 
   @@id([streamerId, date])
   @@index([streamerId])

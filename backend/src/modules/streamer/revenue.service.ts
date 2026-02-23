@@ -50,6 +50,55 @@ const BITS_DAILY_AGG_RETRY_BASE_MS = 250;
 
 export class RevenueService {
   private bitsDailyAggRefreshLocks = new Map<string, Promise<void>>();
+  private twurpleClients = new Map<
+    string,
+    { authProvider: unknown; apiClient: unknown; tokenId: string; lastUsedAt: number }
+  >();
+  private readonly twurpleClientTtlMs = Number(process.env.REVENUE_TWURPLE_CLIENT_TTL_MS || 15 * 60 * 1000);
+  private readonly twurpleClientMaxEntries = Number(process.env.REVENUE_TWURPLE_CLIENT_MAX_ENTRIES || 200);
+  private readonly twurpleCleanupIntervalMs = Number(
+    process.env.REVENUE_TWURPLE_CLIENT_CLEANUP_INTERVAL_MS || 5 * 60 * 1000
+  );
+  private twurpleCleanupTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.startTwurpleCleanupTimer();
+  }
+
+  private startTwurpleCleanupTimer(): void {
+    if (this.twurpleCleanupTimer) {
+      return;
+    }
+
+    const intervalMs =
+      Number.isFinite(this.twurpleCleanupIntervalMs) && this.twurpleCleanupIntervalMs > 0
+        ? this.twurpleCleanupIntervalMs
+        : 5 * 60 * 1000;
+
+    this.twurpleCleanupTimer = setInterval(() => {
+      this.cleanupTwurpleClients(Date.now());
+    }, intervalMs);
+
+    if (this.twurpleCleanupTimer.unref) {
+      this.twurpleCleanupTimer.unref();
+    }
+  }
+
+  private cleanupTwurpleClients(now = Date.now()): void {
+    for (const [key, cached] of this.twurpleClients.entries()) {
+      if (now - cached.lastUsedAt > this.twurpleClientTtlMs) {
+        this.twurpleClients.delete(key);
+      }
+    }
+
+    while (this.twurpleClients.size > this.twurpleClientMaxEntries) {
+      const oldestKey = this.twurpleClients.keys().next().value;
+      if (!oldestKey) {
+        break;
+      }
+      this.twurpleClients.delete(oldestKey);
+    }
+  }
 
   private toDateKey(date: Date): string {
     return date.toISOString().split("T")[0];
@@ -309,66 +358,97 @@ export class RevenueService {
       throw new Error("Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET environment variables");
     }
 
-    // 解密 Token
-    const accessToken = decryptToken(tokenData.accessToken);
-    const refreshToken = tokenData.refreshToken ? decryptToken(tokenData.refreshToken) : null;
+    const now = Date.now();
+    this.cleanupTwurpleClients(now);
 
-    if (!refreshToken) {
-      throw new Error("No refresh token available for revenue sync");
-    }
+    const cachedClient = this.twurpleClients.get(broadcasterId);
+    const shouldReuseClient =
+      cachedClient &&
+      cachedClient.tokenId === tokenData.id &&
+      now - cachedClient.lastUsedAt <= this.twurpleClientTtlMs;
 
-    const authProvider = new RefreshingAuthProvider({
-      clientId,
-      clientSecret,
-    });
+    // 取得或建立 per-streamer ApiClient 快取，避免每次 sync 重建物件
+    if (!shouldReuseClient) {
+      if (cachedClient) {
+        this.twurpleClients.delete(broadcasterId);
+      }
 
-    // 設定刷新回調（含錯誤處理）
-    authProvider.onRefresh(
-      async (
-        _userId: string,
-        newTokenData: import("../../types/twitch.types").TwurpleRefreshCallbackData
-      ) => {
-        try {
-          logger.info("RevenueService", `Token refreshed for streamer ${broadcasterId}`);
-          await prisma.twitchToken.update({
-            where: { id: tokenData.id },
-            data: {
-              accessToken: encryptToken(newTokenData.accessToken),
-              refreshToken: newTokenData.refreshToken
-                ? encryptToken(newTokenData.refreshToken)
-                : undefined,
-              expiresAt: newTokenData.expiresIn
-                ? new Date(Date.now() + newTokenData.expiresIn * 1000)
-                : null,
-              lastValidatedAt: new Date(),
-            },
-          });
-          logger.info("RevenueService", "Token successfully saved to database");
-        } catch (error) {
-          // Token 刷新成功但儲存失敗 - 記錄錯誤但不中斷流程
-          logger.error("RevenueService", "Failed to save refreshed token to database:", error);
-          if (process.env.SENTRY_DSN) {
-            const Sentry = await import("@sentry/node");
-            Sentry.captureException(error, {
-              tags: { component: "token-refresh" },
-              extra: { streamerId: broadcasterId, tokenId: tokenData.id },
+      // 解密 Token
+      const accessToken = decryptToken(tokenData.accessToken);
+      const refreshToken = tokenData.refreshToken ? decryptToken(tokenData.refreshToken) : null;
+
+      if (!refreshToken) {
+        throw new Error("No refresh token available for revenue sync");
+      }
+
+      const authProvider = new RefreshingAuthProvider({
+        clientId,
+        clientSecret,
+      });
+
+      // 設定刷新回調（含錯誤處理）
+      authProvider.onRefresh(
+        async (
+          _userId: string,
+          newTokenData: import("../../types/twitch.types").TwurpleRefreshCallbackData
+        ) => {
+          try {
+            logger.info("RevenueService", `Token refreshed for streamer ${broadcasterId}`);
+            await prisma.twitchToken.update({
+              where: { id: tokenData.id },
+              data: {
+                accessToken: encryptToken(newTokenData.accessToken),
+                refreshToken: newTokenData.refreshToken
+                  ? encryptToken(newTokenData.refreshToken)
+                  : undefined,
+                expiresAt: newTokenData.expiresIn
+                  ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+                  : null,
+                lastValidatedAt: new Date(),
+              },
             });
+            logger.info("RevenueService", "Token successfully saved to database");
+          } catch (error) {
+            // Token 刷新成功但儲存失敗 - 記錄錯誤但不中斷流程
+            logger.error("RevenueService", "Failed to save refreshed token to database:", error);
+            if (process.env.SENTRY_DSN) {
+              const Sentry = await import("@sentry/node");
+              Sentry.captureException(error, {
+                tags: { component: "token-refresh" },
+                extra: { streamerId: broadcasterId, tokenId: tokenData.id },
+              });
+            }
           }
         }
-      }
-    );
+      );
 
-    await authProvider.addUserForToken(
-      {
-        accessToken,
-        refreshToken,
-        expiresIn: null,
-        obtainmentTimestamp: 0,
-      },
-      ["channel:read:subscriptions"]
-    );
+      await authProvider.addUserForToken(
+        {
+          accessToken,
+          refreshToken,
+          expiresIn: null,
+          obtainmentTimestamp: 0,
+        },
+        ["channel:read:subscriptions"]
+      );
 
-    const apiClient = new ApiClient({ authProvider });
+      const apiClient = new ApiClient({ authProvider });
+      this.twurpleClients.set(broadcasterId, {
+        authProvider,
+        apiClient,
+        tokenId: tokenData.id,
+        lastUsedAt: now,
+      });
+    }
+
+    const cached = this.twurpleClients.get(broadcasterId) as {
+      authProvider: unknown;
+      apiClient: InstanceType<typeof ApiClient>;
+      tokenId: string;
+      lastUsedAt: number;
+    };
+    cached.lastUsedAt = Date.now();
+    const { apiClient } = cached;
 
     // 使用 Paginator 獲取所有訂閱者
     const result = { total: 0, tier1: 0, tier2: 0, tier3: 0 };
@@ -434,6 +514,8 @@ export class RevenueService {
           "RevenueService",
           `Permission error for ${broadcasterId}: ${apiError.message}`
         );
+        // 清除快取的 client，下次重建
+        this.twurpleClients.delete(broadcasterId);
         throw new Error("Permission denied - requires Affiliate/Partner status");
       }
       throw error;

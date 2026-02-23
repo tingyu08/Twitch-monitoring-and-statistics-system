@@ -486,13 +486,19 @@ export class TwurpleChatService {
 
     // P0 Memory Safety: 限制數組大小，避免高流量頻道記憶體洩漏
     if (timestamps.length > MAX_TIMESTAMPS_PER_CHANNEL) {
-      timestamps.shift(); // 移除最舊的時間戳
+      const overflowCount = timestamps.length - MAX_TIMESTAMPS_PER_CHANNEL;
+      if (overflowCount > 0) {
+        timestamps.splice(0, overflowCount);
+      }
     }
 
     // 移除視窗外的時間戳（例如只保留最近 5 秒）
     const validStart = now - HEAT_WINDOW_MS;
-    while (timestamps.length > 0 && timestamps[0] < validStart) {
-      timestamps.shift();
+    const firstValidIndex = timestamps.findIndex((timestamp) => timestamp >= validStart);
+    if (firstValidIndex === -1) {
+      timestamps.length = 0;
+    } else if (firstValidIndex > 0) {
+      timestamps.splice(0, firstValidIndex);
     }
 
     // 檢查是否超過閾值

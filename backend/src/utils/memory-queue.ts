@@ -9,8 +9,11 @@
  */
 
 import { logger } from "./logger";
-import { appendFile, mkdir, open, readFile, stat, unlink, writeFile } from "fs/promises";
+import { appendFile, mkdir, open, rename, stat, unlink } from "fs/promises";
+import { appendFileSync, createReadStream, createWriteStream, mkdirSync } from "fs";
 import path from "path";
+import { createInterface } from "readline";
+import { once } from "events";
 
 export interface QueueJob<T = unknown> {
   id: string;
@@ -34,9 +37,12 @@ const OVERFLOW_LOCK_WAIT_MS = 25;
 const OVERFLOW_LOCK_MAX_WAIT_MS = 250;
 const OVERFLOW_LOCK_MAX_ATTEMPTS = 120;
 const OVERFLOW_LOCK_STALE_MS = 2 * 60 * 1000;
+const SYNC_OVERFLOW_PRIORITY_THRESHOLD = Number(process.env.QUEUE_SYNC_OVERFLOW_PRIORITY || 10);
 
 export class MemoryQueue<T = unknown> {
   private queue: QueueJob<T>[] = [];
+  private retryQueue: Array<{ executeAt: number; job: QueueJob<T> }> = [];
+  private retryTimer: NodeJS.Timeout | null = null;
   private processing = 0;
   private processor: JobProcessor<T> | null = null;
   private jobIdCounter = 0;
@@ -108,6 +114,77 @@ export class MemoryQueue<T = unknown> {
     return true;
   }
 
+  private scheduleRetry(job: QueueJob<T>): void {
+    const executeAt = Date.now() + this.retryDelayMs;
+    const insertIndex = this.retryQueue.findIndex((retryItem) => retryItem.executeAt > executeAt);
+
+    const retryItem = { executeAt, job };
+    if (insertIndex === -1) {
+      this.retryQueue.push(retryItem);
+    } else {
+      this.retryQueue.splice(insertIndex, 0, retryItem);
+    }
+
+    this.armRetryTimer();
+  }
+
+  private armRetryTimer(): void {
+    if (this.retryTimer || this.retryQueue.length === 0) {
+      return;
+    }
+
+    const nextExecuteAt = this.retryQueue[0]?.executeAt ?? Date.now();
+    const delayMs = Math.max(0, nextExecuteAt - Date.now());
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.processRetryQueue();
+    }, delayMs);
+
+    if (this.retryTimer.unref) {
+      this.retryTimer.unref();
+    }
+  }
+
+  private async processRetryQueue(): Promise<void> {
+    const now = Date.now();
+    const dueJobs: QueueJob<T>[] = [];
+
+    while (this.retryQueue.length > 0) {
+      const next = this.retryQueue[0];
+      if (!next || next.executeAt > now) {
+        break;
+      }
+      this.retryQueue.shift();
+      dueJobs.push(next.job);
+    }
+
+    for (const job of dueJobs) {
+      const retryJob: QueueJob<T> = {
+        ...job,
+        priority: job.priority - 1,
+      };
+
+      if (!this.enqueueJob(retryJob)) {
+        if (this.overflowFilePath) {
+          if (retryJob.priority >= SYNC_OVERFLOW_PRIORITY_THRESHOLD) {
+            await this.persistOverflowJob(retryJob);
+          } else {
+            void this.persistOverflowJob(retryJob);
+          }
+        } else {
+          logger.warn("MemoryQueue", `Retry queue full, dropping job ${retryJob.id}`);
+        }
+      }
+    }
+
+    if (dueJobs.length > 0) {
+      this.tick();
+    }
+
+    this.armRetryTimer();
+  }
+
   private async persistOverflowJob(job: QueueJob<T>): Promise<void> {
     if (!this.overflowFilePath) {
       return;
@@ -130,6 +207,23 @@ export class MemoryQueue<T = unknown> {
         logger.error("MemoryQueue", `Failed to persist overflow job ${job.id}`, error);
       }
     });
+  }
+
+  private persistOverflowJobSync(job: QueueJob<T>): void {
+    if (!this.overflowFilePath) {
+      return;
+    }
+
+    mkdirSync(path.dirname(this.overflowFilePath), { recursive: true });
+    const serialized = JSON.stringify({
+      id: job.id,
+      data: job.data,
+      priority: job.priority,
+      retries: job.retries,
+      createdAt: job.createdAt.toISOString(),
+    });
+    appendFileSync(this.overflowFilePath, `${serialized}\n`, "utf8");
+    this.overflowPersisted += 1;
   }
 
   private async withOverflowFileLock(work: () => Promise<void>): Promise<void> {
@@ -236,9 +330,8 @@ export class MemoryQueue<T = unknown> {
 
     try {
       await this.withOverflowFileLock(async () => {
-        let content: string;
         try {
-          content = await readFile(this.overflowFilePath, "utf8");
+          await stat(this.overflowFilePath);
         } catch (error) {
           const nodeError = error as NodeJS.ErrnoException;
           if (nodeError.code === "ENOENT") {
@@ -247,55 +340,62 @@ export class MemoryQueue<T = unknown> {
           throw error;
         }
 
-        const lines = content
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
+        const tempPath = `${this.overflowFilePath}.tmp`;
+        const readStream = createReadStream(this.overflowFilePath, { encoding: "utf8" });
+        const writeStream = createWriteStream(tempPath, { encoding: "utf8" });
+        const lineReader = createInterface({ input: readStream, crlfDelay: Infinity });
 
-        if (lines.length === 0) {
-          return;
-        }
-
-        const remainingLines: string[] = [];
-
-        for (const line of lines) {
-          if (this.queue.length >= this.maxQueueSize) {
-            remainingLines.push(line);
-            continue;
-          }
-
-          try {
-            const parsed = JSON.parse(line) as {
-              data?: T;
-              priority?: number;
-              retries?: number;
-              createdAt?: string;
-            };
-
-            if (typeof parsed.priority !== "number") {
+        try {
+          for await (const rawLine of lineReader) {
+            const line = rawLine.trim();
+            if (line.length === 0) {
               continue;
             }
 
-            const recoveredJob: QueueJob<T> = {
-              id: `job_${++this.jobIdCounter}`,
-              data: parsed.data as T,
-              priority: parsed.priority,
-              retries: typeof parsed.retries === "number" ? parsed.retries : 0,
-              createdAt: parsed.createdAt ? new Date(parsed.createdAt) : new Date(),
-            };
-
-            if (this.enqueueJob(recoveredJob)) {
-              this.overflowRecovered += 1;
-            } else {
-              remainingLines.push(line);
+            if (this.queue.length >= this.maxQueueSize) {
+              await this.writeOverflowLine(writeStream, line);
+              continue;
             }
-          } catch {
-            logger.warn("MemoryQueue", "Skipped invalid overflow payload line");
+
+            try {
+              const parsed = JSON.parse(line) as {
+                data?: T;
+                priority?: number;
+                retries?: number;
+                createdAt?: string;
+              };
+
+              if (typeof parsed.priority !== "number") {
+                continue;
+              }
+
+              const recoveredJob: QueueJob<T> = {
+                id: `job_${++this.jobIdCounter}`,
+                data: parsed.data as T,
+                priority: parsed.priority,
+                retries: typeof parsed.retries === "number" ? parsed.retries : 0,
+                createdAt: parsed.createdAt ? new Date(parsed.createdAt) : new Date(),
+              };
+
+              if (this.enqueueJob(recoveredJob)) {
+                this.overflowRecovered += 1;
+              } else {
+                await this.writeOverflowLine(writeStream, line);
+              }
+            } catch {
+              logger.warn("MemoryQueue", "Skipped invalid overflow payload line");
+            }
           }
+
+          await new Promise<void>((resolve, reject) => {
+            writeStream.on("error", reject);
+            writeStream.end(() => resolve());
+          });
+        } finally {
+          lineReader.close();
         }
 
-        const nextContent = remainingLines.length > 0 ? `${remainingLines.join("\n")}\n` : "";
-        await writeFile(this.overflowFilePath, nextContent, "utf8");
+        await rename(tempPath, this.overflowFilePath);
       });
 
       if (this.processor && this.queue.length > 0) {
@@ -304,6 +404,13 @@ export class MemoryQueue<T = unknown> {
     } finally {
       this.overflowRecovering = false;
     }
+  }
+
+  private async writeOverflowLine(stream: ReturnType<typeof createWriteStream>, line: string): Promise<void> {
+    if (stream.write(`${line}\n`)) {
+      return;
+    }
+    await once(stream, "drain");
   }
 
   /**
@@ -315,7 +422,16 @@ export class MemoryQueue<T = unknown> {
 
     if (!this.enqueueJob(job)) {
       if (this.overflowFilePath) {
-        void this.persistOverflowJob(job);
+        if (priority >= SYNC_OVERFLOW_PRIORITY_THRESHOLD) {
+          try {
+            this.persistOverflowJobSync(job);
+          } catch (error) {
+            logger.error("MemoryQueue", `同步寫入 overflow 失敗 (job=${job.id})`, error);
+            return null;
+          }
+        } else {
+          void this.persistOverflowJob(job);
+        }
         return job.id;
       }
 
@@ -355,6 +471,11 @@ export class MemoryQueue<T = unknown> {
    */
   clear(): void {
     this.queue = [];
+    this.retryQueue = [];
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     logger.debug("MemoryQueue", "Queue cleared");
   }
 
@@ -403,29 +524,7 @@ export class MemoryQueue<T = unknown> {
           "MemoryQueue",
           `Job ${job.id} will retry (${job.retries}/${this.maxRetries}) in ${this.retryDelayMs}ms`
         );
-
-        // 延遲後重新加入佇列
-        const retryTimer = setTimeout(() => {
-          // 重試時降低優先級
-          const retryJob: QueueJob<T> = {
-            ...job,
-            priority: job.priority - 1,
-          };
-
-          if (!this.enqueueJob(retryJob)) {
-            if (this.overflowFilePath) {
-              void this.persistOverflowJob(retryJob);
-            } else {
-              logger.warn("MemoryQueue", `Retry queue full, dropping job ${retryJob.id}`);
-            }
-          } else {
-            this.tick();
-          }
-        }, this.retryDelayMs);
-
-        if (retryTimer.unref) {
-          retryTimer.unref();
-        }
+        this.scheduleRetry(job);
       } else {
         logger.error("MemoryQueue", `Job ${job.id} failed after ${this.maxRetries} retries. Giving up.`);
       }

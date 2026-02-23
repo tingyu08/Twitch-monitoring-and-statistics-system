@@ -65,6 +65,7 @@ let isConnectionWarmed = false;
 let sqlitePragmasApplied = false;
 let keepAliveStarted = false;
 let shutdownHooksRegistered = false;
+let warmupPromise: Promise<boolean> | null = null;
 
 async function applyLocalSqlitePragmas(): Promise<void> {
   if (isTurso || sqlitePragmasApplied) {
@@ -93,43 +94,64 @@ export async function warmupConnection(maxRetries = 3, timeoutMs = 15000): Promi
     return true;
   }
 
-  logger.info("Prisma", "開始預熱連線...");
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      await applyLocalSqlitePragmas();
-
-      const result = await Promise.race([
-        prisma.$queryRaw`SELECT 1 as ping`,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`連線超時 (${timeoutMs}ms)`)), timeoutMs)
-        ),
-      ]);
-
-      if (result) {
-        isConnectionWarmed = true;
-        startConnectionKeepAlive();
-        registerShutdownHooks();
-        logger.info("Prisma", `連線預熱成功 (第 ${attempt} 次嘗試)`);
-        return true;
-      }
-    } catch (error) {
-      logger.warn(
-        "Prisma",
-        `連線預熱失敗 (${attempt}/${maxRetries}): ${error instanceof Error ? error.message : error}`
-      );
-
-      if (attempt < maxRetries) {
-        // 指數退避：1s, 2s, 4s...
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        logger.info("Prisma", `等待 ${delay}ms 後重試...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
+  if (warmupPromise) {
+    logger.info("Prisma", "連線預熱進行中，等待既有任務完成");
+    return warmupPromise;
   }
 
-  logger.error("Prisma", `連線預熱失敗，已重試 ${maxRetries} 次`);
-  return false;
+  warmupPromise = (async () => {
+    logger.info("Prisma", "開始預熱連線...");
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let timeoutTimer: NodeJS.Timeout | null = null;
+      try {
+        await applyLocalSqlitePragmas();
+
+        const result = await Promise.race([
+          prisma.$queryRaw`SELECT 1 as ping`,
+          new Promise<never>((_, reject) => {
+            timeoutTimer = setTimeout(() => reject(new Error(`連線超時 (${timeoutMs}ms)`)), timeoutMs);
+            if (timeoutTimer.unref) {
+              timeoutTimer.unref();
+            }
+          }),
+        ]);
+
+        if (result) {
+          isConnectionWarmed = true;
+          startConnectionKeepAlive();
+          registerShutdownHooks();
+          logger.info("Prisma", `連線預熱成功 (第 ${attempt} 次嘗試)`);
+          return true;
+        }
+      } catch (error) {
+        logger.warn(
+          "Prisma",
+          `連線預熱失敗 (${attempt}/${maxRetries}): ${error instanceof Error ? error.message : error}`
+        );
+
+        if (attempt < maxRetries) {
+          // 指數退避：1s, 2s, 4s...
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          logger.info("Prisma", `等待 ${delay}ms 後重試...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      } finally {
+        if (timeoutTimer) {
+          clearTimeout(timeoutTimer);
+        }
+      }
+    }
+
+    logger.error("Prisma", `連線預熱失敗，已重試 ${maxRetries} 次`);
+    return false;
+  })();
+
+  try {
+    return await warmupPromise;
+  } finally {
+    warmupPromise = null;
+  }
 }
 
 function startConnectionKeepAlive(): void {
@@ -138,14 +160,31 @@ function startConnectionKeepAlive(): void {
   }
 
   const keepAliveMinutes = Number(process.env.PRISMA_KEEP_ALIVE_MINUTES || 5);
+  const keepAliveTimeoutMs = Number(process.env.PRISMA_KEEP_ALIVE_TIMEOUT_MS || 5000);
   const intervalMs = Math.max(1, keepAliveMinutes) * 60 * 1000;
 
   const timer = setInterval(async () => {
+    let timeoutTimer: NodeJS.Timeout | null = null;
     try {
-      await prisma.$queryRaw`SELECT 1 as ping`;
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1 as ping`,
+        new Promise<never>((_, reject) => {
+          timeoutTimer = setTimeout(
+            () => reject(new Error(`keep-alive timeout (${keepAliveTimeoutMs}ms)`)),
+            keepAliveTimeoutMs
+          );
+          if (timeoutTimer.unref) {
+            timeoutTimer.unref();
+          }
+        }),
+      ]);
     } catch (error) {
       isConnectionWarmed = false;
       logger.warn("Prisma", `keep-alive ping failed: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
     }
   }, intervalMs);
 

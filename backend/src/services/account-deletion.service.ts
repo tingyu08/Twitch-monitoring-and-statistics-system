@@ -12,6 +12,10 @@ import { logger } from "../utils/logger";
 
 // 冷靜期天數
 const COOLING_PERIOD_DAYS = 7;
+const EXPIRED_DELETION_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.ACCOUNT_DELETION_EXECUTION_CONCURRENCY || 4)
+);
 
 export interface DeletionRequestResult {
   success: boolean;
@@ -312,13 +316,31 @@ export class AccountDeletionService {
     let success = 0;
     let failed = 0;
 
-    for (const deletion of pendingDeletions) {
-      const result = await this.executeAnonymization(deletion.viewerId);
-      if (result.success) {
-        success++;
-      } else {
-        failed++;
-        logger.error("AccountDeletion", `匿名化失敗 (viewerId: ${deletion.viewerId}): ${result.message}`);
+    for (let i = 0; i < pendingDeletions.length; i += EXPIRED_DELETION_CONCURRENCY) {
+      const batch = pendingDeletions.slice(i, i + EXPIRED_DELETION_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        batch.map(async (deletion) => ({
+          viewerId: deletion.viewerId,
+          result: await this.executeAnonymization(deletion.viewerId),
+        }))
+      );
+
+      for (const item of settled) {
+        if (item.status === "rejected") {
+          failed++;
+          logger.error("AccountDeletion", "匿名化失敗 (batch rejected)", item.reason);
+          continue;
+        }
+
+        if (item.value.result.success) {
+          success++;
+        } else {
+          failed++;
+          logger.error(
+            "AccountDeletion",
+            `匿名化失敗 (viewerId: ${item.value.viewerId}): ${item.value.result.message}`
+          );
+        }
       }
     }
 

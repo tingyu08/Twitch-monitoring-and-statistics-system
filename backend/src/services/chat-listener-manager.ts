@@ -106,7 +106,7 @@ export class ChatListenerManager {
     // 檢查是否超過最大限制
     if (this.channels.size >= MAX_CHANNELS_PER_INSTANCE) {
       // 嘗試移除優先級最低的離線頻道
-      const removed = this.evictLowestPriorityChannel();
+      const removed = await this.evictLowestPriorityChannel();
       if (!removed) {
         logger.warn(
           "ListenerManager",
@@ -179,7 +179,7 @@ export class ChatListenerManager {
   /**
    * 移除優先級最低的離線頻道
    */
-  private evictLowestPriorityChannel(): boolean {
+  private async evictLowestPriorityChannel(): Promise<boolean> {
     let lowestPriority = Infinity;
     let candidateChannel: string | null = null;
 
@@ -192,7 +192,7 @@ export class ChatListenerManager {
     });
 
     if (candidateChannel) {
-      this.stopListening(candidateChannel);
+      await this.stopListening(candidateChannel);
       return true;
     }
 
@@ -203,6 +203,10 @@ export class ChatListenerManager {
    * 啟動健康檢查
    */
   private startHealthCheck(): void {
+    if (this.healthCheckInterval) {
+      return;
+    }
+
     this.healthCheckInterval = setInterval(() => {
       this.performHealthCheck();
     }, HEALTH_CHECK_INTERVAL_MS);
@@ -236,7 +240,9 @@ export class ChatListenerManager {
 
       // 移除無活動頻道
       for (const name of channelsToRemove) {
-        this.stopListening(name);
+        void this.stopListening(name).catch((error) =>
+          logger.error("ListenerManager", `停止頻道失敗: ${name}`, error)
+        );
         logger.info("ListenerManager", `自動停止非活躍頻道: ${name}`);
       }
 

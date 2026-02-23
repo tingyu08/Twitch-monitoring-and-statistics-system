@@ -20,6 +20,7 @@
 // } from "@twurple/eventsub-http";
 // import type { ApiClient } from "@twurple/api";
 import type { Application } from "express";
+import { Prisma } from "@prisma/client";
 
 // Types for database query results
 interface ChannelResult {
@@ -104,6 +105,15 @@ class TwurpleEventSubService {
   private subscribedChannels: Set<string> = new Set();
   private cheerDailyAggReady = false;
   private cheerDailyAggInitPromise: Promise<void> | null = null;
+  private cheerDailyAggBuffer = new Map<string, { streamerId: string; date: string; totalBits: number; eventCount: number }>();
+  private cheerDailyAggFlushTimer: NodeJS.Timeout | null = null;
+  private cheerDailyAggFlushing = false;
+  private readonly CHEER_DAILY_AGG_FLUSH_INTERVAL_MS = Number(
+    process.env.CHEER_DAILY_AGG_FLUSH_INTERVAL_MS || 2000
+  );
+  private readonly CHEER_DAILY_AGG_FLUSH_BATCH_SIZE = Number(
+    process.env.CHEER_DAILY_AGG_FLUSH_BATCH_SIZE || 200
+  );
   private static readonly CHEER_DAILY_AGG_INIT_MAX_RETRIES = 3;
   private static readonly CHEER_DAILY_AGG_INIT_RETRY_BASE_MS = 200;
 
@@ -172,16 +182,78 @@ class TwurpleEventSubService {
     cheeredAtIso: string,
     bits: number
   ): Promise<void> {
-    await this.ensureCheerDailyAggTable();
+    const date = cheeredAtIso.slice(0, 10);
+    const key = `${streamerId}:${date}`;
+    const current = this.cheerDailyAggBuffer.get(key);
 
-    await prisma.$executeRaw`
-      INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
-      VALUES (${streamerId}, DATE(${cheeredAtIso}), ${bits}, 1, CURRENT_TIMESTAMP)
-      ON CONFLICT(streamerId, date) DO UPDATE SET
-        totalBits = totalBits + excluded.totalBits,
-        eventCount = eventCount + excluded.eventCount,
-        updatedAt = CURRENT_TIMESTAMP
-    `;
+    if (current) {
+      current.totalBits += bits;
+      current.eventCount += 1;
+      this.cheerDailyAggBuffer.set(key, current);
+    } else {
+      this.cheerDailyAggBuffer.set(key, {
+        streamerId,
+        date,
+        totalBits: bits,
+        eventCount: 1,
+      });
+    }
+
+    this.scheduleCheerDailyAggFlush();
+  }
+
+  private scheduleCheerDailyAggFlush(): void {
+    if (this.cheerDailyAggFlushTimer) {
+      return;
+    }
+
+    this.cheerDailyAggFlushTimer = setTimeout(() => {
+      this.cheerDailyAggFlushTimer = null;
+      void this.flushCheerDailyAggBuffer();
+    }, this.CHEER_DAILY_AGG_FLUSH_INTERVAL_MS);
+
+    this.cheerDailyAggFlushTimer.unref?.();
+  }
+
+  private async flushCheerDailyAggBuffer(): Promise<void> {
+    if (this.cheerDailyAggFlushing || this.cheerDailyAggBuffer.size === 0) {
+      return;
+    }
+
+    this.cheerDailyAggFlushing = true;
+    try {
+      await this.ensureCheerDailyAggTable();
+
+      const entries = Array.from(this.cheerDailyAggBuffer.entries()).slice(
+        0,
+        this.CHEER_DAILY_AGG_FLUSH_BATCH_SIZE
+      );
+      for (const [key] of entries) {
+        this.cheerDailyAggBuffer.delete(key);
+      }
+
+      const values = entries.map(([, item]) =>
+        Prisma.sql`(${item.streamerId}, ${item.date}, ${item.totalBits}, ${item.eventCount}, CURRENT_TIMESTAMP)`
+      );
+
+      if (values.length > 0) {
+        await prisma.$executeRaw(Prisma.sql`
+          INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
+          VALUES ${Prisma.join(values)}
+          ON CONFLICT(streamerId, date) DO UPDATE SET
+            totalBits = cheer_daily_agg.totalBits + excluded.totalBits,
+            eventCount = cheer_daily_agg.eventCount + excluded.eventCount,
+            updatedAt = CURRENT_TIMESTAMP
+        `);
+      }
+    } catch (error) {
+      logger.warn("TwurpleEventSub", "flush cheer_daily_agg buffer failed", error);
+    } finally {
+      this.cheerDailyAggFlushing = false;
+      if (this.cheerDailyAggBuffer.size > 0) {
+        this.scheduleCheerDailyAggFlush();
+      }
+    }
   }
 
   /**

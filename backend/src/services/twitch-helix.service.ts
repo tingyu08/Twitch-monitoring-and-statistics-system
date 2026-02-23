@@ -274,29 +274,35 @@ class TwurpleHelixService {
    */
   async getStreamsByUserIds(userIds: string[]): Promise<TwitchStream[]> {
     if (userIds.length === 0) return [];
-    if (userIds.length > 100) {
-      userIds = userIds.slice(0, 100);
-    }
 
     try {
       const api = await this.getApiClient();
-      const streams = await api.streams.getStreamsByUserIds(userIds);
+      const allStreams: TwitchStream[] = [];
 
-      return streams.map((stream) => ({
-        id: stream.id,
-        userId: stream.userId,
-        userLogin: stream.userName,
-        userName: stream.userDisplayName,
-        gameId: stream.gameId,
-        gameName: stream.gameName,
-        type: stream.type,
-        title: stream.title,
-        viewerCount: stream.viewers,
-        startedAt: stream.startDate,
-        language: stream.language,
-        thumbnailUrl: stream.thumbnailUrl,
-        isMature: stream.isMature,
-      }));
+      for (let i = 0; i < userIds.length; i += 100) {
+        const chunk = userIds.slice(i, i + 100);
+        const streams = await api.streams.getStreamsByUserIds(chunk);
+
+        allStreams.push(
+          ...streams.map((stream) => ({
+            id: stream.id,
+            userId: stream.userId,
+            userLogin: stream.userName,
+            userName: stream.userDisplayName,
+            gameId: stream.gameId,
+            gameName: stream.gameName,
+            type: stream.type,
+            title: stream.title,
+            viewerCount: stream.viewers,
+            startedAt: stream.startDate,
+            language: stream.language,
+            thumbnailUrl: stream.thumbnailUrl,
+            isMature: stream.isMature,
+          }))
+        );
+      }
+
+      return allStreams;
     } catch (error) {
       logger.error("Twurple Helix", "批量獲取直播狀態失敗", error);
       return [];

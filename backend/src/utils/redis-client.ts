@@ -9,6 +9,8 @@ let redisFailureCount = 0;
 let redisDisabledUntil = 0;
 let redisCircuitOpenedCount = 0;
 let redisLastFailureReason: string | null = null;
+let redisCircuitState: "closed" | "open" | "half-open" = "closed";
+let redisHalfOpenProbeInFlight = false;
 
 const REDIS_FAILURE_THRESHOLD = Number(process.env.REDIS_FAILURE_THRESHOLD || 5);
 const REDIS_CIRCUIT_BREAKER_MS = Number(process.env.REDIS_CIRCUIT_BREAKER_MS || 30000);
@@ -47,19 +49,33 @@ export function getRedisClient(): Redis | null {
 }
 
 function isRedisCircuitOpen(): boolean {
-  return redisDisabledUntil > Date.now();
+  return redisCircuitState === "open" && redisDisabledUntil > Date.now();
 }
 
 function markRedisSuccess(): void {
   redisFailureCount = 0;
   redisDisabledUntil = 0;
+  redisCircuitState = "closed";
+  redisHalfOpenProbeInFlight = false;
 }
 
 function markRedisFailure(): void {
+  if (redisCircuitState === "half-open") {
+    redisDisabledUntil = Date.now() + REDIS_CIRCUIT_BREAKER_MS;
+    redisCircuitOpenedCount += 1;
+    redisCircuitState = "open";
+    redisHalfOpenProbeInFlight = false;
+    redisFailureCount = 0;
+    logger.warn("Redis", `Half-open probe failed, reopen circuit for ${REDIS_CIRCUIT_BREAKER_MS}ms`);
+    return;
+  }
+
   redisFailureCount += 1;
   if (redisFailureCount >= REDIS_FAILURE_THRESHOLD) {
     redisDisabledUntil = Date.now() + REDIS_CIRCUIT_BREAKER_MS;
     redisCircuitOpenedCount += 1;
+    redisCircuitState = "open";
+    redisHalfOpenProbeInFlight = false;
     logger.warn(
       "Redis",
       `Circuit breaker opened for ${REDIS_CIRCUIT_BREAKER_MS}ms after ${redisFailureCount} failures`
@@ -69,12 +85,29 @@ function markRedisFailure(): void {
 }
 
 function getHealthyRedisClient(): Redis | null {
-  if (isRedisCircuitOpen()) {
-    return null;
+  const now = Date.now();
+
+  if (redisCircuitState === "open") {
+    if (redisDisabledUntil > now) {
+      return null;
+    }
+
+    redisCircuitState = "half-open";
+    redisHalfOpenProbeInFlight = false;
+  }
+
+  if (redisCircuitState === "half-open") {
+    if (redisHalfOpenProbeInFlight) {
+      return null;
+    }
+    redisHalfOpenProbeInFlight = true;
   }
 
   const client = getRedisClient();
-  if (!client) return null;
+  if (!client) {
+    redisHalfOpenProbeInFlight = false;
+    return null;
+  }
   return client;
 }
 
@@ -83,6 +116,7 @@ export function getRedisCircuitBreakerStats() {
   return {
     enabled: isRedisEnabled(),
     open: isRedisCircuitOpen(),
+    state: redisCircuitState,
     openUntil: redisDisabledUntil > now ? new Date(redisDisabledUntil).toISOString() : null,
     remainingOpenMs: Math.max(0, redisDisabledUntil - now),
     openedCount: redisCircuitOpenedCount,

@@ -1,12 +1,26 @@
 const MAX_SAMPLES = 200;
 
-const durations: number[] = [];
+const durationRing = new Array<number>(MAX_SAMPLES);
+let writeIndex = 0;
+let sampleCount = 0;
 
 export function recordQueryDuration(durationMs: number): void {
-  durations.push(durationMs);
-  if (durations.length > MAX_SAMPLES) {
-    durations.shift();
+  durationRing[writeIndex] = durationMs;
+  writeIndex = (writeIndex + 1) % MAX_SAMPLES;
+  if (sampleCount < MAX_SAMPLES) {
+    sampleCount += 1;
   }
+}
+
+function getDurationSnapshot(): number[] {
+  const snapshot = new Array<number>(sampleCount);
+  const oldestIndex = (writeIndex - sampleCount + MAX_SAMPLES) % MAX_SAMPLES;
+
+  for (let i = 0; i < sampleCount; i += 1) {
+    snapshot[i] = durationRing[(oldestIndex + i) % MAX_SAMPLES];
+  }
+
+  return snapshot;
 }
 
 export function getQueryStats(): {
@@ -15,9 +29,9 @@ export function getQueryStats(): {
   p95Ms: number;
   maxMs: number;
 } | null {
-  if (durations.length === 0) return null;
+  if (sampleCount === 0) return null;
 
-  const sorted = [...durations].sort((a, b) => a - b);
+  const sorted = getDurationSnapshot().sort((a, b) => a - b);
   const count = sorted.length;
   const sum = sorted.reduce((acc, v) => acc + v, 0);
   const avg = Math.round((sum / count) * 100) / 100;

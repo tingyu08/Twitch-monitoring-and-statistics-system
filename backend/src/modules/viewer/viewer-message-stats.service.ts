@@ -1,6 +1,9 @@
 import { prisma } from "../../db/prisma";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 
+const MAX_RANGE_DAYS = 365;
+const MAX_DAILY_BREAKDOWN_ROWS = 400;
+
 export interface ViewerMessageStatsResult {
   channelId: string;
   timeRange: {
@@ -37,10 +40,25 @@ export async function getViewerMessageStats(
   startDateStr?: string,
   endDateStr?: string
 ): Promise<ViewerMessageStatsResult> {
-  const endDate = endDateStr ? new Date(endDateStr) : new Date();
-  const startDate = startDateStr
+  const now = new Date();
+  const parsedEndDate = endDateStr ? new Date(endDateStr) : now;
+  const endDate = Number.isNaN(parsedEndDate.getTime()) ? now : parsedEndDate;
+
+  const parsedStartDate = startDateStr
     ? new Date(startDateStr)
     : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const fallbackStartDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  let startDate = Number.isNaN(parsedStartDate.getTime()) ? fallbackStartDate : parsedStartDate;
+
+  if (startDate > endDate) {
+    startDate = fallbackStartDate;
+  }
+
+  const maxRangeStart = new Date(endDate.getTime() - MAX_RANGE_DAYS * 24 * 60 * 60 * 1000);
+  if (startDate < maxRangeStart) {
+    startDate = maxRangeStart;
+  }
 
   const startKey = startDate.toISOString().split("T")[0];
   const endKey = endDate.toISOString().split("T")[0];
@@ -60,6 +78,17 @@ export async function getViewerMessageStats(
           },
         },
         orderBy: { date: "asc" },
+        take: MAX_DAILY_BREAKDOWN_ROWS,
+        select: {
+          date: true,
+          totalMessages: true,
+          chatMessages: true,
+          subscriptions: true,
+          cheers: true,
+          giftSubs: true,
+          raids: true,
+          totalBits: true,
+        },
       });
 
       const summary = {

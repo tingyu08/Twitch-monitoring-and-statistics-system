@@ -5,7 +5,9 @@
  * Story 2.5: 觀眾隱私與授權控制
  */
 
+import { Prisma } from "@prisma/client";
 import cron from "node-cron";
+
 import { accountDeletionService } from "../services/account-deletion.service";
 import { dataExportService } from "../services/data-export.service";
 import { prisma } from "../db/prisma";
@@ -14,38 +16,43 @@ import { captureJobError } from "./job-error-tracker";
 
 // 每日凌晨 3 點執行
 const DATA_RETENTION_CRON = process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 * * *";
+const DEFAULT_MESSAGE_DELETE_BATCH_SIZE = 3000;
+const DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE = (() => {
+  const parsed = Number(process.env.DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return DEFAULT_MESSAGE_DELETE_BATCH_SIZE;
+  }
+  return Math.floor(parsed);
+})();
 
 export class DataRetentionJob {
   private isRunning = false;
-  private readonly MESSAGE_DELETE_BATCH_SIZE = 3000;
+  private readonly MESSAGE_DELETE_BATCH_SIZE = DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE;
   private readonly MESSAGE_DELETE_BATCH_DELAY_MS = 200;
 
   private async batchDeleteViewerMessages(before: Date): Promise<number> {
     let totalDeleted = 0;
 
     while (true) {
-      const rows = await prisma.viewerChannelMessage.findMany({
-        where: { timestamp: { lt: before } },
-        select: { id: true },
-        take: this.MESSAGE_DELETE_BATCH_SIZE,
-        orderBy: { timestamp: "asc" },
-      });
+      const deleted = await prisma.$executeRaw(
+        Prisma.sql`
+          DELETE FROM viewer_channel_messages
+          WHERE rowid IN (
+            SELECT rowid FROM viewer_channel_messages
+            WHERE timestamp < ${before}
+            ORDER BY timestamp ASC
+            LIMIT ${this.MESSAGE_DELETE_BATCH_SIZE}
+          )
+        `
+      );
 
-      if (rows.length === 0) {
+      if (deleted === 0) {
         break;
       }
 
-      const deleted = await prisma.viewerChannelMessage.deleteMany({
-        where: {
-          id: {
-            in: rows.map((row) => row.id),
-          },
-        },
-      });
+      totalDeleted += deleted;
 
-      totalDeleted += deleted.count;
-
-      if (rows.length < this.MESSAGE_DELETE_BATCH_SIZE) {
+      if (deleted < this.MESSAGE_DELETE_BATCH_SIZE) {
         break;
       }
 
@@ -59,7 +66,10 @@ export class DataRetentionJob {
    * 啟動 Cron Job
    */
   start(): void {
-    logger.info("DataRetention", `Job 已排程: ${DATA_RETENTION_CRON}`);
+    logger.info(
+      "DataRetention",
+      `Job 已排程: ${DATA_RETENTION_CRON} (messageDeleteBatchSize=${this.MESSAGE_DELETE_BATCH_SIZE})`
+    );
 
     cron.schedule(DATA_RETENTION_CRON, async () => {
       await this.execute();

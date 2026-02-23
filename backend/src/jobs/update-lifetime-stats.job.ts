@@ -12,6 +12,7 @@ const BATCH_SIZE = 50;
 
 // 查詢批次大小（避免一次性 findMany 造成記憶體尖峰）
 const TARGET_QUERY_BATCH_SIZE = 2000;
+const TARGET_FLUSH_SIZE = 5000;
 
 // P0 Fix: 限制並行度，避免同時發送過多 DB 查詢
 const CONCURRENCY_LIMIT = 5;
@@ -24,7 +25,8 @@ function appendPairTarget(targets: Set<string>, viewerId: string, channelId: str
 async function collectTargetsFromDailyStats(
   targets: Set<string>,
   where?: Prisma.ViewerChannelDailyStatWhereInput,
-  shouldStop: () => boolean = () => false
+  shouldStop: () => boolean = () => false,
+  onFlush?: () => Promise<void>
 ): Promise<void> {
   let cursorId: string | undefined;
 
@@ -52,6 +54,10 @@ async function collectTargetsFromDailyStats(
 
     for (const row of rows) {
       appendPairTarget(targets, row.viewerId, row.channelId);
+
+      if (onFlush && targets.size >= TARGET_FLUSH_SIZE) {
+        await onFlush();
+      }
     }
 
     cursorId = rows[rows.length - 1]?.id;
@@ -62,7 +68,8 @@ async function collectTargetsFromDailyStats(
 async function collectTargetsFromMessageAgg(
   targets: Set<string>,
   where?: Prisma.ViewerChannelMessageDailyAggWhereInput,
-  shouldStop: () => boolean = () => false
+  shouldStop: () => boolean = () => false,
+  onFlush?: () => Promise<void>
 ): Promise<void> {
   let cursorId: string | undefined;
 
@@ -90,6 +97,10 @@ async function collectTargetsFromMessageAgg(
 
     for (const row of rows) {
       appendPairTarget(targets, row.viewerId, row.channelId);
+
+      if (onFlush && targets.size >= TARGET_FLUSH_SIZE) {
+        await onFlush();
+      }
     }
 
     cursorId = rows[rows.length - 1]?.id;
@@ -112,13 +123,71 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
 
   try {
     let targets = new Set<string>();
+    const affectedChannels = new Set<string>();
+    const affectedViewers = new Set<string>();
+
+    // 批次並行處理 Stats（修復 N+1 問題）
+    // P0 Fix: 使用 p-limit 限制並行度
+    const limit = pLimit(CONCURRENCY_LIMIT);
+    let processed = 0;
+
+    const processTargets = async (targetSet: Set<string>, totalHint?: number): Promise<void> => {
+      const targetArray = Array.from(targetSet);
+      if (targetArray.length === 0) {
+        return;
+      }
+
+      for (let i = 0; i < targetArray.length; i += BATCH_SIZE) {
+        if (shouldStop()) {
+          timedOut = true;
+          logger.warn(
+            "CronJob",
+            `Lifetime Stats 更新達到執行時間上限，已處理 ${processed}/${totalHint ?? processed + (targetArray.length - i)}`
+          );
+          break;
+        }
+
+        const batch = targetArray.slice(i, i + BATCH_SIZE);
+
+        await Promise.all(
+          batch.map((target) =>
+            limit(async () => {
+              const [viewerId, channelId] = target.split("|");
+              await lifetimeStatsAggregator.aggregateStats(viewerId, channelId, {
+                preventDecreases: !fullUpdate,
+              });
+              affectedChannels.add(channelId);
+              affectedViewers.add(viewerId);
+            })
+          )
+        );
+
+        processed += batch.length;
+        if (processed % 100 === 0 || i + BATCH_SIZE >= targetArray.length) {
+          logger.info("CronJob", `已處理 ${processed}${totalHint ? `/${totalHint}` : ""} 組配對...`);
+        }
+
+        // P0 Fix: 批次間延遲，讓系統喘息
+        if (i + BATCH_SIZE < targetArray.length) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+    };
+
+    const flushTargets = async (totalHint?: number): Promise<void> => {
+      if (targets.size === 0 || shouldStop()) {
+        return;
+      }
+      const toProcess = targets;
+      targets = new Set<string>();
+      await processTargets(toProcess, totalHint);
+    };
 
     if (fullUpdate) {
-      // 全量更新：使用分頁掃描，避免無上限查詢導致 OOM
-      await Promise.all([
-        collectTargetsFromDailyStats(targets, undefined, shouldStop),
-        collectTargetsFromMessageAgg(targets, undefined, shouldStop),
-      ]);
+      // 全量更新：分段收集與分段處理，避免 targets 無上限累積
+      await collectTargetsFromDailyStats(targets, undefined, shouldStop, () => flushTargets());
+      await collectTargetsFromMessageAgg(targets, undefined, shouldStop, () => flushTargets());
+      await flushTargets();
     } else {
       // 增量更新：找出過去 26 小時有變動的 (多留一點緩衝)
       const checkTime = new Date(Date.now() - 26 * 60 * 60 * 1000);
@@ -127,48 +196,9 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
         collectTargetsFromDailyStats(targets, { updatedAt: { gte: checkTime } }, shouldStop),
         collectTargetsFromMessageAgg(targets, { updatedAt: { gte: checkTime } }, shouldStop),
       ]);
-    }
 
-    logger.info("CronJob", `找到 ${targets.size} 組觀眾-頻道配對需要更新`);
-
-    const affectedChannels = new Set<string>();
-    const affectedViewers = new Set<string>();
-
-    // 批次並行處理 Stats（修復 N+1 問題）
-    // P0 Fix: 使用 p-limit 限制並行度
-    const limit = pLimit(CONCURRENCY_LIMIT);
-    let processed = 0;
-    const targetArray = Array.from(targets);
-
-    for (let i = 0; i < targetArray.length; i += BATCH_SIZE) {
-      if (shouldStop()) {
-        timedOut = true;
-        logger.warn("CronJob", `Lifetime Stats 更新達到執行時間上限，已處理 ${processed}/${targets.size}`);
-        break;
-      }
-
-      const batch = targetArray.slice(i, i + BATCH_SIZE);
-
-      await Promise.all(
-        batch.map((target) =>
-          limit(async () => {
-            const [viewerId, channelId] = target.split("|");
-            await lifetimeStatsAggregator.aggregateStats(viewerId, channelId);
-            affectedChannels.add(channelId);
-            affectedViewers.add(viewerId);
-          })
-        )
-      );
-
-      processed += batch.length;
-      if (processed % 100 === 0 || processed === targetArray.length) {
-        logger.info("CronJob", `已處理 ${processed}/${targets.size} 組配對...`);
-      }
-
-      // P0 Fix: 批次間延遲，讓系統喘息
-      if (i + BATCH_SIZE < targetArray.length) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
+      logger.info("CronJob", `找到 ${targets.size} 組觀眾-頻道配對需要更新`);
+      await processTargets(targets, targets.size);
     }
 
     // 批次更新受影響頻道的 Ranking

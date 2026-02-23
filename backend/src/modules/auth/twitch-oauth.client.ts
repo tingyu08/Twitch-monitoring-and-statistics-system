@@ -2,6 +2,10 @@ import axios from "axios";
 import { env } from "../../config/env";
 
 const OAUTH_REQUEST_TIMEOUT_MS = Number(process.env.TWITCH_OAUTH_TIMEOUT_MS || 20000);
+const OAUTH_SUBSCRIPTIONS_PAGE_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.TWITCH_SUBSCRIPTIONS_PAGE_TIMEOUT_MS || OAUTH_REQUEST_TIMEOUT_MS)
+);
 const OAUTH_MAX_ATTEMPTS = Math.max(Number(process.env.TWITCH_OAUTH_MAX_ATTEMPTS || 3), 1);
 const OAUTH_RETRY_BASE_DELAY_MS = Number(process.env.TWITCH_OAUTH_RETRY_BASE_DELAY_MS || 400);
 
@@ -187,6 +191,7 @@ export class TwitchOAuthClient {
             Authorization: `Bearer ${accessToken}`,
           },
           params,
+          timeout: OAUTH_SUBSCRIPTIONS_PAGE_TIMEOUT_MS,
         });
 
         const subscriptions: Array<{ tier: string }> = response.data.data ?? [];

@@ -20,6 +20,7 @@ const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
 
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
+const ACTIVE_SESSION_QUERY_CHUNK = 500;
 
 // 超時時間（毫秒）- 優化：增加到 4 分鐘以處理大量頻道（286+）
 const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
@@ -42,6 +43,8 @@ interface ActiveStreamSession {
   startedAt: Date;
   avgViewers: number | null;
   peakViewers: number | null;
+  title: string;
+  category: string;
 }
 
 export interface StreamStatusResult {
@@ -236,11 +239,7 @@ export class StreamStatusJob {
     // 執行並發控制
     await this.runWithConcurrency(tasks, CONCURRENCY_LIMIT);
 
-    // 6. 清理大型物件以釋放記憶體
-    liveStreamMap.clear();
-    activeSessionMap.clear();
-
-    // 7. 執行後觸發 GC（如果記憶體使用較高）
+    // 6. 執行後觸發 GC（如果記憶體使用較高）
       if (memoryMonitor.isNearLimit() && global.gc) {
         global.gc();
       }
@@ -249,26 +248,28 @@ export class StreamStatusJob {
   /**
    * 簡單的並發控制器
    */
-  private async runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<void> {
-    const results: Promise<T>[] = [];
-    const executing = new Set<Promise<void>>();
-
-    for (const task of tasks) {
-      const p = Promise.resolve().then(task);
-      results.push(p);
-
-      if (limit <= tasks.length) {
-        const wrapper = p.then(() => {
-          executing.delete(wrapper);
-        });
-        executing.add(wrapper);
-
-        if (executing.size >= limit) {
-          await Promise.race(executing);
-        }
-      }
+  private async runWithConcurrency(tasks: Array<() => Promise<void>>, limit: number): Promise<void> {
+    if (tasks.length === 0) {
+      return;
     }
-    await Promise.all(results);
+
+    const workerCount = Math.max(1, Math.min(limit, tasks.length));
+    let nextIndex = 0;
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const taskIndex = nextIndex;
+        nextIndex += 1;
+
+        if (taskIndex >= tasks.length) {
+          return;
+        }
+
+        await tasks[taskIndex]();
+      }
+    });
+
+    await Promise.all(workers);
   }
 
   /**
@@ -333,24 +334,28 @@ export class StreamStatusJob {
       return [];
     }
 
-    const monitoredChannelIdSet = new Set(channelIds);
+    const sessions: ActiveStreamSession[] = [];
+    for (let i = 0; i < channelIds.length; i += ACTIVE_SESSION_QUERY_CHUNK) {
+      const chunk = channelIds.slice(i, i + ACTIVE_SESSION_QUERY_CHUNK);
+      const activeSessions = (await prisma.streamSession.findMany({
+        where: {
+          endedAt: null,
+          channelId: { in: chunk },
+        },
+        select: {
+          id: true,
+          channelId: true,
+          startedAt: true,
+          avgViewers: true,
+          peakViewers: true,
+          title: true,
+          category: true,
+        },
+      })) as ActiveStreamSession[];
+      sessions.push(...activeSessions);
+    }
 
-    // 查所有 active sessions，再以記憶體集合過濾監控清單
-    // 避免對超大 IN 列表做重複分批查詢，降低慢查詢風險
-    const activeSessions = (await prisma.streamSession.findMany({
-      where: {
-        endedAt: null,
-      },
-      select: {
-        id: true,
-        channelId: true,
-        startedAt: true,
-        avgViewers: true,
-        peakViewers: true,
-      },
-    })) as ActiveStreamSession[];
-
-    return activeSessions.filter((session) => monitoredChannelIdSet.has(session.channelId));
+    return sessions;
   }
 
   /**
@@ -407,6 +412,8 @@ export class StreamStatusJob {
       id: string;
       peakViewers: number | null;
       avgViewers: number | null;
+      title: string;
+      category: string;
     },
     stream: {
       title: string;
@@ -426,6 +433,16 @@ export class StreamStatusJob {
       currentAvg === null
         ? stream.viewerCount
         : Math.round(currentAvg * 0.8 + stream.viewerCount * 0.2);
+
+    const hasBaseChanges =
+      activeSession.title !== stream.title ||
+      activeSession.category !== stream.gameName ||
+      (activeSession.peakViewers || 0) !== newPeak;
+    const shouldUpdateAvg = shouldSampleMetric || currentAvg === null;
+
+    if (!hasBaseChanges && !shouldUpdateAvg && !shouldSampleMetric) {
+      return;
+    }
 
     await runWithWriteGuard("stream-session:update-session", async () => {
       // 直接更新

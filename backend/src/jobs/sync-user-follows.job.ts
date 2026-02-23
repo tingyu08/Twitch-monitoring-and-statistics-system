@@ -8,6 +8,8 @@
 import cron from "node-cron";
 import pLimit from "p-limit";
 import { randomUUID } from "crypto";
+import { mkdir, readFile, writeFile } from "fs/promises";
+import path from "path";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { twurpleHelixService } from "../services/twitch-helix.service";
@@ -15,6 +17,7 @@ import { logger } from "../utils/logger";
 import { decryptToken } from "../utils/crypto.utils";
 import { cacheManager } from "../utils/cache-manager";
 import { retryDatabaseOperation } from "../utils/db-retry";
+import { isRedisEnabled, redisGetJson, redisSetJson } from "../utils/redis-client";
 import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
 import { captureJobError } from "./job-error-tracker";
 
@@ -39,12 +42,325 @@ interface ExistingStreamer {
   twitchUserId: string;
 }
 
+interface TwitchUserProfile {
+  id: string;
+  displayName: string;
+  profileImageUrl: string;
+}
+
+type StreamerProfileRecord = {
+  twitchUserId: string;
+  displayName: string;
+  avatarUrl: string;
+};
+
+async function fetchTwitchUserProfileMapByIds(
+  twitchUserIds: string[]
+): Promise<Map<string, TwitchUserProfile>> {
+  if (twitchUserIds.length === 0) {
+    return new Map();
+  }
+
+  const users = await twurpleHelixService.getUsersByIds(twitchUserIds);
+  return new Map(
+    users.map((user) => [
+      user.id,
+      {
+        id: user.id,
+        displayName: user.displayName,
+        profileImageUrl: user.profileImageUrl,
+      },
+    ])
+  );
+}
+
+async function backfillExistingStreamerProfiles(
+  streamers: Array<{ id: string; twitchUserId: string }>
+): Promise<number> {
+  if (streamers.length === 0) {
+    return 0;
+  }
+
+  const userMap = await fetchTwitchUserProfileMapByIds(streamers.map((s) => s.twitchUserId));
+  const updates: Array<{ id: string; displayName: string; avatarUrl: string }> = [];
+  for (const streamer of streamers) {
+    const profile = userMap.get(streamer.twitchUserId);
+    if (!profile) {
+      continue;
+    }
+
+    updates.push({
+      id: streamer.id,
+      displayName: profile.displayName,
+      avatarUrl: profile.profileImageUrl,
+    });
+  }
+
+  const UPDATE_CHUNK_SIZE = 100;
+  for (let i = 0; i < updates.length; i += UPDATE_CHUNK_SIZE) {
+    const batch = updates.slice(i, i + UPDATE_CHUNK_SIZE);
+    await Promise.all(
+      batch.map((update) =>
+        prisma.streamer.update({
+          where: { id: update.id },
+          data: {
+            displayName: update.displayName,
+            avatarUrl: update.avatarUrl,
+          },
+        })
+      )
+    );
+  }
+
+  return updates.length;
+}
+
+function hydrateStreamerProfileRecords(
+  records: Iterable<StreamerProfileRecord>,
+  profileMap: Map<string, TwitchUserProfile>
+): number {
+  let hydratedCount = 0;
+
+  for (const record of records) {
+    const profile = profileMap.get(record.twitchUserId);
+    if (!profile) {
+      continue;
+    }
+
+    record.displayName = profile.displayName;
+    record.avatarUrl = profile.profileImageUrl;
+    hydratedCount += 1;
+  }
+
+  return hydratedCount;
+}
+
 // P1 Fix: 每小時第 30 分鐘執行（錯開 channelStatsSyncJob 的第 10 分鐘執行）
 const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "50 * * * *";
 
 // 並發控制：同時最多處理 5 個使用者
 const CONCURRENCY_LIMIT = 5;
 const TOKEN_QUERY_BATCH_SIZE = 200;
+const SUMMARY_REFRESH_DEBOUNCE_MS = Number(process.env.SUMMARY_REFRESH_DEBOUNCE_MS || 30000);
+const SUMMARY_REFRESH_BATCH_SIZE = Number(process.env.SUMMARY_REFRESH_BATCH_SIZE || 50);
+const SUMMARY_REFRESH_CONCURRENCY = Number(process.env.SUMMARY_REFRESH_CONCURRENCY || 4);
+const LIVE_STATUS_REFRESH_DEBOUNCE_MS = Number(
+  process.env.LIVE_STATUS_REFRESH_DEBOUNCE_MS || 20000
+);
+const FOLLOW_SYNC_MAINTENANCE_STATE_PATH = path.join(
+  process.cwd(),
+  "tmp",
+  "follow-sync-maintenance-state.json"
+);
+const FOLLOW_SYNC_MAINTENANCE_STATE_CACHE_KEY = "jobs:follow-sync:maintenance-state";
+const FOLLOW_SYNC_MAINTENANCE_STATE_TTL_SECONDS = 24 * 60 * 60;
+
+const pendingSummaryRefreshViewerIds = new Set<string>();
+let summaryRefreshTimer: NodeJS.Timeout | null = null;
+let liveStatusRefreshTimer: NodeJS.Timeout | null = null;
+let isLiveStatusRefreshing = false;
+let maintenanceStateLoaded = false;
+let maintenanceStateLoading: Promise<void> | null = null;
+let maintenanceStatePersisting = false;
+let maintenanceStatePersistQueued = false;
+
+async function ensureMaintenanceStateLoaded(): Promise<void> {
+  if (maintenanceStateLoaded) {
+    return;
+  }
+
+  if (maintenanceStateLoading) {
+    await maintenanceStateLoading;
+    return;
+  }
+
+  maintenanceStateLoading = (async () => {
+    try {
+      let parsed: {
+        pendingSummaryViewerIds?: string[];
+        liveStatusRefreshPending?: boolean;
+      } | null = null;
+
+      if (isRedisEnabled()) {
+        parsed = await redisGetJson<{
+          pendingSummaryViewerIds?: string[];
+          liveStatusRefreshPending?: boolean;
+        }>(FOLLOW_SYNC_MAINTENANCE_STATE_CACHE_KEY);
+      }
+
+      if (!parsed) {
+        const raw = await readFile(FOLLOW_SYNC_MAINTENANCE_STATE_PATH, "utf8");
+        parsed = JSON.parse(raw) as {
+          pendingSummaryViewerIds?: string[];
+          liveStatusRefreshPending?: boolean;
+        };
+      }
+
+      for (const viewerId of parsed.pendingSummaryViewerIds ?? []) {
+        if (viewerId) {
+          pendingSummaryRefreshViewerIds.add(viewerId);
+        }
+      }
+
+      if (parsed.liveStatusRefreshPending) {
+        scheduleLiveStatusRefresh();
+      }
+    } catch {
+      // ignore if state file does not exist or invalid
+    } finally {
+      maintenanceStateLoaded = true;
+    }
+  })();
+
+  await maintenanceStateLoading;
+  maintenanceStateLoading = null;
+}
+
+async function persistMaintenanceState(): Promise<void> {
+  if (maintenanceStatePersisting) {
+    maintenanceStatePersistQueued = true;
+    return;
+  }
+
+  maintenanceStatePersisting = true;
+  try {
+    const statePayload = {
+      pendingSummaryViewerIds: Array.from(pendingSummaryRefreshViewerIds),
+      liveStatusRefreshPending: Boolean(liveStatusRefreshTimer) || isLiveStatusRefreshing,
+    };
+
+    if (isRedisEnabled()) {
+      await redisSetJson(
+        FOLLOW_SYNC_MAINTENANCE_STATE_CACHE_KEY,
+        statePayload,
+        FOLLOW_SYNC_MAINTENANCE_STATE_TTL_SECONDS
+      );
+    }
+
+    await mkdir(path.dirname(FOLLOW_SYNC_MAINTENANCE_STATE_PATH), { recursive: true });
+    await writeFile(
+      FOLLOW_SYNC_MAINTENANCE_STATE_PATH,
+      JSON.stringify(statePayload, null, 2),
+      "utf8"
+    );
+  } catch (error) {
+    logger.warn("Jobs", "無法持久化 follow-sync 維護狀態", error);
+  } finally {
+    maintenanceStatePersisting = false;
+    if (maintenanceStatePersistQueued) {
+      maintenanceStatePersistQueued = false;
+      await persistMaintenanceState();
+    }
+  }
+}
+
+async function flushPendingSummaryRefreshes(): Promise<void> {
+  await ensureMaintenanceStateLoaded();
+
+  if (pendingSummaryRefreshViewerIds.size === 0) {
+    await persistMaintenanceState();
+    return;
+  }
+
+  const viewerIds = Array.from(pendingSummaryRefreshViewerIds);
+  pendingSummaryRefreshViewerIds.clear();
+
+  const limit = pLimit(Math.max(1, SUMMARY_REFRESH_CONCURRENCY));
+
+  for (let i = 0; i < viewerIds.length; i += SUMMARY_REFRESH_BATCH_SIZE) {
+    const batch = viewerIds.slice(i, i + SUMMARY_REFRESH_BATCH_SIZE);
+    await Promise.all(
+      batch.map((viewerId) =>
+        limit(async () => {
+          try {
+            await refreshViewerChannelSummaryForViewer(viewerId);
+            cacheManager.delete(`viewer:${viewerId}:channels_list`);
+          } catch (error) {
+            logger.warn("Jobs", `刷新 viewer summary 失敗: ${viewerId}`, error);
+          }
+        })
+      )
+    );
+  }
+
+  await persistMaintenanceState();
+}
+
+function scheduleSummaryRefresh(viewerId: string): void {
+  void ensureMaintenanceStateLoaded();
+  pendingSummaryRefreshViewerIds.add(viewerId);
+  void persistMaintenanceState();
+
+  if (summaryRefreshTimer) {
+    return;
+  }
+
+  summaryRefreshTimer = setTimeout(() => {
+    summaryRefreshTimer = null;
+    void flushPendingSummaryRefreshes();
+  }, SUMMARY_REFRESH_DEBOUNCE_MS);
+
+  summaryRefreshTimer.unref?.();
+}
+
+async function flushLiveStatusRefresh(): Promise<void> {
+  await ensureMaintenanceStateLoaded();
+
+  if (isLiveStatusRefreshing) {
+    return;
+  }
+
+  isLiveStatusRefreshing = true;
+  try {
+    const { updateLiveStatusFn } = await import("./update-live-status.job");
+    await updateLiveStatusFn();
+    logger.info("Jobs", "✅ 已批次觸發開台狀態更新");
+  } catch (error) {
+    logger.warn("Jobs", "批次開台狀態更新失敗（不影響主流程）", error);
+  } finally {
+    isLiveStatusRefreshing = false;
+    await persistMaintenanceState();
+  }
+}
+
+function scheduleLiveStatusRefresh(): void {
+  void ensureMaintenanceStateLoaded();
+
+  if (liveStatusRefreshTimer) {
+    return;
+  }
+
+  void persistMaintenanceState();
+
+  liveStatusRefreshTimer = setTimeout(() => {
+    liveStatusRefreshTimer = null;
+    void flushLiveStatusRefresh();
+  }, LIVE_STATUS_REFRESH_DEBOUNCE_MS);
+
+  liveStatusRefreshTimer.unref?.();
+}
+
+export async function flushPendingFollowSyncMaintenance(): Promise<void> {
+  await ensureMaintenanceStateLoaded();
+
+  if (summaryRefreshTimer) {
+    clearTimeout(summaryRefreshTimer);
+    summaryRefreshTimer = null;
+  }
+
+  if (liveStatusRefreshTimer) {
+    clearTimeout(liveStatusRefreshTimer);
+    liveStatusRefreshTimer = null;
+  }
+
+  await flushPendingSummaryRefreshes();
+  await flushLiveStatusRefresh();
+  await persistMaintenanceState();
+}
+
+export function initializeFollowSyncMaintenance(): void {
+  void ensureMaintenanceStateLoaded();
+}
 
 export interface SyncUserFollowsResult {
   usersProcessed: number;
@@ -113,39 +429,42 @@ export class SyncUserFollowsJob {
       // 2. 對每個使用者同步追蹤名單 (使用並發控制)
       const limit = pLimit(CONCURRENCY_LIMIT);
 
-      const syncTasks = usersWithFollowScope.map((user) =>
-        limit(async () => {
-          try {
-            const userResult = await this.syncUserFollows(user);
-            return {
-              success: true,
-              channelsCreated: userResult.channelsCreated,
-              followsCreated: userResult.followsCreated,
-              followsRemoved: userResult.followsRemoved,
-            };
-          } catch (error) {
-            logger.error("Jobs", `同步使用者 ${user.twitchUserId} 追蹤名單失敗`, error);
-            return {
-              success: false,
-              channelsCreated: 0,
-              followsCreated: 0,
-              followsRemoved: 0,
-            };
+      const USER_CHUNK_SIZE = 100;
+      for (let i = 0; i < usersWithFollowScope.length; i += USER_CHUNK_SIZE) {
+        const userChunk = usersWithFollowScope.slice(i, i + USER_CHUNK_SIZE);
+        const taskResults = await Promise.all(
+          userChunk.map((user) =>
+            limit(async () => {
+              try {
+                const userResult = await this.syncUserFollows(user);
+                return {
+                  success: true,
+                  channelsCreated: userResult.channelsCreated,
+                  followsCreated: userResult.followsCreated,
+                  followsRemoved: userResult.followsRemoved,
+                };
+              } catch (error) {
+                logger.error("Jobs", `同步使用者 ${user.twitchUserId} 追蹤名單失敗`, error);
+                return {
+                  success: false,
+                  channelsCreated: 0,
+                  followsCreated: 0,
+                  followsRemoved: 0,
+                };
+              }
+            })
+          )
+        );
+
+        for (const taskResult of taskResults) {
+          if (taskResult.success) {
+            result.usersProcessed++;
+            result.channelsCreated += taskResult.channelsCreated;
+            result.followsCreated += taskResult.followsCreated;
+            result.followsRemoved += taskResult.followsRemoved;
+          } else {
+            result.usersFailed++;
           }
-        })
-      );
-
-      const taskResults = await Promise.all(syncTasks);
-
-      // 聚合結果
-      for (const taskResult of taskResults) {
-        if (taskResult.success) {
-          result.usersProcessed++;
-          result.channelsCreated += taskResult.channelsCreated;
-          result.followsCreated += taskResult.followsCreated;
-          result.followsRemoved += taskResult.followsRemoved;
-        } else {
-          result.usersFailed++;
         }
       }
 
@@ -379,29 +698,10 @@ export class SyncUserFollowsJob {
     // 5. 批量抓取需要更新的 Streamers 資料
     if (streamersNeedingUpdate.length > 0) {
       try {
-        const idsToFetch = streamersNeedingUpdate.map((s) => s.twitchUserId);
-        const twitchUsers = await twurpleHelixService.getUsersByIds(idsToFetch);
-        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
-
-        // 批量更新
-        const updatePromises = streamersNeedingUpdate.map((streamer) => {
-          const twitchUser = userMap.get(streamer.twitchUserId);
-          if (twitchUser) {
-            return prisma.streamer.update({
-              where: { id: streamer.id },
-              data: {
-                displayName: twitchUser.displayName,
-                avatarUrl: twitchUser.profileImageUrl,
-              },
-            });
-          }
-          return Promise.resolve();
-        });
-
-        await Promise.all(updatePromises);
+        const updatedCount = await backfillExistingStreamerProfiles(streamersNeedingUpdate);
         logger.info(
           "SyncFollows",
-          `已更新 ${streamersNeedingUpdate.length} 個現有 Streamer 的頭貼和名稱`
+          `已更新 ${updatedCount}/${streamersNeedingUpdate.length} 個現有 Streamer 的頭貼和名稱`
         );
       } catch (error) {
         logger.warn("SyncFollows", "更新現有 Streamer 資料失敗", error);
@@ -421,6 +721,7 @@ export class SyncUserFollowsJob {
       broadcasterLogin: string;
     }> = [];
     const channelsToUpdate: string[] = [];
+    const newFollowedChannels: typeof followedChannels = [];
 
     for (const follow of followedChannels) {
       const existingFollow = existingFollowMap.get(follow.broadcasterId);
@@ -428,6 +729,7 @@ export class SyncUserFollowsJob {
       if (existingFollow) {
         existingFollowMap.delete(follow.broadcasterId);
       } else {
+        newFollowedChannels.push(follow);
         const channel = existingChannelMap.get(follow.broadcasterId);
 
         if (!channel) {
@@ -455,21 +757,12 @@ export class SyncUserFollowsJob {
     if (streamersToUpsert.length > 0) {
       try {
         const twitchIds = streamersToUpsert.map((s) => s.twitchUserId);
-        const twitchUsers = await twurpleHelixService.getUsersByIds(twitchIds);
-
-        // 更新 streamersToUpsert 的資料
-        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
-        for (const streamerData of streamersToUpsert) {
-          const twitchUser = userMap.get(streamerData.twitchUserId);
-          if (twitchUser) {
-            streamerData.displayName = twitchUser.displayName;
-            streamerData.avatarUrl = twitchUser.profileImageUrl;
-          }
-        }
+        const userMap = await fetchTwitchUserProfileMapByIds(twitchIds);
+        const hydratedCount = hydrateStreamerProfileRecords(streamersToUpsert, userMap);
 
         logger.info(
           "SyncFollows",
-          `已抓取 ${twitchUsers.length}/${twitchIds.length} 個新 Streamer 的完整資料`
+          `已抓取 ${hydratedCount}/${twitchIds.length} 個新 Streamer 的完整資料`
         );
       } catch (error) {
         logger.warn("SyncFollows", "抓取 Streamer 資料失敗，使用預設值", error);
@@ -478,38 +771,87 @@ export class SyncUserFollowsJob {
 
     // 8. 批量執行資料庫操作
     await prisma.$transaction(async (tx: TransactionClient) => {
-      for (const streamerData of streamersToUpsert) {
-        const upserted = await tx.streamer.upsert({
-          where: { twitchUserId: streamerData.twitchUserId },
-          create: streamerData,
-          update: {
-            displayName: streamerData.displayName,
-            avatarUrl: streamerData.avatarUrl,
+      const now = new Date();
+
+      if (streamersToUpsert.length > 0) {
+        const streamerRows = streamersToUpsert.map((streamerData) =>
+          Prisma.sql`(${randomUUID()}, ${streamerData.twitchUserId}, ${streamerData.displayName}, ${streamerData.avatarUrl}, ${now})`
+        );
+
+        await tx.$executeRaw(
+          Prisma.sql`
+            INSERT INTO streamers (id, twitchUserId, displayName, avatarUrl, updatedAt)
+            VALUES ${Prisma.join(streamerRows)}
+            ON CONFLICT(twitchUserId) DO UPDATE SET
+              displayName = excluded.displayName,
+              avatarUrl = excluded.avatarUrl,
+              updatedAt = excluded.updatedAt
+          `
+        );
+
+        const upsertedStreamers = await tx.streamer.findMany({
+          where: {
+            twitchUserId: {
+              in: streamersToUpsert.map((streamerData) => streamerData.twitchUserId),
+            },
+          },
+          select: {
+            id: true,
+            twitchUserId: true,
           },
         });
-        existingStreamerMap.set(upserted.twitchUserId, upserted);
+
+        for (const upserted of upsertedStreamers) {
+          existingStreamerMap.set(upserted.twitchUserId, upserted);
+        }
       }
 
-      for (const channelData of channelsToCreate) {
-        const streamer = existingStreamerMap.get(channelData.twitchChannelId);
-        if (streamer) {
-          const channel = await tx.channel.create({
-            data: {
-              twitchChannelId: channelData.twitchChannelId,
-              channelName: channelData.channelName,
-              channelUrl: channelData.channelUrl,
-              source: "external",
-              isMonitored: true,
-              streamer: {
-                connect: { id: streamer.id },
+      if (channelsToCreate.length > 0) {
+        const channelRows: ReturnType<typeof Prisma.sql>[] = [];
+        for (const channelData of channelsToCreate) {
+          const streamer = existingStreamerMap.get(channelData.twitchChannelId);
+          if (!streamer) {
+            continue;
+          }
+
+          channelRows.push(
+            Prisma.sql`(${randomUUID()}, ${channelData.twitchChannelId}, ${channelData.channelName}, ${channelData.channelUrl}, ${streamer.id}, ${"external"}, ${1}, ${now})`
+          );
+        }
+
+        if (channelRows.length > 0) {
+          await tx.$executeRaw(
+            Prisma.sql`
+              INSERT INTO channels (id, twitchChannelId, channelName, channelUrl, streamerId, source, isMonitored, updatedAt)
+              VALUES ${Prisma.join(channelRows)}
+              ON CONFLICT(twitchChannelId) DO UPDATE SET
+                channelName = excluded.channelName,
+                channelUrl = excluded.channelUrl,
+                streamerId = excluded.streamerId,
+                isMonitored = 1,
+                updatedAt = excluded.updatedAt
+            `
+          );
+
+          const upsertedChannels = await tx.channel.findMany({
+            where: {
+              twitchChannelId: {
+                in: channelsToCreate.map((channelData) => channelData.twitchChannelId),
               },
             },
-            include: {
-              streamer: true,
+            select: {
+              id: true,
+              twitchChannelId: true,
+              isMonitored: true,
+              streamerId: true,
             },
           });
-          existingChannelMap.set(channel.twitchChannelId, channel);
-          result.channelsCreated++;
+
+          for (const channel of upsertedChannels) {
+            existingChannelMap.set(channel.twitchChannelId, channel);
+          }
+
+          result.channelsCreated += channelRows.length;
         }
       }
 
@@ -529,17 +871,15 @@ export class SyncUserFollowsJob {
       followedAt: Date;
     }> = [];
 
-    for (const follow of followedChannels) {
-      if (!existingFollowMap.has(follow.broadcasterId)) {
-        const channel = existingChannelMap.get(follow.broadcasterId);
-        if (channel) {
-          followsToCreate.push({
-            userId: user.id,
-            userType: user.userType,
-            channelId: channel.id,
-            followedAt: follow.followedAt,
-          });
-        }
+    for (const follow of newFollowedChannels) {
+      const channel = existingChannelMap.get(follow.broadcasterId);
+      if (channel) {
+        followsToCreate.push({
+          userId: user.id,
+          userType: user.userType,
+          channelId: channel.id,
+          followedAt: follow.followedAt,
+        });
       }
     }
 
@@ -556,18 +896,17 @@ export class SyncUserFollowsJob {
           }, ${followData.followedAt})`
         );
 
-        await retryDatabaseOperation(() =>
+        const insertedCount = await retryDatabaseOperation(() =>
           prisma.$executeRaw(
             Prisma.sql`
               INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
               VALUES ${Prisma.join(rows)}
-              ON CONFLICT(userId, channelId) DO UPDATE SET followedAt=excluded.followedAt
+              ON CONFLICT(userId, channelId) DO NOTHING
             `
           )
         );
 
-        // followsToCreate 已排除 existingFollowMap，因此可視為新增
-        result.followsCreated += batch.length;
+        result.followsCreated += Number(insertedCount);
       } catch (error) {
         logger.warn(
           "Jobs",
@@ -592,8 +931,7 @@ export class SyncUserFollowsJob {
       result.followsRemoved = followIdsToDelete.length;
     }
 
-    await refreshViewerChannelSummaryForViewer(user.id);
-    cacheManager.delete(`viewer:${user.id}:channels_list`);
+    scheduleSummaryRefresh(user.id);
 
     return result;
   }
@@ -739,29 +1077,10 @@ export async function triggerFollowSyncForUser(
     // 批量抓取需要更新的 Streamers 資料
     if (streamersNeedingUpdate.length > 0) {
       try {
-        const idsToFetch = streamersNeedingUpdate.map((s) => s.twitchUserId);
-        const twitchUsers = await twurpleHelixService.getUsersByIds(idsToFetch);
-        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
-
-        // 批量更新
-        const updatePromises = streamersNeedingUpdate.map((streamer) => {
-          const twitchUser = userMap.get(streamer.twitchUserId);
-          if (twitchUser) {
-            return prisma.streamer.update({
-              where: { id: streamer.id },
-              data: {
-                displayName: twitchUser.displayName,
-                avatarUrl: twitchUser.profileImageUrl,
-              },
-            });
-          }
-          return Promise.resolve();
-        });
-
-        await Promise.all(updatePromises);
+        const updatedCount = await backfillExistingStreamerProfiles(streamersNeedingUpdate);
         logger.info(
           "Jobs",
-          `✅ 已更新 ${streamersNeedingUpdate.length} 個現有 Streamer 的頭貼和名稱`
+          `✅ 已更新 ${updatedCount}/${streamersNeedingUpdate.length} 個現有 Streamer 的頭貼和名稱`
         );
       } catch (error) {
         logger.warn("Jobs", "更新現有 Streamer 資料失敗", error);
@@ -790,6 +1109,117 @@ export async function triggerFollowSyncForUser(
     >();
     const channelIdsToEnable = new Set<string>();
     const newFollowBroadcasterIds = new Set<string>();
+    const ENTITY_FLUSH_SIZE = 200;
+
+    const flushPendingEntities = async (): Promise<void> => {
+      if (
+        streamersToUpsert.size === 0 &&
+        channelsToUpsert.size === 0 &&
+        channelIdsToEnable.size === 0
+      ) {
+        return;
+      }
+
+      if (streamersToUpsert.size > 0) {
+        try {
+          const twitchIds = Array.from(streamersToUpsert.keys());
+          const userMap = await fetchTwitchUserProfileMapByIds(twitchIds);
+          const hydratedCount = hydrateStreamerProfileRecords(streamersToUpsert.values(), userMap);
+
+          logger.info(
+            "Jobs",
+            `✅ 已抓取 ${hydratedCount}/${streamersToUpsert.size} 個新 Streamer 的完整資料`
+          );
+        } catch (error) {
+          logger.warn("Jobs", "抓取新 Streamer 資料失敗，使用預設值", error);
+        }
+      }
+
+      await prisma.$transaction(async (tx: TransactionClient) => {
+        const now = new Date();
+
+        if (streamersToUpsert.size > 0) {
+          const streamerRows = [...streamersToUpsert.values()].map((s) =>
+            Prisma.sql`(${randomUUID()}, ${s.twitchUserId}, ${s.displayName}, ${s.avatarUrl ?? null}, ${now})`
+          );
+
+          await tx.$executeRaw(
+            Prisma.sql`
+              INSERT INTO streamers (id, twitchUserId, displayName, avatarUrl, updatedAt)
+              VALUES ${Prisma.join(streamerRows)}
+              ON CONFLICT(twitchUserId) DO UPDATE SET
+                displayName = excluded.displayName,
+                avatarUrl = excluded.avatarUrl,
+                updatedAt = excluded.updatedAt
+            `
+          );
+
+          const upsertedStreamers = await tx.streamer.findMany({
+            where: { twitchUserId: { in: [...streamersToUpsert.keys()] } },
+            select: { id: true, twitchUserId: true, avatarUrl: true },
+          });
+          for (const s of upsertedStreamers) {
+            existingStreamerMap.set(s.twitchUserId, {
+              id: s.id,
+              twitchUserId: s.twitchUserId,
+              avatarUrl: s.avatarUrl,
+            });
+          }
+        }
+
+        if (channelsToUpsert.size > 0) {
+          const channelRows: ReturnType<typeof Prisma.sql>[] = [];
+          for (const channelData of channelsToUpsert.values()) {
+            const streamerId = existingStreamerMap.get(channelData.twitchChannelId)?.id ?? null;
+            if (!streamerId) {
+              logger.warn("Jobs", `無法解析 streamerId for ${channelData.channelName}, 跳過此頻道`);
+              continue;
+            }
+            channelRows.push(
+              Prisma.sql`(${randomUUID()}, ${channelData.twitchChannelId}, ${channelData.channelName}, ${channelData.channelUrl ?? null}, ${streamerId}, ${"external"}, ${1}, ${now})`
+            );
+          }
+
+          if (channelRows.length > 0) {
+            await tx.$executeRaw(
+              Prisma.sql`
+                INSERT INTO channels (id, twitchChannelId, channelName, channelUrl, streamerId, source, isMonitored, updatedAt)
+                VALUES ${Prisma.join(channelRows)}
+                ON CONFLICT(twitchChannelId) DO UPDATE SET
+                  channelName = excluded.channelName,
+                  isMonitored = 1,
+                  streamerId = excluded.streamerId,
+                  updatedAt = excluded.updatedAt
+              `
+            );
+
+            const upsertedChannels = await tx.channel.findMany({
+              where: { twitchChannelId: { in: [...channelsToUpsert.keys()] } },
+              select: { id: true, twitchChannelId: true, isMonitored: true, streamerId: true },
+            });
+            for (const ch of upsertedChannels) {
+              existingChannelMap.set(ch.twitchChannelId, {
+                id: ch.id,
+                twitchChannelId: ch.twitchChannelId,
+                isMonitored: ch.isMonitored,
+                streamerId: ch.streamerId,
+              });
+            }
+          }
+        }
+
+        if (channelIdsToEnable.size > 0) {
+          await tx.channel.updateMany({
+            where: { id: { in: Array.from(channelIdsToEnable) } },
+            data: { isMonitored: true },
+          });
+        }
+      });
+
+      streamersToUpsert.clear();
+      channelsToUpsert.clear();
+      channelIdsToEnable.clear();
+    };
 
     // 先做收集，不在迴圈中直接寫 DB
     for (const follow of followedChannels) {
@@ -824,93 +1254,13 @@ export async function triggerFollowSyncForUser(
       if (processed % BATCH_SIZE === 0) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-    }
 
-    // 批次抓取新 Streamer 的完整資料（頭貼、顯示名稱）
-    if (streamersToUpsert.size > 0) {
-      try {
-        const twitchIds = Array.from(streamersToUpsert.keys());
-        const twitchUsers = await twurpleHelixService.getUsersByIds(twitchIds);
-        const userMap = new Map(twitchUsers.map((u) => [u.id, u]));
-
-        for (const streamerData of streamersToUpsert.values()) {
-          const twitchUser = userMap.get(streamerData.twitchUserId);
-          if (twitchUser) {
-            streamerData.displayName = twitchUser.displayName;
-            streamerData.avatarUrl = twitchUser.profileImageUrl;
-          }
-        }
-
-        logger.info(
-          "Jobs",
-          `✅ 已抓取 ${twitchUsers.length}/${streamersToUpsert.size} 個新 Streamer 的完整資料`
-        );
-      } catch (error) {
-        logger.warn("Jobs", "抓取新 Streamer 資料失敗，使用預設值", error);
+      if (streamersToUpsert.size + channelsToUpsert.size >= ENTITY_FLUSH_SIZE) {
+        await flushPendingEntities();
       }
     }
 
-    // 批量寫入 streamers/channels，避免逐筆 N+1
-    if (streamersToUpsert.size > 0 || channelsToUpsert.size > 0 || channelIdsToEnable.size > 0) {
-      await prisma.$transaction(async (tx: TransactionClient) => {
-        for (const streamerData of streamersToUpsert.values()) {
-          const upserted = await tx.streamer.upsert({
-            where: { twitchUserId: streamerData.twitchUserId },
-            create: streamerData,
-            update: {
-              displayName: streamerData.displayName,
-              avatarUrl: streamerData.avatarUrl,
-            },
-          });
-
-          existingStreamerMap.set(upserted.twitchUserId, {
-            id: upserted.id,
-            twitchUserId: upserted.twitchUserId,
-            avatarUrl: upserted.avatarUrl,
-          });
-        }
-
-        for (const channelData of channelsToUpsert.values()) {
-          const streamerId = existingStreamerMap.get(channelData.twitchChannelId)?.id;
-
-          if (!streamerId) {
-            logger.warn("Jobs", `無法解析 streamerId for ${channelData.channelName}, 跳過此頻道`);
-            continue;
-          }
-
-          const channel = await tx.channel.upsert({
-            where: { twitchChannelId: channelData.twitchChannelId },
-            create: {
-              twitchChannelId: channelData.twitchChannelId,
-              channelName: channelData.channelName,
-              channelUrl: channelData.channelUrl,
-              source: "external",
-              isMonitored: true,
-              streamerId,
-            },
-            update: {
-              channelName: channelData.channelName,
-              isMonitored: true,
-              streamerId,
-            },
-          });
-
-          existingChannelMap.set(channel.twitchChannelId, {
-            id: channel.id,
-            twitchChannelId: channel.twitchChannelId,
-            isMonitored: true,
-            streamerId: channel.streamerId,
-          });
-        }
-
-        if (channelIdsToEnable.size > 0) {
-          await tx.channel.updateMany({
-            where: { id: { in: Array.from(channelIdsToEnable) } },
-            data: { isMonitored: true },
-          });
-        }
-      });
-    }
+    await flushPendingEntities();
 
     const followsToUpsert: Array<{
       userId: string;
@@ -951,17 +1301,17 @@ export async function triggerFollowSyncForUser(
             }, ${followData.followedAt})`
         );
 
-        await retryDatabaseOperation(() =>
+        const insertedCount = await retryDatabaseOperation(() =>
           prisma.$executeRaw(
             Prisma.sql`
               INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
               VALUES ${Prisma.join(rows)}
-              ON CONFLICT(userId, channelId) DO UPDATE SET followedAt=excluded.followedAt
+              ON CONFLICT(userId, channelId) DO NOTHING
             `
           )
         );
 
-        created += batch.length;
+        created += Number(insertedCount);
       } catch (error) {
         logger.warn(
           "Jobs",
@@ -988,21 +1338,10 @@ export async function triggerFollowSyncForUser(
 
     logger.info("Jobs", `✅ 追蹤同步完成: 新增 ${created}, 移除 ${removed}`);
 
-    await refreshViewerChannelSummaryForViewer(viewerId);
+    scheduleSummaryRefresh(viewerId);
 
-    // 清除該用戶的 channels_list 快取，確保下次刷新頁面能看到最新資料
-    const cacheKey = `viewer:${viewerId}:channels_list`;
-    cacheManager.delete(cacheKey);
-    logger.debug("Jobs", `已清除快取: ${cacheKey}`);
-
-    // 立即觸發開台狀態更新，確保使用者登入後能看到最新的開台狀態
-    try {
-      const { updateLiveStatusFn } = await import("./update-live-status.job");
-      await updateLiveStatusFn();
-      logger.info("Jobs", "✅ 開台狀態已即時更新");
-    } catch (updateError) {
-      logger.warn("Jobs", "登入後開台狀態更新失敗（不影響主流程）", updateError);
-    }
+    // 延遲合併觸發開台狀態更新，避免大量登入造成重複壓力
+    scheduleLiveStatusRefresh();
   } catch (error) {
     logger.error("Jobs", "追蹤同步失敗", error);
     captureJobError("sync-user-follows-trigger", error, { viewerId });

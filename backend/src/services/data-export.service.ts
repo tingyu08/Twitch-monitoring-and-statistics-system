@@ -50,21 +50,6 @@ interface ExportViewerData {
   } | null;
 }
 
-interface ExportLifetimeStat {
-  totalWatchTimeMinutes: number;
-  totalSessions: number;
-  totalMessages: number;
-  totalChatMessages: number;
-  totalSubscriptions: number;
-  totalCheers: number;
-  totalBits: number;
-  trackingDays: number;
-  longestStreakDays: number;
-  firstWatchedAt: Date | null;
-  lastWatchedAt: Date | null;
-  channel: { channelName: string } | null;
-}
-
 /**
  * Helper: Check if a path exists (async)
  */
@@ -226,16 +211,11 @@ export class DataExportService {
         throw new Error("找不到觀眾記錄");
       }
 
-      const lifetimeStats = await prisma.viewerChannelLifetimeStats.findMany({
-        where: { viewerId },
-        include: { channel: true },
-      });
-
       // 生成 JSON 檔案
       await this.generateJsonFiles(exportDir, {
         viewer,
-        lifetimeStats,
       });
+      await this.generateLifetimeStatsJson(exportDir, viewerId);
 
       await this.generateDailyStatsFiles(exportDir, viewerId);
       await this.generateMessageAggFiles(exportDir, viewerId);
@@ -267,7 +247,6 @@ export class DataExportService {
     exportDir: string,
     data: {
       viewer: ExportViewerData;
-      lifetimeStats: ExportLifetimeStat[];
     }
   ): Promise<void> {
     const jsonDir = path.join(exportDir, "json");
@@ -283,26 +262,6 @@ export class DataExportService {
     await fs.promises.writeFile(
       path.join(jsonDir, "profile.json"),
       JSON.stringify(profile, null, 2)
-    );
-
-    // lifetime-stats.json - 全時段統計
-    const lifetimeStats = data.lifetimeStats.map((stat) => ({
-      channelName: stat.channel?.channelName,
-      totalWatchTimeMinutes: stat.totalWatchTimeMinutes,
-      totalSessions: stat.totalSessions,
-      totalMessages: stat.totalMessages,
-      totalChatMessages: stat.totalChatMessages,
-      totalSubscriptions: stat.totalSubscriptions,
-      totalCheers: stat.totalCheers,
-      totalBits: stat.totalBits,
-      trackingDays: stat.trackingDays,
-      longestStreakDays: stat.longestStreakDays,
-      firstWatchedAt: stat.firstWatchedAt,
-      lastWatchedAt: stat.lastWatchedAt,
-    }));
-    await fs.promises.writeFile(
-      path.join(jsonDir, "lifetime-stats.json"),
-      JSON.stringify(lifetimeStats, null, 2)
     );
 
     // privacy-settings.json - 隱私設定
@@ -329,6 +288,58 @@ export class DataExportService {
     }
   }
 
+  private async generateLifetimeStatsJson(exportDir: string, viewerId: string): Promise<void> {
+    const jsonPath = path.join(exportDir, "json", "lifetime-stats.json");
+    const jsonStream = fs.createWriteStream(jsonPath, { encoding: "utf8" });
+
+    await this.writeLine(jsonStream, "[\n");
+
+    let isFirst = true;
+    let cursorId: string | undefined;
+
+    while (true) {
+      const batch = await prisma.viewerChannelLifetimeStats.findMany({
+        where: { viewerId },
+        include: { channel: { select: { channelName: true } } },
+        orderBy: { id: "asc" },
+        take: 200,
+        ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+      });
+
+      if (batch.length === 0) {
+        break;
+      }
+
+      for (const stat of batch) {
+        const row = {
+          channelName: stat.channel?.channelName,
+          totalWatchTimeMinutes: stat.totalWatchTimeMinutes,
+          totalSessions: stat.totalSessions,
+          totalMessages: stat.totalMessages,
+          totalChatMessages: stat.totalChatMessages,
+          totalSubscriptions: stat.totalSubscriptions,
+          totalCheers: stat.totalCheers,
+          totalBits: stat.totalBits,
+          trackingDays: stat.trackingDays,
+          longestStreakDays: stat.longestStreakDays,
+          firstWatchedAt: stat.firstWatchedAt,
+          lastWatchedAt: stat.lastWatchedAt,
+        };
+
+        await this.writeLine(jsonStream, `${isFirst ? "" : ",\n"}${JSON.stringify(row, null, 2)}`);
+        isFirst = false;
+      }
+
+      cursorId = batch[batch.length - 1]?.id;
+      if (batch.length < 200) {
+        break;
+      }
+    }
+
+    await this.writeLine(jsonStream, "\n]\n");
+    await new Promise<void>((resolve) => jsonStream.end(resolve));
+  }
+
   private async writeLine(stream: fs.WriteStream, content: string): Promise<void> {
     if (stream.write(content)) {
       return;
@@ -351,7 +362,7 @@ export class DataExportService {
     while (true) {
       const batch = await prisma.viewerChannelDailyStat.findMany({
         where: { viewerId },
-        include: { channel: true },
+        include: { channel: { select: { channelName: true } } },
         orderBy: { id: "asc" },
         take: 200,
         ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
@@ -405,7 +416,7 @@ export class DataExportService {
     while (true) {
       const batch = await prisma.viewerChannelMessageDailyAgg.findMany({
         where: { viewerId },
-        include: { channel: true },
+        include: { channel: { select: { channelName: true } } },
         orderBy: { id: "asc" },
         take: 200,
         ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),

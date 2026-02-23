@@ -49,6 +49,8 @@ interface PerformanceStats {
   };
 }
 
+type PerformanceStatsCore = Omit<PerformanceStats, "memory" | "dbQueries">;
+
 // 記憶體快照類型
 interface MemorySnapshot {
   heapUsed: number;
@@ -73,6 +75,8 @@ class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
   private config = DEFAULT_CONFIG;
   private writeCursor = 0;
+  private cachedStatsCore: PerformanceStatsCore | null = null;
+  private statsDirty = true;
 
   constructor(config?: Partial<typeof DEFAULT_CONFIG>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -121,8 +125,11 @@ class PerformanceMonitor {
     }
 
     if (!this.config.enableLogging) {
+      this.statsDirty = true;
       return;
     }
+
+    this.statsDirty = true;
 
     const isSlow = metric.duration > this.config.slowThreshold;
     const logLevel = isSlow ? "warn" : "debug";
@@ -139,7 +146,7 @@ class PerformanceMonitor {
    */
   getStats(): PerformanceStats {
     if (this.metrics.length === 0) {
-      return {
+      const emptyStats: PerformanceStatsCore = {
         totalRequests: 0,
         averageResponseTime: 0,
         slowRequests: 0,
@@ -148,6 +155,21 @@ class PerformanceMonitor {
         p95: 0,
         p99: 0,
         requestsByPath: {},
+      };
+      this.cachedStatsCore = emptyStats;
+      this.statsDirty = false;
+      return {
+        ...emptyStats,
+        memory: this.getMemorySnapshot(),
+        dbQueries: getQueryStats() || undefined,
+      };
+    }
+
+    if (!this.statsDirty && this.cachedStatsCore) {
+      return {
+        ...this.cachedStatsCore,
+        memory: this.getMemorySnapshot(),
+        dbQueries: getQueryStats() || undefined,
       };
     }
 
@@ -190,7 +212,7 @@ class PerformanceMonitor {
 
     const slowRequests = this.metrics.filter((m) => m.duration > this.config.slowThreshold).length;
 
-    return {
+    const coreStats: PerformanceStatsCore = {
       totalRequests: total,
       averageResponseTime: Math.round((durations.reduce((a, b) => a + b, 0) / total) * 100) / 100,
       slowRequests,
@@ -199,6 +221,13 @@ class PerformanceMonitor {
       p95: getPercentile(95),
       p99: getPercentile(99),
       requestsByPath,
+    };
+
+    this.cachedStatsCore = coreStats;
+    this.statsDirty = false;
+
+    return {
+      ...coreStats,
       memory: this.getMemorySnapshot(), // 加入記憶體資訊
       dbQueries: getQueryStats() || undefined,
     };
@@ -210,6 +239,8 @@ class PerformanceMonitor {
   reset(): void {
     this.metrics = [];
     this.writeCursor = 0;
+    this.cachedStatsCore = null;
+    this.statsDirty = true;
   }
 
   /**

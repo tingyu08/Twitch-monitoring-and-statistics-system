@@ -29,11 +29,27 @@ interface JobResult {
 }
 
 let lastRunResult: JobResult | null = null;
+let currentRunPromise: Promise<JobResult> | null = null;
 
 /**
  * 執行 Token 驗證任務
  */
 export async function validateTokensJob(): Promise<JobResult> {
+  if (currentRunPromise) {
+    logger.warn(JOB_NAME, "任務已在執行中，回傳既有執行結果 Promise");
+    return currentRunPromise;
+  }
+
+  currentRunPromise = executeValidateTokensJob();
+
+  try {
+    return await currentRunPromise;
+  } finally {
+    currentRunPromise = null;
+  }
+}
+
+async function executeValidateTokensJob(): Promise<JobResult> {
   const startTime = new Date();
   logger.info(JOB_NAME, "開始執行 Token 驗證任務");
 
