@@ -19,9 +19,14 @@ export class WebSocketGateway {
   private io: Server | null = null;
   private pubClient: Redis | null = null;
   private subClient: Redis | null = null;
-  private pendingChannelUpdates: Map<string, { channelId?: string; twitchChannelId?: string; [key: string]: unknown }> = new Map();
+  private pendingChannelUpdates: Map<
+    string,
+    { channelId?: string; twitchChannelId?: string; [key: string]: unknown }
+  > = new Map();
   private channelUpdateFlushTimer: NodeJS.Timeout | null = null;
-  private readonly CHANNEL_UPDATE_DEBOUNCE_MS = Number(process.env.CHANNEL_UPDATE_DEBOUNCE_MS || 800);
+  private readonly CHANNEL_UPDATE_DEBOUNCE_MS = Number(
+    process.env.CHANNEL_UPDATE_DEBOUNCE_MS || 800
+  );
   private readonly MAX_PENDING_UPDATES = Number(process.env.MAX_PENDING_CHANNEL_UPDATES || 5000);
   private readonly CORS_ORIGIN = process.env.FRONTEND_URL || "http://localhost:3000";
 
@@ -50,21 +55,32 @@ export class WebSocketGateway {
   private async setupRedisAdapter(): Promise<void> {
     if (!this.io) return;
 
-    const baseClient = getRedisClient();
-    if (!baseClient) {
-      logger.info("WebSocket", "Redis adapter not enabled (REDIS_URL missing)");
+    const { initRedis } = await import("../utils/redis-client");
+    const connected = await initRedis();
+    if (!connected) {
+      logger.info("WebSocket", "Redis adapter not enabled (Redis unavailable)");
       return;
     }
 
-    try {
-      this.pubClient = baseClient.duplicate();
-      this.subClient = baseClient.duplicate();
+    const baseClient = getRedisClient();
+    if (!baseClient) return;
 
-      await Promise.all([this.pubClient.connect(), this.subClient.connect()]);
+    try {
+      const pubClient = baseClient.duplicate({ lazyConnect: true });
+      const subClient = baseClient.duplicate({ lazyConnect: true });
+
+      // 持久 error handler，避免 unhandled error 崩潰進程
+      pubClient.on("error", (err) => logger.warn("WebSocket", "Redis pub error", err));
+      subClient.on("error", (err) => logger.warn("WebSocket", "Redis sub error", err));
+
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+
+      this.pubClient = pubClient;
+      this.subClient = subClient;
       this.io.adapter(createAdapter(this.pubClient, this.subClient));
       logger.info("WebSocket", "Redis adapter enabled for cross-instance broadcast");
     } catch (error) {
-      logger.warn("WebSocket", "Failed to enable Redis adapter", error);
+      logger.warn("WebSocket", "Failed to enable Redis adapter, using standalone mode", error);
     }
   }
 
@@ -117,7 +133,10 @@ export class WebSocketGateway {
   /**
    * Send stats update to a specific viewer
    */
-  public emitViewerStats(viewerId: string, stats: { channelId: string; messageCountDelta: number }) {
+  public emitViewerStats(
+    viewerId: string,
+    stats: { channelId: string; messageCountDelta: number }
+  ) {
     if (!this.io) return;
     this.io.to(`viewer:${viewerId}`).emit("stats-update", stats);
   }
