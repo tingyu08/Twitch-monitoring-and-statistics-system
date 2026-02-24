@@ -2,6 +2,7 @@ import { getFollowedChannels } from "../viewer.service";
 
 jest.mock("../../../db/prisma", () => ({
   prisma: {
+    $queryRaw: jest.fn().mockResolvedValue([]),
     viewerChannelLifetimeStats: {
       findMany: jest.fn(),
     },
@@ -39,6 +40,7 @@ jest.mock("../../../utils/logger", () => ({
 import { prisma as prismaClient } from "../../../db/prisma";
 
 const prisma = prismaClient as unknown as {
+  $queryRaw: jest.Mock;
   viewerChannelLifetimeStats: { findMany: jest.Mock };
   userFollow: { findMany: jest.Mock };
   channel: { findMany: jest.Mock };
@@ -51,50 +53,49 @@ describe("viewer.service getFollowedChannels sorting", () => {
   });
 
   it("prioritizes live channels with lastWatched over live channels without lastWatched", async () => {
-    prisma.viewerChannelLifetimeStats.findMany.mockResolvedValue([
-      {
-        channelId: "ch_with",
-        totalWatchTimeMinutes: 10,
-        totalMessages: 2,
-        lastWatchedAt: new Date("2026-01-20T00:00:00Z"),
-      },
-      {
-        channelId: "ch_none",
-        totalWatchTimeMinutes: 0,
-        totalMessages: 0,
-        lastWatchedAt: null,
-      },
-    ]);
-
-    prisma.userFollow.findMany.mockResolvedValue([
-      { channelId: "ch_with", followedAt: new Date("2025-01-01T00:00:00Z") },
-      { channelId: "ch_none", followedAt: new Date("2025-01-02T00:00:00Z") },
-    ]);
-
-    prisma.channel.findMany.mockResolvedValue([
-      {
-        id: "ch_none",
-        channelName: "NoWatch",
-        isLive: true,
-        currentViewerCount: 123,
-        currentStreamStartedAt: new Date("2026-01-28T00:00:00Z"),
-        currentGameName: "Just Chatting",
-        streamer: { displayName: "NoWatch", avatarUrl: "http://example.com/nowatch.png" },
-        source: "internal",
-      },
-      {
-        id: "ch_with",
-        channelName: "HasWatch",
-        isLive: true,
-        currentViewerCount: 456,
-        currentStreamStartedAt: new Date("2026-01-28T00:00:00Z"),
-        currentGameName: "Just Chatting",
-        streamer: { displayName: "HasWatch", avatarUrl: "http://example.com/haswatch.png" },
-        source: "internal",
-      },
-    ]);
-
-    prisma.streamSession.findMany.mockResolvedValue([]);
+    prisma.$queryRaw.mockImplementation(async (query: any) => {
+      const sql = query.text || query.sql || query.strings?.[0] || "";
+      // If the query is from fetchSummaryRows, return empty to trigger fallback
+      if (sql.includes("viewer_channel_summary")) {
+        return [];
+      }
+      
+      // If it's buildFollowedChannelsFromSource, return the mock SourceRow array
+      return [
+        {
+          id: "ch_with",
+          channelName: "HasWatch",
+          isLive: 1,
+          hasActiveSession: 0,
+          currentViewerCount: 456,
+          currentStreamStartedAt: new Date("2026-01-28T00:00:00Z"),
+          currentGameName: "Just Chatting",
+          source: "internal",
+          displayName: "HasWatch",
+          avatarUrl: "http://example.com/haswatch.png",
+          totalWatchTimeMinutes: 10,
+          totalMessages: 2,
+          lastWatchedAt: new Date("2026-01-20T00:00:00Z"),
+          followedAt: new Date("2025-01-01T00:00:00Z"),
+        },
+        {
+          id: "ch_none",
+          channelName: "NoWatch",
+          isLive: 1,
+          hasActiveSession: 0,
+          currentViewerCount: 123,
+          currentStreamStartedAt: new Date("2026-01-28T00:00:00Z"),
+          currentGameName: "Just Chatting",
+          source: "internal",
+          displayName: "NoWatch",
+          avatarUrl: "http://example.com/nowatch.png",
+          totalWatchTimeMinutes: 0,
+          totalMessages: 0,
+          lastWatchedAt: null,
+          followedAt: new Date("2025-01-02T00:00:00Z"),
+        },
+      ];
+    });
 
     const result = await getFollowedChannels("viewer_1");
 

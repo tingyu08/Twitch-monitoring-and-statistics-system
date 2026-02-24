@@ -5,8 +5,24 @@ import { logger } from "../../utils/logger";
 
 // Mock dependencies
 const mockPrismaTransaction = {
-  streamer: { upsert: jest.fn() },
-  channel: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+  $executeRaw: jest.fn().mockResolvedValue(1),
+  $queryRaw: jest.fn().mockResolvedValue([]),
+  streamer: {
+    upsert: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([
+      { id: "s_ext1", twitchUserId: "ext1" },
+      { id: "s_ext2", twitchUserId: "ext2" },
+    ]),
+  },
+  channel: {
+    create: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([
+      { id: "ch_ext1", twitchChannelId: "ext1", isMonitored: true, streamerId: "s_ext1" },
+      { id: "ch_ext2", twitchChannelId: "ext2", isMonitored: true, streamerId: "s_ext2" },
+    ]),
+  },
   userFollow: { createMany: jest.fn(), deleteMany: jest.fn() },
 };
 
@@ -17,7 +33,7 @@ jest.mock("../../services/twitch-helix.service", () => ({
 }));
 
 jest.mock("../../db/prisma", () => ({
-  prisma: {
+    prisma: {
     $queryRaw: jest.fn().mockResolvedValue([]),
     $executeRaw: jest.fn().mockResolvedValue(1),
     twitchToken: {
@@ -65,7 +81,7 @@ jest.mock("../../utils/logger", () => ({
   logger: {
     info: jest.fn(),
     warn: jest.fn(),
-    error: jest.fn(),
+    error: jest.fn((...args) => console.error(...args)),
     debug: jest.fn(),
   },
 }));
@@ -140,7 +156,7 @@ describe("Story 3.6: Sync User Follows Job", () => {
       }));
 
       // Mock: UserFollow creation (upsert for each follow)
-      (prisma.userFollow.upsert as jest.Mock).mockResolvedValue({ id: "uf1" });
+      (prisma.$executeRaw as jest.Mock).mockResolvedValueOnce(2);
 
       const result = await job.execute();
 
@@ -152,7 +168,7 @@ describe("Story 3.6: Sync User Follows Job", () => {
       expect(result.usersProcessed).toBe(1);
       expect(result.channelsCreated).toBe(2);
       expect(result.followsCreated).toBe(2);
-      expect(mockPrismaTransaction.channel.create).toHaveBeenCalledTimes(2);
+      expect(mockPrismaTransaction.$executeRaw).toHaveBeenCalled();
     });
 
     it("should not create duplicate channels when already exists", async () => {
@@ -199,7 +215,7 @@ describe("Story 3.6: Sync User Follows Job", () => {
 
       expect(result.channelsCreated).toBe(0);
       expect(result.followsCreated).toBe(1);
-      expect(mockPrismaTransaction.channel.create).not.toHaveBeenCalled();
+      expect(mockPrismaTransaction.$executeRaw).not.toHaveBeenCalled();
     });
 
     it("should remove unfollowed channel relationships", async () => {

@@ -14,6 +14,7 @@ jest.mock("../../services/unified-twitch.service", () => ({
 
 jest.mock("../../db/prisma", () => ({
   prisma: {
+    $executeRaw: jest.fn().mockResolvedValue(1),
     channel: {
       findMany: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
@@ -142,7 +143,7 @@ describe("Story 3.3: Jobs Integration", () => {
 
       expect(prisma.streamSession.update).not.toHaveBeenCalled();
       expect(prisma.streamSession.findMany).toHaveBeenCalled();
-      expect(prisma.channelDailyStat.upsert).toHaveBeenCalled();
+      expect(prisma.$executeRaw).toHaveBeenCalled();
     });
   });
 });
