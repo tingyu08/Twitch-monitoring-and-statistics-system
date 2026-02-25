@@ -13,6 +13,8 @@ import { dataExportService } from "../services/data-export.service";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { captureJobError } from "./job-error-tracker";
+import { runWithWriteGuard } from "./job-write-guard";
+import { WriteGuardKeys } from "../constants";
 
 // 每日凌晨 3 點執行
 const DATA_RETENTION_CRON = process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 * * *";
@@ -34,16 +36,18 @@ export class DataRetentionJob {
     let totalDeleted = 0;
 
     while (true) {
-      const deleted = await prisma.$executeRaw(
-        Prisma.sql`
-          DELETE FROM viewer_channel_messages
-          WHERE rowid IN (
-            SELECT rowid FROM viewer_channel_messages
-            WHERE timestamp < ${before}
-            ORDER BY timestamp ASC
-            LIMIT ${this.MESSAGE_DELETE_BATCH_SIZE}
-          )
-        `
+      const deleted = await runWithWriteGuard(WriteGuardKeys.DATA_RETENTION_DELETE, () =>
+        prisma.$executeRaw(
+          Prisma.sql`
+            DELETE FROM viewer_channel_messages
+            WHERE rowid IN (
+              SELECT rowid FROM viewer_channel_messages
+              WHERE timestamp < ${before}
+              ORDER BY timestamp ASC
+              LIMIT ${this.MESSAGE_DELETE_BATCH_SIZE}
+            )
+          `
+        )
       );
 
       if (deleted === 0) {

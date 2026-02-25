@@ -12,116 +12,10 @@ import { logger } from "../utils/logger";
 const PRE_MESSAGE_BUFFER_MIN = 10; // 第一則訊息前假設看了 10 分鐘
 const POST_MESSAGE_BUFFER_MIN = 30; // 最後一則訊息後假設繼續看 30 分鐘
 
-interface WatchSession {
-  startTime: Date;
-  endTime: Date;
-  durationSeconds: number;
-}
-
 interface WatchTimeAccumulator {
   currentStart: Date | null;
   lastMessage: Date | null;
   totalSeconds: number;
-}
-
-/**
- * 根據訊息時間戳計算觀看區段
- * @param messageTimestamps - 訊息時間戳陣列（已排序）
- * @param streamStartTime - 直播開始時間（可選，用於限制開始時間）
- * @param streamEndTime - 直播結束時間（可選，用於限制結束時間）
- */
-export function calculateWatchSessions(
-  messageTimestamps: Date[],
-  streamStartTime?: Date,
-  streamEndTime?: Date
-): WatchSession[] {
-  if (messageTimestamps.length === 0) {
-    return [];
-  }
-
-  // 確保訊息按時間排序
-  const sorted = [...messageTimestamps].sort((a, b) => a.getTime() - b.getTime());
-
-  const sessions: WatchSession[] = [];
-  let currentSession: { start: Date; lastMessage: Date } | null = null;
-
-  for (const msgTime of sorted) {
-    if (!currentSession) {
-      // 開始新區段
-      let startTime = new Date(msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000);
-
-      // 不早於直播開始時間
-      if (streamStartTime && startTime < streamStartTime) {
-        startTime = streamStartTime;
-      }
-
-      currentSession = {
-        start: startTime,
-        lastMessage: msgTime,
-      };
-    } else {
-      // 檢查是否需要開始新區段
-      const previousSessionEnd = new Date(
-        currentSession.lastMessage.getTime() + POST_MESSAGE_BUFFER_MIN * 60 * 1000
-      );
-
-      if (msgTime > previousSessionEnd) {
-        // 上一區段已結束，儲存並開始新區段
-        let endTime = previousSessionEnd;
-
-        // 不晚於直播結束時間
-        if (streamEndTime && endTime > streamEndTime) {
-          endTime = streamEndTime;
-        }
-
-        sessions.push({
-          startTime: currentSession.start,
-          endTime,
-          durationSeconds: Math.max(0, (endTime.getTime() - currentSession.start.getTime()) / 1000),
-        });
-
-        // 開始新區段
-        let startTime = new Date(msgTime.getTime() - PRE_MESSAGE_BUFFER_MIN * 60 * 1000);
-        if (streamStartTime && startTime < streamStartTime) {
-          startTime = streamStartTime;
-        }
-
-        currentSession = {
-          start: startTime,
-          lastMessage: msgTime,
-        };
-      } else {
-        // 延長當前區段
-        currentSession.lastMessage = msgTime;
-      }
-    }
-  }
-
-  // 處理最後一個區段
-  if (currentSession) {
-    let endTime = new Date(
-      currentSession.lastMessage.getTime() + POST_MESSAGE_BUFFER_MIN * 60 * 1000
-    );
-
-    if (streamEndTime && endTime > streamEndTime) {
-      endTime = streamEndTime;
-    }
-
-    sessions.push({
-      startTime: currentSession.start,
-      endTime,
-      durationSeconds: Math.max(0, (endTime.getTime() - currentSession.start.getTime()) / 1000),
-    });
-  }
-
-  return sessions;
-}
-
-/**
- * 計算總觀看秒數
- */
-export function calculateTotalWatchSeconds(sessions: WatchSession[]): number {
-  return sessions.reduce((sum, s) => sum + s.durationSeconds, 0);
 }
 
 function accumulateWatchTime(
@@ -335,9 +229,3 @@ export async function updateViewerWatchTime(
     logger.error("WatchTime", "Failed to update watch time", error);
   }
 }
-
-export const watchTimeService = {
-  calculateWatchSessions,
-  calculateTotalWatchSeconds,
-  updateViewerWatchTime,
-};

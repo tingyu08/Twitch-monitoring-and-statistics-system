@@ -628,6 +628,7 @@ export class ViewerMessageRepository {
               watchSeconds,
               messageCount,
               emoteCount,
+              source,
               createdAt,
               updatedAt
             )
@@ -639,6 +640,7 @@ export class ViewerMessageRepository {
               0,
               src.messageCount,
               src.emoteCount,
+              'chat',
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
             FROM src

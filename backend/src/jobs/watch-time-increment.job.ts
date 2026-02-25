@@ -12,6 +12,7 @@ import { logger } from "../utils/logger";
 import { cacheManager } from "../utils/cache-manager";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
+import { WriteGuardKeys } from "../constants";
 
 const parsedIncrementMinutes = Number.parseInt(
   process.env.WATCH_TIME_INCREMENT_MINUTES || "10",
@@ -31,6 +32,14 @@ const INCREMENT_SECONDS = WATCH_TIME_INCREMENT_MINUTES * 60;
 
 // 活躍窗口：過去 N 分鐘內有訊息視為在線
 const ACTIVE_WINDOW_MINUTES = WATCH_TIME_INCREMENT_MINUTES;
+
+// 批次大小：每次 INSERT VALUES 的組數上限，避免 SQL 過長
+const BATCH_SIZE = 200;
+
+/** 將 Date 轉為 SQLite 相容的 ISO 日期字串 (YYYY-MM-DD) */
+function toSqliteDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
 
 export class WatchTimeIncrementJob {
   private isRunning = false;
@@ -67,7 +76,7 @@ export class WatchTimeIncrementJob {
       const today = new Date(now);
       today.setHours(0, 0, 0, 0);
 
-      // 1. 找出正在直播中的頻道（僅取數量，避免大量 ID 造成 SQL 變數上限）
+      // 1. 找出正在直播中的頻道（僅取數量，用於日誌）
       const liveChannelCount = await prisma.channel.count({
         where: { isLive: true },
       });
@@ -82,155 +91,13 @@ export class WatchTimeIncrementJob {
         return;
       }
 
-      // 2. 計算活躍的 viewer-channel 組合數量
-      const rows = await prisma.$queryRaw<Array<{ count: number | string }>>(Prisma.sql`
-          SELECT COUNT(*) AS count
-          FROM (
-            SELECT viewerId, channelId
-            FROM viewer_channel_messages
-            WHERE timestamp >= ${activeWindowStart}
-              AND EXISTS (
-                SELECT 1
-                FROM channels c
-                WHERE c.id = viewer_channel_messages.channelId
-                  AND c.isLive = 1
-              )
-            GROUP BY viewerId, channelId
-          )
-      `);
-
-      const activeCount = Number(rows[0]?.count ?? 0);
-      if (activeCount === 0) {
-        logger.debug(
-          "Jobs",
-          `沒有活躍的觀眾，跳過觀看時間更新 (liveChannels=${liveChannelCount}, window=${ACTIVE_WINDOW_MINUTES}m)`
-        );
-        return;
-      }
-
-      // 3. 使用 set-based SQL 一次性 upsert，降低大量逐筆寫入成本
-      const dailyUpsertAffected = await runWithWriteGuard("watch-time-increment:daily-stats-upsert", () =>
-        prisma.$executeRaw(Prisma.sql`
-          INSERT INTO viewer_channel_daily_stats (
-            id,
-            viewerId,
-            channelId,
-            date,
-            watchSeconds,
-            messageCount,
-            emoteCount,
-            createdAt,
-            updatedAt
-          )
-          SELECT
-            lower(hex(randomblob(16))) AS id,
-            active.viewerId,
-            active.channelId,
-            ${today} AS date,
-            ${INCREMENT_SECONDS} AS watchSeconds,
-            0,
-            0,
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-          FROM (
-            SELECT viewerId, channelId
-            FROM viewer_channel_messages
-            WHERE timestamp >= ${activeWindowStart}
-              AND EXISTS (
-                SELECT 1
-                FROM channels c
-                WHERE c.id = viewer_channel_messages.channelId
-                  AND c.isLive = 1
-              )
-            GROUP BY viewerId, channelId
-          ) AS active
-          ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-            watchSeconds = viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds,
-            updatedAt = CURRENT_TIMESTAMP
-        `)
-      );
-      const dailyUpsertCount = Number(dailyUpsertAffected);
-
-      // 4. 同步更新 lifetime watch minutes，避免等到每日聚合才看到數值變化
-      const incrementMinutes = Math.floor(INCREMENT_SECONDS / 60);
-      let lifetimeUpsertCount = 0;
-      if (incrementMinutes > 0) {
-        const lifetimeUpsertAffected = await runWithWriteGuard(
-          "watch-time-increment:lifetime-stats-upsert",
-          () =>
-          prisma.$executeRaw(Prisma.sql`
-            INSERT INTO viewer_channel_lifetime_stats (
-              id,
-              viewerId,
-              channelId,
-              totalWatchTimeMinutes,
-              totalSessions,
-              avgSessionMinutes,
-              firstWatchedAt,
-              lastWatchedAt,
-              totalMessages,
-              totalChatMessages,
-              totalSubscriptions,
-              totalCheers,
-              totalBits,
-              trackingStartedAt,
-              trackingDays,
-              longestStreakDays,
-              currentStreakDays,
-              activeDaysLast30,
-              activeDaysLast90,
-              mostActiveMonthCount,
-              createdAt,
-              updatedAt
-            )
-            SELECT
-              lower(hex(randomblob(16))) AS id,
-              active.viewerId,
-              active.channelId,
-              ${incrementMinutes},
-              0,
-              0,
-              ${now},
-              ${now},
-              0,
-              0,
-              0,
-              0,
-              0,
-              CURRENT_TIMESTAMP,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
-              CURRENT_TIMESTAMP,
-              CURRENT_TIMESTAMP
-            FROM (
-              SELECT viewerId, channelId
-              FROM viewer_channel_messages
-              WHERE timestamp >= ${activeWindowStart}
-                AND EXISTS (
-                  SELECT 1
-                  FROM channels c
-                  WHERE c.id = viewer_channel_messages.channelId
-                    AND c.isLive = 1
-                )
-              GROUP BY viewerId, channelId
-            ) AS active
-            ON CONFLICT(viewerId, channelId) DO UPDATE SET
-              totalWatchTimeMinutes =
-                viewer_channel_lifetime_stats.totalWatchTimeMinutes + excluded.totalWatchTimeMinutes,
-              lastWatchedAt = excluded.lastWatchedAt,
-              updatedAt = CURRENT_TIMESTAMP
-          `)
-        );
-        lifetimeUpsertCount = Number(lifetimeUpsertAffected);
-      }
-
-      // 5. 清理受影響觀眾的頻道列表快取，確保前端立即看到更新
-      const activeViewers = await prisma.$queryRaw<Array<{ viewerId: string }>>(Prisma.sql`
-        SELECT DISTINCT viewerId
+      // 2. 一次性物化所有活躍的 viewer-channel 組合到 JS 陣列
+      //    這是唯一一次掃描 viewer_channel_messages + channels 的查詢
+      //    後續的 daily upsert、lifetime upsert、cache invalidation 全部基於此陣列
+      const activePairs = await prisma.$queryRaw<
+        Array<{ viewerId: string; channelId: string }>
+      >(Prisma.sql`
+        SELECT viewerId, channelId
         FROM viewer_channel_messages
         WHERE timestamp >= ${activeWindowStart}
           AND EXISTS (
@@ -239,23 +106,115 @@ export class WatchTimeIncrementJob {
             WHERE c.id = viewer_channel_messages.channelId
               AND c.isLive = 1
           )
+        GROUP BY viewerId, channelId
       `);
 
-      for (const row of activeViewers) {
-        cacheManager.delete(`viewer:${row.viewerId}:channels_list`);
+      const activeCount = activePairs.length;
+      if (activeCount === 0) {
+        logger.debug(
+          "Jobs",
+          `沒有活躍的觀眾，跳過觀看時間更新 (liveChannels=${liveChannelCount}, window=${ACTIVE_WINDOW_MINUTES}m)`
+        );
+        return;
       }
 
-      const updatedCount = activeCount;
+      // 3. 批次 upsert daily stats（每批 BATCH_SIZE 組，逐筆使用 Prisma.sql 參數化）
+      let dailyUpsertCount = 0;
+      for (let i = 0; i < activePairs.length; i += BATCH_SIZE) {
+        const batch = activePairs.slice(i, i + BATCH_SIZE);
+        for (const p of batch) {
+          const affected = await runWithWriteGuard(
+            WriteGuardKeys.WATCH_TIME_DAILY_UPSERT,
+            () =>
+              prisma.$executeRaw(Prisma.sql`
+                INSERT INTO viewer_channel_daily_stats (
+                  id, viewerId, channelId, date,
+                  watchSeconds, messageCount, emoteCount, source, createdAt, updatedAt
+                ) VALUES (
+                  lower(hex(randomblob(16))), ${p.viewerId}, ${p.channelId}, ${toSqliteDate(today)},
+                  ${INCREMENT_SECONDS}, 0, 0, 'chat', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+                  watchSeconds = CASE
+                    WHEN viewer_channel_daily_stats.source = 'extension'
+                      THEN viewer_channel_daily_stats.watchSeconds
+                    ELSE viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds
+                  END,
+                  updatedAt = CURRENT_TIMESTAMP
+              `)
+          );
+          dailyUpsertCount += Number(affected);
+        }
+      }
+
+      // 4. 批次 upsert lifetime stats（逐筆使用 Prisma.sql 參數化）
+      const incrementMinutes = Math.floor(INCREMENT_SECONDS / 60);
+      let lifetimeUpsertCount = 0;
+      if (incrementMinutes > 0) {
+        const nowIso = now.toISOString();
+        const todayStr = toSqliteDate(today);
+        for (let i = 0; i < activePairs.length; i += BATCH_SIZE) {
+          const batch = activePairs.slice(i, i + BATCH_SIZE);
+          for (const p of batch) {
+            const affected = await runWithWriteGuard(
+              WriteGuardKeys.WATCH_TIME_LIFETIME_UPSERT,
+              () =>
+                prisma.$executeRaw(Prisma.sql`
+                  INSERT INTO viewer_channel_lifetime_stats (
+                    id, viewerId, channelId,
+                    totalWatchTimeMinutes, totalSessions, avgSessionMinutes,
+                    firstWatchedAt, lastWatchedAt,
+                    totalMessages, totalChatMessages, totalSubscriptions, totalCheers, totalBits,
+                    trackingStartedAt, trackingDays,
+                    longestStreakDays, currentStreakDays,
+                    activeDaysLast30, activeDaysLast90, mostActiveMonthCount,
+                    createdAt, updatedAt
+                  ) VALUES (
+                    lower(hex(randomblob(16))), ${p.viewerId}, ${p.channelId},
+                    ${incrementMinutes}, 0, 0,
+                    ${nowIso}, ${nowIso},
+                    0, 0, 0, 0, 0,
+                    CURRENT_TIMESTAMP, 0,
+                    0, 0,
+                    0, 0, 0,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                  )
+                  ON CONFLICT(viewerId, channelId) DO UPDATE SET
+                    totalWatchTimeMinutes =
+                      viewer_channel_lifetime_stats.totalWatchTimeMinutes + CASE
+                        WHEN (
+                          SELECT source FROM viewer_channel_daily_stats
+                          WHERE viewerId = ${p.viewerId}
+                            AND channelId = ${p.channelId}
+                            AND date = ${todayStr}
+                        ) = 'extension' THEN 0
+                        ELSE excluded.totalWatchTimeMinutes
+                      END,
+                    lastWatchedAt = excluded.lastWatchedAt,
+                    updatedAt = CURRENT_TIMESTAMP
+                `)
+            );
+            lifetimeUpsertCount += Number(affected);
+          }
+        }
+      }
+
+      // 5. 從 JS 陣列提取不重複 viewerId，清理快取（不需要再查 DB）
+      const uniqueViewerIds = new Set(activePairs.map((p) => p.viewerId));
+      for (const viewerId of uniqueViewerIds) {
+        cacheManager.delete(`viewer:${viewerId}:channels_list`);
+      }
+
       const duration = Date.now() - executionStartedAt;
 
       // 只在有實際更新時輸出 info，否則輸出 debug
-      if (updatedCount > 0) {
+      if (activeCount > 0) {
         this.lastSuccessAt = now;
         logger.info(
           "Jobs",
-          `Watch Time Increment 完成: 更新了 ${updatedCount} 個觀眾的觀看時間 (+${
+          `Watch Time Increment 完成: 更新了 ${activeCount} 個觀眾的觀看時間 (+${
             INCREMENT_SECONDS / 60
-          } 分鐘, liveChannels=${liveChannelCount}, dailyUpserts=${dailyUpsertCount}, lifetimeUpserts=${lifetimeUpsertCount}, invalidatedCaches=${activeViewers.length}) [${duration}ms]`
+          } 分鐘, liveChannels=${liveChannelCount}, dailyUpserts=${dailyUpsertCount}, lifetimeUpserts=${lifetimeUpsertCount}, invalidatedCaches=${uniqueViewerIds.size}) [${duration}ms]`
         );
       } else {
         logger.debug(

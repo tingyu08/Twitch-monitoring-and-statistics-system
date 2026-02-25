@@ -3,6 +3,7 @@ import { recordConsent, getChannelStats, getFollowedChannels } from "./viewer.se
 import type { AuthRequest } from "../auth/auth.middleware";
 import { logger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
+import { CacheTags } from "../../constants";
 import { getChannelGameStatsAndViewerTrends } from "../streamer/streamer.service";
 import { getViewerMessageStats } from "./viewer-message-stats.service";
 
@@ -182,7 +183,7 @@ export class ViewerController {
           };
         },
         ttl,
-        [`viewer:${viewerId}`, `channel:${channelId}`, "viewer:bff"]
+        [`viewer:${viewerId}`, `channel:${channelId}`, CacheTags.VIEWER_BFF]
       );
 
       const duration = Date.now() - requestStart;

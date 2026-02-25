@@ -8,6 +8,7 @@ import { cacheManager } from "../utils/cache-manager";
 import { memoryMonitor } from "../utils/memory-monitor";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
+import { CacheTags, WriteGuardKeys } from "../constants";
 
 import cron from "node-cron";
 
@@ -140,7 +141,7 @@ async function updateChannelsCheckTimeOnly(
 ): Promise<void> {
   if (checkUpdateCandidates.length === 0) return;
 
-  await runWithWriteGuard("update-live-status:check-time-only", () =>
+  await runWithWriteGuard(WriteGuardKeys.LIVE_STATUS_CHECK_TIME, () =>
     retryDatabaseOperation(() =>
       prisma.channel.updateMany({
         where: {
@@ -248,7 +249,7 @@ async function updateChannelsWithChanges(
     const totalBatches = Math.ceil(combinedUpdates.length / TX_BATCH_SIZE);
 
     try {
-      await runWithWriteGuard("update-live-status:batch-channel-update", () =>
+      await runWithWriteGuard(WriteGuardKeys.LIVE_STATUS_BATCH_UPDATE, () =>
         retryDatabaseOperation(async () => {
           if (batch.length === 0) {
             return;
@@ -347,7 +348,7 @@ async function updateChannelsWithChanges(
 
   // 清除快取
   if (liveUpdates.length > 0) {
-    await cacheManager.invalidateTag("viewer:channels");
+    await cacheManager.invalidateTag(CacheTags.VIEWER_CHANNELS);
   }
 
   // 更新未變化但需要更新檢查時間的頻道
@@ -356,7 +357,7 @@ async function updateChannelsWithChanges(
   );
 
   if (unchangedChannelsNeedingUpdate.length > 0) {
-    await runWithWriteGuard("update-live-status:unchanged-check-time", () =>
+    await runWithWriteGuard(WriteGuardKeys.LIVE_STATUS_UNCHANGED_CHECK, () =>
       retryDatabaseOperation(() =>
         prisma.channel.updateMany({
           where: {

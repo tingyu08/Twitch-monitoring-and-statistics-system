@@ -9,6 +9,7 @@ import {
 } from "./streamer.service";
 import { streamerLogger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
+import { CacheTags } from "../../constants";
 
 /**
  * 取得遊戲/分類統計
@@ -63,7 +64,7 @@ export async function getPublicGameStatsHandler(req: Request, res: Response): Pr
         return await getChannelGameStats(channelId, range as "7d" | "30d" | "90d");
       },
       ttl,
-      [`channel:${channelId}`, "streamer:public-game-stats"]
+      [`channel:${channelId}`, CacheTags.STREAMER_PUBLIC_GAME_STATS]
     );
 
     res.json(stats);
@@ -282,7 +283,7 @@ export async function getPublicViewerTrendsHandler(req: Request, res: Response):
         );
       },
       ttl,
-      [`channel:${channelId}`, "streamer:public-viewer-trends"]
+      [`channel:${channelId}`, CacheTags.STREAMER_PUBLIC_VIEWER_TRENDS]
     );
 
     res.json(data);
@@ -394,7 +395,7 @@ export async function getPublicStreamHourlyHandler(req: Request, res: Response):
         return result;
       },
       ttl,
-      [`channel:${channelId}`, "streamer:public-stream-hourly"]
+      [`channel:${channelId}`, CacheTags.STREAMER_PUBLIC_STREAM_HOURLY]
     );
 
     res.json(data);

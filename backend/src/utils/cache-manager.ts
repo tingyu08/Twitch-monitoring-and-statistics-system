@@ -147,10 +147,14 @@ export class CacheManager {
     this.stats.memoryUsage = this.currentMemoryUsage;
 
     if (this.redisEnabled) {
-      void redisSetJson(key, value, ttlSeconds);
+      void redisSetJson(key, value, ttlSeconds).catch((err) =>
+        logger.warn("Cache", `Redis setJson failed for key ${key}`, err)
+      );
       if (tags.length > 0) {
         for (const tag of tags) {
-          void redisTagAddKeys(tag, [key]);
+          void redisTagAddKeys(tag, [key]).catch((err) =>
+            logger.warn("Cache", `Redis tagAddKeys failed for tag ${tag}`, err)
+          );
         }
       }
     }
@@ -220,7 +224,9 @@ export class CacheManager {
     }
 
     if (this.redisEnabled) {
-      void redisDeleteKey(key);
+      void redisDeleteKey(key).catch((err) =>
+        logger.warn("Cache", `Redis deleteKey failed for key ${key}`, err)
+      );
     }
   }
 
@@ -240,7 +246,9 @@ export class CacheManager {
     this.lastSegmentIndex.clear();
 
     if (this.redisEnabled) {
-      void redisDeleteByPrefix("");
+      void redisDeleteByPrefix("").catch((err) =>
+        logger.warn("Cache", "Redis clear (deleteByPrefix) failed", err)
+      );
     }
   }
 
@@ -262,7 +270,9 @@ export class CacheManager {
     }
 
     if (this.redisEnabled) {
-      void redisDeleteByPrefix(pattern);
+      void redisDeleteByPrefix(pattern).catch((err) =>
+        logger.warn("Cache", `Redis deleteByPrefix failed for pattern ${pattern}`, err)
+      );
     }
 
     return count;
@@ -287,7 +297,9 @@ export class CacheManager {
     }
 
     if (this.redisEnabled) {
-      void redisDeleteBySuffix(suffix);
+      void redisDeleteBySuffix(suffix).catch((err) =>
+        logger.warn("Cache", `Redis deleteBySuffix failed for suffix ${suffix}`, err)
+      );
     }
 
     return count;
@@ -299,7 +311,9 @@ export class CacheManager {
    */
   deleteRevenueCache(streamerId: string): void {
     const deleted = this.deletePattern(`revenue:${streamerId}:`);
-    void this.invalidateTag(`streamer:${streamerId}`);
+    void this.invalidateTag(`streamer:${streamerId}`).catch((err) =>
+      logger.warn("Cache", `invalidateTag failed for streamer:${streamerId}`, err)
+    );
     if (deleted > 0) {
       logger.debug("Cache", `Deleted ${deleted} revenue cache entries for streamer ${streamerId}`);
     }

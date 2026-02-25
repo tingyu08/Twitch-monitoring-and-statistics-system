@@ -162,6 +162,7 @@ model ViewerChannelDailyStat {
   watchSeconds Int      @default(0)
   messageCount Int      @default(0)
   emoteCount   Int      @default(0)
+  source       String   @default("chat") // 'chat' | 'extension' — 觀看時間來源，extension 資料優先
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   channel      Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)

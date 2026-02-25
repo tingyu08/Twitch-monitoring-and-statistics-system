@@ -138,7 +138,9 @@ export class MemoryQueue<T = unknown> {
 
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
-      void this.processRetryQueue();
+      void this.processRetryQueue().catch((err) =>
+        logger.warn("MemoryQueue", "processRetryQueue failed in timer callback", err)
+      );
     }, delayMs);
 
     if (this.retryTimer.unref) {
@@ -148,16 +150,23 @@ export class MemoryQueue<T = unknown> {
 
   private async processRetryQueue(): Promise<void> {
     const now = Date.now();
-    const dueJobs: QueueJob<T>[] = [];
 
-    while (this.retryQueue.length > 0) {
-      const next = this.retryQueue[0];
-      if (!next || next.executeAt > now) {
-        break;
-      }
-      this.retryQueue.shift();
-      dueJobs.push(next.job);
+    // Find the boundary index where executeAt > now
+    let boundaryIndex = 0;
+    while (boundaryIndex < this.retryQueue.length) {
+      const item = this.retryQueue[boundaryIndex];
+      if (!item || item.executeAt > now) break;
+      boundaryIndex++;
     }
+
+    if (boundaryIndex === 0) {
+      this.armRetryTimer();
+      return;
+    }
+
+    // Batch extract due jobs (single splice instead of repeated shift)
+    const dueItems = this.retryQueue.splice(0, boundaryIndex);
+    const dueJobs = dueItems.map((item) => item.job);
 
     for (const job of dueJobs) {
       const retryJob: QueueJob<T> = {
@@ -170,7 +179,10 @@ export class MemoryQueue<T = unknown> {
           if (retryJob.priority >= SYNC_OVERFLOW_PRIORITY_THRESHOLD) {
             await this.persistOverflowJob(retryJob);
           } else {
-            void this.persistOverflowJob(retryJob);
+            void this.persistOverflowJob(retryJob).catch((err) =>
+              logger.warn("MemoryQueue", `persistOverflowJob failed for retry job ${retryJob.id}`, err)
+            );
+
           }
         } else {
           logger.warn("MemoryQueue", `Retry queue full, dropping job ${retryJob.id}`);
@@ -430,7 +442,9 @@ export class MemoryQueue<T = unknown> {
             return null;
           }
         } else {
-          void this.persistOverflowJob(job);
+          void this.persistOverflowJob(job).catch((err) =>
+            logger.warn("MemoryQueue", `persistOverflowJob failed for job ${job.id}`, err)
+          );
         }
         return job.id;
       }
@@ -488,16 +502,22 @@ export class MemoryQueue<T = unknown> {
     }
 
     // 檢查是否可以處理更多任務
-    while (this.processing < this.concurrency && this.queue.length > 0) {
-      const job = this.queue.shift();
-      if (!job) break;
+    const slotsAvailable = this.concurrency - this.processing;
+    if (slotsAvailable <= 0 || this.queue.length === 0) return;
 
+    // Batch dequeue: single splice instead of repeated shift()
+    const batchSize = Math.min(slotsAvailable, this.queue.length);
+    const jobs = this.queue.splice(0, batchSize);
+
+    for (const job of jobs) {
       this.processing++;
-      this.processJob(job).finally(() => {
-        this.processing--;
-        // 處理完成後繼續檢查佇列
-        this.tick();
-      });
+      this.processJob(job)
+        .catch((err) => logger.warn("MemoryQueue", `processJob failed for job ${job.id}`, err))
+        .finally(() => {
+          this.processing--;
+          // 處理完成後繼續檢查佇列
+          this.tick();
+        });
     }
   }
 

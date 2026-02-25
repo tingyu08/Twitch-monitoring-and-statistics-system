@@ -47,7 +47,9 @@ export class WebSocketGateway {
       this.handleConnection(socket);
     });
 
-    void this.setupRedisAdapter();
+    void this.setupRedisAdapter().catch((err) =>
+      logger.warn("WebSocket", "setupRedisAdapter failed", err)
+    );
 
     logger.info("WebSocket", "Socket.IO Gateway initialized with room support");
   }

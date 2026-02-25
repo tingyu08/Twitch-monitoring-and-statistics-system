@@ -32,7 +32,33 @@ interface PendingHeartbeat {
 }
 
 const CHANNEL_ID_CACHE_TTL_MS = 5 * 60 * 1000;
+const CHANNEL_ID_CACHE_MAX_SIZE = Number(process.env.CHANNEL_ID_CACHE_MAX_SIZE || 5000);
 const channelIdCache = new Map<string, { channelId: string; expiresAt: number }>();
+
+/**
+ * 快取容量管理：先清除過期項目，若仍超出上限則驅逐最舊的 10% 項目。
+ * 利用 Map 的插入順序保證（最舊的 key 在最前面）。
+ */
+export function evictChannelIdCache(): void {
+  const now = Date.now();
+  // 第一輪：清除已過期項目（O(n) 但通常能釋放足夠空間）
+  for (const [k, v] of channelIdCache) {
+    if (v.expiresAt <= now) {
+      channelIdCache.delete(k);
+    }
+  }
+  // 第二輪：若仍超出上限，驅逐最舊的 10%
+  if (channelIdCache.size >= CHANNEL_ID_CACHE_MAX_SIZE) {
+    const toRemove = Math.max(1, Math.floor(CHANNEL_ID_CACHE_MAX_SIZE * 0.1));
+    let removed = 0;
+    for (const k of channelIdCache.keys()) {
+      if (removed >= toRemove) break;
+      channelIdCache.delete(k);
+      removed++;
+    }
+  }
+}
+
 const heartbeatDedupCache = new Map<string, number>();
 const HEARTBEAT_FLUSH_INTERVAL_MS = Number(process.env.HEARTBEAT_FLUSH_INTERVAL_MS || 5000);
 const HEARTBEAT_FLUSH_BATCH_SIZE = Number(process.env.HEARTBEAT_FLUSH_BATCH_SIZE || 200);
@@ -115,7 +141,9 @@ function scheduleHeartbeatFlush(): void {
 
   heartbeatFlushTimer = setTimeout(() => {
     heartbeatFlushTimer = null;
-    void flushHeartbeatBuffer();
+    void flushHeartbeatBuffer().catch((err) =>
+      logger.warn("Extension", "flushHeartbeatBuffer failed in timer callback", err)
+    );
   }, delayMs);
 
   heartbeatFlushTimer.unref?.();
@@ -198,7 +226,7 @@ async function flushHeartbeatBuffer(): Promise<void> {
     const dailyRows = aggregated.map((pending) =>
       Prisma.sql`(${randomUUID()}, ${pending.viewerId}, ${pending.channelId}, ${pending.date}, ${
         pending.watchSeconds
-      }, ${new Date()})`
+      }, ${"extension"}, ${new Date()})`
     );
     const lifetimeRows = aggregated.map((pending) =>
       Prisma.sql`(${pending.viewerId}, ${pending.channelId}, ${pending.lastWatchedAt}, ${pending.watchSeconds})`
@@ -207,10 +235,15 @@ async function flushHeartbeatBuffer(): Promise<void> {
     const acceptedHeartbeats = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_daily_stats
-          (id, viewerId, channelId, date, watchSeconds, updatedAt)
+          (id, viewerId, channelId, date, watchSeconds, source, updatedAt)
         VALUES ${Prisma.join(dailyRows)}
         ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-          watchSeconds = viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds,
+          watchSeconds = CASE
+            WHEN viewer_channel_daily_stats.source = 'chat'
+              THEN excluded.watchSeconds
+            ELSE viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds
+          END,
+          source = 'extension',
           updatedAt = excluded.updatedAt
       `);
 
@@ -302,6 +335,11 @@ async function getCachedChannelId(channelName: string): Promise<string | null> {
   if (!channel) {
     channelIdCache.delete(normalized);
     return null;
+  }
+
+  // Evict expired or oldest entries if cache is at capacity
+  if (channelIdCache.size >= CHANNEL_ID_CACHE_MAX_SIZE) {
+    evictChannelIdCache();
   }
 
   channelIdCache.set(normalized, {

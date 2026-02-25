@@ -14,6 +14,7 @@ import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { chatListenerManager } from "../services/chat-listener-manager";
 import { getSessionWriteAuthority } from "../config/session-write-authority";
+import { WriteGuardKeys } from "../constants";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
@@ -371,7 +372,7 @@ export class StreamStatusJob {
       startedAt: Date;
     }
   ): Promise<void> {
-    await runWithWriteGuard("stream-session:create-session", async () => {
+    await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_CREATE, async () => {
       // Upsert 並直接返回結果
       const session = await prisma.streamSession.upsert({
         where: { twitchStreamId: stream.id },
@@ -444,7 +445,7 @@ export class StreamStatusJob {
       return;
     }
 
-    await runWithWriteGuard("stream-session:update-session", async () => {
+    await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_UPDATE, async () => {
       // 直接更新
       await prisma.streamSession.update({
         where: { id: activeSession.id },
@@ -477,7 +478,7 @@ export class StreamStatusJob {
       (endedAt.getTime() - activeSession.startedAt.getTime()) / 1000
     );
 
-    await runWithWriteGuard("stream-session:end-session", () =>
+    await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_END, () =>
       prisma.streamSession.update({
         where: { id: activeSession.id },
         data: {

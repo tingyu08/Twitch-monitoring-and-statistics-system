@@ -6,6 +6,7 @@ import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { importTwurpleApi } from "../utils/dynamic-import";
 import { runWithWriteGuard } from "../jobs/job-write-guard";
+import { WriteGuardKeys } from "../constants";
 
 export class TwurpleVideoService {
   // ApiClient 透過動態導入，使用 unknown 類型
@@ -59,7 +60,7 @@ export class TwurpleVideoService {
       )
     );
 
-    await runWithWriteGuard("sync-videos:videos-upsert", () =>
+    await runWithWriteGuard(WriteGuardKeys.SYNC_VIDEOS_UPSERT, () =>
       retryDatabaseOperation(() =>
         prisma.$executeRaw(Prisma.sql`
       INSERT INTO videos (
@@ -128,7 +129,7 @@ export class TwurpleVideoService {
       )
     );
 
-    await runWithWriteGuard("sync-videos:clips-upsert", () =>
+    await runWithWriteGuard(WriteGuardKeys.SYNC_CLIPS_UPSERT, () =>
       retryDatabaseOperation(() =>
         prisma.$executeRaw(Prisma.sql`
       INSERT INTO clips (
@@ -239,7 +240,7 @@ export class TwurpleVideoService {
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-      const deleteResult = await runWithWriteGuard("sync-videos:videos-cleanup", () =>
+      const deleteResult = await runWithWriteGuard(WriteGuardKeys.SYNC_VIDEOS_CLEANUP, () =>
         retryDatabaseOperation(() =>
           prisma.video.deleteMany({
             where: {
@@ -305,7 +306,7 @@ export class TwurpleVideoService {
       );
 
       // 優化：差異化更新，避免每次全刪全建
-      await runWithWriteGuard("sync-videos:viewer-videos", () =>
+      await runWithWriteGuard(WriteGuardKeys.SYNC_VIEWER_VIDEOS, () =>
         retryDatabaseOperation(async () => {
           await prisma.$transaction(
             async (tx) => {
@@ -534,7 +535,7 @@ export class TwurpleVideoService {
       );
 
       // 優化：差異化更新，避免每次全刪全建
-      await runWithWriteGuard("sync-videos:viewer-clips", () =>
+      await runWithWriteGuard(WriteGuardKeys.SYNC_VIEWER_CLIPS, () =>
         retryDatabaseOperation(async () => {
           await prisma.$transaction(
             async (tx) => {

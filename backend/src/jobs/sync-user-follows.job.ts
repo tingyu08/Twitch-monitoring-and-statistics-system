@@ -34,12 +34,12 @@ interface ExistingChannel {
   twitchChannelId: string;
   isMonitored: boolean;
   streamerId: string | null;
-  streamer?: { id: string; twitchUserId: string } | null;
 }
 
 interface ExistingStreamer {
   id: string;
   twitchUserId: string;
+  avatarUrl?: string | null;
 }
 
 interface TwitchUserProfile {
@@ -96,9 +96,9 @@ async function backfillExistingStreamerProfiles(
     });
   }
 
-  const UPDATE_CHUNK_SIZE = 100;
-  for (let i = 0; i < updates.length; i += UPDATE_CHUNK_SIZE) {
-    const batch = updates.slice(i, i + UPDATE_CHUNK_SIZE);
+  const UPDATE_BATCH_SIZE = 200;
+  for (let i = 0; i < updates.length; i += UPDATE_BATCH_SIZE) {
+    const batch = updates.slice(i, i + UPDATE_BATCH_SIZE);
     await Promise.all(
       batch.map((update) =>
         prisma.streamer.update({
@@ -287,9 +287,13 @@ async function flushPendingSummaryRefreshes(): Promise<void> {
 }
 
 function scheduleSummaryRefresh(viewerId: string): void {
-  void ensureMaintenanceStateLoaded();
+  void ensureMaintenanceStateLoaded().catch((err) =>
+    logger.warn("Jobs", "ensureMaintenanceStateLoaded failed in scheduleSummaryRefresh", err)
+  );
   pendingSummaryRefreshViewerIds.add(viewerId);
-  void persistMaintenanceState();
+  void persistMaintenanceState().catch((err) =>
+    logger.warn("Jobs", "persistMaintenanceState failed in scheduleSummaryRefresh", err)
+  );
 
   if (summaryRefreshTimer) {
     return;
@@ -297,7 +301,9 @@ function scheduleSummaryRefresh(viewerId: string): void {
 
   summaryRefreshTimer = setTimeout(() => {
     summaryRefreshTimer = null;
-    void flushPendingSummaryRefreshes();
+    void flushPendingSummaryRefreshes().catch((err) =>
+      logger.warn("Jobs", "flushPendingSummaryRefreshes failed in timer callback", err)
+    );
   }, SUMMARY_REFRESH_DEBOUNCE_MS);
 
   summaryRefreshTimer.unref?.();
@@ -324,17 +330,23 @@ async function flushLiveStatusRefresh(): Promise<void> {
 }
 
 function scheduleLiveStatusRefresh(): void {
-  void ensureMaintenanceStateLoaded();
+  void ensureMaintenanceStateLoaded().catch((err) =>
+    logger.warn("Jobs", "ensureMaintenanceStateLoaded failed in scheduleLiveStatusRefresh", err)
+  );
 
   if (liveStatusRefreshTimer) {
     return;
   }
 
-  void persistMaintenanceState();
+  void persistMaintenanceState().catch((err) =>
+    logger.warn("Jobs", "persistMaintenanceState failed in scheduleLiveStatusRefresh", err)
+  );
 
   liveStatusRefreshTimer = setTimeout(() => {
     liveStatusRefreshTimer = null;
-    void flushLiveStatusRefresh();
+    void flushLiveStatusRefresh().catch((err) =>
+      logger.warn("Jobs", "flushLiveStatusRefresh failed in timer callback", err)
+    );
   }, LIVE_STATUS_REFRESH_DEBOUNCE_MS);
 
   liveStatusRefreshTimer.unref?.();
@@ -359,7 +371,9 @@ export async function flushPendingFollowSyncMaintenance(): Promise<void> {
 }
 
 export function initializeFollowSyncMaintenance(): void {
-  void ensureMaintenanceStateLoaded();
+  void ensureMaintenanceStateLoaded().catch((err) =>
+    logger.warn("Jobs", "ensureMaintenanceStateLoaded failed in initializeFollowSyncMaintenance", err)
+  );
 }
 
 export interface SyncUserFollowsResult {
@@ -657,10 +671,13 @@ export class SyncUserFollowsJob {
       }
     );
 
-    // 2. 獲取目前資料庫中的追蹤記錄
+    // 2. 獲取目前資料庫中的追蹤記錄（只 select 需要的欄位以減少記憶體）
     const existingFollows = await prisma.userFollow.findMany({
       where: { userId: user.id },
-      include: { channel: true },
+      select: {
+        id: true,
+        channel: { select: { twitchChannelId: true } },
+      },
     });
 
     const existingFollowMap = new Map(
@@ -672,7 +689,12 @@ export class SyncUserFollowsJob {
 
     const existingChannels = await prisma.channel.findMany({
       where: { twitchChannelId: { in: broadcasterIds } },
-      include: { streamer: true },
+      select: {
+        id: true,
+        twitchChannelId: true,
+        isMonitored: true,
+        streamerId: true,
+      },
     });
 
     const existingChannelMap = new Map<string, ExistingChannel>(
@@ -681,6 +703,7 @@ export class SyncUserFollowsJob {
 
     const existingStreamers = await prisma.streamer.findMany({
       where: { twitchUserId: { in: broadcasterIds } },
+      select: { id: true, twitchUserId: true, avatarUrl: true },
     });
 
     const existingStreamerMap = new Map<string, ExistingStreamer>(

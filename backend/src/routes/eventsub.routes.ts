@@ -21,6 +21,7 @@ import {
   type ChannelSubscribeEvent,
   type ChannelCheerEvent,
 } from "../services/eventsub.service";
+import { twurpleEventSubService } from "../services/twurple-eventsub.service";
 import { logger } from "../utils/logger";
 
 const router = Router();
@@ -70,13 +71,24 @@ router.post("/callback", verifyEventSubSignature, async (req: EventSubRequest, r
       logger.info("EventSub", `收到事件: ${eventType}`);
 
       // 根據事件類型分發處理
+      // Gate: skip session-related events in legacy handler when Twurple is active
+      const twurpleActive = twurpleEventSubService.getStatus().initialized;
+
       switch (eventType) {
         case EVENTSUB_TYPES.STREAM_ONLINE:
-          await eventSubService.handleStreamOnline(notification.event as StreamOnlineEvent);
+          if (twurpleActive) {
+            logger.debug("EventSub", "Skipping legacy stream.online — Twurple is active");
+          } else {
+            await eventSubService.handleStreamOnline(notification.event as StreamOnlineEvent);
+          }
           break;
 
         case EVENTSUB_TYPES.STREAM_OFFLINE:
-          await eventSubService.handleStreamOffline(notification.event as StreamOfflineEvent);
+          if (twurpleActive) {
+            logger.debug("EventSub", "Skipping legacy stream.offline — Twurple is active");
+          } else {
+            await eventSubService.handleStreamOffline(notification.event as StreamOfflineEvent);
+          }
           break;
 
         case EVENTSUB_TYPES.CHANNEL_UPDATE:
@@ -108,8 +120,6 @@ router.post("/callback", verifyEventSubSignature, async (req: EventSubRequest, r
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
-import { twurpleEventSubService } from "../services/twurple-eventsub.service";
 
 /**
  * GET /eventsub/status

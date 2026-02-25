@@ -1,5 +1,6 @@
 import { prisma } from "../../db/prisma";
 import { cacheManager } from "../../utils/cache-manager";
+import { CacheTags } from "../../constants";
 
 const VIEWER_AUTH_SNAPSHOT_TTL_SECONDS = Number(
   process.env.VIEWER_AUTH_SNAPSHOT_TTL_SECONDS || 600
@@ -23,7 +24,7 @@ function byTwitchIdKey(twitchUserId: string): string {
 }
 
 function cacheSnapshot(snapshot: ViewerAuthSnapshot): void {
-  const tags = [`viewer:${snapshot.id}`, "viewer-auth-snapshot"];
+  const tags = [`viewer:${snapshot.id}`, CacheTags.VIEWER_AUTH_SNAPSHOT];
   cacheManager.setWithTags(byIdKey(snapshot.id), snapshot, VIEWER_AUTH_SNAPSHOT_TTL_SECONDS, tags);
   cacheManager.setWithTags(
     byTwitchIdKey(snapshot.twitchUserId),
@@ -51,7 +52,7 @@ export async function getViewerAuthSnapshotById(
         },
       }),
     VIEWER_AUTH_SNAPSHOT_TTL_SECONDS,
-    [`viewer:${viewerId}`, "viewer-auth-snapshot"]
+    [`viewer:${viewerId}`, CacheTags.VIEWER_AUTH_SNAPSHOT]
   );
 
   if (!snapshot) {
@@ -80,7 +81,7 @@ export async function getViewerAuthSnapshotByTwitchUserId(
         },
       }),
     VIEWER_AUTH_SNAPSHOT_TTL_SECONDS,
-    ["viewer-auth-snapshot"]
+    [CacheTags.VIEWER_AUTH_SNAPSHOT]
   );
 
   if (!snapshot) {

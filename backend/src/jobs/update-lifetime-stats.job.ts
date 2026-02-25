@@ -18,6 +18,9 @@ const TARGET_FLUSH_SIZE = 5000;
 const CONCURRENCY_LIMIT = 5;
 const MAX_RUNTIME_MS = Number(process.env.LIFETIME_UPDATE_MAX_RUNTIME_MS || 20 * 60 * 1000);
 
+// P2 Fix: 防止重疊執行（封裝為 object，避免模組級可變原始值）
+const lifetimeStatsState = { isRunning: false };
+
 function appendPairTarget(targets: Set<string>, viewerId: string, channelId: string): void {
   targets.add(`${viewerId}|${channelId}`);
 }
@@ -116,6 +119,12 @@ export const updateLifetimeStatsJob = () => {
 };
 
 export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
+  if (lifetimeStatsState.isRunning) {
+    logger.warn("CronJob", "Lifetime Stats 更新正在執行中，跳過...");
+    return;
+  }
+
+  lifetimeStatsState.isRunning = true;
   logger.info("CronJob", `開始執行 Lifetime Stats 更新 (完整更新: ${fullUpdate})...`);
   const startTime = Date.now();
   const shouldStop = () => Date.now() - startTime > MAX_RUNTIME_MS;
@@ -254,5 +263,7 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
   } catch (error) {
     logger.error("CronJob", "Lifetime Stats 更新失敗:", error);
     captureJobError("update-lifetime-stats", error, { fullUpdate });
+  } finally {
+    lifetimeStatsState.isRunning = false;
   }
 };

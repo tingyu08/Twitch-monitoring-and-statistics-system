@@ -25,6 +25,7 @@ async function getOrSetWithOptionalTags<T>(
   return cacheManager.getOrSet(key, factory, ttl);
 }
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
+import { CacheTags } from "../../constants";
 
 // P2 Note: GroupByStatResult 保留供未來 groupBy 查詢使用
 // interface GroupByStatResult {
@@ -247,7 +248,7 @@ export async function getChannelStats(
       };
     },
     ttl,
-    [`viewer:${viewerId}`, `channel:${channelId}`, "viewer:stats"]
+    [`viewer:${viewerId}`, `channel:${channelId}`, CacheTags.VIEWER_STATS]
   );
 }
 
@@ -299,7 +300,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
       }
     },
     ttl, // 適應性 TTL（根據記憶體壓力從 30 秒到 3 分鐘）
-    [`viewer:${viewerId}`, "viewer:channels"]
+    [`viewer:${viewerId}`, CacheTags.VIEWER_CHANNELS]
   );
 }
 

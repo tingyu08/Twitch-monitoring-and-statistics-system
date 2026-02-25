@@ -12,6 +12,7 @@ import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
+import { WriteGuardKeys } from "../constants";
 
 // P1 Fix: 每小時第 10 分鐘執行（錯開 syncUserFollowsJob 的整點執行）
 const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "35 * * * *";
@@ -150,7 +151,7 @@ export class ChannelStatsSyncJob {
     // 如果頻道名稱有變更，更新資料庫
     if (channelInfo.login !== channel.channelName) {
       logger.info("ChannelStatsSync", `Channel renamed: ${channel.channelName} -> ${channelInfo.login}`);
-      await runWithWriteGuard("channel-stats-sync:rename-channel", () =>
+      await runWithWriteGuard(WriteGuardKeys.CHANNEL_STATS_RENAME, () =>
         prisma.channel.update({
           where: { id: channel.id },
           data: { channelName: channelInfo.login },
@@ -279,7 +280,7 @@ export class ChannelStatsSyncJob {
         )`;
       });
 
-      await runWithWriteGuard("channel-stats-sync:daily-stats-upsert", () =>
+      await runWithWriteGuard(WriteGuardKeys.CHANNEL_STATS_DAILY_UPSERT, () =>
         prisma.$executeRaw(Prisma.sql`
           WITH src(channelId, date, streamSeconds, streamCount, avgViewers, peakViewers) AS (
             VALUES ${Prisma.join(values)}

@@ -7,13 +7,8 @@ import { captureJobError } from "./job-error-tracker";
 // 每 5 分鐘執行，在第 2 分鐘觸發（錯開 Stream Status Job）
 const CHECK_LIVE_CRON = process.env.CHECK_LIVE_CRON || "0 2-59/5 * * * *";
 
-// 超時時間（毫秒）- 2 分鐘
-//  const JOB_TIMEOUT_MS = 2 * 60 * 1000;
-
 export class AutoJoinLiveChannelsJob {
   private isRunning = false;
-  // P2 Note: timeoutHandle 保留供未來超時功能使用
-  // private timeoutHandle: NodeJS.Timeout | null = null;
 
   start(): void {
     logger.info("Jobs", `📋 Auto Join Live Channels Job 已排程: ${CHECK_LIVE_CRON}`);

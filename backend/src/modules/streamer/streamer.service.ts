@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
+import { cacheManager } from "../../utils/cache-manager";
 
 export interface StreamerSummary {
   totalStreamHours: number;
@@ -63,12 +64,18 @@ function resolveRangeDays(range: string): number {
 }
 
 async function getChannelIdByStreamerId(streamerId: string): Promise<string | null> {
-  const channel = await prisma.channel.findFirst({
-    where: { streamerId },
-    select: { id: true },
-  });
-
-  return channel?.id ?? null;
+  const cacheKey = `streamer:${streamerId}:channelId`;
+  return cacheManager.getOrSet(
+    cacheKey,
+    async () => {
+      const channel = await prisma.channel.findFirst({
+        where: { streamerId },
+        select: { id: true },
+      });
+      return channel?.id ?? null;
+    },
+    600 // 10 分鐘 — channel ID 幾乎不會變
+  );
 }
 
 function buildHeatmapResponseFromCells(range: string, cells: HeatmapCell[]): HeatmapResponse {
@@ -314,45 +321,52 @@ export async function getStreamerSummary(
   streamerId: string,
   range: string = "30d"
 ): Promise<StreamerSummary> {
-  const now = new Date();
-  const days = resolveRangeDays(range);
+  const cacheKey = `streamer:${streamerId}:summary:${range}`;
+  return cacheManager.getOrSetWithTags(
+    cacheKey,
+    async () => {
+      const now = new Date();
+      const days = resolveRangeDays(range);
+      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const channelId = await getChannelIdByStreamerId(streamerId);
 
-  const channelId = await getChannelIdByStreamerId(streamerId);
+      if (!channelId) {
+        return {
+          range,
+          totalStreamHours: 0,
+          totalStreamSessions: 0,
+          avgStreamDurationMinutes: 0,
+          isEstimated: false,
+        };
+      }
 
-  if (!channelId) {
-    return {
-      range,
-      totalStreamHours: 0,
-      totalStreamSessions: 0,
-      avgStreamDurationMinutes: 0,
-      isEstimated: false,
-    };
-  }
+      const rows = await prisma.$queryRaw<StreamerSummaryRow[]>(Prisma.sql`
+        SELECT
+          SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+          COUNT(*) AS sessionCount
+        FROM stream_sessions
+        WHERE channelId = ${channelId}
+          AND startedAt >= ${cutoffDate}
+      `);
 
-  const rows = await prisma.$queryRaw<StreamerSummaryRow[]>(Prisma.sql`
-    SELECT
-      SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
-      COUNT(*) AS sessionCount
-    FROM stream_sessions
-    WHERE channelId = ${channelId}
-      AND startedAt >= ${cutoffDate}
-  `);
+      const totalSeconds = toNumber(rows[0]?.totalSeconds);
+      const totalStreamSessions = toNumber(rows[0]?.sessionCount);
+      const totalStreamHours = Math.round((totalSeconds / 3600) * 10) / 10;
+      const avgStreamDurationMinutes =
+        totalStreamSessions > 0 ? Math.round(totalSeconds / 60 / totalStreamSessions) : 0;
 
-  const totalSeconds = toNumber(rows[0]?.totalSeconds);
-  const totalStreamSessions = toNumber(rows[0]?.sessionCount);
-  const totalStreamHours = Math.round((totalSeconds / 3600) * 10) / 10;
-  const avgStreamDurationMinutes =
-    totalStreamSessions > 0 ? Math.round(totalSeconds / 60 / totalStreamSessions) : 0;
-
-  return {
-    range,
-    totalStreamHours,
-    totalStreamSessions,
-    avgStreamDurationMinutes,
-    isEstimated: false,
-  };
+      return {
+        range,
+        totalStreamHours,
+        totalStreamSessions,
+        avgStreamDurationMinutes,
+        isEstimated: false,
+      };
+    },
+    300, // 5 分鐘
+    [`streamer:${streamerId}`]
+  );
 }
 
 /**
@@ -367,51 +381,58 @@ export async function getStreamerTimeSeries(
   range: string = "30d",
   granularity: "day" | "week" = "day"
 ): Promise<TimeSeriesResponse> {
-  const now = new Date();
-  const days = resolveRangeDays(range);
+  const cacheKey = `streamer:${streamerId}:timeseries:${range}:${granularity}`;
+  return cacheManager.getOrSetWithTags(
+    cacheKey,
+    async () => {
+      const now = new Date();
+      const days = resolveRangeDays(range);
+      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const channelId = await getChannelIdByStreamerId(streamerId);
 
-  const channelId = await getChannelIdByStreamerId(streamerId);
+      if (!channelId) {
+        return {
+          range,
+          granularity,
+          data: [],
+          isEstimated: false,
+        };
+      }
 
-  if (!channelId) {
-    return {
-      range,
-      granularity,
-      data: [],
-      isEstimated: false,
-    };
-  }
+      if (granularity === "day") {
+        const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
+          SELECT
+            date(startedAt) AS bucketDate,
+            SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+            COUNT(*) AS sessionCount
+          FROM stream_sessions
+          WHERE channelId = ${channelId}
+            AND startedAt >= ${cutoffDate}
+          GROUP BY date(startedAt)
+          ORDER BY bucketDate ASC
+        `);
 
-  if (granularity === "day") {
-    const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
-      SELECT
-        date(startedAt) AS bucketDate,
-        SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
-        COUNT(*) AS sessionCount
-      FROM stream_sessions
-      WHERE channelId = ${channelId}
-        AND startedAt >= ${cutoffDate}
-      GROUP BY date(startedAt)
-      ORDER BY bucketDate ASC
-    `);
+        return buildDailyTimeSeries(rows, range, cutoffDate, now);
+      }
 
-    return buildDailyTimeSeries(rows, range, cutoffDate, now);
-  }
+      const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
+        SELECT
+          date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days') AS bucketDate,
+          SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+          COUNT(*) AS sessionCount
+        FROM stream_sessions
+        WHERE channelId = ${channelId}
+          AND startedAt >= ${cutoffDate}
+        GROUP BY date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days')
+        ORDER BY bucketDate ASC
+      `);
 
-  const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
-    SELECT
-      date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days') AS bucketDate,
-      SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
-      COUNT(*) AS sessionCount
-    FROM stream_sessions
-    WHERE channelId = ${channelId}
-      AND startedAt >= ${cutoffDate}
-    GROUP BY date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days')
-    ORDER BY bucketDate ASC
-  `);
-
-  return buildWeeklyTimeSeries(rows, range, cutoffDate, now);
+      return buildWeeklyTimeSeries(rows, range, cutoffDate, now);
+    },
+    300, // 5 分鐘
+    [`streamer:${streamerId}`]
+  );
 }
 
 function buildDailyTimeSeries(
@@ -646,16 +667,24 @@ export async function getStreamerGameStats(
   streamerId: string,
   range: "7d" | "30d" | "90d" = "30d"
 ): Promise<GameStats[]> {
-  const now = new Date();
-  let days = 30;
-  if (range === "7d") days = 7;
-  if (range === "90d") days = 90;
-  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const cacheKey = `streamer:${streamerId}:gameStats:${range}`;
+  return cacheManager.getOrSetWithTags(
+    cacheKey,
+    async () => {
+      const now = new Date();
+      let days = 30;
+      if (range === "7d") days = 7;
+      if (range === "90d") days = 90;
+      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const channel = await prisma.channel.findFirst({ where: { streamerId } });
-  if (!channel) return [];
+      const channel = await prisma.channel.findFirst({ where: { streamerId } });
+      if (!channel) return [];
 
-  return getGameStatsByChannelId(channel.id, cutoffDate);
+      return getGameStatsByChannelId(channel.id, cutoffDate);
+    },
+    300,
+    [`streamer:${streamerId}`]
+  );
 }
 
 /**
@@ -665,13 +694,20 @@ export async function getChannelGameStats(
   channelId: string,
   range: "7d" | "30d" | "90d" = "30d"
 ): Promise<GameStats[]> {
-  const now = new Date();
-  let days = 30;
-  if (range === "7d") days = 7;
-  if (range === "90d") days = 90;
-  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const cacheKey = `channel:${channelId}:gameStats:${range}`;
+  return cacheManager.getOrSet(
+    cacheKey,
+    async () => {
+      const now = new Date();
+      let days = 30;
+      if (range === "7d") days = 7;
+      if (range === "90d") days = 90;
+      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  return getGameStatsByChannelId(channelId, cutoffDate);
+      return getGameStatsByChannelId(channelId, cutoffDate);
+    },
+    300
+  );
 }
 
 export interface ViewerTrendPoint {
@@ -690,62 +726,76 @@ export async function getChannelViewerTrends(
   channelId: string,
   range: "7d" | "30d" | "90d" = "30d"
 ): Promise<ViewerTrendPoint[]> {
-  const now = new Date();
-  let days = 30;
-  if (range === "7d") days = 7;
-  if (range === "90d") days = 90;
-  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const cacheKey = `channel:${channelId}:viewerTrends:${range}`;
+  return cacheManager.getOrSet(
+    cacheKey,
+    async () => {
+      const now = new Date();
+      let days = 30;
+      if (range === "7d") days = 7;
+      if (range === "90d") days = 90;
+      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const sessions = await prisma.streamSession.findMany({
-    where: {
-      channelId: channelId,
-      startedAt: { gte: cutoffDate },
-    },
-    select: {
-      startedAt: true,
-      title: true,
-      avgViewers: true,
-      peakViewers: true,
-      durationSeconds: true,
-      category: true,
-    },
-    orderBy: { startedAt: "asc" },
-  });
+      const sessions = await prisma.streamSession.findMany({
+        where: {
+          channelId: channelId,
+          startedAt: { gte: cutoffDate },
+        },
+        select: {
+          startedAt: true,
+          title: true,
+          avgViewers: true,
+          peakViewers: true,
+          durationSeconds: true,
+          category: true,
+        },
+        orderBy: { startedAt: "asc" },
+      });
 
-  return buildViewerTrendsFromSessions(sessions);
+      return buildViewerTrendsFromSessions(sessions);
+    },
+    300
+  );
 }
 
 export async function getChannelGameStatsAndViewerTrends(
   channelId: string,
   range: "7d" | "30d" | "90d" = "30d"
 ): Promise<{ gameStats: GameStats[]; viewerTrends: ViewerTrendPoint[] }> {
-  const now = new Date();
-  const days = resolveRangeDays(range);
-  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const cacheKey = `channel:${channelId}:gameStatsAndTrends:${range}`;
+  return cacheManager.getOrSet(
+    cacheKey,
+    async () => {
+      const now = new Date();
+      const days = resolveRangeDays(range);
+      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-  const [gameStats, sessions] = await Promise.all([
-    getGameStatsByChannelId(channelId, cutoffDate),
-    prisma.streamSession.findMany({
-      where: {
-        channelId,
-        startedAt: { gte: cutoffDate },
-      },
-      select: {
-        startedAt: true,
-        title: true,
-        avgViewers: true,
-        peakViewers: true,
-        durationSeconds: true,
-        category: true,
-      },
-      orderBy: { startedAt: "asc" },
-    }),
-  ]);
+      const [gameStats, sessions] = await Promise.all([
+        getGameStatsByChannelId(channelId, cutoffDate),
+        prisma.streamSession.findMany({
+          where: {
+            channelId,
+            startedAt: { gte: cutoffDate },
+          },
+          select: {
+            startedAt: true,
+            title: true,
+            avgViewers: true,
+            peakViewers: true,
+            durationSeconds: true,
+            category: true,
+          },
+          orderBy: { startedAt: "asc" },
+        }),
+      ]);
 
-  return {
-    gameStats,
-    viewerTrends: buildViewerTrendsFromSessions(sessions),
-  };
+      return {
+        gameStats,
+        viewerTrends: buildViewerTrendsFromSessions(sessions),
+      };
+    },
+    300
+  );
 }
 
 // ========== Story 6.4 Helpers ==========

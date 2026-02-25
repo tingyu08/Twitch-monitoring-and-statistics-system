@@ -50,6 +50,7 @@ import { retryDatabaseOperation } from "../utils/db-retry";
 import { importTwurpleApi, importTwurpleEventSub } from "../utils/dynamic-import";
 import { runWithWriteGuard } from "../jobs/job-write-guard";
 import { getSessionWriteAuthority } from "../config/session-write-authority";
+import { WriteGuardKeys } from "../constants";
 
 const SESSION_WRITE_AUTHORITY = getSessionWriteAuthority();
 const EVENTSUB_WRITES_SESSION = SESSION_WRITE_AUTHORITY !== "job";
@@ -113,6 +114,9 @@ class TwurpleEventSubService {
   );
   private readonly CHEER_DAILY_AGG_FLUSH_BATCH_SIZE = Number(
     process.env.CHEER_DAILY_AGG_FLUSH_BATCH_SIZE || 200
+  );
+  private readonly CHEER_DAILY_AGG_MAX_BUFFER_SIZE = Number(
+    process.env.CHEER_DAILY_AGG_MAX_BUFFER_SIZE || 5000
   );
   private static readonly CHEER_DAILY_AGG_INIT_MAX_RETRIES = 3;
   private static readonly CHEER_DAILY_AGG_INIT_RETRY_BASE_MS = 200;
@@ -191,6 +195,16 @@ class TwurpleEventSubService {
       current.eventCount += 1;
       this.cheerDailyAggBuffer.set(key, current);
     } else {
+      // Enforce buffer size cap: flush immediately if at capacity before adding new key
+      if (this.cheerDailyAggBuffer.size >= this.CHEER_DAILY_AGG_MAX_BUFFER_SIZE) {
+        logger.warn(
+          "TwurpleEventSub",
+          `cheerDailyAggBuffer reached cap (${this.CHEER_DAILY_AGG_MAX_BUFFER_SIZE}), forcing immediate flush`
+        );
+        void this.flushCheerDailyAggBuffer().catch((err) =>
+          logger.warn("TwurpleEventSub", "forced flushCheerDailyAggBuffer failed", err)
+        );
+      }
       this.cheerDailyAggBuffer.set(key, {
         streamerId,
         date,
@@ -209,7 +223,9 @@ class TwurpleEventSubService {
 
     this.cheerDailyAggFlushTimer = setTimeout(() => {
       this.cheerDailyAggFlushTimer = null;
-      void this.flushCheerDailyAggBuffer();
+      void this.flushCheerDailyAggBuffer().catch((err) =>
+        logger.warn("TwurpleEventSub", "scheduled flushCheerDailyAggBuffer failed", err)
+      );
     }, this.CHEER_DAILY_AGG_FLUSH_INTERVAL_MS);
 
     this.cheerDailyAggFlushTimer.unref?.();
@@ -497,7 +513,7 @@ class TwurpleEventSubService {
         );
       } else {
         let created = false;
-        await runWithWriteGuard("stream-session:create-session", async () => {
+await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_CREATE, async () => {
         // 使用重試機制檢查是否已有進行中的 session
           const existingSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
             prisma.streamSession.findFirst({
@@ -518,7 +534,7 @@ class TwurpleEventSubService {
               prisma.streamSession.create({
                 data: {
                   channelId: channel.id,
-                  twitchStreamId: `eventsub_${Date.now()}`,
+                  twitchStreamId: `eventsub_${twitchChannelId}_${data.startedAt.getTime()}`,
                   startedAt: data.startedAt,
                   title: "",
                   category: "",
@@ -590,7 +606,7 @@ class TwurpleEventSubService {
         );
         updated = true;
       } else {
-        await runWithWriteGuard("stream-session:end-session", async () => {
+await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_END, async () => {
         // 使用重試機制找到進行中的 session
           const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
             prisma.streamSession.findFirst({
@@ -681,7 +697,7 @@ class TwurpleEventSubService {
       }
 
       let updated = false;
-      await runWithWriteGuard("stream-session:update-session", async () => {
+      await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_UPDATE, async () => {
         // 使用重試機制查詢進行中的 session
         const openSession = await retryDatabaseOperation<StreamSessionResult | null>(() =>
           prisma.streamSession.findFirst({

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, type JWTPayload, type UserRole } from "./jwt.utils";
 import { cacheManager } from "../../utils/cache-manager";
+import { CacheTags } from "../../constants";
 import { getViewerAuthSnapshotById } from "../viewer/viewer-auth-snapshot.service";
 
 // 擴展 Express Request 類型以包含 user 資訊
@@ -39,7 +40,7 @@ async function requireAuthHandler(
           return snapshot?.tokenVersion ?? null;
         },
         60, // 快取 60 秒
-        [`viewer:${decoded.viewerId}`, "auth:token-version"]
+        [`viewer:${decoded.viewerId}`, CacheTags.AUTH_TOKEN_VERSION]
       );
 
       if (currentVersion === null || currentVersion !== decoded.tokenVersion) {

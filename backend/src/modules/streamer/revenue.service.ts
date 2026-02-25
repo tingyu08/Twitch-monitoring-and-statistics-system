@@ -3,6 +3,7 @@ import { importTwurpleApi, importTwurpleAuth } from "../../utils/dynamic-import"
 import { decryptToken, encryptToken } from "../../utils/crypto.utils";
 import { cacheManager, CacheKeys, CacheTTL } from "../../utils/cache-manager";
 import { logger } from "../../utils/logger";
+import { CacheTags } from "../../constants";
 import {
   REVENUE_SHARE,
   BITS_TO_USD_RATE,
@@ -225,7 +226,7 @@ export class RevenueService {
         return true;
       },
       BITS_DAILY_AGG_BOOTSTRAP_TTL_SECONDS,
-      [`streamer:${streamerId}`, "revenue:bits-agg"]
+      [`streamer:${streamerId}`, CacheTags.REVENUE_BITS_AGG]
     );
 
     const recentStartDate = this.addDays(new Date(), -BITS_DAILY_AGG_RECENT_REFRESH_DAYS);
@@ -242,7 +243,7 @@ export class RevenueService {
         return true;
       },
       BITS_DAILY_AGG_REFRESH_TTL_SECONDS,
-      [`streamer:${streamerId}`, "revenue:bits-agg"]
+      [`streamer:${streamerId}`, CacheTags.REVENUE_BITS_AGG]
     );
   }
 
@@ -595,7 +596,7 @@ export class RevenueService {
         }
       },
       CacheTTL.MEDIUM,
-      [`streamer:${streamerId}`, "revenue:subscriptions"]
+      [`streamer:${streamerId}`, CacheTags.REVENUE_SUBSCRIPTIONS]
     );
   }
 
@@ -666,7 +667,7 @@ export class RevenueService {
         }
       },
       CacheTTL.MEDIUM,
-      [`streamer:${streamerId}`, "revenue:bits"]
+      [`streamer:${streamerId}`, CacheTags.REVENUE_BITS]
     );
   }
 
@@ -770,7 +771,7 @@ export class RevenueService {
         }
       },
       CacheTTL.SHORT,
-      [`streamer:${streamerId}`, "revenue:overview"]
+      [`streamer:${streamerId}`, CacheTags.REVENUE_OVERVIEW]
     );
   }
 

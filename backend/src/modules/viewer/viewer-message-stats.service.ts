@@ -1,5 +1,6 @@
 import { prisma } from "../../db/prisma";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
+import { CacheTags } from "../../constants";
 
 const MAX_RANGE_DAYS = 365;
 const MAX_DAILY_BREAKDOWN_ROWS = 400;
@@ -161,6 +162,6 @@ export async function getViewerMessageStats(
       };
     },
     ttl,
-    [`viewer:${viewerId}`, `channel:${channelId}`, "viewer:message-stats"]
+    [`viewer:${viewerId}`, `channel:${channelId}`, CacheTags.VIEWER_MESSAGE_STATS]
   );
 }
