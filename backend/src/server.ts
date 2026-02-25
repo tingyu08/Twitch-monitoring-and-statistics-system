@@ -236,7 +236,9 @@ httpServer.listen(PORT, "0.0.0.0", async () => {
               take: 5,
             });
             await Promise.allSettled(
-              streamers.map((streamer) => revenueService.prewarmRevenueCache(streamer.id))
+              streamers.map((streamer: { id: string }) =>
+                revenueService.prewarmRevenueCache(streamer.id)
+              )
             );
             if (streamers.length > 0) {
               logger.info("Server", `Revenue 快取預熱完成 (${streamers.length} streamers)`);

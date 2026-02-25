@@ -1,15 +1,18 @@
 import { twurpleAuthService } from "../twurple-auth.service";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { AppTokenAuthProvider, RefreshingAuthProvider } from "@twurple/auth";
+import { importTwurpleAuth } from "../../utils/dynamic-import";
 
-jest.mock("@twurple/auth", () => ({
-  AppTokenAuthProvider: jest.fn(),
-  RefreshingAuthProvider: jest.fn().mockImplementation(() => ({
-    addUser: jest.fn(),
-    onRefresh: jest.fn(),
-    onRefreshFailure: jest.fn(),
-  })),
-}));
+jest.mock("../../utils/dynamic-import", () => {
+  return {
+    importTwurpleAuth: jest.fn().mockResolvedValue({
+      AppTokenAuthProvider: jest.fn(),
+      RefreshingAuthProvider: jest.fn().mockImplementation(() => ({
+        addUser: jest.fn(),
+        onRefresh: jest.fn(),
+        onRefreshFailure: jest.fn(),
+      })),
+    }),
+  };
+});
 
 describe("TwurpleAuthService", () => {
   let TwurpleAuthServiceClass: any;
@@ -25,6 +28,11 @@ describe("TwurpleAuthService", () => {
     // 為每個測試創建新實例（使用 setupTests.ts 中設置的環境變數）
     service = new TwurpleAuthServiceClass();
   });
+
+  async function getMockProvider() {
+    const { RefreshingAuthProvider } = await importTwurpleAuth();
+    return (RefreshingAuthProvider as jest.Mock).mock.results[0].value;
+  }
 
   it("should detect credentials from env", () => {
     expect(service.hasCredentials()).toBe(true);
@@ -97,5 +105,185 @@ describe("TwurpleAuthService", () => {
     const status = service.getStatus();
     expect(status.hasCredentials).toBe(true);
     expect(status.appProviderInitialized).toBe(true);
+  });
+
+  it("should return client secret", () => {
+    expect(service.getClientSecret()).toBe("test_client_secret");
+  });
+
+  it("should return false for hasActiveProvider when no provider", () => {
+    expect(service.hasActiveProvider("nonexistent")).toBe(false);
+  });
+
+  it("should return true for hasActiveProvider after createUserAuthProvider", async () => {
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    expect(service.hasActiveProvider("u1")).toBe(true);
+  });
+
+  it("should return null from getUserAuthProvider when provider not found", () => {
+    expect(service.getUserAuthProvider("unknown")).toBeNull();
+  });
+
+  it("should return active user ids", async () => {
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    await service.createUserAuthProvider("u2", {
+      accessToken: "at2",
+      refreshToken: "rt2",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const ids = service.getActiveUserIds();
+    expect(ids).toContain("u1");
+    expect(ids).toContain("u2");
+  });
+
+  it("should return userProviderCount in status", async () => {
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    expect(service.getStatus().userProviderCount).toBe(1);
+  });
+
+  it("should evict oldest provider when maxUserProviders is exceeded", async () => {
+    const smallService = new TwurpleAuthServiceClass();
+    (smallService as any).maxUserProviders = 2;
+    const td = {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    };
+    await smallService.createUserAuthProvider("u1", td);
+    await smallService.createUserAuthProvider("u2", td);
+    await smallService.createUserAuthProvider("u3", td); // evicts u1
+    expect(smallService.hasActiveProvider("u1")).toBe(false);
+    expect(smallService.hasActiveProvider("u3")).toBe(true);
+  });
+
+  it("should call onRefresh callback when token is refreshed", async () => {
+    const onRefresh = jest.fn().mockResolvedValue(undefined);
+    await service.createUserAuthProvider(
+      "u1",
+      { accessToken: "at", refreshToken: "rt", expiresIn: 3600, obtainmentTimestamp: Date.now() },
+      onRefresh
+    );
+    const mockProvider = await getMockProvider();
+    const registeredCb = mockProvider.onRefresh.mock.calls[0][0];
+    await registeredCb("u1", {
+      accessToken: "new-at",
+      refreshToken: "new-rt",
+      expiresIn: 7200,
+      obtainmentTimestamp: 12345,
+    });
+    expect(onRefresh).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ accessToken: "new-at" })
+    );
+  });
+
+  it("should create provider without onRefresh - onRefresh not registered", async () => {
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const mockProvider = await getMockProvider();
+    expect(mockProvider.onRefresh).not.toHaveBeenCalled();
+  });
+
+  it("should invoke onTokenFailure with reason=refresh_failed by default", async () => {
+    const failCb = jest.fn().mockResolvedValue(undefined);
+    service.setOnTokenFailure(failCb);
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const mockProvider = await getMockProvider();
+    const failureCb = mockProvider.onRefreshFailure.mock.calls[0][0];
+    await failureCb("u1", new Error("network error"));
+    expect(failCb).toHaveBeenCalledWith("u1", expect.any(Error), "refresh_failed");
+  });
+
+  it("should invoke onTokenFailure with reason=invalid_token", async () => {
+    const failCb = jest.fn().mockResolvedValue(undefined);
+    service.setOnTokenFailure(failCb);
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const mockProvider = await getMockProvider();
+    await mockProvider.onRefreshFailure.mock.calls[0][0]("u1", new Error("invalid token"));
+    expect(failCb).toHaveBeenCalledWith("u1", expect.any(Error), "invalid_token");
+  });
+
+  it("should invoke onTokenFailure with reason=revoked", async () => {
+    const failCb = jest.fn().mockResolvedValue(undefined);
+    service.setOnTokenFailure(failCb);
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const mockProvider = await getMockProvider();
+    await mockProvider.onRefreshFailure.mock.calls[0][0]("u1", new Error("access denied revoked"));
+    expect(failCb).toHaveBeenCalledWith("u1", expect.any(Error), "revoked");
+  });
+
+  it("should not throw if onTokenFailure itself throws", async () => {
+    service.setOnTokenFailure(jest.fn().mockRejectedValue(new Error("cb boom")));
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const mockProvider = await getMockProvider();
+    await expect(
+      mockProvider.onRefreshFailure.mock.calls[0][0]("u1", new Error("fail"))
+    ).resolves.not.toThrow();
+  });
+
+  it("should not throw when no onTokenFailure set during refresh failure", async () => {
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const mockProvider = await getMockProvider();
+    await expect(
+      mockProvider.onRefreshFailure.mock.calls[0][0]("u1", new Error("fail"))
+    ).resolves.not.toThrow();
+  });
+
+  it("should remove provider after refresh failure", async () => {
+    await service.createUserAuthProvider("u1", {
+      accessToken: "at",
+      refreshToken: "rt",
+      expiresIn: 3600,
+      obtainmentTimestamp: Date.now(),
+    });
+    const mockProvider = await getMockProvider();
+    await mockProvider.onRefreshFailure.mock.calls[0][0]("u1", new Error("fail"));
+    expect(service.hasActiveProvider("u1")).toBe(false);
   });
 });

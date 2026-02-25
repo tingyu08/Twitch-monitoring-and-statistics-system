@@ -1,8 +1,18 @@
 import { Response, NextFunction } from "express";
-import { requireAuth, AuthRequest } from "../auth.middleware";
+import { requireAuth, AuthRequest, authMiddleware } from "../auth.middleware";
 import * as JwtUtils from "../jwt.utils";
 
 jest.mock("../jwt.utils");
+jest.mock("../../../utils/cache-manager", () => ({
+  cacheManager: {
+    getOrSetWithTags: jest.fn(),
+  },
+}));
+jest.mock("../../viewer/viewer-auth-snapshot.service", () => ({
+  getViewerAuthSnapshotById: jest.fn(),
+}));
+
+import { cacheManager } from "../../../utils/cache-manager";
 
 describe("auth.middleware", () => {
   let mockReq: Partial<AuthRequest>;
@@ -122,7 +132,65 @@ describe("auth.middleware - factory pattern & tokenVersion", () => {
   });
 
   it("authMiddleware alias should work", () => {
-    const { authMiddleware } = require("../auth.middleware");
     expect(typeof authMiddleware).toBe("function");
+  });
+});
+
+describe("auth.middleware - tokenVersion checks", () => {
+  let mockReq: any;
+  let mockRes: any;
+  let mockNext: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNext = jest.fn();
+    mockReq = { cookies: { auth_token: "valid" } };
+    mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    };
+  });
+
+  it("should return 401 Token expired when currentVersion is null", async () => {
+    (cacheManager.getOrSetWithTags as jest.Mock).mockResolvedValue(null);
+
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      viewerId: "v1",
+      tokenVersion: 1,
+      role: "viewer",
+    });
+
+    await requireAuth(mockReq, mockRes, mockNext);
+
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: "Token expired" });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it("should return 401 Token expired when currentVersion does not match decoded.tokenVersion", async () => {
+    (cacheManager.getOrSetWithTags as jest.Mock).mockResolvedValue(2);
+
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      viewerId: "v1",
+      tokenVersion: 1,
+      role: "viewer",
+    });
+
+    await requireAuth(mockReq, mockRes, mockNext);
+
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: "Token expired" });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it("should allow streamer role when allowedRoles includes only viewer (super role)", async () => {
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      role: "streamer",
+    });
+
+    await requireAuth(mockReq, mockRes, mockNext, ["viewer"]);
+
+    expect(mockNext).toHaveBeenCalled();
+    expect(mockRes.status).not.toHaveBeenCalled();
   });
 });
