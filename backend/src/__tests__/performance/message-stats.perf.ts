@@ -19,7 +19,6 @@ const PERFORMANCE_THRESHOLDS = {
 const databaseUrl = process.env.DATABASE_URL || "";
 const isTurso = databaseUrl.startsWith("libsql://");
 const shouldRunPerfTests = process.env.RUN_PERF_TESTS === "true" && !isTurso;
-const perfTest = shouldRunPerfTests ? it : it.skip;
 
 interface PerformanceResult {
   testName: string;
@@ -64,12 +63,19 @@ async function measurePerformance(
   };
 }
 
-describe("Message Stats Performance Tests", () => {
-  afterAll(async () => {
-    await prisma.$disconnect();
+if (!shouldRunPerfTests) {
+  describe("Message Stats Performance Tests", () => {
+    it("is disabled unless RUN_PERF_TESTS=true and non-Turso database is used", () => {
+      expect(shouldRunPerfTests).toBe(false);
+    });
   });
+} else {
+  describe("Message Stats Performance Tests", () => {
+    afterAll(async () => {
+      await prisma.$disconnect();
+    });
 
-  perfTest("should complete Message Stats Query within threshold", async () => {
+    it("should complete Message Stats Query within threshold", async () => {
     const viewer = await prisma.viewer.findFirst();
     if (!viewer) {
       console.warn("No viewer found, skipping performance test");
@@ -136,9 +142,9 @@ describe("Message Stats Performance Tests", () => {
 
     console.log(`Message Stats Query: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`);
     expect(result.passed).toBe(true);
-  }, 30000);
+    }, 30000);
 
-  perfTest("should complete Aggregation Query within threshold", async () => {
+    it("should complete Aggregation Query within threshold", async () => {
     const viewer = await prisma.viewer.findFirst();
     if (!viewer) {
       console.warn("No viewer found, skipping aggregation test");
@@ -166,9 +172,9 @@ describe("Message Stats Performance Tests", () => {
 
     console.log(`Aggregation Query: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`);
     expect(result.passed).toBe(true);
-  }, 30000);
+    }, 30000);
 
-  perfTest("should complete Batch Read within threshold", async () => {
+    it("should complete Batch Read within threshold", async () => {
     const viewer = await prisma.viewer.findFirst();
     if (!viewer) {
       console.warn("No viewer found, skipping batch read test");
@@ -196,5 +202,6 @@ describe("Message Stats Performance Tests", () => {
 
     console.log(`Batch Read: P95=${result.p95TimeMs}ms, Avg=${result.avgTimeMs}ms`);
     expect(result.passed).toBe(true);
-  }, 30000);
-});
+    }, 30000);
+  });
+}
