@@ -300,3 +300,26 @@ describe("batchOperation", () => {
     expect(op).toHaveBeenCalledWith([42]);
   });
 });
+
+describe("retryDatabaseOperation - 404 retryable pattern", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("should retry on 404 error (Turso connection issue)", async () => {
+    const op = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("404 not found"))
+      .mockResolvedValue("recovered");
+
+    const promise = retryDatabaseOperation(op, { maxRetries: 1, initialDelayMs: 10 });
+    await jest.advanceTimersByTimeAsync(10);
+    const result = await promise;
+    expect(result).toBe("recovered");
+    expect(op).toHaveBeenCalledTimes(2);
+  });
+});

@@ -1,5 +1,6 @@
-﻿import { getStreamerSummary, getStreamerTimeSeries, getStreamerHeatmap } from "../streamer.service";
+import { getStreamerSummary, getStreamerTimeSeries, getStreamerHeatmap } from "../streamer.service";
 import { prisma } from "../../../db/prisma";
+import { cacheManager } from "../../../utils/cache-manager";
 
 jest.mock("../../../db/prisma", () => ({
   prisma: {
@@ -17,6 +18,8 @@ jest.mock("../../../db/prisma", () => ({
 describe("StreamerService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    cacheManager.clear(); // 清除快取，防止測試間狀態污染
+    cacheManager.clear();
   });
 
   describe("getStreamerSummary", () => {

@@ -7,6 +7,7 @@ jest.mock("@twurple/auth", () => ({
   RefreshingAuthProvider: jest.fn().mockImplementation(() => ({
     addUser: jest.fn(),
     onRefresh: jest.fn(),
+    onRefreshFailure: jest.fn(),
   })),
 }));
 

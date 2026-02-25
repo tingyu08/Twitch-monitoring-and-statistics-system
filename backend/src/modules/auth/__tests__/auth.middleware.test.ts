@@ -84,3 +84,45 @@ describe("auth.middleware", () => {
     expect(statusMock).toHaveBeenCalledWith(401);
   });
 });
+
+describe("auth.middleware - factory pattern & tokenVersion", () => {
+  let mockReq: any;
+  let mockRes: any;
+  let mockNext: jest.Mock;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNext = jest.fn();
+    mockReq = { cookies: {} };
+    mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    };
+  });
+
+  it("requireAuth() factory pattern should return a middleware function", () => {
+    const middleware = requireAuth([]);
+    expect(typeof middleware).toBe("function");
+  });
+
+  it("factory middleware should work when called", async () => {
+    mockReq.cookies = { auth_token: "valid" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({ role: "streamer" });
+    const middleware = requireAuth([]);
+    await middleware(mockReq, mockRes, mockNext);
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it("factory middleware should enforce roles", async () => {
+    mockReq.cookies = { auth_token: "valid" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({ role: "viewer" });
+    const middleware = requireAuth(["streamer"]);
+    await middleware(mockReq, mockRes, mockNext);
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+  });
+
+  it("authMiddleware alias should work", () => {
+    const { authMiddleware } = require("../auth.middleware");
+    expect(typeof authMiddleware).toBe("function");
+  });
+});

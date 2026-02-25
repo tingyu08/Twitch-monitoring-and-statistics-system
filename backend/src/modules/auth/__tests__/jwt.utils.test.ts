@@ -3,6 +3,8 @@ import {
   verifyAccessToken,
   signRefreshToken,
   verifyRefreshToken,
+  signExtensionToken,
+  verifyExtensionToken,
 } from "../jwt.utils";
 import * as jwt from "jsonwebtoken";
 
@@ -57,6 +59,40 @@ describe("JWT Utils", () => {
       const tamperedToken = token.slice(0, -5) + "xxxxx";
       const decoded = verifyAccessToken(tamperedToken);
       expect(decoded).toBeNull();
+    });
+  });
+
+  describe("extension tokens", () => {
+    it("should sign and verify extension token", () => {
+      const token = signExtensionToken("viewer_789", 1);
+      const decoded = verifyExtensionToken(token);
+      expect(decoded).not.toBeNull();
+      expect(decoded?.tokenType).toBe("extension");
+      expect(decoded?.viewerId).toBe("viewer_789");
+      expect(decoded?.tokenVersion).toBe(1);
+    });
+
+    it("should return null for access token verified as extension token", () => {
+      const token = signAccessToken(mockPayload);
+      const decoded = verifyExtensionToken(token);
+      expect(decoded).toBeNull();
+    });
+
+    it("should return null for invalid extension token", () => {
+      const decoded = verifyExtensionToken("invalid.token.here");
+      expect(decoded).toBeNull();
+    });
+
+    it("should create different extension tokens for different viewers", () => {
+      const token1 = signExtensionToken("viewer_1", 1);
+      const token2 = signExtensionToken("viewer_2", 1);
+      expect(token1).not.toBe(token2);
+    });
+
+    it("should include tokenVersion in extension token", () => {
+      const token = signExtensionToken("viewer_123", 5);
+      const decoded = verifyExtensionToken(token);
+      expect(decoded?.tokenVersion).toBe(5);
     });
   });
 
