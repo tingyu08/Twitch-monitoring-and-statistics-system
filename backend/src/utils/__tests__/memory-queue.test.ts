@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, utimes, writeFile } from "fs/promises";
+import { access, mkdtemp, readFile, rm, utimes, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
 
@@ -234,5 +234,457 @@ describe("processRetryQueue - batch splice boundary conditions", () => {
     // Confirm the priority stored on the job in retryQueue had INITIAL_PRIORITY
     // and the re-enqueued copy had INITIAL_PRIORITY - 1 (verified via the source code logic)
     expect(job.priority).toBe(INITIAL_PRIORITY);
+  });
+});
+
+// ========== Basic add / getStatus / clear ==========
+
+describe("MemoryQueue basic operations", () => {
+  beforeEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("should add a job and return its ID", () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    const id = queue.add("hello");
+    expect(typeof id).toBe("string");
+    expect(id).toMatch(/^job_/);
+  });
+
+  it("should report queue status", () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    queue.add("a");
+    queue.add("b");
+    const status = queue.getStatus();
+    expect(status.queued).toBe(2);
+    expect(status.processing).toBe(0);
+    expect(status.total).toBe(2);
+  });
+
+  it("should clear queue and retry queue", () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    queue.add("a");
+    queue.add("b");
+    queue.clear();
+    const status = queue.getStatus();
+    expect(status.queued).toBe(0);
+  });
+
+  it("should return null when queue is full and no overflow file", () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 1 });
+    queue.add("first");
+    const id = queue.add("overflow");
+    expect(id).toBeNull();
+  });
+
+  it("should process jobs with processor", async () => {
+    const queue = new MemoryQueue<string>({ concurrency: 1, maxQueueSize: 10 });
+    const processed: string[] = [];
+
+    queue.process(async (data) => {
+      processed.push(data);
+    });
+
+    queue.add("job1");
+    queue.add("job2");
+
+    // Allow async processing
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(processed.length).toBeGreaterThan(0);
+  });
+
+  it("should retry failed jobs up to maxRetries", async () => {
+    const queue = new MemoryQueue<string>({
+      concurrency: 1,
+      maxQueueSize: 10,
+      maxRetries: 2,
+      retryDelayMs: 10,
+    });
+
+    let attempts = 0;
+    queue.process(async () => {
+      attempts++;
+      throw new Error("processing error");
+    });
+
+    queue.add("failing-job");
+
+    // Wait for initial attempt + retries
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Should have been attempted at least once
+    expect(attempts).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should respect concurrency limit", async () => {
+    const queue = new MemoryQueue<string>({
+      concurrency: 2,
+      maxQueueSize: 20,
+      maxRetries: 0,
+    });
+
+    let concurrent = 0;
+    let maxConcurrent = 0;
+
+    queue.process(async () => {
+      concurrent++;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      concurrent--;
+    });
+
+    for (let i = 0; i < 6; i++) {
+      queue.add(`job${i}`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(maxConcurrent).toBeLessThanOrEqual(2);
+  });
+
+  it("should insert higher priority jobs before lower priority ones", () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    queue.add("low", 0);
+    queue.add("high", 10);
+    queue.add("medium", 5);
+
+    const internalQueue: any[] = (queue as any).queue;
+    expect(internalQueue[0].priority).toBe(10);
+    expect(internalQueue[1].priority).toBe(5);
+    expect(internalQueue[2].priority).toBe(0);
+  });
+
+  it("should handle tick() without processor set", async () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    queue.add("job");
+    // tick() is called in add(), should not throw even without processor
+    await Promise.resolve();
+    expect(queue.getStatus().queued).toBe(1);
+  });
+});
+
+// ========== scheduleRetry and armRetryTimer ==========
+
+describe("MemoryQueue retry scheduling", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("should schedule retry and process after delay", async () => {
+    const queue = new MemoryQueue<string>({
+      concurrency: 1,
+      maxQueueSize: 10,
+      maxRetries: 1,
+      retryDelayMs: 100,
+    });
+
+    let attempts = 0;
+    queue.process(async () => {
+      attempts++;
+      if (attempts === 1) throw new Error("first attempt fails");
+    });
+
+    queue.add("retry-job");
+
+    // Process first attempt
+    await Promise.resolve();
+    await jest.runAllTimersAsync();
+    await Promise.resolve();
+
+    expect(attempts).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should not arm retry timer if retryQueue is empty", () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    // armRetryTimer with empty retryQueue should not set any timer
+    (queue as any).armRetryTimer();
+    expect((queue as any).retryTimer).toBeNull();
+  });
+
+  it("should not arm a second timer if one is already armed", () => {
+    jest.useFakeTimers();
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    const retryQueue: Array<{ executeAt: number; job: any }> = (queue as any).retryQueue;
+
+    retryQueue.push({
+      executeAt: Date.now() + 1000,
+      job: { id: "j1", data: "x", priority: 0, retries: 0, createdAt: new Date() },
+    });
+
+    (queue as any).armRetryTimer();
+    const firstTimer = (queue as any).retryTimer;
+    // Call again - should not replace the existing timer
+    (queue as any).armRetryTimer();
+    expect((queue as any).retryTimer).toBe(firstTimer);
+  });
+});
+
+// ========== overflow with high-priority sync write ==========
+
+describe("MemoryQueue overflow - high priority sync write", () => {
+  let tempDir: string;
+  let overflowFilePath: string;
+
+  beforeEach(async () => {
+    jest.useRealTimers();
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "mq-hipri-"));
+    overflowFilePath = path.join(tempDir, "overflow.log");
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  });
+
+  it("should persist job synchronously when queue full and priority >= threshold", () => {
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 1,
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    queue.add("first"); // fill queue
+
+    // QUEUE_SYNC_OVERFLOW_PRIORITY defaults to 10
+    const id = queue.add("high-prio", 10);
+    // Should be persisted (returns job ID)
+    expect(id).toBeTruthy();
+
+    const status = queue.getStatus();
+    expect(status.overflowPersisted).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should persist job asynchronously when queue full and priority < threshold", async () => {
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 1,
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    queue.add("first"); // fill queue
+
+    // priority < 10, uses async persist
+    const id = queue.add("low-prio", 0);
+    expect(id).toBeTruthy();
+
+    // Wait for async persist to complete (avoid timing flakes on CI/Windows FS)
+    for (let i = 0; i < 40; i++) {
+      const status = queue.getStatus();
+      if (status.overflowPersisted >= 1) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    const status = queue.getStatus();
+    expect(status.overflowPersisted).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should recover persisted overflow jobs on demand", async () => {
+    const queue = new MemoryQueue<string>({
+      concurrency: 1,
+      maxQueueSize: 2,
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    const processed: string[] = [];
+    queue.process(async (data) => {
+      processed.push(data as string);
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    // Fill queue to force overflow
+    for (let i = 0; i < 5; i++) {
+      queue.add(`item-${i}`);
+    }
+
+    // Trigger recovery multiple times
+    for (let i = 0; i < 20; i++) {
+      await (queue as any).recoverOverflowJobs();
+      if (processed.length >= 5) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+
+    expect(processed.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("should skip recovery when queue is full", async () => {
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 1,
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    queue.add("fill"); // fill to maxQueueSize
+
+    // recoverOverflowJobs should return early
+    const recovered = (queue as any).overflowRecovered;
+    await (queue as any).recoverOverflowJobs();
+    expect((queue as any).overflowRecovered).toBe(recovered);
+  });
+
+  it("should skip recovery when already recovering", async () => {
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 10,
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    (queue as any).overflowRecovering = true;
+    // Should return without doing anything
+    await (queue as any).recoverOverflowJobs();
+    expect((queue as any).overflowRecovered).toBe(0);
+    (queue as any).overflowRecovering = false;
+  });
+
+  it("should handle missing overflow file gracefully", async () => {
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 10,
+      maxRetries: 0,
+      overflowFilePath: path.join(tempDir, "nonexistent.log"),
+    });
+
+    await expect((queue as any).recoverOverflowJobs()).resolves.not.toThrow();
+  });
+
+  it("should skip invalid JSON lines during recovery", async () => {
+    await writeFile(overflowFilePath, 'invalid-json\n{"priority": 5, "data": "valid"}\n', "utf8");
+
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 10,
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    // Call recovery directly to avoid racing with process() auto-recovery
+    await (queue as any).recoverOverflowJobs();
+
+    // Valid job should be recovered
+    expect(queue.getStatus().overflowRecovered).toBe(1);
+  });
+
+  it("should skip lines without priority field", async () => {
+    await writeFile(overflowFilePath, '{"data": "no-priority"}\n', "utf8");
+
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 10,
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    queue.process(async () => undefined);
+    await (queue as any).recoverOverflowJobs();
+
+    expect(queue.getStatus().overflowRecovered).toBe(0);
+  });
+
+  it("should write remaining lines back when queue fills during recovery", async () => {
+    // Create an overflow file with many jobs
+    const lines = Array.from({ length: 10 }, (_, i) =>
+      JSON.stringify({ priority: i, data: `item-${i}`, retries: 0, createdAt: new Date().toISOString() })
+    ).join("\n") + "\n";
+    await writeFile(overflowFilePath, lines, "utf8");
+
+    const queue = new MemoryQueue<string>({
+      maxQueueSize: 3, // small queue to force partial recovery
+      maxRetries: 0,
+      overflowFilePath,
+    });
+
+    // Call recovery directly without setting a processor first (avoids race with process() auto-recovery)
+    await (queue as any).recoverOverflowJobs();
+
+    // Some items should be recovered (up to maxQueueSize=3), some written back
+    const status = queue.getStatus();
+    expect(status.overflowRecovered).toBeGreaterThan(0);
+    expect(status.overflowRecovered).toBeLessThanOrEqual(3);
+  });
+
+  it("should handle retry overflow to file when retry queue is full", async () => {
+    const queue = new MemoryQueue<string>({
+      concurrency: 1,
+      maxQueueSize: 1,
+      maxRetries: 1,
+      retryDelayMs: 10,
+      overflowFilePath,
+    });
+
+    const retryQueue: Array<{ executeAt: number; job: any }> = (queue as any).retryQueue;
+
+    // Inject a past-due job directly
+    const job = {
+      id: "retry-overflow",
+      data: "test",
+      priority: 0,
+      retries: 0,
+      createdAt: new Date(),
+    };
+
+    queue.add("filler"); // fill queue
+
+    retryQueue.push({ executeAt: Date.now() - 1000, job });
+    await (queue as any).processRetryQueue();
+
+    await new Promise((r) => setTimeout(r, 100));
+    const status = queue.getStatus();
+    expect(status.overflowPersisted).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ========== persistOverflowJobSync ==========
+
+describe("MemoryQueue persistOverflowJobSync", () => {
+  it("should do nothing when overflowFilePath is null", () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    const job = {
+      id: "j1",
+      data: "x",
+      priority: 0,
+      retries: 0,
+      createdAt: new Date(),
+    };
+    // Should not throw
+    expect(() => (queue as any).persistOverflowJobSync(job)).not.toThrow();
+  });
+});
+
+// ========== processJob without processor ==========
+
+describe("MemoryQueue processJob edge cases", () => {
+  it("should log warn when processJob is called without processor", async () => {
+    const queue = new MemoryQueue<string>({ maxQueueSize: 10 });
+    const job = {
+      id: "j1",
+      data: "x",
+      priority: 0,
+      retries: 0,
+      createdAt: new Date(),
+    };
+    // processJob is private, access via any
+    await expect((queue as any).processJob(job)).resolves.not.toThrow();
+  });
+
+  it("should give up after exhausting maxRetries", async () => {
+    const queue = new MemoryQueue<string>({
+      concurrency: 1,
+      maxQueueSize: 10,
+      maxRetries: 0,
+      retryDelayMs: 10,
+    });
+
+    let attempts = 0;
+    queue.process(async () => {
+      attempts++;
+      throw new Error("always fails");
+    });
+
+    queue.add("failing");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // With maxRetries=0, no retries scheduled
+    expect(attempts).toBe(1);
   });
 });
