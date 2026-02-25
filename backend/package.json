@@ -30,6 +30,7 @@
     "db:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.0",
     "@prisma/adapter-libsql": "^7.1.0",
     "@prisma/client": "^6.19.2",
     "@sentry/node": "^10.32.1",
