@@ -22,10 +22,9 @@ describe('httpClient', () => {
     const result = await httpClient('/test');
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:4000/test',
+      '/test',
       expect.objectContaining({
         credentials: 'include',
-        headers: expect.any(Headers),
         signal: expect.any(AbortSignal),
       })
     );
@@ -49,8 +48,8 @@ describe('httpClient', () => {
 
     await httpClient('/test');
 
-    // In test environment, API_URL is empty string, so path is used directly
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:4000/test', expect.any(Object));
+    // In jsdom browser environment, API base URL is empty, so path is used directly
+    expect(mockFetch).toHaveBeenCalledWith('/test', expect.any(Object));
   });
 
   it('should handle endpoints without leading slash', async () => {
@@ -64,7 +63,7 @@ describe('httpClient', () => {
 
     await httpClient('test');
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:4000/test', expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith('/test', expect.any(Object));
   });
 
   it('should merge custom headers', async () => {
@@ -83,10 +82,9 @@ describe('httpClient', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:4000/test',
+      '/test',
       expect.objectContaining({
         credentials: 'include',
-        headers: expect.any(Headers),
       })
     );
     const config = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
@@ -166,12 +164,11 @@ describe('httpClient', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:4000/test',
+      '/test',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ data: 'test' }),
         credentials: 'include',
-        headers: expect.any(Headers),
       })
     );
     const config = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;

@@ -1,8 +1,22 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 
+const mockPush = jest.fn();
+const mockPrefetch = jest.fn();
+const mockRouter = { push: mockPush, prefetch: mockPrefetch };
+
+const mockLogout = jest.fn();
+const mockAuthUser = {
+  displayName: 'Test Streamer',
+  avatarUrl: '',
+  twitchUserId: '123',
+  streamerId: 'abc',
+  channelUrl: 'https://twitch.tv/test',
+  role: 'streamer' as const,
+};
+
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => mockRouter,
   usePathname: () => '/en/dashboard/streamer',
   useParams: () => ({ locale: 'en' }),
 }));
@@ -20,7 +34,11 @@ jest.mock('@/lib/api/auth', () => ({
 }));
 
 jest.mock('@/features/auth/AuthContext', () => ({
-  useAuthSession: () => ({ logout: jest.fn() }),
+  useAuthSession: () => ({
+    logout: mockLogout,
+    loading: false,
+    user: mockAuthUser,
+  }),
 }));
 
 jest.mock('@/features/streamer-dashboard/hooks/useChartData', () => ({
@@ -61,7 +79,7 @@ jest.mock('@/features/streamer-dashboard/hooks/useUiPreferences', () => ({
 }));
 
 jest.mock('@/lib/logger', () => ({
-  authLogger: { error: jest.fn() },
+  authLogger: { error: jest.fn(), warn: jest.fn() },
 }));
 
 import StreamerDashboard from '../page';

@@ -16,8 +16,12 @@ jest.mock("next/image", () => ({
 
 // Mock next/navigation
 const mockPush = jest.fn();
+const mockPrefetch = jest.fn();
+const mockRouter = { push: mockPush, prefetch: mockPrefetch };
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => mockRouter,
+  usePathname: () => "/en/dashboard/viewer",
+  useParams: () => ({ locale: "en" }),
 }));
 
 // Mock AuthContext
@@ -61,6 +65,7 @@ describe("ViewerDashboardPage", () => {
   };
   beforeEach(() => {
     jest.clearAllMocks();
+    (viewerApi.getFollowedChannels as jest.Mock).mockResolvedValue([]);
   });
 
   it("shows loading spinner when user is not authenticated", () => {

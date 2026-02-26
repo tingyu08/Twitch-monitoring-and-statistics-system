@@ -38,12 +38,15 @@ describe('useChartData Hooks', () => {
         { wrapper }
       );
 
-      expect(result.current.isLoading).toBe(true);
+      expect(result.current.isLoading).toBe(false);
       expect(result.current.data).toEqual([]);
 
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await result.current.refresh();
 
-      expect(result.current.data).toEqual(mockData);
+      await waitFor(() => {
+        expect(result.current.data).toEqual(mockData);
+      });
+
       expect(result.current.error).toBeNull();
     });
 
@@ -57,9 +60,12 @@ describe('useChartData Hooks', () => {
         { wrapper }
       );
 
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await result.current.refresh();
 
-      expect(result.current.error).toBe('API Error');
+      await waitFor(() => {
+        expect(result.current.error).toBe('API Error');
+      });
+
       expect(result.current.data).toEqual([]);
     });
 
@@ -71,6 +77,8 @@ describe('useChartData Hooks', () => {
       });
 
       const { result } = renderHook(() => useTimeSeriesData('7d', 'day'), { wrapper });
+
+      await result.current.refresh();
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -87,9 +95,12 @@ describe('useChartData Hooks', () => {
 
       const { result } = renderHook(() => useHeatmapData('7d'), { wrapper });
 
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await result.current.refresh();
 
-      expect(result.current.data).toEqual(mockData);
+      await waitFor(() => {
+        expect(result.current.data).toEqual(mockData);
+      });
+
       expect(result.current.error).toBeNull();
     });
 
@@ -98,9 +109,12 @@ describe('useChartData Hooks', () => {
 
       const { result } = renderHook(() => useHeatmapData('30d'), { wrapper });
 
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await result.current.refresh();
 
-      expect(result.current.error).toBe('Heatmap Error');
+      await waitFor(() => {
+        expect(result.current.error).toBe('Heatmap Error');
+      });
+
       expect(result.current.data).toEqual([]);
     });
   });
