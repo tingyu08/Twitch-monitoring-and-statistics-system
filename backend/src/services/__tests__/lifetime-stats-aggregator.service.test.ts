@@ -1,5 +1,6 @@
 import { LifetimeStatsAggregatorService } from "../lifetime-stats-aggregator.service";
 import { prisma } from "../../db/prisma";
+import { logger } from "../../utils/logger";
 
 jest.mock("../../db/prisma", () => ({
   prisma: {
@@ -18,6 +19,15 @@ jest.mock("../../db/prisma", () => ({
       findMany: jest.fn(),
       aggregate: jest.fn(),
     },
+  },
+}));
+
+jest.mock("../../utils/logger", () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
   },
 }));
 
@@ -300,6 +310,107 @@ describe("LifetimeStatsAggregatorService", () => {
     expect(result).toEqual(mockedResult);
   });
 
+  it("aggregateStatsWithChannel defaults preventDecreases to true when options omitted", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 1200 },
+      _count: 1,
+      _min: { date: new Date("2025-12-16") },
+      _max: { date: new Date("2025-12-16") },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 5,
+        chatMessages: 4,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: "2025-12-16",
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-12",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+    (prisma.viewerChannelLifetimeStats.findUnique as jest.Mock).mockResolvedValue({
+      viewerId,
+      channelId,
+      channel: { channelName: "demo" },
+    });
+
+    await service.aggregateStatsWithChannel(viewerId, channelId);
+
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.viewerChannelLifetimeStats.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it("aggregateStatsWithChannel uses upsert include when preventDecreases is false", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 600 },
+      _count: 1,
+      _min: { date: new Date("2025-12-16") },
+      _max: { date: new Date("2025-12-16") },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 3,
+        chatMessages: 2,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: "2025-12-16",
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-12",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+    (prisma.viewerChannelLifetimeStats.upsert as jest.Mock).mockResolvedValue({
+      viewerId,
+      channelId,
+      channel: { channelName: "demo" },
+    });
+
+    const result = await service.aggregateStatsWithChannel(viewerId, channelId, {
+      preventDecreases: false,
+    });
+
+    expect(prisma.viewerChannelLifetimeStats.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: { channel: { select: { channelName: true } } },
+      })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        viewerId,
+        channelId,
+      })
+    );
+  });
+
   it("updatePercentileRankings executes ranking SQL when enough rows", async () => {
     (prisma.viewerChannelLifetimeStats.count as jest.Mock)
       .mockResolvedValueOnce(2)
@@ -320,5 +431,250 @@ describe("LifetimeStatsAggregatorService", () => {
 
     expect(prisma.$executeRaw).not.toHaveBeenCalled();
     expect(prisma.viewerChannelLifetimeStats.count).toHaveBeenCalledTimes(2);
+  });
+
+  it("updatePercentileRankings returns early when no stats rows", async () => {
+    (prisma.viewerChannelLifetimeStats.count as jest.Mock).mockResolvedValueOnce(0);
+
+    await service.updatePercentileRankings(channelId);
+
+    expect(prisma.viewerChannelLifetimeStats.count).toHaveBeenCalledTimes(1);
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it("aggregateStats logs and rethrows when calculateStats fails", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockRejectedValueOnce(new Error("agg failed"));
+
+    await expect(service.aggregateStats(viewerId, channelId)).rejects.toThrow("agg failed");
+    expect(logger.error).toHaveBeenCalledWith(
+      "LifetimeStats",
+      expect.stringContaining(`Error aggregating stats for viewer ${viewerId}`)
+    );
+  });
+
+  it("normalizes numeric trackingStartedAt in activity summary", async () => {
+    const ts = Date.parse("2025-11-20T15:30:00Z");
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 120 },
+      _count: 1,
+      _min: { date: null },
+      _max: { date: null },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 1,
+        chatMessages: 1,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: ts,
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-11",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+
+    await service.aggregateStats(viewerId, channelId, { preventDecreases: false });
+
+    expect(prisma.viewerChannelLifetimeStats.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          trackingStartedAt: new Date("2025-11-20T00:00:00.000Z"),
+        }),
+      })
+    );
+  });
+
+  it("normalizes Date trackingStartedAt in activity summary", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 120 },
+      _count: 1,
+      _min: { date: null },
+      _max: { date: null },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 1,
+        chatMessages: 1,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: new Date("2025-11-21T15:30:00.000Z"),
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-11",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+
+    await service.aggregateStats(viewerId, channelId, { preventDecreases: false });
+
+    expect(prisma.viewerChannelLifetimeStats.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          trackingStartedAt: new Date("2025-11-21T00:00:00.000Z"),
+        }),
+      })
+    );
+  });
+
+  it("normalizes non-iso string trackingStartedAt in activity summary", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 120 },
+      _count: 1,
+      _min: { date: null },
+      _max: { date: null },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 1,
+        chatMessages: 1,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: "Nov 22 2025 15:30:00 UTC",
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-11",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+
+    await service.aggregateStats(viewerId, channelId, { preventDecreases: false });
+
+    expect(prisma.viewerChannelLifetimeStats.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          trackingStartedAt: new Date("2025-11-22T00:00:00.000Z"),
+        }),
+      })
+    );
+  });
+
+  it("falls back to current time when numeric trackingStartedAt is invalid", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 120 },
+      _count: 1,
+      _min: { date: null },
+      _max: { date: null },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 1,
+        chatMessages: 1,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: Number.NaN,
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-11",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+
+    await service.aggregateStats(viewerId, channelId, { preventDecreases: false });
+
+    expect(prisma.viewerChannelLifetimeStats.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          trackingStartedAt: mockDate,
+        }),
+      })
+    );
+  });
+
+  it("falls back to current time when non-iso string trackingStartedAt is invalid", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 120 },
+      _count: 1,
+      _min: { date: null },
+      _max: { date: null },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 1,
+        chatMessages: 1,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: "not-a-date-value",
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-11",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+
+    await service.aggregateStats(viewerId, channelId, { preventDecreases: false });
+
+    expect(prisma.viewerChannelLifetimeStats.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          trackingStartedAt: mockDate,
+        }),
+      })
+    );
   });
 });

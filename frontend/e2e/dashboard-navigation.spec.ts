@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+const HOME_URL_PATTERN = /\/(?:zh-TW|en)?\/?$/;
+
 test.describe("Dashboard Navigation (with mocked auth)", () => {
   test.beforeEach(async ({ page, context }) => {
     // Mock authentication state
@@ -137,6 +139,6 @@ test.describe("Dashboard Navigation (with mocked auth)", () => {
     await logoutButton.click();
 
     // Should redirect to home/login
-    await page.waitForURL(/\/(login)?$/, { timeout: 10000 });
+    await page.waitForURL(HOME_URL_PATTERN, { timeout: 10000 });
   });
 });

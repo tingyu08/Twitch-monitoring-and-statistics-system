@@ -13,7 +13,7 @@ describe("BadgeService", () => {
     trackingDays: 0,
     longestStreakDays: 0,
     updatedAt: new Date("2025-01-01"),
-  };
+  } as any;
 
   it("should return empty badges for zero stats", () => {
     const badges = badgeService.checkBadges(mockStats);

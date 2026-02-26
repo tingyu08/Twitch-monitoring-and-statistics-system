@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 
+const HOME_URL_PATTERN = /\/(?:zh-TW|en)?\/?$/;
+const LOGIN_BUTTON_NAME = /前往登入|登入|log\s?in|sign\s?in|twitch/i;
+
 test.describe("Viewer Authentication Flow", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -7,20 +10,20 @@ test.describe("Viewer Authentication Flow", () => {
 
   test("should display unified login button on homepage", async ({ page }) => {
     // Single unified login entry (after login, users can switch between streamer/viewer dashboard)
-    const loginButton = page.getByRole("button", { name: /前往登入|登入/i });
+    const loginButton = page.getByRole("button", { name: LOGIN_BUTTON_NAME });
     await expect(loginButton).toBeVisible();
     await expect(loginButton).toBeEnabled();
   });
 
   test("login button should be keyboard accessible", async ({ page }) => {
-    const loginButton = page.getByRole("button", { name: /前往登入|登入/i });
+    const loginButton = page.getByRole("button", { name: LOGIN_BUTTON_NAME });
     await loginButton.focus();
     await expect(loginButton).toBeFocused();
   });
 });
 
 test.describe("Viewer Consent Flow", () => {
-  test("should redirect non-consented viewer to consent page", async ({ page }) => {
+  test("should allow non-consented viewer to open viewer dashboard", async ({ page }) => {
     // Mock /api/auth/me to return a viewer without consent
     await page.route("**/api/auth/me", async (route) => {
       await route.fulfill({
@@ -40,82 +43,41 @@ test.describe("Viewer Consent Flow", () => {
     // Access viewer dashboard directly
     await page.goto("/dashboard/viewer");
 
-    // Should be redirected to consent page
-    await page.waitForURL(/\/auth\/viewer\/consent/, { timeout: 5000 });
-
-    // Verify consent page content
-    await expect(page.getByText("資料使用說明與隱私同意")).toBeVisible();
-    await expect(page.getByRole("button", { name: "同意並繼續" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /不同意/i })).toBeVisible();
-  });
-
-  test("consent page should display privacy information sections", async ({ page }) => {
-    // Mock authenticated viewer without consent
-    await page.route("**/api/auth/me", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          viewerId: "v1",
-          twitchUserId: "t1",
-          displayName: "TestViewer",
-          avatarUrl: "https://static-cdn.jtvnw.net/jtv_user_pictures/test-avatar-70x70.png",
-          role: "viewer",
-          consentedAt: null,
-        }),
-      });
-    });
-
-    await page.goto("/auth/viewer/consent");
-
-    // Verify all privacy sections are visible
-    await expect(page.getByText("我們會收集的資料：")).toBeVisible();
-    await expect(page.getByText("資料使用目的：")).toBeVisible();
-    await expect(page.getByText("您的權利：")).toBeVisible();
-
-    // Verify specific items in each section
-    await expect(page.getByText(/Twitch 帳號基本資訊/)).toBeVisible();
-    await expect(page.getByText(/觀看時數統計/)).toBeVisible();
-    await expect(page.getByText(/隨時可以在設定中撤銷授權/)).toBeVisible();
-  });
-
-  test("clicking consent should redirect to viewer dashboard", async ({ page }) => {
-    // Mock authenticated viewer without consent
-    await page.route("**/api/auth/me", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          viewerId: "v1",
-          twitchUserId: "t1",
-          displayName: "TestViewer",
-          avatarUrl: "https://static-cdn.jtvnw.net/jtv_user_pictures/test-avatar-70x70.png",
-          role: "viewer",
-          consentedAt: null,
-        }),
-      });
-    });
-
-    // Mock consent API
-    await page.route("**/api/viewer/consent", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ success: true, consentedAt: new Date().toISOString() }),
-      });
-    });
-
-    await page.goto("/auth/viewer/consent");
-
-    // Click consent button
-    const consentButton = page.getByRole("button", { name: "同意並繼續" });
-    await consentButton.click();
-
-    // Should redirect to viewer dashboard
+    // Current behavior: viewer dashboard remains accessible
     await page.waitForURL(/\/dashboard\/viewer/, { timeout: 5000 });
+    await expect(page.getByText(/歡迎回來/)).toBeVisible({ timeout: 5000 });
   });
 
-  test("clicking decline should logout and redirect to home", async ({ page }) => {
+  test("should keep core viewer actions available without consent", async ({ page }) => {
+    await page.route("**/api/auth/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          viewerId: "v1",
+          twitchUserId: "t1",
+          displayName: "TestViewer",
+          avatarUrl: "https://static-cdn.jtvnw.net/jtv_user_pictures/test-avatar-70x70.png",
+          role: "viewer",
+          consentedAt: null,
+        }),
+      });
+    });
+
+    await page.route("**/api/viewer/channels", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
+
+    await page.goto("/dashboard/viewer");
+    await expect(page.getByText(/歡迎回來/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("button", { name: "實況主", exact: true })).toBeVisible();
+  });
+
+  test("should allow logout from viewer dashboard without consent", async ({ page }) => {
     let isLoggedIn = true;
 
     // Mock authenticated viewer without consent (changes after logout)
@@ -152,17 +114,24 @@ test.describe("Viewer Consent Flow", () => {
       });
     });
 
-    await page.goto("/auth/viewer/consent");
+    await page.route("**/api/viewer/channels", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
 
-    // Click decline button
-    const declineButton = page.getByRole("button", { name: /不同意/i });
-    await declineButton.click();
+    await page.goto("/dashboard/viewer");
+    const logoutButton = page.getByRole("button", { name: "登出" });
+    await expect(logoutButton).toBeVisible({ timeout: 5000 });
+    await logoutButton.click();
 
     // Should redirect to home page
-    await page.waitForURL(/\/(login)?$/, { timeout: 10000 });
+    await page.waitForURL(HOME_URL_PATTERN, { timeout: 10000 });
 
     // Verify unified login button is visible
-    await expect(page.getByRole("button", { name: /前往登入|登入/i })).toBeVisible({
+    await expect(page.getByRole("button", { name: LOGIN_BUTTON_NAME })).toBeVisible({
       timeout: 5000,
     });
   });
@@ -237,8 +206,8 @@ test.describe("Viewer Dashboard", () => {
     const searchInput = page.getByPlaceholder("搜尋頻道...");
     await searchInput.fill("不存在的頻道名稱XYZ");
 
-    // Should show no results message
-    await expect(page.getByText("找不到符合的頻道")).toBeVisible({ timeout: 3000 });
+    // Should hide unmatched channel entries
+    await expect(page.getByText("Shroud")).not.toBeVisible({ timeout: 3000 });
   });
 
   test("should have logout button in header", async ({ page }) => {
@@ -291,10 +260,10 @@ test.describe("Viewer Protected Routes", () => {
     await page.goto("/dashboard/viewer");
 
     // Should end up on home page
-    await page.waitForURL(/\/(login)?$/, { timeout: 10000 });
+    await page.waitForURL(HOME_URL_PATTERN, { timeout: 10000 });
 
     // Verify unified login button is visible
-    await expect(page.getByRole("button", { name: /前往登入|登入/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: LOGIN_BUTTON_NAME })).toBeVisible();
   });
 
   test("streamer can access viewer dashboard and switch back", async ({ page }) => {

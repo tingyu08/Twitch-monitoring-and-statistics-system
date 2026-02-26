@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 
+const HOME_URL_PATTERN = /\/(?:zh-TW|en)?\/?$/;
+const LOGIN_BUTTON_NAME = /前往登入|登入|log\s?in|sign\s?in|twitch/i;
+
 test.describe("Authentication Flow", () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to the home page
@@ -7,17 +10,17 @@ test.describe("Authentication Flow", () => {
   });
 
   test("should display login page for unauthenticated users", async ({ page }) => {
-    // Check if we're on the login page or redirected to it
-    await expect(page).toHaveURL(/\/(login)?$/);
+    // Check if we're on the locale home page
+    await expect(page).toHaveURL(HOME_URL_PATTERN);
 
     // Verify single login button exists (unified login entry)
-    const loginButton = page.getByRole("button", { name: /前往登入|登入/i });
+    const loginButton = page.getByRole("button", { name: LOGIN_BUTTON_NAME });
     await expect(loginButton).toBeVisible();
   });
 
   test("should have accessible login button", async ({ page }) => {
     // Ensure login button is keyboard accessible
-    const loginButton = page.getByRole("button", { name: /前往登入|登入/i });
+    const loginButton = page.getByRole("button", { name: LOGIN_BUTTON_NAME });
     await expect(loginButton).toBeVisible();
     await expect(loginButton).toBeEnabled();
 
@@ -33,7 +36,7 @@ test.describe("Authentication Flow", () => {
       route.continue();
     });
 
-    const loginButton = page.getByRole("button", { name: /前往登入|登入/i });
+    const loginButton = page.getByRole("button", { name: LOGIN_BUTTON_NAME });
     await loginButton.click();
 
     // Should show some loading indicator (adjust selector based on your UI)
@@ -69,15 +72,15 @@ test.describe("Protected Routes", () => {
 
     // Use Promise.race to check for either condition
     const errorMessageVisible = page.getByText("無法載入資料").first();
-    const homePageVisible = page.getByRole("button", { name: /前往登入|登入/i });
+    const homePageVisible = page.getByRole("button", { name: LOGIN_BUTTON_NAME });
 
     // Wait for either the error message or the home page login button
     await expect(errorMessageVisible.or(homePageVisible)).toBeVisible({ timeout: 15000 });
 
     // Ultimately should end up on home page (with or without seeing error first)
-    await page.waitForURL(/\/(login)?$/, { timeout: 10000 });
+    await page.waitForURL(HOME_URL_PATTERN, { timeout: 10000 });
 
     // Verify we're on the login page with unified login entry
-    await expect(page.getByRole("button", { name: /前往登入|登入/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: LOGIN_BUTTON_NAME })).toBeVisible();
   });
 });

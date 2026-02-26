@@ -385,4 +385,50 @@ describe("WebSocketGateway", () => {
 
     clearTimeoutSpy.mockRestore();
   });
+
+  it("no-ops for guarded emit and broadcast methods when io is missing", () => {
+    const gateway = new WebSocketGateway();
+    (gateway as any).io = null;
+
+    expect(() => gateway.broadcastChannelStats("ch-x", { messageCount: 1 })).not.toThrow();
+    expect(() =>
+      gateway.emitViewerStats("viewer-x", { channelId: "ch-x", messageCountDelta: 1 })
+    ).not.toThrow();
+    expect(() => gateway.emitToViewer("viewer-x", "custom", { ok: true })).not.toThrow();
+    expect(() => gateway.broadcastStreamStatus("stream.offline", { channelId: "ch-x" })).not.toThrow();
+    expect(() =>
+      gateway.broadcastChatHeat({ channelId: "ch-x", channelName: "demo", heatLevel: 1, message: "m" })
+    ).not.toThrow();
+    expect(() =>
+      gateway.broadcastRaid({ channelId: "ch-x", channelName: "demo", raider: "r", viewers: 1 })
+    ).not.toThrow();
+    expect(() => gateway.emit("evt", { x: 1 })).not.toThrow();
+  });
+
+  it("flushes channel.update to twitchChannelId room when channelId is absent", () => {
+    jest.useFakeTimers();
+
+    const events: Array<{ room: string; event: string; data: unknown }> = [];
+    const to = jest.fn().mockImplementation((room: string) => ({
+      emit: (event: string, data: unknown) => events.push({ room, event, data }),
+    }));
+    const gateway = new WebSocketGateway();
+    (gateway as any).io = { to };
+    (gateway as any).CHANNEL_UPDATE_DEBOUNCE_MS = 10;
+
+    gateway.broadcastStreamStatus("channel.update", {
+      twitchChannelId: "tw-only",
+      title: "update",
+    });
+
+    jest.advanceTimersByTime(11);
+
+    expect(events).toEqual([
+      {
+        room: "channel:tw-only",
+        event: "channel.update",
+        data: { twitchChannelId: "tw-only", title: "update" },
+      },
+    ]);
+  });
 });

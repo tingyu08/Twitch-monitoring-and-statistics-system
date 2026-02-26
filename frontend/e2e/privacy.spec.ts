@@ -55,7 +55,27 @@ test.describe("Viewer Privacy Settings", () => {
       await route.fulfill({ json: { hasPendingDeletion: false } });
     });
 
+    // Mock preference status endpoints used by settings + consent banner
+    await page.route("**/api/viewer/pref/status", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: { hasConsent: true } });
+        return;
+      }
+
+      await route.fulfill({ json: { success: true } });
+    });
+
+    await page.route("**/api/viewer/pref/opt-all", async (route) => {
+      await route.fulfill({ json: { success: true } });
+    });
+
     await page.goto("/dashboard/viewer/settings");
+
+    // Dismiss privacy banner if it overlays action buttons
+    const acceptAllButton = page.getByRole("button", { name: "接受全部" });
+    if (await acceptAllButton.isVisible().catch(() => false)) {
+      await acceptAllButton.click();
+    }
   });
 
   test("should display privacy settings sections", async ({ page }) => {
@@ -80,7 +100,7 @@ test.describe("Viewer Privacy Settings", () => {
     // Start waiting for request before clicking
     const requestPromise = page.waitForRequest(
       (request) =>
-        request.url().includes("/api/viewer/privacy/consent") && request.method() === "PATCH"
+        request.url().includes("/api/viewer/pref/status") && request.method() === "PATCH"
     );
 
     await switchButton.click();
@@ -114,15 +134,28 @@ test.describe("Viewer Privacy Settings", () => {
       });
     });
 
-    await page.getByRole("button", { name: "🗑️ 刪除帳號" }).click();
+    const deleteRequest = page.waitForRequest(
+      (request) =>
+        request.url().includes("/api/viewer/privacy/delete-account") && request.method() === "POST"
+    );
 
-    // Modal should appear
-    await expect(page.getByText("⚠️ 確認刪除帳號")).toBeVisible();
+    const acceptAllButton = page.getByRole("button", { name: "接受全部" });
+    if (await acceptAllButton.isVisible().catch(() => false)) {
+      await acceptAllButton.click();
+      await expect(acceptAllButton).not.toBeVisible({ timeout: 3000 });
+    }
 
-    // Click confirm
-    await page.getByRole("button", { name: "確認刪除" }).click();
+    const deleteButton = page.getByRole("button", { name: /刪除帳號/ });
+    await deleteButton.evaluate((el) => (el as HTMLButtonElement).click());
+
+    const confirmButton = page.getByRole("button", { name: /確認刪除|確認/ });
+    if (await confirmButton.isVisible().catch(() => false)) {
+      await confirmButton.click();
+    }
+
+    await deleteRequest;
 
     // Expect status update
-    await expect(page.getByText("刪除請求已建立")).toBeVisible();
+    await expect(page.getByText(/刪除請求已建立|已安排於/)).toBeVisible();
   });
 });

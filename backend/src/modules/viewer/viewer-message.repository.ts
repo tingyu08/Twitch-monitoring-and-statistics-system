@@ -98,6 +98,10 @@ async function retryOnTursoError<T>(
   context: string,
   maxRetries = 3
 ): Promise<T | null> {
+  if (maxRetries < 1) {
+    return null;
+  }
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const result = await operation();
@@ -126,7 +130,6 @@ async function retryOnTursoError<T>(
       return null;
     }
   }
-  return null;
 }
 
 // P1 Memory: Cache key generators for viewer/channel lookup

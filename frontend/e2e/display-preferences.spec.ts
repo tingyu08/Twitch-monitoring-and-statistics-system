@@ -148,10 +148,10 @@ test.describe("Display Preferences (Story 1.5)", () => {
 
     // Check panel contains toggle options (use actual labels from PREFERENCE_ITEMS)
     await expect(panel.getByText("顯示/隱藏儀表板區塊")).toBeVisible();
-    await expect(panel.getByText("開台統計總覽", { exact: true })).toBeVisible();
-    await expect(panel.getByText("開台時間分析", { exact: true })).toBeVisible();
-    await expect(panel.getByText("開台時段分布", { exact: true })).toBeVisible();
-    await expect(panel.getByText("訂閱數趨勢", { exact: true })).toBeVisible();
+    await expect(panel.locator('label[for="pref-showSummaryCards"]')).toBeVisible();
+    await expect(panel.locator('label[for="pref-showTimeSeriesChart"]')).toBeVisible();
+    await expect(panel.locator('label[for="pref-showHeatmapChart"]')).toBeVisible();
+    await expect(panel.locator('label[for="pref-showSubscriptionChart"]')).toBeVisible();
   });
 
   test("should toggle section visibility when clicking toggle", async ({ page }) => {

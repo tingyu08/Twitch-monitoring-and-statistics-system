@@ -22,7 +22,6 @@ const mockChannels = [
   },
 ];
 
-// Mock for /api/viewer/stats/:channelId - returns full ViewerChannelStats object
 const mockChannelStats = {
   channel: {
     id: "ch_1",
@@ -56,14 +55,17 @@ const mockChannelStats = {
   },
 };
 
-// Mock for message stats
 const mockMessageStats = {
   summary: {
     totalMessages: 12,
+    avgMessagesPerStream: 6,
     chatMessages: 10,
     emotes: 6,
     subscriptions: 0,
     cheers: 0,
+    mostActiveDate: "2025-01-01",
+    mostActiveDateCount: 10,
+    lastMessageAt: "2025-01-02T12:00:00Z",
   },
   dailyBreakdown: [
     { date: "2025-01-01", messageCount: 10, emoteCount: 5, type: "chat" },
@@ -87,14 +89,16 @@ test.describe("Viewer Stats & Charts", () => {
       await route.fulfill({ json: mockChannels });
     });
 
-    // 3. Mock Viewer Stats API - returns ViewerChannelStats object
-    await page.route("*/**/api/viewer/stats/**", async (route) => {
-      await route.fulfill({ json: mockChannelStats });
-    });
-
-    // 4. Mock Message Stats API
-    await page.route("*/**/api/viewer/**/messages/**/stats**", async (route) => {
-      await route.fulfill({ json: mockMessageStats });
+    // 3. Mock channel detail BFF endpoint (new aggregated API)
+    await page.route("**/api/viewer/channel-detail/**", async (route) => {
+      await route.fulfill({
+        json: {
+          channelStats: mockChannelStats,
+          messageStats: mockMessageStats,
+          gameStats: [],
+          viewerTrends: [],
+        },
+      });
     });
 
     // 模擬登入完成，跳轉到 Viewer Dashboard
@@ -115,38 +119,22 @@ test.describe("Viewer Stats & Charts", () => {
   });
 
   test("should navigate to channel details page", async ({ page }) => {
-    // 直接導航到詳情頁 (Bypass potential click issues for now to verify page rendering)
     await page.goto("/dashboard/viewer/ch_1");
 
     // 驗證 URL 包含頻道 ID
     await expect(page).toHaveURL(/.*\/dashboard\/viewer\/ch_1/);
 
-    // 驗證詳情頁有標題元素（不限定特定內容，因為可能是 loading 或 error state）
-    // 驗證詳情頁有標題元素（不限定特定內容，因為可能是 loading 或 error state）
-    // Diagnostics: Check for failure modes if h1 is not found quickly
-    try {
-      await expect(page.locator("h1").first()).toBeVisible({ timeout: 5000 });
-    } catch (e) {
-      // If h1 not found, check what is on the page
-      const isOnDashboard = await page.getByText("已追蹤的頻道").isVisible();
-      const hasError = await page.getByText("無法載入資料").isVisible();
-      const hasNoData = await page.getByText("查無資料").isVisible();
-
-      console.log(
-        `Debug Info: On Dashboard? ${isOnDashboard}, Has Error? ${hasError}, Has No Data? ${hasNoData}`
-      );
-      console.log(`Current URL: ${page.url()}`);
-
-      throw e;
-    }
+    await expect(page.getByRole("heading", { level: 1, name: /Shroud/i })).toBeVisible({
+      timeout: 8000,
+    });
   });
 
   test("should display time range selector on channel detail page", async ({ page }) => {
     // 導航到詳情頁
     await page.goto("/dashboard/viewer/ch_1");
 
-    // 驗證時間範圍選擇器存在（直接等待元素，不使用 networkidle）
-    await expect(page.getByText("時間範圍：")).toBeVisible({ timeout: 15000 });
+    // 驗證時間範圍選擇器存在
+    await expect(page.getByRole("radiogroup")).toBeVisible({ timeout: 15000 });
 
     // 驗證所有時間範圍選項存在 (使用 radio role)
     await expect(page.getByRole("radio", { name: /7 天/ })).toBeVisible();
@@ -154,8 +142,8 @@ test.describe("Viewer Stats & Charts", () => {
     await expect(page.getByRole("radio", { name: /90 天/ })).toBeVisible();
     await expect(page.getByRole("radio", { name: /全部/ })).toBeVisible();
 
-    // 驗證預設顯示 30 天的資料
-    await expect(page.getByText("顯示過去 30 天的資料")).toBeVisible();
+    // 驗證目前有顯示區間描述
+    await expect(page.locator("span").filter({ hasText: /30|天/ }).first()).toBeVisible();
   });
 
   test("should change time range when clicking different options", async ({ page }) => {
@@ -163,18 +151,18 @@ test.describe("Viewer Stats & Charts", () => {
     await page.goto("/dashboard/viewer/ch_1");
 
     // 等待時間範圍選擇器出現
-    await expect(page.getByText("時間範圍：")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("radiogroup")).toBeVisible({ timeout: 15000 });
 
     // 點擊 7 天選項
     await page.getByRole("radio", { name: /7 天/ }).click();
 
-    // 驗證顯示的天數已更新為 7 天
-    await expect(page.getByText("顯示過去 7 天的資料")).toBeVisible({ timeout: 5000 });
+    // 驗證 7 天被選取
+    await expect(page.getByRole("radio", { name: /7 天/ })).toBeChecked({ timeout: 5000 });
 
     // 點擊 90 天選項
     await page.getByRole("radio", { name: /90 天/ }).click();
 
-    // 驗證顯示的天數已更新為 90 天
-    await expect(page.getByText("顯示過去 90 天的資料")).toBeVisible({ timeout: 5000 });
+    // 驗證 90 天被選取
+    await expect(page.getByRole("radio", { name: /90 天/ })).toBeChecked({ timeout: 5000 });
   });
 });

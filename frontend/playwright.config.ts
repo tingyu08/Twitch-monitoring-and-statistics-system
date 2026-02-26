@@ -11,12 +11,16 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : 2,
   reporter: process.env.CI ? [["list"], ["github"]] : "list",
   // 增加全域 timeout
   timeout: 60000,
   use: {
     baseURL: "http://localhost:3000",
+    locale: "zh-TW",
+    extraHTTPHeaders: {
+      "Accept-Language": "zh-TW,zh;q=0.9",
+    },
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

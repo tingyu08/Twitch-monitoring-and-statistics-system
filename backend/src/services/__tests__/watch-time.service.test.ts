@@ -147,4 +147,48 @@ describe("watch-time.service updateViewerWatchTime", () => {
     );
     expect(prisma.viewerChannelDailyStat.upsert).not.toHaveBeenCalled();
   });
+
+  it("clips split-session previous end by stream end", async () => {
+    (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue({
+      startedAt: new Date("2026-02-26T08:00:00.000Z"),
+      endedAt: new Date("2026-02-26T09:20:00.000Z"),
+    });
+    (prisma.viewerChannelMessage.findMany as jest.Mock).mockResolvedValue([
+      { timestamp: new Date("2026-02-26T09:00:00.000Z") },
+      { timestamp: new Date("2026-02-26T09:40:00.000Z") },
+    ]);
+
+    await updateViewerWatchTime(viewerId, channelId, day, { allowOverwrite: true });
+
+    expect(prisma.viewerChannelDailyStat.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          // first segment: 08:50 -> clipped end 09:20 => 1800 sec
+          watchSeconds: 1800,
+        }),
+      })
+    );
+  });
+
+  it("clips split-session next start by stream start", async () => {
+    (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue({
+      startedAt: new Date("2026-02-26T10:00:00.000Z"),
+      endedAt: null,
+    });
+    (prisma.viewerChannelMessage.findMany as jest.Mock).mockResolvedValue([
+      { timestamp: new Date("2026-02-26T09:00:00.000Z") },
+      { timestamp: new Date("2026-02-26T09:40:00.000Z") },
+    ]);
+
+    await updateViewerWatchTime(viewerId, channelId, day, { allowOverwrite: true });
+
+    expect(prisma.viewerChannelDailyStat.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          // first segment is 0 after clipping; second segment: 10:00 -> 10:10 => 600 sec
+          watchSeconds: 600,
+        }),
+      })
+    );
+  });
 });

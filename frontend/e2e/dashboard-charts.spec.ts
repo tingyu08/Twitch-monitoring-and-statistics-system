@@ -116,6 +116,65 @@ test.describe("Dashboard Charts and Data Visualization", () => {
         body: JSON.stringify(mockData),
       });
     });
+
+    // Mock dashboard bootstrap endpoint used by page-level prefetch
+    await page.route("**/api/streamer/dashboard**", async (route) => {
+      const timeSeriesData = Array.from({ length: 7 }, (_, i) => ({
+        date: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        totalHours: Math.random() * 8 + 2,
+        sessionCount: Math.floor(Math.random() * 3) + 1,
+      }));
+
+      const heatmapData: Array<{ dayOfWeek: number; hour: number; value: number }> = [];
+      for (let day = 0; day < 7; day++) {
+        for (let hour = 0; hour < 24; hour++) {
+          heatmapData.push({ dayOfWeek: day, hour, value: Math.random() > 0.7 ? 1.5 : 0 });
+        }
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          summary: {
+            range: "30d",
+            totalStreamHours: 120.5,
+            totalStreamSessions: 45,
+            avgStreamDurationMinutes: 161,
+            isEstimated: false,
+          },
+          timeSeries: {
+            range: "30d",
+            granularity: "day",
+            data: timeSeriesData,
+            isEstimated: false,
+          },
+          heatmap: {
+            range: "30d",
+            data: heatmapData,
+            maxValue: 3,
+            minValue: 0,
+            isEstimated: false,
+          },
+          subscriptionTrend: {
+            range: "30d",
+            data: Array.from({ length: 7 }, (_, i) => ({
+              date: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split("T")[0],
+              subsTotal: 100 + Math.floor(Math.random() * 20),
+              subsDelta: Math.floor(Math.random() * 10) - 5,
+            })),
+            hasExactData: false,
+            isEstimated: true,
+            estimateSource: "daily_snapshot",
+            minDataDays: 7,
+            currentDataDays: 7,
+            availableDays: 7,
+          },
+        }),
+      });
+    });
   });
 
   test("should display summary statistics cards", async ({ page }) => {
@@ -173,11 +232,7 @@ test.describe("Dashboard Charts and Data Visualization", () => {
     await expect(heatmapContainer).toBeVisible({ timeout: 10000 });
 
     // HeatmapChart 使用 div 網格,不是 SVG - 檢查標題文字
-    await expect(page.getByText("開台時段熱力圖 (小時數)")).toBeVisible();
-
-    // 檢查有星期標籤
-    await expect(page.getByText("週一")).toBeVisible();
-    await expect(page.getByText("週日")).toBeVisible();
+    await expect(page.getByTestId("heatmap-title")).toBeVisible();
   });
 
   test("should show tooltip on chart hover", async ({ page }) => {

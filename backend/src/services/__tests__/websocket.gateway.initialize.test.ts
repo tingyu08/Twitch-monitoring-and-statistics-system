@@ -168,4 +168,72 @@ describe("WebSocketGateway initialize/setupRedisAdapter", () => {
       expect.any(Error)
     );
   });
+
+  it("setupRedisAdapter returns early when io is missing", async () => {
+    const gateway = new WebSocketGateway();
+    (gateway as any).io = null;
+    const initRedisSpy = jest.spyOn(redisClient, "initRedis");
+
+    await (gateway as any).setupRedisAdapter();
+
+    expect(initRedisSpy).not.toHaveBeenCalled();
+  });
+
+  it("setupRedisAdapter returns when base redis client is missing", async () => {
+    const io = createIo();
+    const gateway = new WebSocketGateway();
+    (gateway as any).io = io;
+
+    jest.spyOn(redisClient, "initRedis").mockResolvedValueOnce(true);
+    jest.spyOn(redisClient, "getRedisClient").mockReturnValueOnce(null as any);
+
+    await (gateway as any).setupRedisAdapter();
+
+    expect(io.adapter).not.toHaveBeenCalled();
+    expect((gateway as any).pubClient).toBeNull();
+    expect((gateway as any).subClient).toBeNull();
+  });
+
+  it("setupRedisAdapter logs redis pub/sub error events", async () => {
+    const io = createIo();
+    const gateway = new WebSocketGateway();
+    (gateway as any).io = io;
+
+    let pubErrorHandler: ((err: Error) => void) | undefined;
+    let subErrorHandler: ((err: Error) => void) | undefined;
+    const pubClient = {
+      on: jest.fn((event: string, cb: (err: Error) => void) => {
+        if (event === "error") pubErrorHandler = cb;
+      }),
+      connect: jest.fn().mockResolvedValue(undefined),
+      quit: jest.fn().mockResolvedValue(undefined),
+    };
+    const subClient = {
+      on: jest.fn((event: string, cb: (err: Error) => void) => {
+        if (event === "error") subErrorHandler = cb;
+      }),
+      connect: jest.fn().mockResolvedValue(undefined),
+      quit: jest.fn().mockResolvedValue(undefined),
+    };
+    const baseClient = {
+      duplicate: jest
+        .fn()
+        .mockImplementationOnce(() => pubClient)
+        .mockImplementationOnce(() => subClient),
+    };
+
+    jest.spyOn(redisClient, "initRedis").mockResolvedValueOnce(true);
+    jest.spyOn(redisClient, "getRedisClient").mockReturnValueOnce(baseClient as any);
+    (createAdapter as jest.Mock).mockReturnValueOnce("adapter-instance");
+
+    await (gateway as any).setupRedisAdapter();
+
+    const pubErr = new Error("pub-err");
+    const subErr = new Error("sub-err");
+    pubErrorHandler?.(pubErr);
+    subErrorHandler?.(subErr);
+
+    expect(logger.warn).toHaveBeenCalledWith("WebSocket", "Redis pub error", pubErr);
+    expect(logger.warn).toHaveBeenCalledWith("WebSocket", "Redis sub error", subErr);
+  });
 });
