@@ -7,6 +7,7 @@ jest.mock("../../db/prisma", () => ({
     $executeRaw: jest.fn(),
     viewerChannelLifetimeStats: {
       findUnique: jest.fn(),
+      count: jest.fn(),
       upsert: jest.fn(),
     },
     viewerChannelDailyStat: {
@@ -242,5 +243,82 @@ describe("LifetimeStatsAggregatorService", () => {
         }),
       })
     );
+  });
+
+  it("aggregateStatsWithChannel returns row with channel when preventDecreases is true", async () => {
+    (prisma.viewerChannelDailyStat.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { watchSeconds: 1200 },
+      _count: 1,
+      _min: { date: new Date("2025-12-16") },
+      _max: { date: new Date("2025-12-16") },
+    });
+    (prisma.viewerChannelMessageDailyAgg.aggregate as jest.Mock).mockResolvedValue({
+      _sum: {
+        totalMessages: 5,
+        chatMessages: 4,
+        subscriptions: 0,
+        cheers: 0,
+        totalBits: 0,
+      },
+    });
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          trackingStartedAt: "2025-12-16",
+          trackingDays: 1,
+          activeDaysLast30: 1,
+          activeDaysLast90: 1,
+          mostActiveMonth: "2025-12",
+          mostActiveMonthCount: 1,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          longestStreakDays: 1,
+          currentStreakDays: 1,
+        },
+      ]);
+
+    const mockedResult = {
+      viewerId,
+      channelId,
+      channel: { channelName: "demo" },
+      totalWatchTimeMinutes: 20,
+    };
+    (prisma.viewerChannelLifetimeStats.findUnique as jest.Mock).mockResolvedValue(mockedResult);
+
+    const result = await service.aggregateStatsWithChannel(viewerId, channelId, {
+      preventDecreases: true,
+    });
+
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.viewerChannelLifetimeStats.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: { channel: { select: { channelName: true } } },
+      })
+    );
+    expect(result).toEqual(mockedResult);
+  });
+
+  it("updatePercentileRankings executes ranking SQL when enough rows", async () => {
+    (prisma.viewerChannelLifetimeStats.count as jest.Mock)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(2);
+    (prisma.$executeRaw as jest.Mock).mockResolvedValue(2);
+
+    await service.updatePercentileRankings(channelId);
+
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("updatePercentileRankings skips SQL when less than 2 rows", async () => {
+    (prisma.viewerChannelLifetimeStats.count as jest.Mock)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+
+    await service.updatePercentileRankings(channelId);
+
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
+    expect(prisma.viewerChannelLifetimeStats.count).toHaveBeenCalledTimes(2);
   });
 });

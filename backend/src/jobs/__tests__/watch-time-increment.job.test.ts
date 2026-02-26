@@ -128,6 +128,23 @@ describe("WatchTimeIncrementJob", () => {
     expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v1:channels_list");
   });
 
+  it("splits large active pairs into multiple batch SQL writes", async () => {
+    const job = new WatchTimeIncrementJob();
+    const activePairs = Array.from({ length: 1200 }, (_, i) => ({
+      viewerId: `v${i}`,
+      channelId: `c${i}`,
+    }));
+
+    (prisma.channel.count as jest.Mock).mockResolvedValue(1);
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue(activePairs);
+    (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+
+    await job.execute();
+
+    // BATCH_SIZE=1000 => daily 2 batches + lifetime 2 batches
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(4);
+  });
+
   it("should skip concurrent execution when already running", async () => {
     const job = new WatchTimeIncrementJob();
 
