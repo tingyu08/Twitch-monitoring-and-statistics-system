@@ -45,6 +45,8 @@ export class TwurpleChatService {
 
   // 熱度追蹤：channelName -> timestamps[]
   private messageTimestamps: Map<string, number[]> = new Map();
+  // 熱度視窗起點索引：channelName -> startIndex（避免每則訊息都 splice/findIndex）
+  private heatWindowStartIndex: Map<string, number> = new Map();
   // 熱度冷卻：channelName -> lastAlertTime
   private lastHeatAlert: Map<string, number> = new Map();
   // P1 Memory: Cleanup interval reference
@@ -85,6 +87,7 @@ export class TwurpleChatService {
       // If no timestamps or all timestamps are old, remove the entry
       if (timestamps.length === 0 || timestamps[timestamps.length - 1] < staleThreshold) {
         this.messageTimestamps.delete(channelName);
+        this.heatWindowStartIndex.delete(channelName);
         this.lastHeatAlert.delete(channelName); // Also clean alert tracking
         this.channelIdCache.delete(channelName); // Also clean channelId cache
         cleanedChannels++;
@@ -479,6 +482,7 @@ export class TwurpleChatService {
     const timestamps = this.messageTimestamps.get(channelName) || [];
     if (!this.messageTimestamps.has(channelName)) {
       this.messageTimestamps.set(channelName, timestamps);
+      this.heatWindowStartIndex.set(channelName, 0);
     }
 
     // 加入當前訊息時間
@@ -488,21 +492,32 @@ export class TwurpleChatService {
     if (timestamps.length > MAX_TIMESTAMPS_PER_CHANNEL) {
       const overflowCount = timestamps.length - MAX_TIMESTAMPS_PER_CHANNEL;
       if (overflowCount > 0) {
+        const currentStartIndex = this.heatWindowStartIndex.get(channelName) || 0;
+        const nextStartIndex = Math.max(0, currentStartIndex - overflowCount);
         timestamps.splice(0, overflowCount);
+        this.heatWindowStartIndex.set(channelName, nextStartIndex);
       }
     }
 
-    // 移除視窗外的時間戳（例如只保留最近 5 秒）
+    // 移動視窗起點（避免每則訊息都 findIndex + splice）
     const validStart = now - HEAT_WINDOW_MS;
-    const firstValidIndex = timestamps.findIndex((timestamp) => timestamp >= validStart);
-    if (firstValidIndex === -1) {
-      timestamps.length = 0;
-    } else if (firstValidIndex > 0) {
-      timestamps.splice(0, firstValidIndex);
+    let startIndex = this.heatWindowStartIndex.get(channelName) || 0;
+
+    while (startIndex < timestamps.length && timestamps[startIndex] < validStart) {
+      startIndex += 1;
     }
 
+    // 定期壓縮陣列，避免頭部已過期資料長期佔用記憶體
+    if (startIndex > 0 && (startIndex >= 128 || startIndex > timestamps.length / 2)) {
+      timestamps.splice(0, startIndex);
+      startIndex = 0;
+    }
+
+    this.heatWindowStartIndex.set(channelName, startIndex);
+    const windowCount = timestamps.length - startIndex;
+
     // 檢查是否超過閾值
-    if (timestamps.length >= HEAT_THRESHOLD_MSG) {
+    if (windowCount >= HEAT_THRESHOLD_MSG) {
       const lastAlert = this.lastHeatAlert.get(channelName) || 0;
 
       // 檢查是否在冷卻時間內
@@ -517,13 +532,13 @@ export class TwurpleChatService {
         // 觸發熱度警報！
         logger.debug(
           "Chat Heat",
-          `🔥 Channel ${channelName} is heating up! (${timestamps.length} msgs/5s)`
+          `🔥 Channel ${channelName} is heating up! (${windowCount} msgs/5s)`
         );
 
         webSocketGateway.broadcastChatHeat({
           channelId,
           channelName,
-          heatLevel: timestamps.length,
+          heatLevel: windowCount,
           message: text.substring(0, 20), // 附帶最後一則訊息作為範例
         });
 

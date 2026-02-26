@@ -7,6 +7,11 @@ const DEFAULT_GUARD_MODE =
 
 const parsedGapMs = Number.parseInt(process.env.JOB_WRITE_GAP_MS || `${DEFAULT_WRITE_GAP_MS}`, 10);
 const WRITE_GAP_MS = Number.isFinite(parsedGapMs) && parsedGapMs >= 0 ? parsedGapMs : DEFAULT_WRITE_GAP_MS;
+const GUARD_KEY_RETENTION_MS = Number.parseInt(process.env.JOB_WRITE_GUARD_KEY_RETENTION_MS || "600000", 10);
+const KEY_CLEANUP_TRIGGER_SIZE = Number.parseInt(
+  process.env.JOB_WRITE_GUARD_KEY_CLEANUP_TRIGGER_SIZE || "200",
+  10
+);
 
 let writeTail: Promise<void> = Promise.resolve();
 let lastWriteCompletedAt = 0;
@@ -15,6 +20,31 @@ const lastWriteCompletedAtByKey = new Map<string, number>();
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function cleanupStaleGuardKeys(now: number): void {
+  if (lastWriteCompletedAtByKey.size < KEY_CLEANUP_TRIGGER_SIZE) {
+    return;
+  }
+
+  const staleBefore = now - Math.max(60_000, GUARD_KEY_RETENTION_MS);
+  let cleaned = 0;
+
+  for (const [key, lastCompletedAt] of lastWriteCompletedAtByKey.entries()) {
+    if (lastCompletedAt > staleBefore) {
+      continue;
+    }
+    if (writeTailsByKey.has(key)) {
+      continue;
+    }
+
+    lastWriteCompletedAtByKey.delete(key);
+    cleaned += 1;
+  }
+
+  if (cleaned > 0) {
+    logger.debug("JobWriteGuard", `Cleaned ${cleaned} stale keyed guard entries`);
+  }
 }
 
 export async function runWithWriteGuard<T>(jobName: string, operation: () => Promise<T>): Promise<T> {
@@ -44,11 +74,13 @@ export async function runWithWriteGuard<T>(jobName: string, operation: () => Pro
   try {
     return await operation();
   } finally {
-    lastWriteCompletedAtByKey.set(guardKey, Date.now());
+    const now = Date.now();
+    lastWriteCompletedAtByKey.set(guardKey, now);
     releaseCurrent?.();
     if (writeTailsByKey.get(guardKey) === ourTail) {
       writeTailsByKey.delete(guardKey);
     }
+    cleanupStaleGuardKeys(now);
     logger.debug("JobWriteGuard", `Write slot released by ${jobName} (key=${guardKey})`);
   }
 }

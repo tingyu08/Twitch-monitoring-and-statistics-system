@@ -20,6 +20,7 @@ jest.mock("../redis-client", () => ({
   isRedisReady: jest.fn().mockReturnValue(false),
   redisAcquireLock: jest.fn(),
   redisDeleteByPrefix: jest.fn(),
+  redisDeleteKeys: jest.fn(),
   redisDeleteBySuffix: jest.fn(),
   redisDeleteKey: jest.fn(),
   redisGetJson: jest.fn(),
@@ -636,6 +637,7 @@ describe("CacheManager", () => {
       redisMock.redisTagGetKeys.mockResolvedValue([]);
       redisMock.redisTagDelete.mockResolvedValue(undefined);
       redisMock.redisDeleteKey.mockResolvedValue(undefined);
+      redisMock.redisDeleteKeys.mockResolvedValue(undefined);
       redisMock.redisDeleteByPrefix.mockResolvedValue(undefined);
       redisMock.redisDeleteBySuffix.mockResolvedValue(undefined);
       redisCache = new CacheManager(1);
@@ -727,10 +729,10 @@ describe("CacheManager", () => {
       expect(redisMock.redisDeleteKey).toHaveBeenCalledWith("del-key");
     });
 
-    it("should use Redis deleteByPrefix on clear", () => {
+    it("should delete local keys in Redis on clear", () => {
       redisCache.set("clear-key", "v");
       redisCache.clear();
-      expect(redisMock.redisDeleteByPrefix).toHaveBeenCalledWith("");
+      expect(redisMock.redisDeleteKeys).toHaveBeenCalledWith(["clear-key"]);
     });
 
     it("should set value in Redis on setInternal", async () => {

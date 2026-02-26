@@ -407,10 +407,28 @@ export default function ViewerDashboardPage() {
       );
     };
 
+    const handleStatsBatchUpdate = (payload: {
+      updates?: Array<{ channelId: string; messageCountDelta: number }>;
+    }) => {
+      const updates = payload?.updates || [];
+      for (const update of updates) {
+        if (update.messageCountDelta <= 0) continue;
+
+        updateSingleChannel(
+          (ch) => ch.id === update.channelId,
+          (ch) => ({
+            ...ch,
+            messageCount: ch.messageCount + update.messageCountDelta,
+          })
+        );
+      }
+    };
+
     socket.on("stream.online", handleStreamOnline);
     socket.on("stream.offline", handleStreamOffline);
     socket.on("channel.update", handleChannelUpdate);
     socket.on("stats-update", handleStatsUpdate);
+    socket.on("stats-update-batch", handleStatsBatchUpdate);
 
     return () => {
       if (flushTimer) {
@@ -420,6 +438,7 @@ export default function ViewerDashboardPage() {
       socket.off("stream.offline", handleStreamOffline);
       socket.off("channel.update", handleChannelUpdate);
       socket.off("stats-update", handleStatsUpdate);
+      socket.off("stats-update-batch", handleStatsBatchUpdate);
     };
   }, [socket, socketConnected, queryClient]);
 

@@ -91,7 +91,7 @@ describe("WatchTimeIncrementJob", () => {
     expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v1:channels_list");
   });
 
-  it("should call $executeRaw once per active pair for daily stats", async () => {
+  it("should batch active pairs into a small number of SQL writes", async () => {
     const job = new WatchTimeIncrementJob();
     const activePairs = [
       { viewerId: "v1", channelId: "c1" },
@@ -105,8 +105,8 @@ describe("WatchTimeIncrementJob", () => {
 
     await job.execute();
 
-    // 3 daily upserts + 3 lifetime upserts = at least 6 calls total
-    expect(prisma.$executeRaw).toHaveBeenCalledTimes(6);
+    // 1 daily batch + 1 lifetime batch
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(2);
   });
 
   it("should invalidate cache once per unique viewerId", async () => {

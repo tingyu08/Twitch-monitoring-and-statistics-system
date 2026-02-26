@@ -740,14 +740,35 @@ export class ViewerMessageRepository {
         }
       });
 
+      const viewerDeltaMap = new Map<string, Map<string, number>>();
+      const affectedViewerIds = new Set<string>();
+
       for (const daily of dailyStatIncrements.values()) {
-        if (daily.messageCount > 0) {
-          webSocketGateway.emitViewerStats(daily.viewerId, {
-            channelId: daily.channelId,
-            messageCountDelta: daily.messageCount,
-          });
-          cacheManager.delete(`viewer:${daily.viewerId}:channels_list`);
+        if (daily.messageCount <= 0) {
+          continue;
         }
+
+        affectedViewerIds.add(daily.viewerId);
+        const perViewer = viewerDeltaMap.get(daily.viewerId) || new Map<string, number>();
+        perViewer.set(daily.channelId, (perViewer.get(daily.channelId) || 0) + daily.messageCount);
+        viewerDeltaMap.set(daily.viewerId, perViewer);
+      }
+
+      for (const [viewerId, perChannel] of viewerDeltaMap.entries()) {
+        const updates = Array.from(perChannel.entries()).map(([channelId, messageCountDelta]) => ({
+          channelId,
+          messageCountDelta,
+        }));
+
+        if (updates.length === 1) {
+          webSocketGateway.emitViewerStats(viewerId, updates[0]);
+        } else {
+          webSocketGateway.emitViewerStatsBatch(viewerId, updates);
+        }
+      }
+
+      for (const viewerId of affectedViewerIds) {
+        cacheManager.delete(`viewer:${viewerId}:channels_list`);
       }
       return true;
     } catch (error) {

@@ -248,8 +248,10 @@ describe("EventSubService", () => {
         content_classification_labels: [],
       };
 
-      (prisma.channel.findUnique as jest.Mock).mockResolvedValue({ id: "c1", channelName: "User" });
-      (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue({ id: "s1" });
+      (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue({
+        id: "s1",
+        channel: { id: "c1", channelName: "User" },
+      });
 
       await eventSubService.handleChannelUpdate(mockEvent);
 
@@ -263,7 +265,7 @@ describe("EventSubService", () => {
     });
 
     it("should skip if channel not found", async () => {
-      (prisma.channel.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue(null);
 
       await eventSubService.handleChannelUpdate({
         broadcaster_user_id: "999",
@@ -276,12 +278,11 @@ describe("EventSubService", () => {
         content_classification_labels: [],
       });
 
-      expect(prisma.streamSession.findFirst).not.toHaveBeenCalled();
+      expect(prisma.streamSession.findFirst).toHaveBeenCalled();
       expect(prisma.streamSession.update).not.toHaveBeenCalled();
     });
 
     it("should skip update if no active session", async () => {
-      (prisma.channel.findUnique as jest.Mock).mockResolvedValue({ id: "c1" });
       (prisma.streamSession.findFirst as jest.Mock).mockResolvedValue(null);
 
       await eventSubService.handleChannelUpdate({
@@ -299,7 +300,7 @@ describe("EventSubService", () => {
     });
 
     it("should handle database errors gracefully", async () => {
-      (prisma.channel.findUnique as jest.Mock).mockRejectedValue(new Error("DB error"));
+      (prisma.streamSession.findFirst as jest.Mock).mockRejectedValue(new Error("DB error"));
 
       await expect(
         eventSubService.handleChannelUpdate({

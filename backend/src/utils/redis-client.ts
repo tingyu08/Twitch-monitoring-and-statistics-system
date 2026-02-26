@@ -211,6 +211,23 @@ export async function redisDeleteKey(key: string): Promise<void> {
   }
 }
 
+export async function redisDeleteKeys(keys: string[]): Promise<number> {
+  const client = getHealthyRedisClient();
+  if (!client || keys.length === 0) return 0;
+
+  try {
+    const cacheKeys = keys.map((key) => cacheKey(key));
+    const deleted = await client.del(...cacheKeys);
+    markRedisSuccess();
+    return deleted;
+  } catch (error) {
+    redisLastFailureReason = error instanceof Error ? error.message : String(error);
+    markRedisFailure();
+    logger.warn("Redis", `Redis del batch failed for ${keys.length} keys`, error);
+    return 0;
+  }
+}
+
 async function scanDelete(pattern: string): Promise<number> {
   const client = getHealthyRedisClient();
   if (!client) return 0;

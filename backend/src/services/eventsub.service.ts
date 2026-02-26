@@ -237,35 +237,38 @@ export class EventSubService {
     logger.info("EventSub", `頻道更新: ${event.broadcaster_user_name} - ${event.title}`);
 
     try {
-      // 找到對應的 Channel
-      const channel = await prisma.channel.findUnique({
-        where: { twitchChannelId: event.broadcaster_user_id },
+      // 單次查詢找到進行中 session（避免先查 channel 再查 session 的序列查詢）
+      const session = await prisma.streamSession.findFirst({
+        where: {
+          endedAt: null,
+          channel: {
+            twitchChannelId: event.broadcaster_user_id,
+          },
+        },
+        orderBy: { startedAt: "desc" },
+        include: {
+          channel: {
+            select: {
+              id: true,
+              channelName: true,
+            },
+          },
+        },
       });
 
-      if (!channel) {
+      if (!session?.channel) {
         logger.warn("EventSub", `找不到頻道: ${event.broadcaster_user_id}`);
         return;
       }
 
-      // 更新進行中的 StreamSession
-      const session = await prisma.streamSession.findFirst({
-        where: {
-          channelId: channel.id,
-          endedAt: null,
+      await prisma.streamSession.update({
+        where: { id: session.id },
+        data: {
+          title: event.title,
+          category: event.category_name, // 使用分類名稱
         },
-        orderBy: { startedAt: "desc" },
       });
-
-      if (session) {
-        await prisma.streamSession.update({
-          where: { id: session.id },
-          data: {
-            title: event.title,
-            category: event.category_name, // 使用分類名稱
-          },
-        });
-        logger.info("EventSub", "StreamSession 標題已更新");
-      }
+      logger.info("EventSub", "StreamSession 標題已更新");
     } catch (error) {
       logger.error("EventSub", "處理頻道更新事件失敗:", error);
     }

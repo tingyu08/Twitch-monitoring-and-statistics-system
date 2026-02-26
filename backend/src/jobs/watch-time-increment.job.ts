@@ -34,7 +34,8 @@ const INCREMENT_SECONDS = WATCH_TIME_INCREMENT_MINUTES * 60;
 const ACTIVE_WINDOW_MINUTES = WATCH_TIME_INCREMENT_MINUTES;
 
 // 批次大小：每次 INSERT VALUES 的組數上限，避免 SQL 過長
-const BATCH_SIZE = 200;
+// 預設提高到 1000，讓一般負載可在單批完成，將 DB 寫入壓到最少
+const BATCH_SIZE = 1000;
 
 /** 將 Date 轉為 SQLite 相容的 ISO 日期字串 (YYYY-MM-DD) */
 function toSqliteDate(d: Date): string {
@@ -118,84 +119,145 @@ export class WatchTimeIncrementJob {
         return;
       }
 
-      // 3. 批次 upsert daily stats（每批 BATCH_SIZE 組，逐筆使用 Prisma.sql 參數化）
+      // 3. 批次 upsert daily stats（每批一條 SQL，避免逐筆寫入造成 write guard gap 放大）
       let dailyUpsertCount = 0;
+      const todayStr = toSqliteDate(today);
       for (let i = 0; i < activePairs.length; i += BATCH_SIZE) {
         const batch = activePairs.slice(i, i + BATCH_SIZE);
-        for (const p of batch) {
-          const affected = await runWithWriteGuard(
-            WriteGuardKeys.WATCH_TIME_DAILY_UPSERT,
-            () =>
-              prisma.$executeRaw(Prisma.sql`
-                INSERT INTO viewer_channel_daily_stats (
-                  id, viewerId, channelId, date,
-                  watchSeconds, messageCount, emoteCount, source, createdAt, updatedAt
-                ) VALUES (
-                  lower(hex(randomblob(16))), ${p.viewerId}, ${p.channelId}, ${toSqliteDate(today)},
-                  ${INCREMENT_SECONDS}, 0, 0, 'chat', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                )
-                ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-                  watchSeconds = CASE
-                    WHEN viewer_channel_daily_stats.source = 'extension'
-                      THEN viewer_channel_daily_stats.watchSeconds
-                    ELSE viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds
-                  END,
-                  updatedAt = CURRENT_TIMESTAMP
-              `)
-          );
-          dailyUpsertCount += Number(affected);
-        }
+        const batchValues = batch.map(
+          (p) => Prisma.sql`(${p.viewerId}, ${p.channelId}, ${todayStr}, ${INCREMENT_SECONDS})`
+        );
+
+        const affected = await runWithWriteGuard(WriteGuardKeys.WATCH_TIME_DAILY_UPSERT, () =>
+          prisma.$executeRaw(Prisma.sql`
+            WITH src (viewerId, channelId, date, watchSeconds) AS (
+              VALUES ${Prisma.join(batchValues)}
+            )
+            INSERT INTO viewer_channel_daily_stats (
+              id,
+              viewerId,
+              channelId,
+              date,
+              watchSeconds,
+              messageCount,
+              emoteCount,
+              source,
+              createdAt,
+              updatedAt
+            )
+            SELECT
+              lower(hex(randomblob(16))) AS id,
+              src.viewerId,
+              src.channelId,
+              src.date,
+              src.watchSeconds,
+              0,
+              0,
+              'chat',
+              CURRENT_TIMESTAMP,
+              CURRENT_TIMESTAMP
+            FROM src
+            ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+              watchSeconds = CASE
+                WHEN viewer_channel_daily_stats.source = 'extension'
+                  THEN viewer_channel_daily_stats.watchSeconds
+                ELSE viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds
+              END,
+              updatedAt = CURRENT_TIMESTAMP
+          `)
+        );
+
+        dailyUpsertCount += Number(affected);
       }
 
-      // 4. 批次 upsert lifetime stats（逐筆使用 Prisma.sql 參數化）
+      // 4. 批次 upsert lifetime stats（每批一條 SQL，沿用 daily source='extension' 防重複邏輯）
       const incrementMinutes = Math.floor(INCREMENT_SECONDS / 60);
       let lifetimeUpsertCount = 0;
       if (incrementMinutes > 0) {
         const nowIso = now.toISOString();
-        const todayStr = toSqliteDate(today);
         for (let i = 0; i < activePairs.length; i += BATCH_SIZE) {
           const batch = activePairs.slice(i, i + BATCH_SIZE);
-          for (const p of batch) {
-            const affected = await runWithWriteGuard(
-              WriteGuardKeys.WATCH_TIME_LIFETIME_UPSERT,
-              () =>
-                prisma.$executeRaw(Prisma.sql`
-                  INSERT INTO viewer_channel_lifetime_stats (
-                    id, viewerId, channelId,
-                    totalWatchTimeMinutes, totalSessions, avgSessionMinutes,
-                    firstWatchedAt, lastWatchedAt,
-                    totalMessages, totalChatMessages, totalSubscriptions, totalCheers, totalBits,
-                    trackingStartedAt, trackingDays,
-                    longestStreakDays, currentStreakDays,
-                    activeDaysLast30, activeDaysLast90, mostActiveMonthCount,
-                    createdAt, updatedAt
-                  ) VALUES (
-                    lower(hex(randomblob(16))), ${p.viewerId}, ${p.channelId},
-                    ${incrementMinutes}, 0, 0,
-                    ${nowIso}, ${nowIso},
-                    0, 0, 0, 0, 0,
-                    CURRENT_TIMESTAMP, 0,
-                    0, 0,
-                    0, 0, 0,
-                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                  )
-                  ON CONFLICT(viewerId, channelId) DO UPDATE SET
-                    totalWatchTimeMinutes =
-                      viewer_channel_lifetime_stats.totalWatchTimeMinutes + CASE
-                        WHEN (
-                          SELECT source FROM viewer_channel_daily_stats
-                          WHERE viewerId = ${p.viewerId}
-                            AND channelId = ${p.channelId}
-                            AND date = ${todayStr}
-                        ) = 'extension' THEN 0
-                        ELSE excluded.totalWatchTimeMinutes
-                      END,
-                    lastWatchedAt = excluded.lastWatchedAt,
-                    updatedAt = CURRENT_TIMESTAMP
-                `)
-            );
-            lifetimeUpsertCount += Number(affected);
-          }
+          const batchValues = batch.map(
+            (p) => Prisma.sql`(${p.viewerId}, ${p.channelId}, ${incrementMinutes}, ${nowIso})`
+          );
+
+          const affected = await runWithWriteGuard(WriteGuardKeys.WATCH_TIME_LIFETIME_UPSERT, () =>
+            prisma.$executeRaw(Prisma.sql`
+              WITH src (viewerId, channelId, incrementMinutes, lastWatchedAt) AS (
+                VALUES ${Prisma.join(batchValues)}
+              ),
+              effective AS (
+                SELECT
+                  src.viewerId,
+                  src.channelId,
+                  CASE
+                    WHEN daily.source = 'extension' THEN 0
+                    ELSE src.incrementMinutes
+                  END AS incrementMinutes,
+                  src.lastWatchedAt
+                FROM src
+                LEFT JOIN viewer_channel_daily_stats daily
+                  ON daily.viewerId = src.viewerId
+                 AND daily.channelId = src.channelId
+                 AND daily.date = ${todayStr}
+              )
+              INSERT INTO viewer_channel_lifetime_stats (
+                id,
+                viewerId,
+                channelId,
+                totalWatchTimeMinutes,
+                totalSessions,
+                avgSessionMinutes,
+                firstWatchedAt,
+                lastWatchedAt,
+                totalMessages,
+                totalChatMessages,
+                totalSubscriptions,
+                totalCheers,
+                totalBits,
+                trackingStartedAt,
+                trackingDays,
+                longestStreakDays,
+                currentStreakDays,
+                activeDaysLast30,
+                activeDaysLast90,
+                mostActiveMonthCount,
+                createdAt,
+                updatedAt
+              )
+              SELECT
+                lower(hex(randomblob(16))) AS id,
+                effective.viewerId,
+                effective.channelId,
+                effective.incrementMinutes,
+                0,
+                0,
+                effective.lastWatchedAt,
+                effective.lastWatchedAt,
+                0,
+                0,
+                0,
+                0,
+                0,
+                CURRENT_TIMESTAMP,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+              FROM effective
+              ON CONFLICT(viewerId, channelId) DO UPDATE SET
+                totalWatchTimeMinutes =
+                  viewer_channel_lifetime_stats.totalWatchTimeMinutes + excluded.totalWatchTimeMinutes,
+                lastWatchedAt = excluded.lastWatchedAt,
+                updatedAt = CURRENT_TIMESTAMP
+            `)
+          );
+
+          lifetimeUpsertCount += Number(affected);
         }
       }
 

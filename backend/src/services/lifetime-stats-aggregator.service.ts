@@ -26,15 +26,18 @@ interface LifetimeStatsResult {
   mostActiveMonthCount: number;
 }
 
-interface DateRow {
-  d: unknown;
-}
-
 interface ActivitySummaryRow {
+  trackingStartedAt: string | null;
+  trackingDays: number | null;
   activeDaysLast30: number | null;
   activeDaysLast90: number | null;
   mostActiveMonth: string | null;
   mostActiveMonthCount: number | null;
+}
+
+interface StreakSummaryRow {
+  longestStreakDays: number | null;
+  currentStreakDays: number | null;
 }
 
 interface AggregateStatsOptions {
@@ -83,29 +86,28 @@ export class LifetimeStatsAggregatorService {
   ): Promise<void> {
     try {
       const stats = await this.calculateStats(viewerId, channelId);
-      const persistedStats = await this.resolvePersistedStats(
-        viewerId,
-        channelId,
-        stats,
-        options?.preventDecreases ?? true
-      );
+      const preventDecreases = options?.preventDecreases ?? true;
 
-      await prisma.viewerChannelLifetimeStats.upsert({
-        where: {
-          viewerId_channelId: {
+      if (preventDecreases) {
+        await this.upsertStatsPreventDecrease(viewerId, channelId, stats);
+      } else {
+        await prisma.viewerChannelLifetimeStats.upsert({
+          where: {
+            viewerId_channelId: {
+              viewerId,
+              channelId,
+            },
+          },
+          create: {
             viewerId,
             channelId,
+            ...stats,
           },
-        },
-        create: {
-          viewerId,
-          channelId,
-          ...persistedStats,
-        },
-        update: {
-          ...persistedStats,
-        },
-      });
+          update: {
+            ...stats,
+          },
+        });
+      }
 
       logger.info("LifetimeStats", `Aggregated stats for viewer ${viewerId} channel ${channelId}`);
     } catch (error) {
@@ -120,12 +122,26 @@ export class LifetimeStatsAggregatorService {
     options?: AggregateStatsOptions
   ) {
     const stats = await this.calculateStats(viewerId, channelId);
-    const persistedStats = await this.resolvePersistedStats(
-      viewerId,
-      channelId,
-      stats,
-      options?.preventDecreases ?? true
-    );
+    const preventDecreases = options?.preventDecreases ?? true;
+
+    if (preventDecreases) {
+      await this.upsertStatsPreventDecrease(viewerId, channelId, stats);
+      return prisma.viewerChannelLifetimeStats.findUnique({
+        where: {
+          viewerId_channelId: {
+            viewerId,
+            channelId,
+          },
+        },
+        include: {
+          channel: {
+            select: {
+              channelName: true,
+            },
+          },
+        },
+      });
+    }
 
     return prisma.viewerChannelLifetimeStats.upsert({
       where: {
@@ -137,10 +153,10 @@ export class LifetimeStatsAggregatorService {
       create: {
         viewerId,
         channelId,
-        ...persistedStats,
+        ...stats,
       },
       update: {
-        ...persistedStats,
+        ...stats,
       },
       include: {
         channel: {
@@ -152,79 +168,119 @@ export class LifetimeStatsAggregatorService {
     });
   }
 
-  private async resolvePersistedStats(
+  private async upsertStatsPreventDecrease(
     viewerId: string,
     channelId: string,
-    stats: LifetimeStatsResult,
-    preventDecreases: boolean
-  ): Promise<LifetimeStatsResult> {
-    if (!preventDecreases) {
-      return stats;
-    }
-
-    const existing = await prisma.viewerChannelLifetimeStats.findUnique({
-      where: {
-        viewerId_channelId: {
-          viewerId,
-          channelId,
-        },
-      },
-      select: {
-        totalWatchTimeMinutes: true,
-        totalSessions: true,
-        totalMessages: true,
-        totalChatMessages: true,
-        totalSubscriptions: true,
-        totalCheers: true,
-        totalBits: true,
-        firstWatchedAt: true,
-        lastWatchedAt: true,
-      },
-    });
-
-    if (!existing) {
-      return stats;
-    }
-
-    const merged: LifetimeStatsResult = {
-      ...stats,
-      totalWatchTimeMinutes: Math.max(stats.totalWatchTimeMinutes, existing.totalWatchTimeMinutes),
-      totalSessions: Math.max(stats.totalSessions, existing.totalSessions),
-      totalMessages: Math.max(stats.totalMessages, existing.totalMessages),
-      totalChatMessages: Math.max(stats.totalChatMessages, existing.totalChatMessages),
-      totalSubscriptions: Math.max(stats.totalSubscriptions, existing.totalSubscriptions),
-      totalCheers: Math.max(stats.totalCheers, existing.totalCheers),
-      totalBits: Math.max(stats.totalBits, existing.totalBits),
-      firstWatchedAt:
-        stats.firstWatchedAt && existing.firstWatchedAt
-          ? stats.firstWatchedAt < existing.firstWatchedAt
-            ? stats.firstWatchedAt
-            : existing.firstWatchedAt
-          : stats.firstWatchedAt || existing.firstWatchedAt,
-      lastWatchedAt:
-        stats.lastWatchedAt && existing.lastWatchedAt
-          ? stats.lastWatchedAt > existing.lastWatchedAt
-            ? stats.lastWatchedAt
-            : existing.lastWatchedAt
-          : stats.lastWatchedAt || existing.lastWatchedAt,
-    };
-
-    const clampedFields: string[] = [];
-    if (merged.totalWatchTimeMinutes !== stats.totalWatchTimeMinutes) {
-      clampedFields.push("totalWatchTimeMinutes");
-    }
-    if (merged.totalMessages !== stats.totalMessages) {
-      clampedFields.push("totalMessages");
-    }
-
-    if (clampedFields.length > 0) {
-      logger.warn(
-        "LifetimeStats",
-        `Prevented lifetime stat decreases for viewer ${viewerId} channel ${channelId}: ${clampedFields.join(",")}`
-      );
-    }
-
-    return merged;
+    stats: LifetimeStatsResult
+  ): Promise<void> {
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO viewer_channel_lifetime_stats (
+        id,
+        viewerId,
+        channelId,
+        totalWatchTimeMinutes,
+        totalSessions,
+        avgSessionMinutes,
+        firstWatchedAt,
+        lastWatchedAt,
+        totalMessages,
+        totalChatMessages,
+        totalSubscriptions,
+        totalCheers,
+        totalBits,
+        trackingStartedAt,
+        trackingDays,
+        longestStreakDays,
+        currentStreakDays,
+        activeDaysLast30,
+        activeDaysLast90,
+        mostActiveMonthCount,
+        createdAt,
+        updatedAt
+      ) VALUES (
+        lower(hex(randomblob(16))),
+        ${viewerId},
+        ${channelId},
+        ${stats.totalWatchTimeMinutes},
+        ${stats.totalSessions},
+        ${stats.avgSessionMinutes},
+        ${stats.firstWatchedAt},
+        ${stats.lastWatchedAt},
+        ${stats.totalMessages},
+        ${stats.totalChatMessages},
+        ${stats.totalSubscriptions},
+        ${stats.totalCheers},
+        ${stats.totalBits},
+        ${stats.trackingStartedAt},
+        ${stats.trackingDays},
+        ${stats.longestStreakDays},
+        ${stats.currentStreakDays},
+        ${stats.activeDaysLast30},
+        ${stats.activeDaysLast90},
+        ${stats.mostActiveMonthCount},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      ON CONFLICT(viewerId, channelId) DO UPDATE SET
+        totalWatchTimeMinutes = CASE
+          WHEN viewer_channel_lifetime_stats.totalWatchTimeMinutes > excluded.totalWatchTimeMinutes
+            THEN viewer_channel_lifetime_stats.totalWatchTimeMinutes
+          ELSE excluded.totalWatchTimeMinutes
+        END,
+        totalSessions = CASE
+          WHEN viewer_channel_lifetime_stats.totalSessions > excluded.totalSessions
+            THEN viewer_channel_lifetime_stats.totalSessions
+          ELSE excluded.totalSessions
+        END,
+        avgSessionMinutes = excluded.avgSessionMinutes,
+        firstWatchedAt = CASE
+          WHEN viewer_channel_lifetime_stats.firstWatchedAt IS NULL THEN excluded.firstWatchedAt
+          WHEN excluded.firstWatchedAt IS NULL THEN viewer_channel_lifetime_stats.firstWatchedAt
+          WHEN viewer_channel_lifetime_stats.firstWatchedAt <= excluded.firstWatchedAt
+            THEN viewer_channel_lifetime_stats.firstWatchedAt
+          ELSE excluded.firstWatchedAt
+        END,
+        lastWatchedAt = CASE
+          WHEN viewer_channel_lifetime_stats.lastWatchedAt IS NULL THEN excluded.lastWatchedAt
+          WHEN excluded.lastWatchedAt IS NULL THEN viewer_channel_lifetime_stats.lastWatchedAt
+          WHEN viewer_channel_lifetime_stats.lastWatchedAt >= excluded.lastWatchedAt
+            THEN viewer_channel_lifetime_stats.lastWatchedAt
+          ELSE excluded.lastWatchedAt
+        END,
+        totalMessages = CASE
+          WHEN viewer_channel_lifetime_stats.totalMessages > excluded.totalMessages
+            THEN viewer_channel_lifetime_stats.totalMessages
+          ELSE excluded.totalMessages
+        END,
+        totalChatMessages = CASE
+          WHEN viewer_channel_lifetime_stats.totalChatMessages > excluded.totalChatMessages
+            THEN viewer_channel_lifetime_stats.totalChatMessages
+          ELSE excluded.totalChatMessages
+        END,
+        totalSubscriptions = CASE
+          WHEN viewer_channel_lifetime_stats.totalSubscriptions > excluded.totalSubscriptions
+            THEN viewer_channel_lifetime_stats.totalSubscriptions
+          ELSE excluded.totalSubscriptions
+        END,
+        totalCheers = CASE
+          WHEN viewer_channel_lifetime_stats.totalCheers > excluded.totalCheers
+            THEN viewer_channel_lifetime_stats.totalCheers
+          ELSE excluded.totalCheers
+        END,
+        totalBits = CASE
+          WHEN viewer_channel_lifetime_stats.totalBits > excluded.totalBits
+            THEN viewer_channel_lifetime_stats.totalBits
+          ELSE excluded.totalBits
+        END,
+        trackingStartedAt = excluded.trackingStartedAt,
+        trackingDays = excluded.trackingDays,
+        longestStreakDays = excluded.longestStreakDays,
+        currentStreakDays = excluded.currentStreakDays,
+        activeDaysLast30 = excluded.activeDaysLast30,
+        activeDaysLast90 = excluded.activeDaysLast90,
+        mostActiveMonthCount = excluded.mostActiveMonthCount,
+        updatedAt = CURRENT_TIMESTAMP
+    `);
   }
 
   /**
@@ -237,7 +293,7 @@ export class LifetimeStatsAggregatorService {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
     // P1 Fix: 使用資料庫聚合函數計算總和，避免載入所有記錄到記憶體
-    const [dailyStatsAgg, messageAggsAgg, activeDateRows, activitySummaryRows] = await Promise.all([
+    const [dailyStatsAgg, messageAggsAgg, activitySummaryRows, streakSummaryRows] = await Promise.all([
         // 聚合觀看時間統計
         prisma.viewerChannelDailyStat.aggregate({
           where: { viewerId, channelId },
@@ -257,17 +313,6 @@ export class LifetimeStatsAggregatorService {
             totalBits: true,
           },
         }),
-        // 只查詢日期列表用於 streak 計算（在 DB 側先做去重）
-        prisma.$queryRaw<DateRow[]>(Prisma.sql`
-          SELECT date AS d
-          FROM viewer_channel_daily_stats
-          WHERE viewerId = ${viewerId} AND channelId = ${channelId}
-          UNION
-          SELECT date AS d
-          FROM viewer_channel_message_daily_aggs
-          WHERE viewerId = ${viewerId} AND channelId = ${channelId}
-          ORDER BY d ASC
-        `),
         prisma.$queryRaw<ActivitySummaryRow[]>(Prisma.sql`
           WITH active_dates AS (
             SELECT date AS d
@@ -290,11 +335,73 @@ export class LifetimeStatsAggregatorService {
             LIMIT 1
           )
           SELECT
+            MIN(d) AS trackingStartedAt,
+            COUNT(*) AS trackingDays,
             COALESCE(SUM(CASE WHEN d >= DATE(${thirtyDaysAgo.toISOString()}) THEN 1 ELSE 0 END), 0) AS activeDaysLast30,
             COALESCE(SUM(CASE WHEN d >= DATE(${ninetyDaysAgo.toISOString()}) THEN 1 ELSE 0 END), 0) AS activeDaysLast90,
             (SELECT month FROM best_month) AS mostActiveMonth,
             COALESCE((SELECT cnt FROM best_month), 0) AS mostActiveMonthCount
           FROM active_dates
+        `),
+        prisma.$queryRaw<StreakSummaryRow[]>(Prisma.sql`
+          WITH active_dates AS (
+            SELECT date AS d
+            FROM viewer_channel_daily_stats
+            WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+            UNION
+            SELECT date AS d
+            FROM viewer_channel_message_daily_aggs
+            WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+          ),
+          ordered AS (
+            SELECT d, LAG(d) OVER (ORDER BY d) AS prev_d
+            FROM active_dates
+          ),
+          boundaries AS (
+            SELECT
+              d,
+              CASE
+                WHEN prev_d IS NULL THEN 1
+                WHEN CAST(julianday(d) - julianday(prev_d) AS INTEGER) = 1 THEN 0
+                ELSE 1
+              END AS is_new_group
+            FROM ordered
+          ),
+          grouped AS (
+            SELECT
+              d,
+              SUM(is_new_group) OVER (ORDER BY d ROWS UNBOUNDED PRECEDING) AS grp
+            FROM boundaries
+          ),
+          streaks AS (
+            SELECT
+              grp,
+              COUNT(*) AS streak_len,
+              MAX(d) AS streak_end
+            FROM grouped
+            GROUP BY grp
+          ),
+          latest AS (
+            SELECT MAX(d) AS last_d
+            FROM active_dates
+          )
+          SELECT
+            COALESCE((SELECT MAX(streak_len) FROM streaks), 0) AS longestStreakDays,
+            CASE
+              WHEN (SELECT last_d FROM latest) IS NULL THEN 0
+              WHEN CAST(julianday(DATE('now')) - julianday((SELECT last_d FROM latest)) AS INTEGER) <= 1
+                THEN COALESCE(
+                  (
+                    SELECT streak_len
+                    FROM streaks
+                    WHERE streak_end = (SELECT last_d FROM latest)
+                    ORDER BY grp DESC
+                    LIMIT 1
+                  ),
+                  0
+                )
+              ELSE 0
+            END AS currentStreakDays
         `),
       ]);
 
@@ -318,57 +425,16 @@ export class LifetimeStatsAggregatorService {
     const totalBits = messageAggsAgg._sum.totalBits || 0;
 
     // ========== 忠誠度與連續簽到 ==========
-
-    // 由資料庫去重後回傳的日期列表
-    const activeDates = activeDateRows
-      .map((row) => normalizeDateToDay(row.d))
-      .filter((dateStr): dateStr is string => Boolean(dateStr));
-
-    const trackingDays = activeDates.length;
-    const trackingStartedAt = activeDates.length > 0 ? new Date(activeDates[0]) : new Date();
-
-    // 計算 Streak
-    let longestStreak = 0;
-    let currentStreak = 0;
-    let tempStreak = 0;
-
-    // 簡單的 Streak 算法: 檢查相鄰日期是否差 1 天
-    if (activeDates.length > 0) {
-      tempStreak = 1;
-      longestStreak = 1;
-
-      for (let i = 1; i < activeDates.length; i++) {
-        const prev = new Date(activeDates[i - 1]);
-        const curr = new Date(activeDates[i]);
-
-        const diffTime = Math.abs(curr.getTime() - prev.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 1) {
-          tempStreak++;
-        } else {
-          tempStreak = 1;
-        }
-
-        if (tempStreak > longestStreak) {
-          longestStreak = tempStreak;
-        }
-      }
-
-      // 檢查 Last Active Date 是否是今天或昨天，決定 Current Streak
-      const lastActive = new Date(activeDates[activeDates.length - 1]);
-      const now = new Date();
-      const diffToNow = Math.floor((now.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (diffToNow <= 1) {
-        currentStreak = tempStreak;
-      } else {
-        currentStreak = 0;
-      }
-    }
+    const activitySummary = activitySummaryRows[0];
+    const streakSummary = streakSummaryRows[0];
+    const trackingStartedAt = normalizeDateToDay(activitySummary?.trackingStartedAt)
+      ? new Date(normalizeDateToDay(activitySummary?.trackingStartedAt) as string)
+      : new Date();
+    const trackingDays = Number(activitySummary?.trackingDays || 0);
+    const longestStreak = Number(streakSummary?.longestStreakDays || 0);
+    const currentStreak = Number(streakSummary?.currentStreakDays || 0);
 
     // ========== 活躍度 (最近 30/90 天 + 最活躍月份) ==========
-    const activitySummary = activitySummaryRows[0];
     const activeDaysLast30 = Number(activitySummary?.activeDaysLast30 || 0);
     const activeDaysLast90 = Number(activitySummary?.activeDaysLast90 || 0);
     const mostActiveMonth = activitySummary?.mostActiveMonth || null;
@@ -427,48 +493,18 @@ export class LifetimeStatsAggregatorService {
         FROM viewer_channel_lifetime_stats
         WHERE channelId = ${channelId}
       ),
-      totals AS (
-        SELECT COUNT(*) AS cnt FROM base
-      ),
       changed AS (
-        SELECT id, totalWatchTimeMinutes, totalMessages
+        SELECT id
         FROM viewer_channel_lifetime_stats
         WHERE channelId = ${channelId}
           AND updatedAt >= ${recentCutoff}
       ),
       ranked AS (
         SELECT
-          c.id,
-          CASE
-            WHEN t.cnt = 0 THEN 0.0
-            ELSE (
-              (
-                SELECT COUNT(*)
-                FROM base b
-                WHERE b.totalWatchTimeMinutes < c.totalWatchTimeMinutes
-                  OR (
-                    b.totalWatchTimeMinutes = c.totalWatchTimeMinutes
-                    AND b.id <= c.id
-                  )
-              ) - 1
-            ) * 100.0 / t.cnt
-          END AS watchPercentile,
-          CASE
-            WHEN t.cnt = 0 THEN 0.0
-            ELSE (
-              (
-                SELECT COUNT(*)
-                FROM base b
-                WHERE b.totalMessages < c.totalMessages
-                  OR (
-                    b.totalMessages = c.totalMessages
-                    AND b.id <= c.id
-                  )
-              ) - 1
-            ) * 100.0 / t.cnt
-          END AS messagePercentile
-        FROM changed c
-        CROSS JOIN totals t
+          id,
+          PERCENT_RANK() OVER (ORDER BY totalWatchTimeMinutes, id) * 100.0 AS watchPercentile,
+          PERCENT_RANK() OVER (ORDER BY totalMessages, id) * 100.0 AS messagePercentile
+        FROM base
       )
       UPDATE viewer_channel_lifetime_stats
       SET

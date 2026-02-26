@@ -144,6 +144,17 @@ export class WebSocketGateway {
   }
 
   /**
+   * Send batched stats updates to a specific viewer
+   */
+  public emitViewerStatsBatch(
+    viewerId: string,
+    updates: Array<{ channelId: string; messageCountDelta: number }>
+  ) {
+    if (!this.io || updates.length === 0) return;
+    this.io.to(`viewer:${viewerId}`).emit("stats-update-batch", { updates });
+  }
+
+  /**
    * P1 Memory: Send update to a specific viewer
    */
   public emitToViewer(viewerId: string, event: string, data: unknown) {

@@ -12,6 +12,7 @@ import {
   isRedisReady,
   redisAcquireLock,
   redisDeleteByPrefix,
+  redisDeleteKeys,
   redisDeleteBySuffix,
   redisDeleteKey,
   redisGetJson,
@@ -43,6 +44,8 @@ const ESTIMATE_MAX_ITEMS = 40;
 const CLEANUP_SCAN_LIMIT = 1000;
 const HIGH_PRESSURE_RATIO = 0.9;
 const TARGET_PRESSURE_RATIO = 0.75;
+const CACHE_CLEAR_REDIS_NAMESPACE =
+  (process.env.CACHE_CLEAR_REDIS_NAMESPACE || "false").toLowerCase() === "true";
 
 export class CacheManager {
   private cache: Map<string, CacheEntry<unknown>>;
@@ -234,6 +237,8 @@ export class CacheManager {
    * 清除所有快取
    */
   clear(): void {
+    const keysSnapshot = Array.from(this.cache.keys());
+
     this.cache.clear();
     this.expiryBuckets.clear();
     this.keyToExpiryBucket.clear();
@@ -246,9 +251,17 @@ export class CacheManager {
     this.lastSegmentIndex.clear();
 
     if (this.redisEnabled) {
-      void redisDeleteByPrefix("").catch((err) =>
-        logger.warn("Cache", "Redis clear (deleteByPrefix) failed", err)
-      );
+      if (keysSnapshot.length > 0) {
+        void redisDeleteKeys(keysSnapshot).catch((err) =>
+          logger.warn("Cache", `Redis clear (deleteKeys ${keysSnapshot.length}) failed`, err)
+        );
+      }
+
+      if (CACHE_CLEAR_REDIS_NAMESPACE) {
+        void redisDeleteByPrefix("").catch((err) =>
+          logger.warn("Cache", "Redis clear namespace (deleteByPrefix) failed", err)
+        );
+      }
     }
   }
 
