@@ -127,10 +127,10 @@ async function buildHeatmapFromSessionsSql(
       UNION ALL
       SELECT
         sessionId,
-        DATETIME(bucketStart, '+1 hour'),
+        DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart), '+1 hour'),
         endedAt
       FROM expanded
-      WHERE DATETIME(bucketStart, '+1 hour') < endedAt
+      WHERE DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart), '+1 hour') < endedAt
     ),
     hourly AS (
       SELECT

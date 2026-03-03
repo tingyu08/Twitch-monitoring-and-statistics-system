@@ -69,7 +69,6 @@ export default function StreamerDashboard() {
 
   const [chartRange, setChartRange] = useState<ChartRange>("30d");
   const [granularity, setGranularity] = useState<ChartGranularity>("day");
-  const [subsChartRange, setSubsChartRange] = useState<ChartRange>("30d");
 
   // Epic 4 state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -80,7 +79,7 @@ export default function StreamerDashboard() {
 
   const timeSeries = useTimeSeriesData(chartRange, granularity, canFetch);
   const heatmap = useHeatmapData(chartRange, canFetch);
-  const subscriptionTrend = useSubscriptionTrendData(subsChartRange, canFetch);
+  const subscriptionTrend = useSubscriptionTrendData(chartRange, canFetch);
 
   const {
     preferences,
@@ -290,7 +289,12 @@ export default function StreamerDashboard() {
         {/* Story 1.2: 開台統計總覽 */}
         {uiPrefs.showSummaryCards && (
           <div className="mb-8" data-testid="summary-section">
-            <StreamSummaryCards initialSummary={bootstrapSummary} initialRange={chartRange} />
+            <StreamSummaryCards
+              initialSummary={bootstrapSummary}
+              initialRange="30d"
+              selectedRange={chartRange}
+              onRangeChange={setChartRange}
+            />
           </div>
         )}
 
@@ -306,20 +310,6 @@ export default function StreamerDashboard() {
                   {t("scheduleAnalysis")}
                 </h2>
                 <div className="flex flex-wrap gap-2">
-                  <select
-                    id="chart-range"
-                    name="chart-range"
-                    value={chartRange}
-                    onChange={(e) =>
-                      setChartRange(e.target.value as "7d" | "30d" | "90d")
-                    }
-                    className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
-                    data-testid="chart-range-select"
-                  >
-                    <option value="7d">{t("recentDays", { days: 7 })}</option>
-                    <option value="30d">{t("recentDays", { days: 30 })}</option>
-                    <option value="90d">{t("recentDays", { days: 90 })}</option>
-                  </select>
                   <select
                     id="chart-granularity"
                     name="chart-granularity"
@@ -392,6 +382,7 @@ export default function StreamerDashboard() {
                   <HeatmapChart
                     data={heatmap.data}
                     maxValue={heatmap.maxValue}
+                    range={chartRange}
                   />
                 </div>
               )}
@@ -407,19 +398,6 @@ export default function StreamerDashboard() {
                 <h2 className="text-lg sm:text-xl font-semibold theme-text-gradient">
                   {t("subTrends")}
                 </h2>
-                <select
-                  id="subs-chart-range"
-                  name="subs-chart-range"
-                  value={subsChartRange}
-                  onChange={(e) =>
-                    setSubsChartRange(e.target.value as ChartRange)
-                  }
-                  className="px-3 py-1.5 bg-white/50 dark:bg-white/10 border border-purple-200 dark:border-white/10 rounded-lg text-sm theme-text-primary"
-                >
-                  <option value="7d">{t("recentDays", { days: 7 })}</option>
-                  <option value="30d">{t("recentDays", { days: 30 })}</option>
-                  <option value="90d">{t("recentDays", { days: 90 })}</option>
-                </select>
               </div>
 
               {subscriptionTrend.currentDataDays <
@@ -450,7 +428,7 @@ export default function StreamerDashboard() {
                   data={subscriptionTrend.data}
                   isEstimated={subscriptionTrend.isEstimated}
                   currentDataDays={subscriptionTrend.currentDataDays}
-                  range={subsChartRange}
+                  range={chartRange}
                 />
               )}
             </div>

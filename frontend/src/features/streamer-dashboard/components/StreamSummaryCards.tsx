@@ -12,14 +12,26 @@ type DateRange = "7d" | "30d" | "90d";
 interface StreamSummaryCardsProps {
   initialSummary?: StreamerSummary | null;
   initialRange?: DateRange;
+  selectedRange?: DateRange;
+  onRangeChange?: (range: DateRange) => void;
 }
 
 export function StreamSummaryCards({
   initialSummary = null,
   initialRange = "30d",
+  selectedRange,
+  onRangeChange,
 }: StreamSummaryCardsProps) {
   const t = useTranslations("streamer");
-  const [range, setRange] = useState<DateRange>(initialRange);
+  const [internalRange, setInternalRange] = useState<DateRange>(initialRange);
+  const range = selectedRange ?? internalRange;
+  const handleRangeChange = (nextRange: DateRange) => {
+    if (onRangeChange) {
+      onRangeChange(nextRange);
+      return;
+    }
+    setInternalRange(nextRange);
+  };
   const [summary, setSummary] = useState<StreamerSummary | null>(initialSummary);
   const [loading, setLoading] = useState(!initialSummary);
   const appliedInitialRef = useRef<string | null>(null);
@@ -71,7 +83,7 @@ export function StreamSummaryCards({
         <h2 id="stats-heading" className="text-2xl theme-text-gradient">
           {t("overviewTitle")}
         </h2>
-        <DateRangePicker selectedRange={range} onRangeChange={setRange} />
+        <DateRangePicker selectedRange={range} onRangeChange={handleRangeChange} />
       </div>
 
       {/* Summary Cards */}

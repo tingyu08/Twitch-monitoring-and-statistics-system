@@ -33,19 +33,38 @@ describe('HeatmapChart', () => {
 
     // Check a few hour labels - use getAllByText since some numbers appear in legend too
     expect(screen.getAllByText('0').length).toBeGreaterThan(0);
-    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getAllByText('12').length).toBeGreaterThan(0);
     expect(screen.getByText('23')).toBeInTheDocument();
   });
 
   it('should render legend with color scale', () => {
-    render(<HeatmapChart data={mockData} />);
+    render(<HeatmapChart data={mockData} range="7d" />);
 
-    // Legend values - some numbers appear in hour labels too, so use getAllBy
+    // 7d bins: 0, 0.2, 0.4, 0.6, 0.8, 1
     expect(screen.getAllByText('0').length).toBeGreaterThan(0);
+    expect(screen.getByText('0.2')).toBeInTheDocument();
+    expect(screen.getByText('0.4')).toBeInTheDocument();
+    expect(screen.getByText('0.6')).toBeInTheDocument();
+    expect(screen.getByText('0.8')).toBeInTheDocument();
     expect(screen.getAllByText('1').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('2').length).toBeGreaterThan(0);
-    // After dynamic scale optimization, legend shows "4.0+" instead of "4+"
-    expect(screen.getByText('4.0+')).toBeInTheDocument();
+  });
+
+  it('should scale legend bins for 30d and 90d ranges', () => {
+    const { rerender } = render(<HeatmapChart data={mockData} range="30d" />);
+
+    expect(screen.getByText('0.8')).toBeInTheDocument();
+    expect(screen.getByText('1.6')).toBeInTheDocument();
+    expect(screen.getByText('2.4')).toBeInTheDocument();
+    expect(screen.getByText('3.2')).toBeInTheDocument();
+    expect(screen.getAllByText('4').length).toBeGreaterThan(0);
+
+    rerender(<HeatmapChart data={mockData} range="90d" />);
+
+    expect(screen.getByText('2.4')).toBeInTheDocument();
+    expect(screen.getByText('4.8')).toBeInTheDocument();
+    expect(screen.getByText('7.2')).toBeInTheDocument();
+    expect(screen.getByText('9.6')).toBeInTheDocument();
+    expect(screen.getAllByText('12').length).toBeGreaterThan(0);
   });
 
   it('should render 7 rows (days) x 24 columns (hours) of cells', () => {

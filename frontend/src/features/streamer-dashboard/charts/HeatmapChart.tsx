@@ -7,11 +7,30 @@ import { useTranslations } from "next-intl";
 interface HeatmapChartProps {
   data: HeatmapCell[];
   maxValue?: number;
+  range?: "7d" | "30d" | "90d";
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const BASE_LEGEND_BINS = [0, 0.2, 0.4, 0.6, 0.8, 1] as const;
+const BIN_COLORS = [
+  "#1f2937", // 0
+  "#2b4f78", // <= bin1
+  "#32669a", // <= bin2
+  "#3a7ebe", // <= bin3
+  "#4296df", // <= bin4
+  "#4aafff", // <= bin5
+  "#66beff", // > bin5
+] as const;
 
-export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
+const formatBinLabel = (value: number) => {
+  if (Number.isInteger(value)) {
+    return `${value}`;
+  }
+
+  return value.toFixed(1);
+};
+
+export function HeatmapChart({ data, maxValue = 4, range = "30d" }: HeatmapChartProps) {
   const t = useTranslations("streamer.charts.heatmap");
 
   const DAYS = [
@@ -64,16 +83,34 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
     dataMap.set(key, current + cell.value);
   });
 
-  // 使用 API 提供的 maxValue 進行動態顏色計算
-  const effectiveMax = maxValue > 0 ? maxValue : 4; // 如果 maxValue 為 0，使用預設值 4
+  const binMultiplier = range === "7d" ? 1 : range === "30d" ? 4 : 12;
+  const legendBins = React.useMemo(
+    () => BASE_LEGEND_BINS.map((value) => Number((value * binMultiplier).toFixed(1))),
+    [binMultiplier]
+  );
+
+  // 固定絕對級距，不再依資料自動縮放
+  const legendItems = React.useMemo(
+    () =>
+      legendBins.map((value, idx) => ({
+        key: `${value}`,
+        value,
+        label: formatBinLabel(value),
+        isZero: idx === 0,
+      })),
+    [legendBins]
+  );
 
   const getColor = (hours: number) => {
-    if (hours === 0) return "#1f2937";
-    // 使用實際的最大值進行正規化
-    const intensity = Math.min(hours / effectiveMax, 1);
-    const blue = Math.round(59 + (255 - 59) * intensity);
-    const green = Math.round(130 + (59 - 130) * (1 - intensity));
-    return `rgb(59, ${green}, ${blue})`;
+    if (hours <= 0) return BIN_COLORS[0];
+
+    for (let idx = 1; idx < legendBins.length; idx += 1) {
+      if (hours <= legendBins[idx]) {
+        return BIN_COLORS[idx];
+      }
+    }
+
+    return BIN_COLORS[BIN_COLORS.length - 1];
   };
 
   // 為螢幕閱讀器生成資料摘要
@@ -117,34 +154,17 @@ export function HeatmapChart({ data, maxValue = 4 }: HeatmapChartProps) {
             className="flex items-center gap-2 text-xs text-gray-400"
             aria-hidden="true"
           >
-            <div className="flex items-center gap-1">
-              <div
-                className="w-4 h-4 rounded"
-                style={{ backgroundColor: "#1f2937" }}
-              ></div>
-              <span>0</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div
-                className="w-4 h-4 rounded"
-                style={{ backgroundColor: getColor(effectiveMax * 0.25) }}
-              ></div>
-              <span>{(effectiveMax * 0.25).toFixed(1)}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div
-                className="w-4 h-4 rounded"
-                style={{ backgroundColor: getColor(effectiveMax * 0.5) }}
-              ></div>
-              <span>{(effectiveMax * 0.5).toFixed(1)}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div
-                className="w-4 h-4 rounded"
-                style={{ backgroundColor: getColor(effectiveMax) }}
-              ></div>
-              <span>{effectiveMax.toFixed(1)}+</span>
-            </div>
+            {legendItems.map((item) => {
+              return (
+                <div key={item.key} className="flex items-center gap-1">
+                  <div
+                    className="w-4 h-4 rounded"
+                    style={{ backgroundColor: item.isZero ? "#1f2937" : getColor(item.value) }}
+                  ></div>
+                  <span>{item.label}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
