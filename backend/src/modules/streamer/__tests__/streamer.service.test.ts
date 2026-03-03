@@ -191,6 +191,16 @@ describe("StreamerService", () => {
       expect(res.granularity).toBe("day");
     });
 
+    it("should default range to 30d when omitted", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+
+      const res = await getStreamerTimeSeries("s_ts_default_range");
+
+      expect(res.range).toBe("30d");
+      expect(res.granularity).toBe("day");
+    });
+
     it("should handle unknown range gracefully (treated as 30d)", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
@@ -246,6 +256,63 @@ describe("StreamerService", () => {
         expect(point).toHaveProperty("totalHours");
         expect(point).toHaveProperty("sessionCount");
       });
+    });
+
+    it("should map weekly aggregate row values when bucketDate matches week key", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+
+      const now = new Date();
+      const startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const weekStart = new Date(startDate);
+      const day = weekStart.getDay();
+      const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+      weekStart.setDate(diff);
+      const weekKey = weekStart.toISOString().split("T")[0];
+
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { bucketDate: weekKey, totalSeconds: "7200", sessionCount: "3" },
+      ]);
+
+      const res = await getStreamerTimeSeries("s_weekly_match", "7d", "week");
+      const point = res.data.find((entry) => entry.date === weekKey);
+
+      expect(point).toBeDefined();
+      expect(point?.totalHours).toBe(2);
+      expect(point?.sessionCount).toBe(3);
+    });
+
+    it("should build weekly buckets correctly when start date is Sunday", async () => {
+      jest.useFakeTimers();
+      try {
+        jest.setSystemTime(new Date("2026-03-08T12:00:00.000Z")); // Sunday
+        (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+        (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+
+        const res = await getStreamerTimeSeries("s_weekly_sunday", "7d", "week");
+
+        expect(res.granularity).toBe("week");
+        expect(res.data.length).toBeGreaterThan(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("should keep existing weekly bucket key when duplicate key is generated", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+
+      const isoSpy = jest
+        .spyOn(Date.prototype, "toISOString")
+        .mockReturnValue("2026-01-05T00:00:00.000Z");
+
+      try {
+        const res = await getStreamerTimeSeries("s_weekly_duplicate_key", "90d", "week");
+
+        expect(res.granularity).toBe("week");
+        expect(res.data.length).toBe(1);
+      } finally {
+        isoSpy.mockRestore();
+      }
     });
 
     it("should serve from cache on second call", async () => {
@@ -306,6 +373,68 @@ describe("StreamerService", () => {
       expect(res.maxValue).toBeGreaterThan(0);
     });
 
+    it("should ignore non-numeric SQL heatmap rows and keep valid cells", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { dayOfWeek: "bad", hour: "10", totalHours: "1.2" },
+          { dayOfWeek: 1, hour: 10, totalHours: "2.6" },
+        ]);
+
+      const res = await getStreamerHeatmap("s1_sql_rows", "30d");
+      const validCell = res.data.find((cell) => cell.dayOfWeek === 1 && cell.hour === 10);
+
+      expect(validCell?.value).toBe(2.6);
+      expect(res.data).toHaveLength(7 * 24);
+    });
+
+    it("should skip fallback sessions with non-positive duration", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error("SQL failed"));
+
+      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
+        { durationSeconds: 0, startedAt: new Date("2025-01-01T10:00:00Z") },
+      ]);
+
+      const res = await getStreamerHeatmap("s1_zero_duration", "30d");
+
+      expect(res.maxValue).toBe(0);
+      expect(res.minValue).toBe(0);
+    });
+
+    it("should treat null duration as 0 in fallback sessions", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error("SQL failed"));
+
+      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([
+        { durationSeconds: null, startedAt: new Date("2025-01-01T10:00:00Z") },
+      ]);
+
+      const res = await getStreamerHeatmap("s1_null_duration", "30d");
+
+      expect(res.maxValue).toBe(0);
+      expect(res.minValue).toBe(0);
+    });
+
+    it("should continue when aggregate query throws and fall back to SQL build", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+      (prisma.$queryRaw as jest.Mock)
+        .mockRejectedValueOnce(new Error("aggregate query failed"))
+        .mockResolvedValueOnce([]);
+
+      const res = await getStreamerHeatmap("s1_agg_error", "30d");
+
+      expect(res.data).toHaveLength(7 * 24);
+    });
+
     it("should use 7d range correctly", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
       (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([]);
@@ -337,7 +466,12 @@ describe("StreamerService", () => {
       const recentDate = new Date(now - 5 * 60 * 1000); // 5 minutes ago (within 10min TTL)
 
       // Build 168 rows (7 days * 24 hours)
-      const aggregateRows = [];
+      const aggregateRows: Array<{
+        dayOfWeek: number;
+        hour: number;
+        totalHours: number;
+        updatedAt: Date;
+      }> = [];
       for (let day = 0; day < 7; day++) {
         for (let hour = 0; hour < 24; hour++) {
           aggregateRows.push({
@@ -358,12 +492,77 @@ describe("StreamerService", () => {
       expect(prisma.streamSession.findMany).not.toHaveBeenCalled();
     });
 
+    it("should accept aggregate updatedAt as recent ISO string", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+
+      const recentIso = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const aggregateRows: Array<{
+        dayOfWeek: number;
+        hour: number;
+        totalHours: number;
+        updatedAt: string;
+      }> = [];
+
+      for (let day = 0; day < 7; day++) {
+        for (let hour = 0; hour < 24; hour++) {
+          aggregateRows.push({
+            dayOfWeek: day,
+            hour,
+            totalHours: 0.4,
+            updatedAt: recentIso,
+          });
+        }
+      }
+
+      (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce(aggregateRows);
+
+      const res = await getStreamerHeatmap("s1_agg_string_date", "30d");
+
+      expect(res.data).toHaveLength(7 * 24);
+      expect(prisma.streamSession.findMany).not.toHaveBeenCalled();
+    });
+
+    it("should ignore invalid aggregate updatedAt and fall back", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+
+      const invalidRows: Array<{
+        dayOfWeek: number;
+        hour: number;
+        totalHours: number;
+        updatedAt: string;
+      }> = [];
+
+      for (let day = 0; day < 7; day++) {
+        for (let hour = 0; hour < 24; hour++) {
+          invalidRows.push({
+            dayOfWeek: day,
+            hour,
+            totalHours: 1,
+            updatedAt: "not-a-date",
+          });
+        }
+      }
+
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce(invalidRows)
+        .mockResolvedValueOnce([]);
+
+      const res = await getStreamerHeatmap("s1_agg_invalid_date", "30d");
+
+      expect(res.data).toHaveLength(7 * 24);
+    });
+
     it("should fallback to SQL query when aggregate is stale (old updatedAt)", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
 
       const staleDate = new Date(Date.now() - 20 * 60 * 1000); // 20 minutes ago (stale)
 
-      const staleRows = [];
+      const staleRows: Array<{
+        dayOfWeek: number;
+        hour: number;
+        totalHours: number;
+        updatedAt: Date;
+      }> = [];
       for (let day = 0; day < 7; day++) {
         for (let hour = 0; hour < 24; hour++) {
           staleRows.push({
@@ -511,6 +710,15 @@ describe("StreamerService", () => {
       const res = await getStreamerGameStats("s1_zero", "30d");
       expect(res[0].avgViewers).toBe(0);
     });
+
+    it("should default range to 30d when omitted", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+
+      const res = await getStreamerGameStats("s_default_game_range");
+
+      expect(res).toEqual([]);
+    });
   });
 
   // ============================================================
@@ -552,6 +760,39 @@ describe("StreamerService", () => {
     it("should handle 90d range", async () => {
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
       const res = await getChannelGameStats("ch1", "90d");
+      expect(res).toEqual([]);
+    });
+
+    it("should convert string and null values from aggregate rows", async () => {
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        {
+          gameName: "StringGame",
+          totalSeconds: "3600",
+          weightedViewersSum: "not-a-number",
+          peakViewers: null,
+          streamCount: "2",
+        },
+      ]);
+
+      const res = await getChannelGameStats("ch1_strings", "30d");
+
+      expect(res[0]).toEqual(
+        expect.objectContaining({
+          gameName: "StringGame",
+          totalHours: 1,
+          avgViewers: 0,
+          peakViewers: 0,
+          streamCount: 2,
+          percentage: 100,
+        })
+      );
+    });
+
+    it("should default range to 30d when omitted", async () => {
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+
+      const res = await getChannelGameStats("ch_default_game_range");
+
       expect(res).toEqual([]);
     });
   });
@@ -624,6 +865,14 @@ describe("StreamerService", () => {
       const res = await getChannelViewerTrends("ch1", "90d");
       expect(res).toEqual([]);
     });
+
+    it("should default range to 30d when omitted", async () => {
+      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([]);
+
+      const res = await getChannelViewerTrends("ch_default_trends_range");
+
+      expect(res).toEqual([]);
+    });
   });
 
   // ============================================================
@@ -682,6 +931,15 @@ describe("StreamerService", () => {
 
       // streamSession.findMany should only be called once
       expect(prisma.streamSession.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it("should default range to 30d when omitted", async () => {
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
+      (prisma.streamSession.findMany as jest.Mock).mockResolvedValue([]);
+
+      const res = await getChannelGameStatsAndViewerTrends("ch_default_combined_range");
+
+      expect(res).toEqual({ gameStats: [], viewerTrends: [] });
     });
   });
 

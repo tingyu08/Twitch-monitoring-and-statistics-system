@@ -112,7 +112,7 @@ export async function updateViewerWatchTime(
 
     // 正規化日期到當天開始
     const dayStart = new Date(date);
-    dayStart.setHours(0, 0, 0, 0);
+    dayStart.setUTCHours(0, 0, 0, 0);
 
     const dayEnd = new Date(dayStart);
     dayEnd.setDate(dayEnd.getDate() + 1);

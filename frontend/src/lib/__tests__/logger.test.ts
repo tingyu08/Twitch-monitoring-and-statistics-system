@@ -1,11 +1,26 @@
-﻿import { logger, apiLogger, authLogger, chartLogger, Logger } from '../logger';
+import type { Logger as LoggerClass } from "../logger";
 
-describe('Logger', () => {
+type LoggerModule = {
+  logger: LoggerClass;
+  apiLogger: LoggerClass;
+  authLogger: LoggerClass;
+  chartLogger: LoggerClass;
+  Logger: typeof LoggerClass;
+};
+
+describe("Logger", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
   const originalConsole = {
     log: console.log,
     info: console.info,
     warn: console.warn,
     error: console.error,
+  };
+
+  const loadLoggerModule = (nodeEnv: string): LoggerModule => {
+    (process.env as Record<string, string | undefined>)["NODE_ENV"] = nodeEnv;
+    jest.resetModules();
+    return require("../logger") as LoggerModule;
   };
 
   beforeEach(() => {
@@ -20,95 +35,79 @@ describe('Logger', () => {
     console.info = originalConsole.info;
     console.warn = originalConsole.warn;
     console.error = originalConsole.error;
+    (process.env as Record<string, string | undefined>)["NODE_ENV"] = originalNodeEnv;
+    jest.resetModules();
   });
 
-  describe('basic functions', () => {
-    it('should output debug in non-production', () => {
-      const originalEnv = process.env.NODE_ENV;
-      (process.env as any).NODE_ENV = 'development';
-      
-      logger.debug('test message', { data: 'test' });
-      
-      expect(console.log).toHaveBeenCalledWith('[App] test message', { data: 'test' });
-      
-      (process.env as any).NODE_ENV = originalEnv;
-    });
+  it("logs debug in development", () => {
+    const { logger } = loadLoggerModule("development");
 
-    it('should always output info', () => {
-      logger.info('info message', { level: 'info' });
-      expect(console.info).toHaveBeenCalledWith('[App] info message', { level: 'info' });
-    });
+    logger.debug("test message", { data: "test" });
 
-    it('should always output warn', () => {
-      logger.warn('warning message', { severity: 'medium' });
-      expect(console.warn).toHaveBeenCalledWith('[App] warning message', { severity: 'medium' });
-    });
-
-    it('should always output error', () => {
-      logger.error('error message', { code: 500 });
-      expect(console.error).toHaveBeenCalledWith('[App] error message', { code: 500 });
-    });
+    expect(console.log).toHaveBeenCalledWith("[App] test message", { data: "test" });
   });
 
-  describe('prefix functionality', () => {
-    it('apiLogger should use API prefix', () => {
-      apiLogger.info('API request');
-      expect(console.info).toHaveBeenCalledWith('[API] API request');
-    });
+  it("skips debug in production", () => {
+    const { logger } = loadLoggerModule("production");
 
-    it('authLogger should use Auth prefix', () => {
-      authLogger.warn('auth failed');
-      expect(console.warn).toHaveBeenCalledWith('[Auth] auth failed');
-    });
+    logger.debug("test message", { data: "test" });
 
-    it('chartLogger should use Chart prefix', () => {
-      chartLogger.error('chart load failed');
-      expect(console.error).toHaveBeenCalledWith('[Chart] chart load failed');
-    });
+    expect(console.log).not.toHaveBeenCalled();
   });
 
-  describe('multiple parameters support', () => {
-    it('should support multiple params', () => {
-      logger.info('message', 'arg1', { key: 'value' }, [1, 2, 3]);
-      
-      expect(console.info).toHaveBeenCalledWith(
-        '[App] message',
-        'arg1',
-        { key: 'value' },
-        [1, 2, 3]
-      );
-    });
+  it("always logs info, warn, and error", () => {
+    const { logger } = loadLoggerModule("production");
 
-    it('should support no additional params', () => {
-      logger.error('simple error');
-      expect(console.error).toHaveBeenCalledWith('[App] simple error');
-    });
+    logger.info("info message", { level: "info" });
+    logger.warn("warning message", { severity: "medium" });
+    logger.error("error message", { code: 500 });
+
+    expect(console.info).toHaveBeenCalledWith("[App] info message", { level: "info" });
+    expect(console.warn).toHaveBeenCalledWith("[App] warning message", { severity: "medium" });
+    expect(console.error).toHaveBeenCalledWith("[App] error message", { code: 500 });
   });
 
-  describe('production environment', () => {
-    it('info/warn/error should still output in production', () => {
-      const originalEnv = process.env.NODE_ENV;
-      (process.env as any).NODE_ENV = 'production';
-      
-      logger.info('info');
-      logger.warn('warning');
-      logger.error('error');
-      
-      expect(console.info).toHaveBeenCalled();
-      expect(console.warn).toHaveBeenCalled();
-      expect(console.error).toHaveBeenCalled();
-      
-      (process.env as any).NODE_ENV = originalEnv;
-    });
+  it("supports all predefined prefixed loggers", () => {
+    const { apiLogger, authLogger, chartLogger } = loadLoggerModule("development");
+
+    apiLogger.info("API request");
+    authLogger.warn("auth failed");
+    chartLogger.error("chart load failed");
+
+    expect(console.info).toHaveBeenCalledWith("[API] API request");
+    expect(console.warn).toHaveBeenCalledWith("[Auth] auth failed");
+    expect(console.error).toHaveBeenCalledWith("[Chart] chart load failed");
   });
 
-  describe('Logger.create static method', () => {
-    it('should create Logger with custom prefix', () => {
-      const customLogger = Logger.create('Custom');
-      
-      customLogger.info('custom message');
-      
-      expect(console.info).toHaveBeenCalledWith('[Custom] custom message');
-    });
+  it("supports custom logger prefixes and variadic arguments", () => {
+    const { Logger } = loadLoggerModule("development");
+    const customLogger = Logger.create("Custom");
+
+    customLogger.info("message", "arg1", { key: "value" }, [1, 2, 3]);
+
+    expect(console.info).toHaveBeenCalledWith(
+      "[Custom] message",
+      "arg1",
+      { key: "value" },
+      [1, 2, 3],
+    );
+  });
+
+  it("does not prefix messages when prefix is empty", () => {
+    const { Logger } = loadLoggerModule("development");
+    const plainLogger = Logger.create("");
+
+    plainLogger.error("plain error");
+
+    expect(console.error).toHaveBeenCalledWith("plain error");
+  });
+
+  it("uses default empty prefix when constructed without arguments", () => {
+    const { Logger } = loadLoggerModule("development");
+    const plainLogger = new Logger();
+
+    plainLogger.info("plain info");
+
+    expect(console.info).toHaveBeenCalledWith("plain info");
   });
 });

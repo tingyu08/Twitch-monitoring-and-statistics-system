@@ -136,6 +136,22 @@ describe("validateToken", () => {
     expect(result.message).toContain("500");
   });
 
+  it("passes validateStatus callback that accepts status codes below 500", async () => {
+    mockedAxios.get.mockResolvedValue({
+      status: 200,
+      data: { client_id: "c1", login: "user", scopes: [], user_id: "u1", expires_in: 60 },
+    });
+
+    await tokenValidationService.validateToken("someToken");
+
+    const config = mockedAxios.get.mock.calls[0][1] as {
+      validateStatus: (status: number) => boolean;
+    };
+
+    expect(config.validateStatus(499)).toBe(true);
+    expect(config.validateStatus(500)).toBe(false);
+  });
+
   it("returns isValid:false, shouldRetry:true when axios throws an error", async () => {
     mockedAxios.get.mockRejectedValue(new Error("Network error"));
 
@@ -145,6 +161,16 @@ describe("validateToken", () => {
     expect(result.shouldRetry).toBe(true);
     expect(result.message).toBe("Network error");
     expect(logger.error).toHaveBeenCalled();
+  });
+
+  it("returns Unknown error when axios rejects with a non-Error value", async () => {
+    mockedAxios.get.mockRejectedValue("non-error-rejection");
+
+    const result = await tokenValidationService.validateToken("someToken");
+
+    expect(result.isValid).toBe(false);
+    expect(result.shouldRetry).toBe(true);
+    expect(result.message).toBe("Unknown error");
   });
 
   it("uses default message when 401 response has no message body", async () => {
@@ -365,6 +391,228 @@ describe("validateAllActiveTokens", () => {
     expect(result.errors[0]).toContain("t-err");
   });
 
+  it("uses positive TOKEN_VALIDATION_CONCURRENCY from env", async () => {
+    const originalConcurrency = process.env.TOKEN_VALIDATION_CONCURRENCY;
+    process.env.TOKEN_VALIDATION_CONCURRENCY = "2";
+
+    const batch = [{ id: "t1", ownerType: "streamer", streamerId: "s1", viewerId: null }];
+    mockedFindMany.mockResolvedValueOnce(batch).mockResolvedValueOnce([]);
+
+    const validateSpy = jest
+      .spyOn(tokenValidationService, "validateAndUpdateToken")
+      .mockResolvedValue({
+        isValid: true,
+        status: TokenStatus.ACTIVE,
+        message: "ok",
+        shouldRetry: false,
+      });
+
+    try {
+      const result = await tokenValidationService.validateAllActiveTokens();
+      expect(result).toEqual({ total: 1, valid: 1, invalid: 0, errors: [] });
+      expect(validateSpy).toHaveBeenCalledWith("t1");
+    } finally {
+      validateSpy.mockRestore();
+      process.env.TOKEN_VALIDATION_CONCURRENCY = originalConcurrency;
+    }
+  });
+
+  it("uses production default concurrency and executes delay branch when delay is positive", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalDelay = process.env.TOKEN_VALIDATION_DELAY_MS;
+    const originalConcurrency = process.env.TOKEN_VALIDATION_CONCURRENCY;
+
+    process.env.NODE_ENV = "production";
+    process.env.TOKEN_VALIDATION_DELAY_MS = "1";
+    delete process.env.TOKEN_VALIDATION_CONCURRENCY;
+
+    try {
+      const ServiceConstructor = (tokenValidationService as unknown as {
+        constructor: new () => {
+          validateAllActiveTokens: () => Promise<{
+            total: number;
+            valid: number;
+            invalid: number;
+            errors: string[];
+          }>;
+          validateAndUpdateToken: (tokenId: string) => Promise<{
+            isValid: boolean;
+            status: string;
+            message: string;
+            shouldRetry: boolean;
+          }>;
+          getValidationConcurrencyLimit: () => number;
+        };
+      }).constructor;
+
+      const isolatedService = new ServiceConstructor();
+
+      mockedFindMany
+        .mockResolvedValueOnce([{ id: "iso-1", ownerType: "streamer", streamerId: "s1", viewerId: null }])
+        .mockResolvedValueOnce([]);
+
+      const validateSpy = jest.spyOn(isolatedService, "validateAndUpdateToken").mockResolvedValue({
+        isValid: true,
+        status: TokenStatus.ACTIVE,
+        message: "ok",
+        shouldRetry: false,
+      });
+      const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+
+      expect(isolatedService.getValidationConcurrencyLimit()).toBe(3);
+
+      const result = await isolatedService.validateAllActiveTokens();
+      expect(result).toEqual({ total: 1, valid: 1, invalid: 0, errors: [] });
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1);
+
+      validateSpy.mockRestore();
+      setTimeoutSpy.mockRestore();
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.TOKEN_VALIDATION_DELAY_MS = originalDelay;
+      if (originalConcurrency === undefined) {
+        delete process.env.TOKEN_VALIDATION_CONCURRENCY;
+      } else {
+        process.env.TOKEN_VALIDATION_CONCURRENCY = originalConcurrency;
+      }
+    }
+  });
+
+  it("keeps only the latest 200 result errors", async () => {
+    const batch = Array.from({ length: 201 }, (_, index) => ({
+      id: `invalid-${index}`,
+      ownerType: "streamer",
+      streamerId: "s1",
+      viewerId: null,
+    }));
+    mockedFindMany.mockResolvedValueOnce(batch).mockResolvedValueOnce([]);
+
+    const validateSpy = jest
+      .spyOn(tokenValidationService, "validateAndUpdateToken")
+      .mockResolvedValue({
+        isValid: false,
+        status: TokenStatus.INVALID,
+        message: "bad token",
+        shouldRetry: false,
+      });
+
+    try {
+      const result = await tokenValidationService.validateAllActiveTokens();
+
+      expect(result.total).toBe(201);
+      expect(result.invalid).toBe(201);
+      expect(result.errors).toHaveLength(200);
+      expect(result.errors[0]).toContain("invalid-1");
+      expect(result.errors[199]).toContain("invalid-200");
+    } finally {
+      validateSpy.mockRestore();
+    }
+  });
+
+  it("keeps only the latest 200 thrown errors", async () => {
+    const batch = Array.from({ length: 201 }, (_, index) => ({
+      id: `throw-${index}`,
+      ownerType: "viewer",
+      streamerId: null,
+      viewerId: "v1",
+    }));
+    mockedFindMany.mockResolvedValueOnce(batch).mockResolvedValueOnce([]);
+
+    const validateSpy = jest
+      .spyOn(tokenValidationService, "validateAndUpdateToken")
+      .mockRejectedValue(new Error("boom"));
+
+    try {
+      const result = await tokenValidationService.validateAllActiveTokens();
+
+      expect(result.total).toBe(201);
+      expect(result.invalid).toBe(201);
+      expect(result.errors).toHaveLength(200);
+      expect(result.errors[0]).toContain("throw-1");
+      expect(result.errors[199]).toContain("throw-200");
+    } finally {
+      validateSpy.mockRestore();
+    }
+  });
+
+  it("formats thrown non-Error values as Unknown error", async () => {
+    const batch = [{ id: "throw-unknown", ownerType: "viewer", streamerId: null, viewerId: "v1" }];
+    mockedFindMany.mockResolvedValueOnce(batch).mockResolvedValueOnce([]);
+
+    const validateSpy = jest
+      .spyOn(tokenValidationService, "validateAndUpdateToken")
+      .mockRejectedValue("raw-error");
+
+    try {
+      const result = await tokenValidationService.validateAllActiveTokens();
+
+      expect(result.invalid).toBe(1);
+      expect(result.errors[0]).toContain("Unknown error");
+    } finally {
+      validateSpy.mockRestore();
+    }
+  });
+
+  it("awaits delay between validations when delay is greater than zero", async () => {
+    const originalDelay = (tokenValidationService as unknown as { TOKEN_VALIDATION_DELAY_MS: number })
+      .TOKEN_VALIDATION_DELAY_MS;
+    (tokenValidationService as unknown as { TOKEN_VALIDATION_DELAY_MS: number }).TOKEN_VALIDATION_DELAY_MS = 1;
+    const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+
+    const batch = [{ id: "delayed-1", ownerType: "streamer", streamerId: "s1", viewerId: null }];
+    mockedFindMany.mockResolvedValueOnce(batch).mockResolvedValueOnce([]);
+
+    const validateSpy = jest
+      .spyOn(tokenValidationService, "validateAndUpdateToken")
+      .mockResolvedValue({
+        isValid: true,
+        status: TokenStatus.ACTIVE,
+        message: "ok",
+        shouldRetry: false,
+      });
+
+    try {
+      const result = await tokenValidationService.validateAllActiveTokens();
+      expect(result.valid).toBe(1);
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1);
+    } finally {
+      validateSpy.mockRestore();
+      setTimeoutSpy.mockRestore();
+      (tokenValidationService as unknown as { TOKEN_VALIDATION_DELAY_MS: number }).TOKEN_VALIDATION_DELAY_MS =
+        originalDelay;
+    }
+  });
+
+  it("skips delay wait when delay is zero", async () => {
+    const originalDelay = (tokenValidationService as unknown as { TOKEN_VALIDATION_DELAY_MS: number })
+      .TOKEN_VALIDATION_DELAY_MS;
+    (tokenValidationService as unknown as { TOKEN_VALIDATION_DELAY_MS: number }).TOKEN_VALIDATION_DELAY_MS = 0;
+    const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+
+    const batch = [{ id: "no-delay-1", ownerType: "streamer", streamerId: "s1", viewerId: null }];
+    mockedFindMany.mockResolvedValueOnce(batch).mockResolvedValueOnce([]);
+
+    const validateSpy = jest
+      .spyOn(tokenValidationService, "validateAndUpdateToken")
+      .mockResolvedValue({
+        isValid: true,
+        status: TokenStatus.ACTIVE,
+        message: "ok",
+        shouldRetry: false,
+      });
+
+    try {
+      const result = await tokenValidationService.validateAllActiveTokens();
+      expect(result.valid).toBe(1);
+      expect(setTimeoutSpy).not.toHaveBeenCalledWith(expect.any(Function), 0);
+    } finally {
+      validateSpy.mockRestore();
+      setTimeoutSpy.mockRestore();
+      (tokenValidationService as unknown as { TOKEN_VALIDATION_DELAY_MS: number }).TOKEN_VALIDATION_DELAY_MS =
+        originalDelay;
+    }
+  });
+
   it("handles multiple batches correctly", async () => {
     // Simulate TOKEN_SCAN_BATCH_SIZE = 200 exactly filled → needs second query
     const firstBatch = Array.from({ length: 200 }, (_, i) => ({
@@ -549,6 +797,27 @@ describe("getTokensNeedingRefresh", () => {
     const result = await tokenValidationService.getTokensNeedingRefresh();
 
     expect(result).toHaveLength(0);
+  });
+
+  it("falls back to default take=500 when refresh limit is invalid", async () => {
+    const originalLimit = (tokenValidationService as unknown as { TOKENS_NEEDING_REFRESH_LIMIT: number })
+      .TOKENS_NEEDING_REFRESH_LIMIT;
+    (tokenValidationService as unknown as { TOKENS_NEEDING_REFRESH_LIMIT: number }).TOKENS_NEEDING_REFRESH_LIMIT =
+      0;
+    mockedFindMany.mockResolvedValue([]);
+
+    try {
+      await tokenValidationService.getTokensNeedingRefresh();
+
+      expect(mockedFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 500,
+        })
+      );
+    } finally {
+      (tokenValidationService as unknown as { TOKENS_NEEDING_REFRESH_LIMIT: number }).TOKENS_NEEDING_REFRESH_LIMIT =
+        originalLimit;
+    }
   });
 });
 

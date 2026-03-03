@@ -13,6 +13,7 @@ jest.mock("../../viewer/viewer-auth-snapshot.service", () => ({
 }));
 
 import { cacheManager } from "../../../utils/cache-manager";
+import { getViewerAuthSnapshotById } from "../../viewer/viewer-auth-snapshot.service";
 
 describe("auth.middleware", () => {
   let mockReq: Partial<AuthRequest>;
@@ -115,6 +116,16 @@ describe("auth.middleware - factory pattern & tokenVersion", () => {
     expect(typeof middleware).toBe("function");
   });
 
+  it("requireAuth() with no args should return working middleware", async () => {
+    mockReq.cookies = { auth_token: "valid" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({ role: "viewer" });
+
+    const middleware = requireAuth();
+    await middleware(mockReq, mockRes, mockNext);
+
+    expect(mockNext).toHaveBeenCalled();
+  });
+
   it("factory middleware should work when called", async () => {
     mockReq.cookies = { auth_token: "valid" };
     (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({ role: "streamer" });
@@ -192,5 +203,62 @@ describe("auth.middleware - tokenVersion checks", () => {
 
     expect(mockNext).toHaveBeenCalled();
     expect(mockRes.status).not.toHaveBeenCalled();
+  });
+
+  it("should resolve tokenVersion from snapshot callback and continue on match", async () => {
+    (getViewerAuthSnapshotById as jest.Mock).mockResolvedValue({ tokenVersion: 3 });
+    (cacheManager.getOrSetWithTags as jest.Mock).mockImplementation(
+      async (_key: string, resolver: () => Promise<number | null>) => resolver()
+    );
+
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      viewerId: "viewer-123",
+      tokenVersion: 3,
+      role: "viewer",
+    });
+
+    await requireAuth(mockReq, mockRes, mockNext);
+
+    expect(getViewerAuthSnapshotById).toHaveBeenCalledWith("viewer-123");
+    expect(cacheManager.getOrSetWithTags).toHaveBeenCalledWith(
+      "auth:viewer:viewer-123:token_version",
+      expect.any(Function),
+      60,
+      ["viewer:viewer-123", "auth:token-version"]
+    );
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it("should skip tokenVersion validation when tokenVersion is undefined", async () => {
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      viewerId: "viewer-123",
+      role: "viewer",
+    });
+
+    await requireAuth(mockReq, mockRes, mockNext);
+
+    expect(cacheManager.getOrSetWithTags).not.toHaveBeenCalled();
+    expect(getViewerAuthSnapshotById).not.toHaveBeenCalled();
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it("should return Token expired when snapshot callback resolves to missing tokenVersion", async () => {
+    (getViewerAuthSnapshotById as jest.Mock).mockResolvedValue(undefined);
+    (cacheManager.getOrSetWithTags as jest.Mock).mockImplementation(
+      async (_key: string, resolver: () => Promise<number | null>) => resolver()
+    );
+
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({
+      viewerId: "viewer-456",
+      tokenVersion: 2,
+      role: "viewer",
+    });
+
+    await requireAuth(mockReq, mockRes, mockNext);
+
+    expect(getViewerAuthSnapshotById).toHaveBeenCalledWith("viewer-456");
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: "Token expired" });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 });

@@ -45,7 +45,7 @@ export interface FollowedChannel {
   currentStreamStartedAt?: string;
 }
 
-function toNumberOrFallback(value: unknown, fallback = 0): number {
+function toNumberOrFallback(value: unknown, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
@@ -58,7 +58,7 @@ function toNumberOrFallback(value: unknown, fallback = 0): number {
   return fallback;
 }
 
-function toStringOrFallback(value: unknown, fallback = ""): string {
+function toStringOrFallback(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
 }
 

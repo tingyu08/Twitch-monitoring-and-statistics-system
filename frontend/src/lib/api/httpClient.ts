@@ -5,12 +5,19 @@
 
 // 瀏覽器端使用同網域 /api，由 Next.js rewrite 轉發
 // 伺服器端才使用完整後端 URL
-const API_BASE_URL =
-  typeof window === "undefined"
-    ? process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000")
-    : "";
+export function resolveApiBaseUrl(isBrowser = typeof window !== "undefined"): string {
+  if (isBrowser) {
+    return "";
+  }
+
+  return (
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000")
+  );
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 // 開發環境日誌記錄器
 const apiLogger = {

@@ -210,13 +210,44 @@ export async function getChannelStats(
         }),
       ]);
 
-      // 轉換為前端友好的格式
-      const dailyStats = stats.map((stat: { date: Date; watchSeconds: number; messageCount: number; emoteCount: number }) => ({
-        date: stat.date.toISOString().split("T")[0],
-        watchHours: Math.round((stat.watchSeconds / 3600) * 10) / 10,
-        messageCount: stat.messageCount,
-        emoteCount: stat.emoteCount,
-      }));
+      // 轉換為前端友好的格式，並填補缺失日期（確保圖表完整顯示所有天）
+      const statsMap = new Map<string, { watchSeconds: number; messageCount: number; emoteCount: number }>();
+      for (const stat of stats) {
+        const dateKey = stat.date.toISOString().split("T")[0];
+        const existing = statsMap.get(dateKey) || {
+          watchSeconds: 0,
+          messageCount: 0,
+          emoteCount: 0,
+        };
+        statsMap.set(dateKey, {
+          watchSeconds: existing.watchSeconds + stat.watchSeconds,
+          messageCount: existing.messageCount + stat.messageCount,
+          emoteCount: existing.emoteCount + stat.emoteCount,
+        });
+      }
+
+      // 填補從 queryStartDate 到 queryEndDate 之間所有日期
+      const dailyStats: Array<{
+        date: string;
+        watchHours: number;
+        messageCount: number;
+        emoteCount: number;
+      }> = [];
+      const cursor = new Date(queryStartDate);
+      cursor.setHours(0, 0, 0, 0);
+      const end = new Date(queryEndDate);
+      end.setHours(23, 59, 59, 999);
+      while (cursor <= end) {
+        const dateKey = cursor.toISOString().split("T")[0];
+        const existing = statsMap.get(dateKey);
+        dailyStats.push({
+          date: dateKey,
+          watchHours: Math.round((((existing?.watchSeconds ?? 0) as number) / 3600) * 10) / 10,
+          messageCount: existing?.messageCount ?? 0,
+          emoteCount: existing?.emoteCount ?? 0,
+        });
+        cursor.setDate(cursor.getDate() + 1);
+      }
 
       // 構建頻道基本資訊
       const totalWatchHours = dailyStats.reduce((sum: number, s: { watchHours: number }) => sum + s.watchHours, 0);

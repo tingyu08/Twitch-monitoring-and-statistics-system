@@ -73,27 +73,8 @@ export class WatchTimeIncrementJob {
       const now = new Date();
       const activeWindowStart = new Date(now.getTime() - ACTIVE_WINDOW_MINUTES * 60 * 1000);
 
-      // 今天的日期（正規化到 00:00:00）
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-
-      // 1. 找出正在直播中的頻道（僅取數量，用於日誌）
-      const liveChannelCount = await prisma.channel.count({
-        where: { isLive: true },
-      });
-
-      if (liveChannelCount === 0) {
-        logger.debug(
-          "Jobs",
-          `沒有正在直播的頻道，跳過觀看時間更新 (lastSuccessAt=${
-            this.lastSuccessAt?.toISOString() || "never"
-          })`
-        );
-        return;
-      }
-
-      // 2. 一次性物化所有活躍的 viewer-channel 組合到 JS 陣列
-      //    這是唯一一次掃描 viewer_channel_messages + channels 的查詢
+      // 1. 一次性物化所有活躍的 viewer-channel 組合到 JS 陣列
+      //    這是唯一一次掃描 viewer_channel_messages 的查詢
       //    後續的 daily upsert、lifetime upsert、cache invalidation 全部基於此陣列
       const activePairs = await prisma.$queryRaw<
         Array<{ viewerId: string; channelId: string }>
@@ -101,12 +82,6 @@ export class WatchTimeIncrementJob {
         SELECT viewerId, channelId
         FROM viewer_channel_messages
         WHERE timestamp >= ${activeWindowStart}
-          AND EXISTS (
-            SELECT 1
-            FROM channels c
-            WHERE c.id = viewer_channel_messages.channelId
-              AND c.isLive = 1
-          )
         GROUP BY viewerId, channelId
       `);
 
@@ -114,14 +89,14 @@ export class WatchTimeIncrementJob {
       if (activeCount === 0) {
         logger.debug(
           "Jobs",
-          `沒有活躍的觀眾，跳過觀看時間更新 (liveChannels=${liveChannelCount}, window=${ACTIVE_WINDOW_MINUTES}m)`
+          `沒有活躍的觀眾，跳過觀看時間更新 (window=${ACTIVE_WINDOW_MINUTES}m)`
         );
         return;
       }
 
       // 3. 批次 upsert daily stats（每批一條 SQL，避免逐筆寫入造成 write guard gap 放大）
       let dailyUpsertCount = 0;
-      const todayStr = toSqliteDate(today);
+      const todayStr = toSqliteDate(now);
       for (let i = 0; i < activePairs.length; i += BATCH_SIZE) {
         const batch = activePairs.slice(i, i + BATCH_SIZE);
         const batchValues = batch.map(
@@ -269,21 +244,13 @@ export class WatchTimeIncrementJob {
 
       const duration = Date.now() - executionStartedAt;
 
-      // 只在有實際更新時輸出 info，否則輸出 debug
-      if (activeCount > 0) {
-        this.lastSuccessAt = now;
-        logger.info(
-          "Jobs",
-          `Watch Time Increment 完成: 更新了 ${activeCount} 個觀眾的觀看時間 (+${
-            INCREMENT_SECONDS / 60
-          } 分鐘, liveChannels=${liveChannelCount}, dailyUpserts=${dailyUpsertCount}, lifetimeUpserts=${lifetimeUpsertCount}, invalidatedCaches=${uniqueViewerIds.size}) [${duration}ms]`
-        );
-      } else {
-        logger.debug(
-          "Jobs",
-          `Watch Time Increment 完成: 沒有需要更新的觀眾 (liveChannels=${liveChannelCount}, activePairs=${activeCount})`
-        );
-      }
+      this.lastSuccessAt = now;
+      logger.info(
+        "Jobs",
+        `Watch Time Increment 完成: 更新了 ${activeCount} 個觀眾的觀看時間 (+${
+          INCREMENT_SECONDS / 60
+        } 分鐘, dailyUpserts=${dailyUpsertCount}, lifetimeUpserts=${lifetimeUpsertCount}, invalidatedCaches=${uniqueViewerIds.size}) [${duration}ms]`
+      );
     } catch (error) {
       logger.error("Jobs", "❌ Watch Time Increment Job 執行失敗", error);
       captureJobError("watch-time-increment", error);

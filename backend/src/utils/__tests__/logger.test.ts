@@ -50,6 +50,24 @@ describe("Logger", () => {
     process.env.LOG_LEVEL = original;
   });
 
+  it("should default to info level in production when LOG_LEVEL is invalid", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalLevel = process.env.LOG_LEVEL;
+
+    process.env.NODE_ENV = "production";
+    process.env.LOG_LEVEL = "not-a-level";
+
+    const testLogger = new Logger();
+    testLogger.debug("Test", "Debug should be filtered");
+    testLogger.info("Test", "Info should log");
+
+    expect(console.debug).not.toHaveBeenCalled();
+    expect(console.info).toHaveBeenCalled();
+
+    process.env.NODE_ENV = originalNodeEnv;
+    process.env.LOG_LEVEL = originalLevel;
+  });
+
   it("should respect category log override", () => {
     const originalLevel = process.env.LOG_LEVEL;
     const originalOverrides = process.env.LOG_LEVEL_OVERRIDES;
@@ -102,6 +120,16 @@ describe("Logger - named loggers", () => {
     expect(call[0]).toContain("AUTH");
   });
 
+  it("authLogger debug/warn/error should use AUTH category", () => {
+    authLogger.debug("Auth debug");
+    authLogger.warn("Auth warn");
+    authLogger.error("Auth error");
+
+    expect((console.debug as jest.Mock).mock.calls[0][0]).toContain("AUTH");
+    expect((console.warn as jest.Mock).mock.calls[0][0]).toContain("AUTH");
+    expect((console.error as jest.Mock).mock.calls[0][0]).toContain("AUTH");
+  });
+
   it("streamerLogger should log with STREAMER category", () => {
     streamerLogger.warn("Streamer message");
     expect(console.warn).toHaveBeenCalled();
@@ -109,11 +137,31 @@ describe("Logger - named loggers", () => {
     expect(call[0]).toContain("STREAMER");
   });
 
+  it("streamerLogger debug/info/error should use STREAMER category", () => {
+    streamerLogger.debug("Streamer debug");
+    streamerLogger.info("Streamer info");
+    streamerLogger.error("Streamer error");
+
+    expect((console.debug as jest.Mock).mock.calls[0][0]).toContain("STREAMER");
+    expect((console.info as jest.Mock).mock.calls[0][0]).toContain("STREAMER");
+    expect((console.error as jest.Mock).mock.calls[0][0]).toContain("STREAMER");
+  });
+
   it("dbLogger should log with DATABASE category", () => {
     dbLogger.error("DB error");
     expect(console.error).toHaveBeenCalled();
     const call = (console.error as jest.Mock).mock.calls[0];
     expect(call[0]).toContain("DATABASE");
+  });
+
+  it("dbLogger debug/info/warn should use DATABASE category", () => {
+    dbLogger.debug("DB debug");
+    dbLogger.info("DB info");
+    dbLogger.warn("DB warn");
+
+    expect((console.debug as jest.Mock).mock.calls[0][0]).toContain("DATABASE");
+    expect((console.info as jest.Mock).mock.calls[0][0]).toContain("DATABASE");
+    expect((console.warn as jest.Mock).mock.calls[0][0]).toContain("DATABASE");
   });
 });
 
@@ -189,6 +237,21 @@ describe("Logger - JSON format all levels", () => {
     const [serialized] = (console.info as jest.Mock).mock.calls[0];
     const parsed = JSON.parse(serialized);
     expect(parsed.context[0]).toBe("9007199254740991");
+    process.env.LOG_FORMAT = originalFormat;
+  });
+
+  it("should keep non-special args unchanged in JSON format", () => {
+    const originalFormat = process.env.LOG_FORMAT;
+    process.env.LOG_FORMAT = "json";
+    const testLogger = new Logger();
+    const context = { source: "unit-test", ok: true };
+
+    testLogger.info("Test", "Context passthrough", context);
+
+    const [serialized] = (console.info as jest.Mock).mock.calls[0];
+    const parsed = JSON.parse(serialized);
+    expect(parsed.context[0]).toEqual(context);
+
     process.env.LOG_FORMAT = originalFormat;
   });
 

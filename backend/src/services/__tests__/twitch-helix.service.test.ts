@@ -482,6 +482,42 @@ describe("TwurpleHelixService", () => {
       );
     });
 
+    it("persists refreshed token data when refresh callback succeeds", async () => {
+      const tokenInfo = {
+        accessToken: "seed-access-token",
+        refreshToken: "seed-refresh-token",
+        expiresAt: null,
+        tokenId: "token-refresh-persist",
+      };
+
+      await twurpleHelixService.getFollowedChannels("user-refresh-persist", undefined, tokenInfo);
+
+      const authProvider = mockRefreshingAuthProviderCtor.mock.results[0].value as {
+        onRefresh: jest.Mock;
+      };
+      const onRefreshCallback = authProvider.onRefresh.mock.calls[0][0] as (
+        userId: string,
+        tokenData: { accessToken: string; refreshToken?: string; expiresIn?: number }
+      ) => Promise<void>;
+
+      await onRefreshCallback("ignored-user", {
+        accessToken: "fresh-access-token",
+      });
+
+      expect(encryptToken).toHaveBeenCalledWith("fresh-access-token");
+      expect(prisma.twitchToken.update).toHaveBeenCalledWith({
+        where: { id: "token-refresh-persist" },
+        data: {
+          accessToken: "enc:fresh-access-token",
+          refreshToken: undefined,
+          expiresAt: null,
+          status: "active",
+          failureCount: 0,
+          lastValidatedAt: expect.any(Date),
+        },
+      });
+    });
+
     it("logs error when onRefresh callback fails to update DB", async () => {
       const tokenInfo = {
         accessToken: "access-token",
@@ -535,6 +571,28 @@ describe("TwurpleHelixService", () => {
       await twurpleHelixService.getFollowedChannels("legacy-user", "token-prefix-0-abcdefghijkl");
 
       expect(mockApiClientCtor).toHaveBeenCalledTimes(52);
+    });
+
+    it("handles missing oldest key during cache eviction defensively", async () => {
+      const service = twurpleHelixService as any;
+      const rememberUserApiClient = service.rememberUserApiClient.bind(service) as (
+        key: string,
+        client: unknown
+      ) => unknown;
+      const cache = service.userApiClients as Map<string, { apiClient: unknown; lastUsedAt: number }>;
+
+      for (let i = 0; i <= 50; i += 1) {
+        rememberUserApiClient(`k-${i}`, { id: i });
+      }
+
+      const keysSpy = jest
+        .spyOn(cache, "keys")
+        .mockReturnValue({ next: () => ({ value: undefined }) } as any);
+
+      expect(() => rememberUserApiClient("k-51", { id: 51 })).not.toThrow();
+      expect(cache.size).toBeGreaterThan(50);
+
+      keysSpy.mockRestore();
     });
 
     it("falls back to app client when no user token is provided", async () => {
@@ -645,6 +703,22 @@ describe("TwurpleHelixService", () => {
   });
 
   describe("health and status", () => {
+    it("healthCheck returns true when twitch user lookup succeeds", async () => {
+      jest.spyOn(twurpleHelixService, "getUserByLogin").mockResolvedValueOnce({
+        id: "1",
+        login: "twitch",
+        displayName: "Twitch",
+        type: "",
+        broadcasterType: "",
+        description: "",
+        profileImageUrl: "",
+        offlineImageUrl: "",
+        createdAt: new Date(),
+      });
+
+      await expect(twurpleHelixService.healthCheck()).resolves.toBe(true);
+    });
+
     it("healthCheck returns false when getUserByLogin throws", async () => {
       jest.spyOn(twurpleHelixService, "getUserByLogin").mockRejectedValueOnce(new Error("boom"));
 

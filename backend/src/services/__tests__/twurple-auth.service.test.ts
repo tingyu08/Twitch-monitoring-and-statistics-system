@@ -173,6 +173,27 @@ describe("TwurpleAuthService", () => {
     expect(smallService.hasActiveProvider("u3")).toBe(true);
   });
 
+  it("should skip eviction when oldest user id is unavailable", () => {
+    const fakeDelete = jest.fn();
+    const fakeSet = jest.fn();
+    const fakeMap = {
+      delete: fakeDelete,
+      set: fakeSet,
+      keys: jest.fn(() => ({
+        next: jest.fn(() => ({ value: undefined })),
+      })),
+      size: 1,
+    };
+
+    (service as any).userAuthProviders = fakeMap;
+    (service as any).maxUserProviders = 0;
+
+    (service as any).touchUserProvider("u1", {});
+
+    expect(fakeDelete).toHaveBeenCalledWith("u1");
+    expect(fakeDelete).not.toHaveBeenCalledWith(undefined);
+  });
+
   it("should call onRefresh callback when token is refreshed", async () => {
     const onRefresh = jest.fn().mockResolvedValue(undefined);
     await service.createUserAuthProvider(
@@ -191,6 +212,34 @@ describe("TwurpleAuthService", () => {
     expect(onRefresh).toHaveBeenCalledWith(
       "u1",
       expect.objectContaining({ accessToken: "new-at" })
+    );
+  });
+
+  it("should normalize missing expiresIn to null on refresh callback", async () => {
+    const onRefresh = jest.fn().mockResolvedValue(undefined);
+    await service.createUserAuthProvider(
+      "u1",
+      { accessToken: "at", refreshToken: "rt", expiresIn: 3600, obtainmentTimestamp: Date.now() },
+      onRefresh
+    );
+
+    const mockProvider = await getMockProvider();
+    const registeredCb = mockProvider.onRefresh.mock.calls[0][0];
+
+    await registeredCb("u1", {
+      accessToken: "new-at",
+      refreshToken: "new-rt",
+      obtainmentTimestamp: 12345,
+    });
+
+    expect(onRefresh).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({
+        accessToken: "new-at",
+        refreshToken: "new-rt",
+        expiresIn: null,
+        obtainmentTimestamp: 12345,
+      })
     );
   });
 

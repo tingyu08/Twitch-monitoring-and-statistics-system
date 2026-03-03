@@ -72,7 +72,14 @@
     "avgViewers": "Avg Viewers",
     "peakViewers": "Peak Viewers",
     "viewerTrendsDesc": "Showing data from {count} streams",
-    "clickForDetails": "Click for Details"
+    "clickForDetails": "Click for Details",
+    "hourlyAnalysis": "Hourly Viewer Analysis",
+    "noHourlyData": "No detailed analysis data",
+    "viewers": "Viewers",
+    "sessionCount": "{count} streams",
+    "daySessionsTitle": "Stream List",
+    "daySessionsDesc": "{count} streams on this day. Select one to view details.",
+    "hours": "hours"
   },
   "stats": {
     "totalWatchHours": "Total Watch Hours",

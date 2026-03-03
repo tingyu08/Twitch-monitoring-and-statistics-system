@@ -32,6 +32,7 @@ import { GameStatsChart } from "@/features/streamer-dashboard/charts/GameStatsCh
 import { ChannelVideosSection } from "@/features/viewer-dashboard/components/ChannelVideosSection";
 import { ViewerTrendsChart } from "@/features/viewer-dashboard/components/ViewerTrendsChart";
 import { StreamHourlyDialog } from "@/features/viewer-dashboard/components/StreamHourlyDialog";
+import { DaySessionsDialog } from "@/features/viewer-dashboard/components/DaySessionsDialog";
 import type { ViewerTrendPoint } from "@/lib/api/viewer";
 import { WatchTimeTrendChart } from "@/features/viewer-dashboard/components/WatchTimeTrendChart";
 import { useChannelDetail } from "@/hooks/useViewer";
@@ -52,6 +53,10 @@ export default function ViewerChannelStatsPage() {
   const [selectedStream, setSelectedStream] = useState<ViewerTrendPoint | null>(null);
 
   const [isHourlyModalOpen, setIsHourlyModalOpen] = useState(false);
+
+  const [daySessionsList, setDaySessionsList] = useState<ViewerTrendPoint[]>([]);
+  const [daySessionsDate, setDaySessionsDate] = useState<string | null>(null);
+  const [isDaySessionsOpen, setIsDaySessionsOpen] = useState(false);
 
   const [timeRange, setTimeRange] = useState<TimeRange>("30");
 
@@ -412,17 +417,36 @@ export default function ViewerChannelStatsPage() {
             <ViewerTrendsChart
               data={viewerTrends}
               loading={loading}
-              onPointClick={(point) => {
-                setSelectedStream(point);
-
-                setIsHourlyModalOpen(true);
+              onDayClick={(sessions, date) => {
+                if (sessions.length === 1) {
+                  // 當天只有一場直播，直接開啟小時分析
+                  setSelectedStream(sessions[0]);
+                  setIsHourlyModalOpen(true);
+                } else {
+                  // 當天有多場直播，顯示列表讓使用者選擇
+                  setDaySessionsList(sessions);
+                  setDaySessionsDate(date);
+                  setIsDaySessionsOpen(true);
+                }
               }}
             />
           </div>
         )}
 
-        {/* 小時分析對話框 */}
+        {/* 當天直播列表對話框 */}
+        <DaySessionsDialog
+          open={isDaySessionsOpen}
+          onOpenChange={setIsDaySessionsOpen}
+          date={daySessionsDate}
+          sessions={daySessionsList}
+          onSelectSession={(session: ViewerTrendPoint) => {
+            setIsDaySessionsOpen(false);
+            setSelectedStream(session);
+            setIsHourlyModalOpen(true);
+          }}
+        />
 
+        {/* 小時分析對話框 */}
         <StreamHourlyDialog
           open={isHourlyModalOpen}
           onOpenChange={setIsHourlyModalOpen}

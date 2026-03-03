@@ -9,6 +9,8 @@
  */
 
 import type { ApiClient } from "@twurple/api";
+import { prisma } from "../db/prisma";
+import { encryptToken } from "../utils/crypto.utils";
 import { twurpleAuthService } from "./twurple-auth.service";
 import { logger } from "../utils/logger";
 import { importTwurpleApi, importTwurpleAuth } from "../utils/esm-import";
@@ -380,10 +382,6 @@ class TwurpleHelixService {
               );
 
               try {
-                // 動態導入以避免循環依賴
-                const { prisma } = await import("../db/prisma");
-                const { encryptToken } = await import("../utils/crypto.utils");
-
                 await prisma.twitchToken.update({
                   where: { id: tokenInfo.tokenId },
                   data: {

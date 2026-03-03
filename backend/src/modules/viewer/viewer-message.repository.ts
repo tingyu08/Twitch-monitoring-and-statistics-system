@@ -461,7 +461,7 @@ export class ViewerMessageRepository {
 
     for (const msg of batch) {
       const date = new Date(msg.timestamp);
-      date.setHours(0, 0, 0, 0);
+      date.setUTCHours(0, 0, 0, 0);
       const key = `${msg.viewerId}:${msg.channelId}:${date.getTime()}`;
 
       const agg = messageAggIncrements.get(key) || {

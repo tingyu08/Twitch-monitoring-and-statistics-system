@@ -27,6 +27,14 @@ type ChannelUpsertPayload = {
   displayNameForLog: string;
 };
 
+type ViewerServiceModule = {
+  getFollowedChannels: (viewerId: string) => Promise<unknown>;
+};
+
+type ChatServiceModule = {
+  twurpleChatService: { initialize: () => Promise<unknown> };
+};
+
 function isLockContentionError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -87,10 +95,7 @@ async function upsertChannelWithCompensation(payload: ChannelUpsertPayload): Pro
         return;
       }
 
-      const delayMs = Math.min(
-        CHANNEL_UPSERT_BASE_DELAY_MS * Math.pow(2, attempt - 1),
-        30000
-      );
+      const delayMs = Math.min(CHANNEL_UPSERT_BASE_DELAY_MS * Math.pow(2, attempt - 1), 30000);
       logger.warn(
         "Auth",
         `Channel upsert attempt ${attempt} failed, retrying in ${delayMs}ms`,
@@ -98,6 +103,43 @@ async function upsertChannelWithCompensation(payload: ChannelUpsertPayload): Pro
       );
       await sleep(delayMs);
     }
+  }
+}
+
+export function warmupFollowedChannelsCache(
+  viewerId: string,
+  viewerServiceLoader: () => Promise<ViewerServiceModule> = () =>
+    import("../viewer/viewer.service") as unknown as Promise<ViewerServiceModule>
+): void {
+  try {
+    viewerServiceLoader()
+      .then((viewerService) => {
+        viewerService
+          .getFollowedChannels(viewerId)
+          .catch((err: unknown) => logger.error("Auth", "Cache warmup failed after login", err));
+      })
+      .catch((err: unknown) => logger.error("Auth", "Cache warmup failed after login", err));
+  } catch (err) {
+    logger.error("Auth", "Cache warmup failed after login", err);
+  }
+}
+
+export function reinitializeChatServiceAfterLogin(
+  chatServiceLoader: () => Promise<ChatServiceModule> = () =>
+    import("../../services/twitch-chat.service") as unknown as Promise<ChatServiceModule>
+): void {
+  try {
+    chatServiceLoader()
+      .then((chatService) => {
+        chatService.twurpleChatService
+          .initialize()
+          .catch((err: unknown) =>
+            logger.error("Auth", "Chat service reinit failed after login", err)
+          );
+      })
+      .catch((err: unknown) => logger.error("Auth", "Chat service reinit failed after login", err));
+  } catch (err) {
+    logger.error("Auth", "Chat service reinit failed after login", err);
   }
 }
 
@@ -259,15 +301,11 @@ export async function handleStreamerTwitchCallback(
 
   // 立即預熱快取（不阻塞登入回應）
   // 這樣當前端請求 /api/viewer/channels 時，快取已經準備好了
-    if (process.env.NODE_ENV !== "test") {
-      setImmediate(() => {
-        import("../viewer/viewer.service").then(({ getFollowedChannels }) => {
-          getFollowedChannels(result.viewerRecord.id).catch((err: unknown) =>
-            logger.error("Auth", "Cache warmup failed after login", err)
-          );
-        });
-      });
-    }
+  if (process.env.NODE_ENV !== "test") {
+    setImmediate(() => {
+      warmupFollowedChannelsCache(result.viewerRecord.id);
+    });
+  }
 
   // 延遲執行後台任務（避免阻塞登入回應，防止 Zeabur 502 超時）
   // 在 Zeabur 免費層資源受限的環境下，立即啟動這些任務可能導致回應超時
@@ -279,13 +317,7 @@ export async function handleStreamerTwitchCallback(
 
     // 非同步觸發聊天室服務重新初始化（不阻塞登入流程）
     if (process.env.NODE_ENV !== "test") {
-      import("../../services/twitch-chat.service").then(({ twurpleChatService }) => {
-        twurpleChatService
-          .initialize()
-          .catch((err: unknown) =>
-            logger.error("Auth", "Chat service reinit failed after login", err)
-          );
-      });
+      reinitializeChatServiceAfterLogin();
     }
   }, 30000); // 延遲 30 秒，避開 Dashboard 初次載入高峰，讓登入回應先完成
 

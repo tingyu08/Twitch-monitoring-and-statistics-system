@@ -63,20 +63,19 @@ describe("WatchTimeIncrementJob", () => {
     expect(cron.schedule).toHaveBeenCalledTimes(1);
   });
 
-  it("skips execution when there are no live channels", async () => {
+  it("skips execution when there are no active pairs", async () => {
     const job = new WatchTimeIncrementJob();
-    (prisma.channel.count as jest.Mock).mockResolvedValue(0);
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
 
     await job.execute();
 
-    expect(prisma.channel.count).toHaveBeenCalledTimes(1);
-    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
   });
 
   it("should execute daily and lifetime upserts for active pairs", async () => {
     const job = new WatchTimeIncrementJob();
 
-    (prisma.channel.count as jest.Mock).mockResolvedValue(1);
     // $queryRaw returns the activePairs array
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([
       { viewerId: "v1", channelId: "c1" },
@@ -99,7 +98,6 @@ describe("WatchTimeIncrementJob", () => {
       { viewerId: "v3", channelId: "c3" },
     ];
 
-    (prisma.channel.count as jest.Mock).mockResolvedValue(1);
     (prisma.$queryRaw as jest.Mock).mockResolvedValue(activePairs);
     (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
 
@@ -117,7 +115,6 @@ describe("WatchTimeIncrementJob", () => {
       { viewerId: "v1", channelId: "c2" },
     ];
 
-    (prisma.channel.count as jest.Mock).mockResolvedValue(1);
     (prisma.$queryRaw as jest.Mock).mockResolvedValue(activePairs);
     (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
 
@@ -135,7 +132,6 @@ describe("WatchTimeIncrementJob", () => {
       channelId: `c${i}`,
     }));
 
-    (prisma.channel.count as jest.Mock).mockResolvedValue(1);
     (prisma.$queryRaw as jest.Mock).mockResolvedValue(activePairs);
     (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
 
@@ -154,18 +150,18 @@ describe("WatchTimeIncrementJob", () => {
       resolveFirstExecution = resolve;
     });
 
-    (prisma.channel.count as jest.Mock).mockImplementationOnce(async () => {
+    (prisma.$queryRaw as jest.Mock).mockImplementationOnce(async () => {
       await firstExecutionStall;
-      return 0;
+      return [];
     });
 
     // Start first execution in background (it will be stuck waiting)
     const firstExecution = job.execute();
 
-    // Second execute() should see isRunning=true and return immediately without calling channel.count again
+    // Second execute() should see isRunning=true and return immediately without querying again
     await job.execute();
 
-    expect(prisma.channel.count).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
 
     // Unblock the first execution so the test can clean up
     resolveFirstExecution();

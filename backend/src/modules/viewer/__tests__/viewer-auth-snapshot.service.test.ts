@@ -22,6 +22,9 @@ import {
   invalidateViewerAuthSnapshot,
   ViewerAuthSnapshot,
 } from "../viewer-auth-snapshot.service";
+import { prisma } from "../../../db/prisma";
+
+const mockFindUnique = prisma.viewer.findUnique as jest.Mock;
 
 const mockSnapshot: ViewerAuthSnapshot = {
   id: "viewer1",
@@ -94,6 +97,28 @@ describe("viewer-auth-snapshot.service", () => {
       expect(result?.isAnonymized).toBe(true);
       expect(result?.consentedAt).toBeNull();
     });
+
+    it("快取 miss 時應使用 viewerId 向 DB 查詢", async () => {
+      mockFindUnique.mockResolvedValue(mockSnapshot);
+      mockGetOrSetWithTags.mockImplementationOnce(async (_key, factory: () => Promise<unknown>) =>
+        factory()
+      );
+
+      const result = await getViewerAuthSnapshotById("viewer1");
+
+      expect(result).toEqual(mockSnapshot);
+      expect(mockFindUnique).toHaveBeenCalledWith({
+        where: { id: "viewer1" },
+        select: {
+          id: true,
+          twitchUserId: true,
+          tokenVersion: true,
+          consentedAt: true,
+          consentVersion: true,
+          isAnonymized: true,
+        },
+      });
+    });
   });
 
   describe("getViewerAuthSnapshotByTwitchUserId", () => {
@@ -126,6 +151,28 @@ describe("viewer-auth-snapshot.service", () => {
       await getViewerAuthSnapshotByTwitchUserId("twitch-123");
 
       expect(mockSetWithTags).toHaveBeenCalledTimes(2);
+    });
+
+    it("快取 miss 時應使用 twitchUserId 向 DB 查詢", async () => {
+      mockFindUnique.mockResolvedValue(mockSnapshot);
+      mockGetOrSetWithTags.mockImplementationOnce(async (_key, factory: () => Promise<unknown>) =>
+        factory()
+      );
+
+      const result = await getViewerAuthSnapshotByTwitchUserId("twitch-123");
+
+      expect(result).toEqual(mockSnapshot);
+      expect(mockFindUnique).toHaveBeenCalledWith({
+        where: { twitchUserId: "twitch-123" },
+        select: {
+          id: true,
+          twitchUserId: true,
+          tokenVersion: true,
+          consentedAt: true,
+          consentVersion: true,
+          isAnonymized: true,
+        },
+      });
     });
   });
 

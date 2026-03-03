@@ -75,7 +75,11 @@
     "clickForDetails": "點擊查看詳細",
     "hourlyAnalysis": "每小時觀眾分析",
     "noHourlyData": "無詳細分析資料",
-    "viewers": "觀眾"
+    "viewers": "觀眾",
+    "sessionCount": "{count} 場直播",
+    "daySessionsTitle": "直播列表",
+    "daySessionsDesc": "當天共 {count} 場直播，請選擇要查看的場次",
+    "hours": "小時"
   },
   "stats": {
     "totalWatchHours": "總觀看時數",
