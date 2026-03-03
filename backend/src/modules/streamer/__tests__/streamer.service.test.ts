@@ -11,6 +11,7 @@ import {
 } from "../streamer.service";
 import { prisma } from "../../../db/prisma";
 import { cacheManager } from "../../../utils/cache-manager";
+import { twurpleVideoService } from "../../../services/twitch-video.service";
 
 // Mock @prisma/client so Prisma.sql tagged template literal works without a real DB
 jest.mock("@prisma/client", () => {
@@ -33,6 +34,9 @@ jest.mock("@prisma/client", () => {
 
 jest.mock("../../../db/prisma", () => ({
   prisma: {
+    streamer: {
+      findUnique: jest.fn(),
+    },
     channel: {
       findFirst: jest.fn(),
     },
@@ -49,6 +53,13 @@ jest.mock("../../../db/prisma", () => ({
     },
     $queryRaw: jest.fn(),
     $executeRaw: jest.fn(),
+  },
+}));
+
+jest.mock("../../../services/twitch-video.service", () => ({
+  twurpleVideoService: {
+    syncVideos: jest.fn(),
+    syncClips: jest.fn(),
   },
 }));
 
@@ -986,11 +997,42 @@ describe("StreamerService", () => {
     it("should return empty list when no videos", async () => {
       (prisma.video.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.video.count as jest.Mock).mockResolvedValue(0);
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue(null);
 
       const res = await getStreamerVideos("s1");
       expect(res.data).toHaveLength(0);
       expect(res.total).toBe(0);
       expect(res.totalPages).toBe(0);
+    });
+
+    it("should trigger one-time sync and refetch when first page is empty", async () => {
+      (prisma.video.findMany as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: "v1",
+            twitchVideoId: "tw1",
+            title: "Synced VOD",
+            description: null,
+            url: "http://twitch.tv/v1",
+            thumbnailUrl: null,
+            viewCount: 12,
+            duration: "1h",
+            language: "en",
+            type: "archive",
+            createdAt: new Date(),
+            publishedAt: new Date(),
+          },
+        ]);
+      (prisma.video.count as jest.Mock).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue({ twitchUserId: "tw-user-1" });
+
+      const res = await getStreamerVideos("s1");
+
+      expect(twurpleVideoService.syncVideos).toHaveBeenCalledWith("tw-user-1", "s1");
+      expect(prisma.video.findMany).toHaveBeenCalledTimes(2);
+      expect(res.total).toBe(1);
+      expect(res.data).toHaveLength(1);
     });
 
     it("should default to limit=20 page=1", async () => {
@@ -1046,10 +1088,39 @@ describe("StreamerService", () => {
     it("should return empty list when no clips", async () => {
       (prisma.clip.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.clip.count as jest.Mock).mockResolvedValue(0);
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue(null);
 
       const res = await getStreamerClips("s1");
       expect(res.data).toHaveLength(0);
       expect(res.totalPages).toBe(0);
+    });
+
+    it("should trigger one-time clip sync and refetch when first page is empty", async () => {
+      (prisma.clip.findMany as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: "cl1",
+            twitchClipId: "twcl1",
+            creatorName: "Creator",
+            title: "Synced Clip",
+            url: "http://clips.twitch.tv/cl1",
+            embedUrl: "http://clips.twitch.tv/embed/cl1",
+            thumbnailUrl: null,
+            viewCount: 99,
+            duration: 25,
+            createdAt: new Date(),
+          },
+        ]);
+      (prisma.clip.count as jest.Mock).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+      (prisma.streamer.findUnique as jest.Mock).mockResolvedValue({ twitchUserId: "tw-user-1" });
+
+      const res = await getStreamerClips("s1");
+
+      expect(twurpleVideoService.syncClips).toHaveBeenCalledWith("tw-user-1", "s1");
+      expect(prisma.clip.findMany).toHaveBeenCalledTimes(2);
+      expect(res.total).toBe(1);
+      expect(res.data).toHaveLength(1);
     });
 
     it("should default to limit=20 page=1", async () => {

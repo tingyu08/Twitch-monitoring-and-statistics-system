@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma";
+import { twurpleVideoService } from "../../services/twitch-video.service";
 import { cacheManager } from "../../utils/cache-manager";
 
 export interface StreamerSummary {
@@ -802,7 +803,8 @@ export async function getChannelGameStatsAndViewerTrends(
 
 export async function getStreamerVideos(streamerId: string, limit = 20, page = 1) {
   const skip = (page - 1) * limit;
-  const [data, total] = await Promise.all([
+  const fetchVideos = () =>
+    Promise.all([
     prisma.video.findMany({
       where: { streamerId },
       orderBy: { createdAt: "desc" },
@@ -824,13 +826,38 @@ export async function getStreamerVideos(streamerId: string, limit = 20, page = 1
       skip,
     }),
     prisma.video.count({ where: { streamerId } }),
-  ]);
+    ]);
+
+  let [data, total] = await fetchVideos();
+
+  if (page === 1 && total === 0) {
+    const syncThrottleKey = `streamer:${streamerId}:videos:sync-attempted`;
+    const hasRecentSyncAttempt = cacheManager.get<boolean>(syncThrottleKey);
+
+    if (!hasRecentSyncAttempt) {
+      const streamer = await prisma.streamer.findUnique({
+        where: { id: streamerId },
+        select: { twitchUserId: true },
+      });
+
+      if (streamer?.twitchUserId) {
+        await twurpleVideoService.syncVideos(streamer.twitchUserId, streamerId);
+        [data, total] = await fetchVideos();
+      }
+
+      if (total === 0) {
+        cacheManager.set(syncThrottleKey, true, 120);
+      }
+    }
+  }
+
   return { data, total, page, totalPages: Math.ceil(total / limit) };
 }
 
 export async function getStreamerClips(streamerId: string, limit = 20, page = 1) {
   const skip = (page - 1) * limit;
-  const [data, total] = await Promise.all([
+  const fetchClips = () =>
+    Promise.all([
     prisma.clip.findMany({
       where: { streamerId },
       orderBy: { viewCount: "desc" }, // Clips usually ordered by views or date. Let's default to views/popularity for clips.
@@ -850,6 +877,30 @@ export async function getStreamerClips(streamerId: string, limit = 20, page = 1)
       skip,
     }),
     prisma.clip.count({ where: { streamerId } }),
-  ]);
+    ]);
+
+  let [data, total] = await fetchClips();
+
+  if (page === 1 && total === 0) {
+    const syncThrottleKey = `streamer:${streamerId}:clips:sync-attempted`;
+    const hasRecentSyncAttempt = cacheManager.get<boolean>(syncThrottleKey);
+
+    if (!hasRecentSyncAttempt) {
+      const streamer = await prisma.streamer.findUnique({
+        where: { id: streamerId },
+        select: { twitchUserId: true },
+      });
+
+      if (streamer?.twitchUserId) {
+        await twurpleVideoService.syncClips(streamer.twitchUserId, streamerId);
+        [data, total] = await fetchClips();
+      }
+
+      if (total === 0) {
+        cacheManager.set(syncThrottleKey, true, 120);
+      }
+    }
+  }
+
   return { data, total, page, totalPages: Math.ceil(total / limit) };
 }
