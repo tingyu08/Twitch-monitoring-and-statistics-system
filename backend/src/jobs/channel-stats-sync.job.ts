@@ -305,6 +305,7 @@ export class ChannelStatsSyncJob {
             src.peakViewers,
             CURRENT_TIMESTAMP
           FROM src
+          WHERE 1 = 1
           ON CONFLICT(channelId, date) DO UPDATE SET
             streamSeconds = excluded.streamSeconds,
             streamCount = excluded.streamCount,

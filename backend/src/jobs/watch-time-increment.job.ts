@@ -184,6 +184,7 @@ export class WatchTimeIncrementJob {
                   CURRENT_TIMESTAMP,
                   CURRENT_TIMESTAMP
                 FROM src
+                WHERE 1 = 1
                 ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
                   watchSeconds = CASE
                     WHEN viewer_channel_daily_stats.source = 'extension'
@@ -273,6 +274,7 @@ export class WatchTimeIncrementJob {
                     CURRENT_TIMESTAMP,
                     CURRENT_TIMESTAMP
                   FROM effective
+                  WHERE 1 = 1
                   ON CONFLICT(viewerId, channelId) DO UPDATE SET
                     totalWatchTimeMinutes =
                       viewer_channel_lifetime_stats.totalWatchTimeMinutes + excluded.totalWatchTimeMinutes,

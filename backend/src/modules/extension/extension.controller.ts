@@ -271,6 +271,7 @@ async function flushHeartbeatBuffer(): Promise<void> {
           0, 0, 0,
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         FROM src
+        WHERE 1 = 1
         ON CONFLICT(viewerId, channelId) DO UPDATE SET
           lastWatchedAt = CASE
             WHEN excluded.lastWatchedAt > viewer_channel_lifetime_stats.lastWatchedAt
