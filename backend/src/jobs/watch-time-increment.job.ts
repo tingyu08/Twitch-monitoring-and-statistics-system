@@ -46,6 +46,7 @@ export class WatchTimeIncrementJob {
   private isRunning = false;
   private scheduledTask: ScheduledTask | null = null;
   private lastSuccessAt: Date | null = null;
+  private lastAttemptAt: Date | null = null;
 
   start(): void {
     if (this.scheduledTask) {
@@ -67,6 +68,7 @@ export class WatchTimeIncrementJob {
     }
 
     this.isRunning = true;
+    this.lastAttemptAt = new Date();
     const executionStartedAt = Date.now();
 
     try {
@@ -257,6 +259,26 @@ export class WatchTimeIncrementJob {
     } finally {
       this.isRunning = false;
     }
+  }
+
+  getStatus(): {
+    scheduled: boolean;
+    isRunning: boolean;
+    lastAttemptAt: string | null;
+    lastSuccessAt: string | null;
+    cron: string;
+    incrementMinutes: number;
+    activeWindowMinutes: number;
+  } {
+    return {
+      scheduled: Boolean(this.scheduledTask),
+      isRunning: this.isRunning,
+      lastAttemptAt: this.lastAttemptAt ? this.lastAttemptAt.toISOString() : null,
+      lastSuccessAt: this.lastSuccessAt ? this.lastSuccessAt.toISOString() : null,
+      cron: WATCH_TIME_INCREMENT_CRON,
+      incrementMinutes: WATCH_TIME_INCREMENT_MINUTES,
+      activeWindowMinutes: ACTIVE_WINDOW_MINUTES,
+    };
   }
 }
 

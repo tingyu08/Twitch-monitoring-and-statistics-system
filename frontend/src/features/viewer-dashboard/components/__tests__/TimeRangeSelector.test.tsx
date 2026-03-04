@@ -157,7 +157,7 @@ describe("getRangeDays", () => {
     expect(getRangeDays("7")).toBe(7);
     expect(getRangeDays("30")).toBe(30);
     expect(getRangeDays("90")).toBe(90);
-    expect(getRangeDays("all")).toBe(3650);
+    expect(getRangeDays("all")).toBe(365);
     expect(getRangeDays("custom")).toBe(30);
   });
 

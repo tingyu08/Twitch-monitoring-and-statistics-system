@@ -22,7 +22,7 @@ export const RANGE_OPTIONS = [
   { value: "7", label: "7 天", days: 7 },
   { value: "30", label: "30 天", days: 30 },
   { value: "90", label: "90 天", days: 90 },
-  { value: "all", label: "全部", days: 3650 }, // ~10年
+  { value: "all", label: "全部", days: 365 },
 ] as const;
 
 export function TimeRangeSelector({

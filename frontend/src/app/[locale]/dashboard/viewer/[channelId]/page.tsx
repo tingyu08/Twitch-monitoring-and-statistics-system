@@ -101,6 +101,7 @@ export default function ViewerChannelStatsPage() {
   };
 
   const handleCustomRangeChange = (range: CustomDateRange) => {
+    setTimeRange("custom");
     setCustomRange(range);
     // React Query 會自動檢測 days 參數變化並重新請求
   };
