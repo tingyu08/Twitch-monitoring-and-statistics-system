@@ -47,6 +47,7 @@ export const WriteGuardKeys = {
   DATA_RETENTION_DELETE: "data-retention:delete-messages",
 
   // Watch time increment
+  WATCH_TIME_EXECUTION: "watch-time-increment:execution",
   WATCH_TIME_DAILY_UPSERT: "watch-time-increment:daily-stats-upsert",
   WATCH_TIME_LIFETIME_UPSERT: "watch-time-increment:lifetime-stats-upsert",
 

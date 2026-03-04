@@ -16,11 +16,7 @@ jest.mock("node-cron", () => ({
 
 jest.mock("../../db/prisma", () => ({
   prisma: {
-    channel: {
-      count: jest.fn(),
-    },
-    $queryRaw: jest.fn(),
-    $executeRaw: jest.fn(),
+    $transaction: jest.fn(),
   },
 }));
 
@@ -50,8 +46,34 @@ jest.mock("../job-write-guard", () => ({
 }));
 
 describe("WatchTimeIncrementJob", () => {
+  const txMock = {
+    systemSetting: {
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
+  };
+
+  const prismaMock = prisma as unknown as {
+    $transaction: jest.Mock;
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+
+    txMock.systemSetting.findUnique.mockResolvedValue(null);
+    txMock.systemSetting.upsert.mockResolvedValue({ key: "dummy", value: "dummy" });
+    txMock.systemSetting.create.mockResolvedValue({ key: "dummy", value: "started" });
+    txMock.systemSetting.update.mockResolvedValue({ key: "dummy", value: "completed" });
+    txMock.$queryRaw.mockResolvedValue([]);
+    txMock.$executeRaw.mockResolvedValue(1);
+
+    prismaMock.$transaction.mockImplementation(async (cb: (tx: typeof txMock) => Promise<unknown>) => {
+      return cb(txMock);
+    });
   });
 
   it("schedules only once even if start is called multiple times", () => {
@@ -65,32 +87,26 @@ describe("WatchTimeIncrementJob", () => {
 
   it("skips execution when there are no active pairs", async () => {
     const job = new WatchTimeIncrementJob();
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
 
     await job.execute();
 
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(prisma.$executeRaw).not.toHaveBeenCalled();
+    expect(txMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(txMock.$executeRaw).not.toHaveBeenCalled();
   });
 
-  it("should execute daily and lifetime upserts for active pairs", async () => {
+  it("executes daily and lifetime upserts for active pairs", async () => {
     const job = new WatchTimeIncrementJob();
 
-    // $queryRaw returns the activePairs array
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue([
-      { viewerId: "v1", channelId: "c1" },
-    ]);
-    (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+    txMock.$queryRaw.mockResolvedValue([{ viewerId: "v1", channelId: "c1" }]);
+    txMock.$executeRaw.mockResolvedValue(1);
 
     await job.execute();
 
-    // $executeRaw should have been called at least once (daily upsert)
-    expect(prisma.$executeRaw).toHaveBeenCalled();
-    // Cache must be invalidated for the viewer
+    expect(txMock.$executeRaw).toHaveBeenCalled();
     expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v1:channels_list");
   });
 
-  it("should batch active pairs into a small number of SQL writes", async () => {
+  it("batches active pairs into a small number of SQL writes", async () => {
     const job = new WatchTimeIncrementJob();
     const activePairs = [
       { viewerId: "v1", channelId: "c1" },
@@ -98,29 +114,26 @@ describe("WatchTimeIncrementJob", () => {
       { viewerId: "v3", channelId: "c3" },
     ];
 
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue(activePairs);
-    (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+    txMock.$queryRaw.mockResolvedValue(activePairs);
+    txMock.$executeRaw.mockResolvedValue(1);
 
     await job.execute();
 
-    // 1 daily batch + 1 lifetime batch
-    expect(prisma.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(txMock.$executeRaw).toHaveBeenCalledTimes(2);
   });
 
-  it("should invalidate cache once per unique viewerId", async () => {
+  it("invalidates cache once per unique viewerId", async () => {
     const job = new WatchTimeIncrementJob();
-    // Two pairs share the same viewerId "v1"
     const activePairs = [
       { viewerId: "v1", channelId: "c1" },
       { viewerId: "v1", channelId: "c2" },
     ];
 
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue(activePairs);
-    (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+    txMock.$queryRaw.mockResolvedValue(activePairs);
+    txMock.$executeRaw.mockResolvedValue(1);
 
     await job.execute();
 
-    // cacheManager.delete should be called exactly once for the single unique viewerId
     expect(cacheManager.delete).toHaveBeenCalledTimes(1);
     expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v1:channels_list");
   });
@@ -132,39 +145,47 @@ describe("WatchTimeIncrementJob", () => {
       channelId: `c${i}`,
     }));
 
-    (prisma.$queryRaw as jest.Mock).mockResolvedValue(activePairs);
-    (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+    txMock.$queryRaw.mockResolvedValue(activePairs);
+    txMock.$executeRaw.mockResolvedValue(1);
 
     await job.execute();
 
-    // BATCH_SIZE=1000 => daily 2 batches + lifetime 2 batches
-    expect(prisma.$executeRaw).toHaveBeenCalledTimes(4);
+    expect(txMock.$executeRaw).toHaveBeenCalledTimes(4);
   });
 
-  it("should skip concurrent execution when already running", async () => {
+  it("skips concurrent execution when already running", async () => {
     const job = new WatchTimeIncrementJob();
 
-    // Make the first execute() stall so isRunning stays true
     let resolveFirstExecution!: () => void;
     const firstExecutionStall = new Promise<void>((resolve) => {
       resolveFirstExecution = resolve;
     });
 
-    (prisma.$queryRaw as jest.Mock).mockImplementationOnce(async () => {
+    txMock.$queryRaw.mockImplementationOnce(async () => {
       await firstExecutionStall;
       return [];
     });
 
-    // Start first execution in background (it will be stuck waiting)
     const firstExecution = job.execute();
-
-    // Second execute() should see isRunning=true and return immediately without querying again
     await job.execute();
 
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
 
-    // Unblock the first execution so the test can clean up
     resolveFirstExecution();
     await firstExecution;
+  });
+
+  it("skips duplicated interval when idempotency run key exists", async () => {
+    const job = new WatchTimeIncrementJob();
+
+    txMock.systemSetting.findUnique
+      .mockResolvedValueOnce({ value: "2026-03-04T05:20:00.000Z" })
+      .mockResolvedValueOnce({ id: "existing-run" });
+
+    await job.execute();
+
+    expect(txMock.$queryRaw).not.toHaveBeenCalled();
+    expect(txMock.$executeRaw).not.toHaveBeenCalled();
+    expect(cacheManager.delete).not.toHaveBeenCalled();
   });
 });
