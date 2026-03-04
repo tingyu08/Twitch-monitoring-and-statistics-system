@@ -28,6 +28,7 @@
     "db:verify:index-cleanup": "ts-node src/scripts/verify-index-cleanup.ts",
     "db:verify:live-status-index": "ts-node src/scripts/verify-live-status-index.ts",
     "db:normalize:viewer-daily-stats": "ts-node src/scripts/normalize-viewer-daily-stats.ts",
+    "db:sync:clips:streamer": "ts-node src/scripts/trigger-clip-sync.ts",
     "db:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {

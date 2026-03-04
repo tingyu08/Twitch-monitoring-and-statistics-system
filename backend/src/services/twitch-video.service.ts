@@ -170,6 +170,7 @@ export class TwurpleVideoService {
       let cursor: string | undefined;
       let page = 0;
       let syncedCount = 0;
+      let fetchedPages = 0;
 
       const normalizeThumbnail = (url?: string | null) => {
         if (!url) return null;
@@ -181,6 +182,7 @@ export class TwurpleVideoService {
       };
 
       while (page < MAX_PAGES) {
+        fetchedPages++;
         const response = await client.callApi({
           type: "helix",
           url: "videos",
@@ -258,7 +260,17 @@ export class TwurpleVideoService {
         );
       }
 
-      logger.debug("TwitchVideo", `Synced ${syncedCount} videos for user ${userId}`);
+      if (syncedCount === 0) {
+        logger.warn(
+          "TwitchVideo",
+          `Sync completed with zero videos for user ${userId} (streamerId=${streamerId}, fetchedPages=${fetchedPages})`
+        );
+      } else {
+        logger.info(
+          "TwitchVideo",
+          `Synced ${syncedCount} videos for user ${userId} (streamerId=${streamerId}, fetchedPages=${fetchedPages})`
+        );
+      }
     } catch (error) {
       logger.error("TwitchVideo", `Failed to sync videos for user ${userId}`, error);
     }
@@ -409,10 +421,10 @@ export class TwurpleVideoService {
       const client = await this.getClient();
       const MAX_PAGES = 50;
       const PAGE_SIZE = 100;
-      const startDate = new Date("2016-01-01T00:00:00Z");
       let cursor: string | undefined;
       let page = 0;
       let syncedCount = 0;
+      let fetchedPages = 0;
 
       const normalizeThumbnail = (url?: string | null) => {
         if (!url) return null;
@@ -424,12 +436,12 @@ export class TwurpleVideoService {
       };
 
       while (page < MAX_PAGES) {
+        fetchedPages++;
         const response = await client.callApi({
           type: "helix",
           url: "clips",
           query: {
             broadcaster_id: userId,
-            started_at: startDate.toISOString(),
             first: String(PAGE_SIZE),
             ...(cursor ? { after: cursor } : {}),
           },
@@ -481,7 +493,17 @@ export class TwurpleVideoService {
         page++;
       }
 
-      logger.debug("TwitchVideo", `Synced ${syncedCount} clips for user ${userId}`);
+      if (syncedCount === 0) {
+        logger.warn(
+          "TwitchVideo",
+          `Sync completed with zero clips for user ${userId} (streamerId=${streamerId}, fetchedPages=${fetchedPages})`
+        );
+      } else {
+        logger.info(
+          "TwitchVideo",
+          `Synced ${syncedCount} clips for user ${userId} (streamerId=${streamerId}, fetchedPages=${fetchedPages})`
+        );
+      }
     } catch (error) {
       logger.error("TwitchVideo", `Failed to sync clips for user ${userId}`, error);
     }

@@ -32,6 +32,14 @@ type FollowedChannelSyncTarget = {
 
 async function loadStreamerBatch(cursorId?: string): Promise<StreamerSyncTarget[]> {
   return prisma.streamer.findMany({
+    where: {
+      twitchUserId: { not: "" },
+      twitchTokens: {
+        some: {
+          ownerType: "streamer",
+        },
+      },
+    },
     select: {
       id: true,
       twitchUserId: true,

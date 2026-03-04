@@ -160,6 +160,18 @@ describe("syncVideosJob", () => {
     expect(twurpleVideoService.syncClips).toHaveBeenCalledTimes(2);
     expect(twurpleVideoService.syncVideos).toHaveBeenCalledWith("twitch-s1", "s1");
     expect(twurpleVideoService.syncVideos).toHaveBeenCalledWith("twitch-s2", "s2");
+    expect(prisma.streamer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          twitchUserId: { not: "" },
+          twitchTokens: {
+            some: {
+              ownerType: "streamer",
+            },
+          },
+        },
+      })
+    );
   });
 
   it("skips streamers with empty twitchUserId", async () => {
