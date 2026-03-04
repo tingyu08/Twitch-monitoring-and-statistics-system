@@ -581,6 +581,7 @@ export class ViewerMessageRepository {
           src.bitsAmount,
           src.createdAt
         FROM src
+        WHERE 1 = 1
         ON CONFLICT(messageDedupKey) DO NOTHING
         RETURNING messageDedupKey
       `);
