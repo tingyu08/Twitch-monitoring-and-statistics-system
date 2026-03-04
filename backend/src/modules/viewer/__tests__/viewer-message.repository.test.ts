@@ -6,9 +6,7 @@ jest.mock("../../../db/prisma", () => ({
     channel: {
       findFirst: jest.fn(),
     },
-    viewerChannelMessage: {
-      createMany: jest.fn(),
-    },
+    $queryRaw: jest.fn(),
     $transaction: jest.fn(),
     $executeRaw: jest.fn(),
   },
@@ -53,7 +51,11 @@ describe("ViewerMessageRepository flush batch emits", () => {
     jest.clearAllMocks();
     (prisma.viewer.findUnique as jest.Mock).mockResolvedValue({ id: "viewer-1" });
     (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "channel-1" });
-    (prisma.viewerChannelMessage.createMany as jest.Mock).mockResolvedValue({ count: 3 });
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+      { messageDedupKey: "k1" },
+      { messageDedupKey: "k2" },
+      { messageDedupKey: "k3" },
+    ]);
     (prisma.$transaction as jest.Mock).mockImplementation(async (callback: (tx: any) => Promise<unknown>) =>
       callback({
         $executeRaw: txExecuteRaw,
@@ -114,7 +116,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     const ok = await (repo as any).flushBatch(batch);
 
     expect(ok).toBe(true);
-    expect(prisma.viewerChannelMessage.createMany).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(txExecuteRaw).toHaveBeenCalledTimes(3);
 
     expect(webSocketGateway.emitViewerStatsBatch).toHaveBeenCalledWith(
@@ -198,7 +200,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     const ok = await (repo as any).flushBatch(batch);
 
     expect(ok).toBe(true);
-    expect(prisma.viewerChannelMessage.createMany).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v9:channels_list");
     expect(webSocketGateway.emitViewerStats).not.toHaveBeenCalled();
@@ -224,7 +226,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
       },
     ];
 
-    (prisma.viewerChannelMessage.createMany as jest.Mock).mockRejectedValueOnce(
+    (prisma.$queryRaw as jest.Mock).mockRejectedValueOnce(
       new Error("insert failed")
     );
 
@@ -351,7 +353,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
         retryCount: 3,
       },
     ];
-    (prisma.viewerChannelMessage.createMany as jest.Mock).mockRejectedValueOnce(
+    (prisma.$queryRaw as jest.Mock).mockRejectedValueOnce(
       new Error("insert failed")
     );
 

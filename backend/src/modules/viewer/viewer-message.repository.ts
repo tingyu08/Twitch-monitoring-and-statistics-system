@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import crypto from "crypto";
 import { prisma } from "../../db/prisma";
 import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/message-parser";
 import { logger } from "../../utils/logger";
@@ -36,6 +37,10 @@ const RETRY_BUFFER_MAX_SIZE = MESSAGE_BATCH_MAX_SIZE;
 const BUFFER_OVERFLOW_WARN_INTERVAL_MS = 30 * 1000;
 const CACHE_NULL_SENTINEL = "__NULL__";
 const NULL_LOOKUP_TTL_SECONDS = CacheTTL.SHORT;
+const MESSAGE_DEDUP_TTL_MS = Number.parseInt(
+  process.env.VIEWER_MESSAGE_DEDUP_TTL_MS || String(15 * 60 * 1000),
+  10
+);
 
 interface BufferedMessage {
   viewerId: string;
@@ -48,6 +53,7 @@ interface BufferedMessage {
   bitsAmount: number | null;
   emoteCount: number;
   retryCount: number;
+  fingerprint?: string;
 }
 
 // 類型守衛：檢查是否為 RawChatMessage
@@ -146,6 +152,46 @@ export class ViewerMessageRepository {
   private flushRequested = false;
   private overflowDropCount = 0;
   private lastOverflowWarnAt = 0;
+  private recentMessageFingerprints = new Map<string, number>();
+
+  private buildMessageFingerprint(message: Pick<
+    BufferedMessage,
+    "viewerId" | "channelId" | "messageType" | "messageText" | "timestamp" | "bitsAmount"
+  >): string {
+    const timestamp =
+      message.timestamp instanceof Date
+        ? message.timestamp.toISOString()
+        : new Date(message.timestamp || 0).toISOString();
+
+    const material = [
+      message.viewerId,
+      message.channelId,
+      message.messageType,
+      message.messageText,
+      timestamp,
+      message.bitsAmount ?? 0,
+    ].join("|");
+
+    return crypto.createHash("sha256").update(material).digest("hex");
+  }
+
+  private cleanupRecentFingerprints(now: number): void {
+    for (const [fingerprint, expireAt] of this.recentMessageFingerprints.entries()) {
+      if (expireAt <= now) {
+        this.recentMessageFingerprints.delete(fingerprint);
+      }
+    }
+  }
+
+  private isRecentDuplicate(fingerprint: string, now: number): boolean {
+    this.cleanupRecentFingerprints(now);
+    const expireAt = this.recentMessageFingerprints.get(fingerprint);
+    return typeof expireAt === "number" && expireAt > now;
+  }
+
+  private markFingerprintPersisted(fingerprint: string, now: number): void {
+    this.recentMessageFingerprints.set(fingerprint, now + Math.max(60_000, MESSAGE_DEDUP_TTL_MS));
+  }
 
   private logOverflowDrop(): void {
     this.overflowDropCount += 1;
@@ -283,6 +329,14 @@ export class ViewerMessageRepository {
         bitsAmount: message.bits > 0 ? message.bits : null,
         emoteCount: message.emotes ? message.emotes.length : 0,
         retryCount: 0,
+        fingerprint: this.buildMessageFingerprint({
+          viewerId,
+          channelId,
+          messageType: message.messageType,
+          messageText: message.messageText,
+          timestamp: message.timestamp,
+          bitsAmount: message.bits > 0 ? message.bits : null,
+        }),
       });
 
       // P1 Optimization: Removed real-time WebSocket stats-update broadcast
@@ -418,6 +472,24 @@ export class ViewerMessageRepository {
   private async flushBatch(batch: BufferedMessage[]): Promise<boolean> {
     if (batch.length === 0) return true;
 
+    const now = Date.now();
+    const dedupedBatch: BufferedMessage[] = [];
+    for (const msg of batch) {
+      const fingerprint = msg.fingerprint || this.buildMessageFingerprint(msg);
+      if (this.isRecentDuplicate(fingerprint, now)) {
+        continue;
+      }
+
+      dedupedBatch.push({
+        ...msg,
+        fingerprint,
+      });
+    }
+
+    if (dedupedBatch.length === 0) {
+      return true;
+    }
+
     const messageAggIncrements = new Map<
       string,
       {
@@ -459,87 +531,138 @@ export class ViewerMessageRepository {
       }
     >();
 
-    for (const msg of batch) {
-      const date = new Date(msg.timestamp);
-      date.setUTCHours(0, 0, 0, 0);
-      const key = `${msg.viewerId}:${msg.channelId}:${date.getTime()}`;
-
-      const agg = messageAggIncrements.get(key) || {
-        viewerId: msg.viewerId,
-        channelId: msg.channelId,
-        date,
-        totalMessages: 0,
-        chatMessages: 0,
-        subscriptions: 0,
-        cheers: 0,
-        giftSubs: 0,
-        raids: 0,
-        totalBits: 0,
-      };
-
-      agg.totalMessages += 1;
-      if (msg.messageType === "CHAT") agg.chatMessages += 1;
-      if (msg.messageType === "SUBSCRIPTION") agg.subscriptions += 1;
-      if (msg.messageType === "CHEER") agg.cheers += 1;
-      if (msg.messageType === "GIFT_SUBSCRIPTION") agg.giftSubs += 1;
-      if (msg.messageType === "RAID") agg.raids += 1;
-      if (msg.bitsAmount) agg.totalBits += msg.bitsAmount;
-
-      messageAggIncrements.set(key, agg);
-
-      const daily = dailyStatIncrements.get(key) || {
-        viewerId: msg.viewerId,
-        channelId: msg.channelId,
-        date,
-        messageCount: 0,
-        emoteCount: 0,
-      };
-
-      daily.messageCount += 1;
-      daily.emoteCount += msg.emoteCount;
-      dailyStatIncrements.set(key, daily);
-
-      const lifetimeKey = `${msg.viewerId}:${msg.channelId}`;
-      const lifetime = lifetimeIncrements.get(lifetimeKey) || {
-        viewerId: msg.viewerId,
-        channelId: msg.channelId,
-        totalMessages: 0,
-        totalChatMessages: 0,
-        totalSubscriptions: 0,
-        totalCheers: 0,
-        totalBits: 0,
-        lastWatchedAt: msg.timestamp,
-      };
-
-      lifetime.totalMessages += 1;
-      if (msg.messageType === "CHAT") lifetime.totalChatMessages += 1;
-      if (msg.messageType === "SUBSCRIPTION") lifetime.totalSubscriptions += 1;
-      if (msg.messageType === "CHEER") lifetime.totalCheers += 1;
-      if (msg.bitsAmount) lifetime.totalBits += msg.bitsAmount;
-      if (msg.timestamp > lifetime.lastWatchedAt) {
-        lifetime.lastWatchedAt = msg.timestamp;
-      }
-      lifetimeIncrements.set(lifetimeKey, lifetime);
-
-    }
-
     let messagesPersisted = false;
 
     try {
-      const messageRows = batch.map((msg) => ({
-        viewerId: msg.viewerId,
-        channelId: msg.channelId,
-        messageText: msg.messageText,
-        messageType: msg.messageType,
-        timestamp: msg.timestamp,
-        badges: msg.badges,
-        emotesUsed: msg.emotesUsed,
-        bitsAmount: msg.bitsAmount,
-      }));
+      const messageValues = dedupedBatch.map(
+        (msg) =>
+          Prisma.sql`(${msg.fingerprint}, ${msg.viewerId}, ${msg.channelId}, ${msg.messageText}, ${msg.messageType}, ${msg.timestamp}, ${msg.badges}, ${msg.emotesUsed}, ${msg.bitsAmount}, CURRENT_TIMESTAMP)`
+      );
 
-      // 先落地原始訊息，縮短後續聚合交易範圍
-      await prisma.viewerChannelMessage.createMany({ data: messageRows });
+      // 先落地原始訊息（DB dedup），縮短後續聚合交易範圍
+      const insertedRows = await prisma.$queryRaw<Array<{ messageDedupKey: string }>>(Prisma.sql`
+        WITH src (
+          messageDedupKey,
+          viewerId,
+          channelId,
+          messageText,
+          messageType,
+          timestamp,
+          badges,
+          emotesUsed,
+          bitsAmount,
+          createdAt
+        ) AS (
+          VALUES ${Prisma.join(messageValues)}
+        )
+        INSERT INTO viewer_channel_messages (
+          id,
+          messageDedupKey,
+          viewerId,
+          channelId,
+          messageText,
+          messageType,
+          timestamp,
+          badges,
+          emotesUsed,
+          bitsAmount,
+          createdAt
+        )
+        SELECT
+          lower(hex(randomblob(16))) AS id,
+          src.messageDedupKey,
+          src.viewerId,
+          src.channelId,
+          src.messageText,
+          src.messageType,
+          src.timestamp,
+          src.badges,
+          src.emotesUsed,
+          src.bitsAmount,
+          src.createdAt
+        FROM src
+        ON CONFLICT(messageDedupKey) DO NOTHING
+        RETURNING messageDedupKey
+      `);
       messagesPersisted = true;
+      for (const msg of dedupedBatch) {
+        if (msg.fingerprint) {
+          this.markFingerprintPersisted(msg.fingerprint, now);
+        }
+      }
+
+      const insertedDedupKeys = new Set(insertedRows.map((row) => row.messageDedupKey));
+      const persistedBatch =
+        insertedRows.length >= dedupedBatch.length
+          ? dedupedBatch
+          : dedupedBatch.filter((msg) => !!msg.fingerprint && insertedDedupKeys.has(msg.fingerprint));
+
+      if (persistedBatch.length === 0) {
+        return true;
+      }
+
+      for (const msg of persistedBatch) {
+        const date = new Date(msg.timestamp);
+        date.setUTCHours(0, 0, 0, 0);
+        const key = `${msg.viewerId}:${msg.channelId}:${date.getTime()}`;
+
+        const agg = messageAggIncrements.get(key) || {
+          viewerId: msg.viewerId,
+          channelId: msg.channelId,
+          date,
+          totalMessages: 0,
+          chatMessages: 0,
+          subscriptions: 0,
+          cheers: 0,
+          giftSubs: 0,
+          raids: 0,
+          totalBits: 0,
+        };
+
+        agg.totalMessages += 1;
+        if (msg.messageType === "CHAT") agg.chatMessages += 1;
+        if (msg.messageType === "SUBSCRIPTION") agg.subscriptions += 1;
+        if (msg.messageType === "CHEER") agg.cheers += 1;
+        if (msg.messageType === "GIFT_SUBSCRIPTION") agg.giftSubs += 1;
+        if (msg.messageType === "RAID") agg.raids += 1;
+        if (msg.bitsAmount) agg.totalBits += msg.bitsAmount;
+
+        messageAggIncrements.set(key, agg);
+
+        const daily = dailyStatIncrements.get(key) || {
+          viewerId: msg.viewerId,
+          channelId: msg.channelId,
+          date,
+          messageCount: 0,
+          emoteCount: 0,
+        };
+
+        daily.messageCount += 1;
+        daily.emoteCount += msg.emoteCount;
+        dailyStatIncrements.set(key, daily);
+
+        const lifetimeKey = `${msg.viewerId}:${msg.channelId}`;
+        const lifetime = lifetimeIncrements.get(lifetimeKey) || {
+          viewerId: msg.viewerId,
+          channelId: msg.channelId,
+          totalMessages: 0,
+          totalChatMessages: 0,
+          totalSubscriptions: 0,
+          totalCheers: 0,
+          totalBits: 0,
+          lastWatchedAt: msg.timestamp,
+        };
+
+        lifetime.totalMessages += 1;
+        if (msg.messageType === "CHAT") lifetime.totalChatMessages += 1;
+        if (msg.messageType === "SUBSCRIPTION") lifetime.totalSubscriptions += 1;
+        if (msg.messageType === "CHEER") lifetime.totalCheers += 1;
+        if (msg.bitsAmount) lifetime.totalBits += msg.bitsAmount;
+        if (msg.timestamp > lifetime.lastWatchedAt) {
+          lifetime.lastWatchedAt = msg.timestamp;
+        }
+        lifetimeIncrements.set(lifetimeKey, lifetime);
+      }
 
       await prisma.$transaction(async (tx) => {
 
@@ -898,14 +1021,14 @@ export class ViewerMessageRepository {
         return true;
       }
 
-      const retryableMessages = batch
+      const retryableMessages = dedupedBatch
         .map((message) => ({
           ...message,
           retryCount: message.retryCount + 1,
         }))
         .filter((message) => message.retryCount <= MESSAGE_BATCH_MAX_RETRIES);
 
-      const droppedMessages = batch.length - retryableMessages.length;
+      const droppedMessages = dedupedBatch.length - retryableMessages.length;
 
       if (retryableMessages.length > 0) {
         this.enqueueRetryMessages(retryableMessages);

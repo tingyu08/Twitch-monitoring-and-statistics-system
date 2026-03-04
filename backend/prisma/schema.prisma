@@ -176,6 +176,7 @@ model ViewerChannelDailyStat {
 
 model ViewerChannelMessage {
   id          String   @id @default(uuid())
+  messageDedupKey String @unique
   viewerId    String
   channelId   String
   messageText String
