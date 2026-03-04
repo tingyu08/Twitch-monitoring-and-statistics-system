@@ -39,9 +39,12 @@ const BATCH_SIZE = 1000;
 const WATERMARK_SETTING_KEY = "watch-time-increment:last-processed-at";
 const RUN_IDEMPOTENCY_KEY_PREFIX = "watch-time-increment:run:";
 
-/** 將 Date 轉為 SQLite 相容的 ISO 日期字串 (YYYY-MM-DD) */
-function toSqliteDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/**
+ * 將 Date 轉為 SQLite 可解析的 datetime 字串 (YYYY-MM-DD 00:00:00)
+ * 避免只寫入 YYYY-MM-DD 造成 Prisma DateTime 解析失敗。
+ */
+function toSqliteDateTime(d: Date): string {
+  return `${d.toISOString().slice(0, 10)} 00:00:00`;
 }
 
 function floorToMinute(d: Date): Date {
@@ -149,11 +152,12 @@ export class WatchTimeIncrementJob {
           const activeCount = activePairs.length;
 
           if (activeCount > 0) {
-            const todayStr = toSqliteDate(intervalEnd);
+            const todayDateTime = toSqliteDateTime(intervalEnd);
             for (let i = 0; i < activePairs.length; i += BATCH_SIZE) {
               const batch = activePairs.slice(i, i + BATCH_SIZE);
               const batchValues = batch.map(
-                (p) => Prisma.sql`(${p.viewerId}, ${p.channelId}, ${todayStr}, ${INCREMENT_SECONDS})`
+                (p) =>
+                  Prisma.sql`(${p.viewerId}, ${p.channelId}, ${todayDateTime}, ${INCREMENT_SECONDS})`
               );
 
               const affected = await tx.$executeRaw(Prisma.sql`
@@ -224,7 +228,7 @@ export class WatchTimeIncrementJob {
                     LEFT JOIN viewer_channel_daily_stats daily
                       ON daily.viewerId = src.viewerId
                      AND daily.channelId = src.channelId
-                     AND daily.date = ${todayStr}
+                     AND daily.date = ${todayDateTime}
                   )
                   INSERT INTO viewer_channel_lifetime_stats (
                     id,
