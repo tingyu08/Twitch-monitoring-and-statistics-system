@@ -178,6 +178,11 @@ function startConnectionKeepAlive(): void {
           }
         }),
       ]);
+      // ping 成功：若先前曾因失敗設為 false，在此恢復連線就緒狀態
+      if (!isConnectionWarmed) {
+        isConnectionWarmed = true;
+        logger.info("Prisma", "keep-alive ping 恢復成功，連線已重新就緒");
+      }
     } catch (error) {
       isConnectionWarmed = false;
       logger.warn("Prisma", `keep-alive ping failed: ${error instanceof Error ? error.message : error}`);
