@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { prisma } from "../../db/prisma";
 import { cacheManager } from "../../utils/cache-manager";
+import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
 import { WatchTimeIncrementJob } from "../watch-time-increment.job";
 
 jest.mock("node-cron", () => ({
@@ -45,6 +46,12 @@ jest.mock("../job-write-guard", () => ({
   ),
 }));
 
+jest.mock("../../utils/job-circuit-breaker", () => ({
+  shouldSkipForCircuitBreaker: jest.fn().mockReturnValue(false),
+  recordJobSuccess: jest.fn(),
+  recordJobFailure: jest.fn(),
+}));
+
 describe("WatchTimeIncrementJob", () => {
   const txMock = {
     systemSetting: {
@@ -74,6 +81,8 @@ describe("WatchTimeIncrementJob", () => {
     prismaMock.$transaction.mockImplementation(async (cb: (tx: typeof txMock) => Promise<unknown>) => {
       return cb(txMock);
     });
+
+    (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(false);
   });
 
   it("schedules only once even if start is called multiple times", () => {
@@ -187,5 +196,14 @@ describe("WatchTimeIncrementJob", () => {
     expect(txMock.$queryRaw).not.toHaveBeenCalled();
     expect(txMock.$executeRaw).not.toHaveBeenCalled();
     expect(cacheManager.delete).not.toHaveBeenCalled();
+  });
+
+  it("skips execution when circuit breaker is active", async () => {
+    const job = new WatchTimeIncrementJob();
+    (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(true);
+
+    await job.execute();
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });

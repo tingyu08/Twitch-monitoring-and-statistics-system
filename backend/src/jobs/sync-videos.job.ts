@@ -4,6 +4,12 @@ import { twurpleVideoService } from "../services/twitch-video.service";
 import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
 import { captureJobError } from "./job-error-tracker";
+import { retryDatabaseOperation } from "../utils/db-retry";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 
 /**
  * Sync Videos & Clips Job (記憶體優化版)
@@ -16,6 +22,8 @@ const STREAMER_DELAY_MS = 300;
 const JOB_TIMEOUT_MS = 90 * 60 * 1000;
 const MAX_MEMORY_MB = MEMORY_THRESHOLDS.MAX_MB;
 const ENTITY_QUERY_BATCH_SIZE = 200;
+const CRON_JITTER_MAX_MS = Number.parseInt(process.env.SYNC_VIDEOS_CRON_JITTER_MAX_MS || "8000", 10);
+const JOB_CIRCUIT_BREAKER_NAME = "sync-videos";
 let isRunning = false;
 
 type StreamerSyncTarget = {
@@ -31,7 +39,8 @@ type FollowedChannelSyncTarget = {
 };
 
 async function loadStreamerBatch(cursorId?: string): Promise<StreamerSyncTarget[]> {
-  return prisma.streamer.findMany({
+  return retryDatabaseOperation(() =>
+    prisma.streamer.findMany({
     where: {
       twitchUserId: { not: "" },
       twitchTokens: {
@@ -53,11 +62,13 @@ async function loadStreamerBatch(cursorId?: string): Promise<StreamerSyncTarget[
           skip: 1,
         }
       : {}),
-  });
+    })
+  );
 }
 
 async function loadFollowedChannelBatch(cursorId?: string): Promise<FollowedChannelSyncTarget[]> {
-  return prisma.channel.findMany({
+  return retryDatabaseOperation(() =>
+    prisma.channel.findMany({
     where: {
       twitchChannelId: { not: "" },
       userFollows: { some: {} },
@@ -75,7 +86,8 @@ async function loadFollowedChannelBatch(cursorId?: string): Promise<FollowedChan
           skip: 1,
         }
       : {}),
-  });
+    })
+  );
 }
 
 async function shouldSkipBatch(maxMemoryMB: number, context: string): Promise<boolean> {
@@ -115,7 +127,20 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
   }
 
   isRunning = true;
+
+  if (CRON_JITTER_MAX_MS > 0) {
+    const jitterMs = Math.floor(Math.random() * CRON_JITTER_MAX_MS);
+    if (jitterMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, jitterMs));
+    }
+  }
   logger.info("Jobs", "開始執行 Sync Videos Job (記憶體優化版)...");
+
+  if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+    logger.warn("Jobs", "Sync Videos Job 暫停中（circuit breaker），跳過本輪");
+    isRunning = false;
+    return;
+  }
 
   const startTime = Date.now();
   let totalProcessed = 0;
@@ -264,9 +289,11 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
       `Sync Videos Job 完成: 實況主 ${totalProcessed}, 跳過 ${totalSkipped}, ` +
         `觀眾 Channel ${viewerChannelsSynced}, 耗時 ${duration}s, 記憶體 ${finalMemMB}MB`
     );
+    recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Jobs", "Sync Videos Job 執行失敗", error);
     captureJobError("sync-videos", error);
+    recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
   } finally {
     clearTimeout(timeoutHandle);
     isRunning = false;

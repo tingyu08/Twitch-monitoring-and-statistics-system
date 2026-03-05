@@ -17,6 +17,11 @@ import { logger } from "../utils/logger";
 import { decryptToken } from "../utils/crypto.utils";
 import { cacheManager } from "../utils/cache-manager";
 import { retryDatabaseOperation } from "../utils/db-retry";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 import { isRedisEnabled, redisGetJson, redisSetJson } from "../utils/redis-client";
 import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
 import { captureJobError } from "./job-error-tracker";
@@ -141,6 +146,15 @@ const SYNC_FOLLOWS_CRON = process.env.SYNC_FOLLOWS_CRON || "50 * * * *";
 // 並發控制：同時最多處理 5 個使用者
 const CONCURRENCY_LIMIT = 5;
 const TOKEN_QUERY_BATCH_SIZE = 200;
+const DB_JITTER_MAX_MS = Number.parseInt(process.env.SYNC_USER_FOLLOWS_DB_JITTER_MAX_MS || "5000", 10);
+const JOB_CIRCUIT_BREAKER_NAME = "sync-user-follows";
+const DB_RETRY_OPTIONS = {
+  maxRetries: 4,
+  initialDelayMs: 400,
+  maxDelayMs: 6000,
+  backoffMultiplier: 2,
+  jitterMs: 300,
+};
 const SUMMARY_REFRESH_DEBOUNCE_MS = Number(process.env.SUMMARY_REFRESH_DEBOUNCE_MS || 30000);
 const SUMMARY_REFRESH_BATCH_SIZE = Number(process.env.SUMMARY_REFRESH_BATCH_SIZE || 50);
 const SUMMARY_REFRESH_CONCURRENCY = Number(process.env.SUMMARY_REFRESH_CONCURRENCY || 4);
@@ -391,6 +405,10 @@ export interface SyncUserFollowsResult {
 export class SyncUserFollowsJob {
   private isRunning = false;
 
+  private async withDbRetry<T>(operation: () => Promise<T>): Promise<T> {
+    return retryDatabaseOperation(operation, DB_RETRY_OPTIONS);
+  }
+
   /**
    * 啟動 Cron Job
    */
@@ -398,6 +416,12 @@ export class SyncUserFollowsJob {
     logger.info("Jobs", `📋 Sync User Follows Job 已排程: ${SYNC_FOLLOWS_CRON}`);
 
     cron.schedule(SYNC_FOLLOWS_CRON, async () => {
+      if (DB_JITTER_MAX_MS > 0) {
+        const jitterMs = Math.floor(Math.random() * DB_JITTER_MAX_MS);
+        if (jitterMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, jitterMs));
+        }
+      }
       await this.execute();
     });
   }
@@ -423,6 +447,21 @@ export class SyncUserFollowsJob {
     this.isRunning = true;
     const startTime = Date.now();
     logger.debug("Jobs", "開始同步使用者追蹤名單...");
+
+    if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+      logger.warn("Jobs", "Sync User Follows Job 暫停中（circuit breaker），跳過本輪");
+      this.isRunning = false;
+      return {
+        usersProcessed: 0,
+        channelsCreated: 0,
+        followsCreated: 0,
+        followsRemoved: 0,
+        channelsDeactivated: 0,
+        usersFailed: 0,
+        totalMonitoredChannels: 0,
+        executionTimeMs: 0,
+      };
+    }
 
     const result: SyncUserFollowsResult = {
       usersProcessed: 0,
@@ -501,12 +540,16 @@ export class SyncUserFollowsJob {
           `耗時 ${result.executionTimeMs}ms`
       );
 
+      recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
+
       return result;
     } catch (error) {
       result.executionTimeMs = Date.now() - startTime;
       logger.error("Jobs", "❌ Sync User Follows Job 執行失敗", error);
       captureJobError("sync-user-follows", error);
-      throw error;
+      recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
+      result.usersFailed += 1;
+      return result;
     } finally {
       this.isRunning = false;
     }
@@ -540,7 +583,8 @@ export class SyncUserFollowsJob {
     // 注意：統一登入後，streamer token 也會有 viewerId
     let streamerCursorId: string | undefined;
     while (true) {
-      const streamerTokens = await prisma.twitchToken.findMany({
+      const streamerTokens = await this.withDbRetry(() =>
+        prisma.twitchToken.findMany({
         where: {
           ownerType: "streamer",
           streamerId: { not: null },
@@ -555,7 +599,8 @@ export class SyncUserFollowsJob {
               skip: 1,
             }
           : {}),
-      });
+        })
+      );
 
       if (streamerTokens.length === 0) {
         break;
@@ -589,7 +634,8 @@ export class SyncUserFollowsJob {
     // 獲取有 user:read:follows scope 的 Viewer tokens（分頁）
     let viewerCursorId: string | undefined;
     while (true) {
-      const viewerTokens = await prisma.twitchToken.findMany({
+      const viewerTokens = await this.withDbRetry(() =>
+        prisma.twitchToken.findMany({
         where: {
           ownerType: "viewer",
           viewerId: { not: null },
@@ -604,7 +650,8 @@ export class SyncUserFollowsJob {
               skip: 1,
             }
           : {}),
-      });
+        })
+      );
 
       if (viewerTokens.length === 0) {
         break;
@@ -672,13 +719,15 @@ export class SyncUserFollowsJob {
     );
 
     // 2. 獲取目前資料庫中的追蹤記錄（只 select 需要的欄位以減少記憶體）
-    const existingFollows = await prisma.userFollow.findMany({
+    const existingFollows = await this.withDbRetry(() =>
+      prisma.userFollow.findMany({
       where: { userId: user.id },
       select: {
         id: true,
         channel: { select: { twitchChannelId: true } },
       },
-    });
+      })
+    );
 
     const existingFollowMap = new Map(
       existingFollows.map((f: ExistingFollow) => [f.channel.twitchChannelId, f])
@@ -687,7 +736,8 @@ export class SyncUserFollowsJob {
     // 3. 批量獲取現有資料（消除 N+1 查詢）
     const broadcasterIds = followedChannels.map((f) => f.broadcasterId);
 
-    const existingChannels = await prisma.channel.findMany({
+    const existingChannels = await this.withDbRetry(() =>
+      prisma.channel.findMany({
       where: { twitchChannelId: { in: broadcasterIds } },
       select: {
         id: true,
@@ -695,16 +745,19 @@ export class SyncUserFollowsJob {
         isMonitored: true,
         streamerId: true,
       },
-    });
+      })
+    );
 
     const existingChannelMap = new Map<string, ExistingChannel>(
       existingChannels.map((ch: ExistingChannel) => [ch.twitchChannelId, ch])
     );
 
-    const existingStreamers = await prisma.streamer.findMany({
+    const existingStreamers = await this.withDbRetry(() =>
+      prisma.streamer.findMany({
       where: { twitchUserId: { in: broadcasterIds } },
       select: { id: true, twitchUserId: true, avatarUrl: true },
-    });
+      })
+    );
 
     const existingStreamerMap = new Map<string, ExistingStreamer>(
       existingStreamers.map((s: ExistingStreamer) => [s.twitchUserId, s])
@@ -793,7 +846,8 @@ export class SyncUserFollowsJob {
     }
 
     // 8. 批量執行資料庫操作
-    await prisma.$transaction(async (tx: TransactionClient) => {
+    await this.withDbRetry(() =>
+      prisma.$transaction(async (tx: TransactionClient) => {
       const now = new Date();
 
       if (streamersToUpsert.length > 0) {
@@ -884,7 +938,8 @@ export class SyncUserFollowsJob {
           data: { isMonitored: true },
         });
       }
-    });
+      })
+    );
 
     // 6. 批量建立 UserFollow 記錄
     const followsToCreate: Array<{
@@ -948,9 +1003,11 @@ export class SyncUserFollowsJob {
       (f: ExistingFollow) => f.id
     );
     if (followIdsToDelete.length > 0) {
-      await prisma.userFollow.deleteMany({
+      await this.withDbRetry(() =>
+        prisma.userFollow.deleteMany({
         where: { id: { in: followIdsToDelete } },
-      });
+        })
+      );
       result.followsRemoved = followIdsToDelete.length;
     }
 
@@ -964,14 +1021,16 @@ export class SyncUserFollowsJob {
    */
   private async cleanupUnfollowedChannels(): Promise<number> {
     // 找出所有 source="external" 且沒有 UserFollow 關聯的頻道
-    const orphanedChannels = await prisma.channel.findMany({
+    const orphanedChannels = await this.withDbRetry(() =>
+      prisma.channel.findMany({
       where: {
         source: "external",
         isMonitored: true,
         userFollows: { none: {} },
       },
       select: { id: true },
-    });
+      })
+    );
 
     if (orphanedChannels.length === 0) {
       return 0;
@@ -979,10 +1038,12 @@ export class SyncUserFollowsJob {
 
     // 使用 updateMany 批次更新（修復 N+1 問題）
     const orphanedIds = orphanedChannels.map((c: { id: string }) => c.id);
-    await prisma.channel.updateMany({
+    await this.withDbRetry(() =>
+      prisma.channel.updateMany({
       where: { id: { in: orphanedIds } },
       data: { isMonitored: false },
-    });
+      })
+    );
 
     logger.info("Jobs", `🧹 停用 ${orphanedChannels.length} 個無人追蹤的外部頻道`);
 
@@ -993,9 +1054,11 @@ export class SyncUserFollowsJob {
    * 獲取目前監控中的頻道總數
    */
   private async getMonitoredChannelCount(): Promise<number> {
-    const count = await prisma.channel.count({
-      where: { isMonitored: true },
-    });
+    const count = await this.withDbRetry(() =>
+      prisma.channel.count({
+        where: { isMonitored: true },
+      })
+    );
     return count;
   }
 }
@@ -1039,10 +1102,14 @@ export async function triggerFollowSyncForUser(
     logger.info("Jobs", `🔄 登入後同步使用者追蹤名單: ${viewerId}`);
 
     // 獲取 Viewer 的 Twitch User ID
-    const viewer = await prisma.viewer.findUnique({
-      where: { id: viewerId },
-      select: { twitchUserId: true },
-    });
+    const viewer = await retryDatabaseOperation(
+      () =>
+        prisma.viewer.findUnique({
+          where: { id: viewerId },
+          select: { twitchUserId: true },
+        }),
+      DB_RETRY_OPTIONS
+    );
 
     if (!viewer) {
       logger.warn("Jobs", `找不到 Viewer: ${viewerId}`);
@@ -1058,16 +1125,20 @@ export async function triggerFollowSyncForUser(
     logger.info("Jobs", `📋 從 Twitch 取得 ${followedChannels.length} 個追蹤頻道`);
 
     // 獲取現有的追蹤記錄
-    const existingFollows = await prisma.userFollow.findMany({
-      where: {
-        userId: viewerId,
-        userType: "viewer",
-      },
-      select: {
-        id: true,
-        channel: { select: { twitchChannelId: true } },
-      },
-    });
+    const existingFollows = await retryDatabaseOperation(
+      () =>
+        prisma.userFollow.findMany({
+          where: {
+            userId: viewerId,
+            userType: "viewer",
+          },
+          select: {
+            id: true,
+            channel: { select: { twitchChannelId: true } },
+          },
+        }),
+      DB_RETRY_OPTIONS
+    );
 
     const existingFollowMap = new Map<string, TriggerExistingFollow>(
       existingFollows.map((f: TriggerExistingFollow) => [f.channel.twitchChannelId, f])
@@ -1075,19 +1146,27 @@ export async function triggerFollowSyncForUser(
 
     // P1 Fix: 批次查詢所有頻道，避免 N+1 查詢問題
     const allBroadcasterIds = followedChannels.map((f) => f.broadcasterId);
-    const existingChannels = await prisma.channel.findMany({
-      where: { twitchChannelId: { in: allBroadcasterIds } },
-      select: { id: true, twitchChannelId: true, isMonitored: true, streamerId: true },
-    });
+    const existingChannels = await retryDatabaseOperation(
+      () =>
+        prisma.channel.findMany({
+          where: { twitchChannelId: { in: allBroadcasterIds } },
+          select: { id: true, twitchChannelId: true, isMonitored: true, streamerId: true },
+        }),
+      DB_RETRY_OPTIONS
+    );
     const existingChannelMap = new Map<string, TriggerExistingChannel>(
       existingChannels.map((c: TriggerExistingChannel) => [c.twitchChannelId, c])
     );
 
     // P1 Fix: 批次查詢所有 Streamer，避免 N+1 查詢問題
-    const existingStreamers = await prisma.streamer.findMany({
-      where: { twitchUserId: { in: allBroadcasterIds } },
-      select: { id: true, twitchUserId: true, avatarUrl: true },
-    });
+    const existingStreamers = await retryDatabaseOperation(
+      () =>
+        prisma.streamer.findMany({
+          where: { twitchUserId: { in: allBroadcasterIds } },
+          select: { id: true, twitchUserId: true, avatarUrl: true },
+        }),
+      DB_RETRY_OPTIONS
+    );
     const existingStreamerMap = new Map<string, TriggerExistingStreamer & { avatarUrl?: string | null }>(
       existingStreamers.map((s) => [s.twitchUserId, s])
     );
@@ -1158,7 +1237,9 @@ export async function triggerFollowSyncForUser(
         }
       }
 
-      await prisma.$transaction(async (tx: TransactionClient) => {
+      await retryDatabaseOperation(
+        () =>
+          prisma.$transaction(async (tx: TransactionClient) => {
         const now = new Date();
 
         if (streamersToUpsert.size > 0) {
@@ -1237,7 +1318,9 @@ export async function triggerFollowSyncForUser(
             data: { isMonitored: true },
           });
         }
-      });
+          }),
+        DB_RETRY_OPTIONS
+      );
 
       streamersToUpsert.clear();
       channelsToUpsert.clear();
@@ -1353,9 +1436,13 @@ export async function triggerFollowSyncForUser(
       (f: TriggerExistingFollow) => f.id
     );
     if (oldFollowIds.length > 0) {
-      await prisma.userFollow.deleteMany({
-        where: { id: { in: oldFollowIds } },
-      });
+      await retryDatabaseOperation(
+        () =>
+          prisma.userFollow.deleteMany({
+            where: { id: { in: oldFollowIds } },
+          }),
+        DB_RETRY_OPTIONS
+      );
       removed = oldFollowIds.length;
     }
 

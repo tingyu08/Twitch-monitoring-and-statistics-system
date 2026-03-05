@@ -13,9 +13,19 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { captureJobError } from "./job-error-tracker";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 
 const LAST_AGGREGATED_AT_KEY = "message_agg_last_aggregated_at";
 const AGGREGATE_DAILY_MESSAGES_CRON = process.env.AGGREGATE_DAILY_MESSAGES_CRON || "15 * * * *";
+const CRON_JITTER_MAX_MS = Number.parseInt(
+  process.env.AGGREGATE_DAILY_MESSAGES_CRON_JITTER_MAX_MS || "3000",
+  10
+);
+const JOB_CIRCUIT_BREAKER_NAME = "aggregate-daily-messages";
 type AggregationMode = "increment" | "replace";
 let isAggregating = false;
 
@@ -31,6 +41,12 @@ export async function aggregateDailyMessages(mode: AggregationMode = "increment"
   isAggregating = true;
   const startTime = Date.now();
   logger.info("Cron", `開始執行每日訊息聚合任務... (mode=${mode})`);
+
+  if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+    logger.warn("Cron", "訊息聚合任務暫停中（circuit breaker），跳過本輪");
+    isAggregating = false;
+    return;
+  }
 
   try {
     const now = new Date();
@@ -123,9 +139,11 @@ export async function aggregateDailyMessages(mode: AggregationMode = "increment"
     } else {
       logger.info("Cron", `訊息聚合完成: ${upsertCount} 筆記錄已更新 (mode=${mode}, 耗時 ${duration}ms)`);
     }
+    recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Cron", "訊息聚合失敗:", error);
     captureJobError("aggregate-daily-messages", error);
+    recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
     throw error;
   } finally {
     isAggregating = false;
@@ -138,6 +156,12 @@ export async function aggregateDailyMessages(mode: AggregationMode = "increment"
 export function startMessageAggregationJob(): void {
   // 每小時執行一次（預設每小時第 15 分鐘）
   cron.schedule(AGGREGATE_DAILY_MESSAGES_CRON, async () => {
+    if (CRON_JITTER_MAX_MS > 0) {
+      const jitterMs = Math.floor(Math.random() * CRON_JITTER_MAX_MS);
+      if (jitterMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, jitterMs));
+      }
+    }
     try {
       await aggregateDailyMessages();
     } catch (error) {

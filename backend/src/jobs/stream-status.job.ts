@@ -15,9 +15,16 @@ import { runWithWriteGuard } from "./job-write-guard";
 import { chatListenerManager } from "../services/chat-listener-manager";
 import { getSessionWriteAuthority } from "../config/session-write-authority";
 import { WriteGuardKeys } from "../constants";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 
 // 每 5 分鐘執行（第 0 秒觸發）
 const STREAM_STATUS_CRON = process.env.STREAM_STATUS_CRON || "20 */5 * * * *";
+const CRON_JITTER_MAX_MS = Number.parseInt(process.env.STREAM_STATUS_CRON_JITTER_MAX_MS || "5000", 10);
+const JOB_CIRCUIT_BREAKER_NAME = "stream-status";
 
 // Twitch API 單次查詢最大頻道數
 const MAX_CHANNELS_PER_BATCH = 100;
@@ -67,6 +74,12 @@ export class StreamStatusJob {
     logger.info("JOB", `Stream Status Job 已排程: ${STREAM_STATUS_CRON}`);
 
     cron.schedule(STREAM_STATUS_CRON, async () => {
+      if (CRON_JITTER_MAX_MS > 0) {
+        const jitterMs = Math.floor(Math.random() * CRON_JITTER_MAX_MS);
+        if (jitterMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, jitterMs));
+        }
+      }
       await this.execute();
     });
   }
@@ -100,6 +113,18 @@ export class StreamStatusJob {
     this.isRunning = true;
     const startTime = Date.now();
     logger.debug("JOB", "開始檢查開播狀態...");
+
+    if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+      logger.warn("JOB", "Stream Status Job 暫停中（circuit breaker），跳過本輪");
+      this.isRunning = false;
+      return {
+        checked: 0,
+        online: 0,
+        offline: 0,
+        newSessions: 0,
+        endedSessions: 0,
+      };
+    }
 
     const result: StreamStatusResult = {
       checked: 0,
@@ -139,10 +164,12 @@ export class StreamStatusJob {
         );
       }
 
+      recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
       return result;
     } catch (error) {
       logger.error("JOB", "Stream Status Job 執行失敗:", error);
       captureJobError("stream-status", error);
+      recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
       throw error;
     } finally {
       if (this.timeoutHandle) {

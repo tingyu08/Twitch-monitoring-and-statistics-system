@@ -13,6 +13,11 @@ import { logger } from "../utils/logger";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { WriteGuardKeys } from "../constants";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 
 // P1 Fix: 每小時第 10 分鐘執行（錯開 syncUserFollowsJob 的整點執行）
 const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "35 * * * *";
@@ -20,6 +25,8 @@ const CHANNEL_STATS_CRON = process.env.CHANNEL_STATS_CRON || "35 * * * *";
 // P0 Fix: 加入批次處理配置
 const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 500; // 每批次間隔 500ms
+const CRON_JITTER_MAX_MS = Number.parseInt(process.env.CHANNEL_STATS_CRON_JITTER_MAX_MS || "5000", 10);
+const JOB_CIRCUIT_BREAKER_NAME = "channel-stats-sync";
 
 export interface ChannelStatsSyncResult {
   synced: number;
@@ -37,6 +44,12 @@ export class ChannelStatsSyncJob {
     logger.info("ChannelStatsSync", `Job scheduled: ${CHANNEL_STATS_CRON}`);
 
     cron.schedule(CHANNEL_STATS_CRON, async () => {
+      if (CRON_JITTER_MAX_MS > 0) {
+        const jitterMs = Math.floor(Math.random() * CRON_JITTER_MAX_MS);
+        if (jitterMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, jitterMs));
+        }
+      }
       await this.execute();
     });
   }
@@ -52,6 +65,12 @@ export class ChannelStatsSyncJob {
 
     this.isRunning = true;
     logger.info("ChannelStatsSync", "Starting Channel Stats Sync...");
+
+    if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+      logger.warn("ChannelStatsSync", "Circuit breaker active, skipping this round");
+      this.isRunning = false;
+      return { synced: 0, failed: 0, dailyStatsUpdated: 0 };
+    }
 
     const result: ChannelStatsSyncResult = {
       synced: 0,
@@ -116,10 +135,13 @@ export class ChannelStatsSyncJob {
 
       logger.info("ChannelStatsSync", summary);
 
+      recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
+
       return result;
     } catch (error) {
       logger.error("ChannelStatsSync", "Job execution failed:", error);
       captureJobError("channel-stats-sync", error);
+      recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
       throw error;
     } finally {
       this.isRunning = false;

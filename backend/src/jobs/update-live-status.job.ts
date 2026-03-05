@@ -9,6 +9,11 @@ import { memoryMonitor } from "../utils/memory-monitor";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { CacheTags, WriteGuardKeys } from "../constants";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 
 import cron from "node-cron";
 
@@ -21,6 +26,8 @@ const LAST_CHECK_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
 // 每分鐘第 30 秒執行（不是每 30 秒）。
 // 目的：錯開多數整分鐘觸發的 job，降低同秒 DB/Twitch API 峰值競爭。
 const UPDATE_LIVE_STATUS_CRON = process.env.UPDATE_LIVE_STATUS_CRON || "30 * * * * *";
+const CRON_JITTER_MAX_MS = Number.parseInt(process.env.UPDATE_LIVE_STATUS_CRON_JITTER_MAX_MS || "3000", 10);
+const JOB_CIRCUIT_BREAKER_NAME = "update-live-status";
 
 // 活躍頻道判斷窗口（超過此時間未開台則進入低頻輪詢）
 const SLOW_POLL_GROUPS = 5;
@@ -384,6 +391,12 @@ async function updateChannelsWithChanges(
  * 頻率：每 1 分鐘由 cron 觸發（優化後執行時間大幅縮短）
  */
 export const updateLiveStatusJob = cron.schedule(UPDATE_LIVE_STATUS_CRON, async () => {
+  if (CRON_JITTER_MAX_MS > 0) {
+    const jitterMs = Math.floor(Math.random() * CRON_JITTER_MAX_MS);
+    if (jitterMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, jitterMs));
+    }
+  }
   await updateLiveStatusFn();
 });
 
@@ -397,6 +410,12 @@ export async function updateLiveStatusFn() {
   isRunning = true;
   const startTime = Date.now();
   logger.debug("Jobs", "🔄 開始執行 Update Live Status Job...");
+
+  if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+    logger.warn("Jobs", "Update Live Status Job 暫停中（circuit breaker），跳過本輪");
+    isRunning = false;
+    return;
+  }
 
   try {
     // 1. 先取得監控總量與慢速輪詢總量，再做串流分頁處理
@@ -671,9 +690,12 @@ export async function updateLiveStatusFn() {
         `✅ 直播狀態更新完成: 已檢查 ${processedCount} 個頻道, ${liveCount} 直播中, ${offlineCount} 離線, DB寫入: ${totalChangedUpdates} [${duration}ms]`
       );
     }
+
+    recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Jobs", "Update Live Status Job 執行失敗", error);
     captureJobError("update-live-status", error);
+    recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
   } finally {
     // 確保解鎖，即使發生錯誤
     isRunning = false;

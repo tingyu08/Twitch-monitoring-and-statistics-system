@@ -44,6 +44,12 @@ jest.mock("../job-write-guard", () => ({
   runWithWriteGuard: jest.fn(async (_key: string, op: () => Promise<unknown>) => op()),
 }));
 
+jest.mock("../../utils/job-circuit-breaker", () => ({
+  shouldSkipForCircuitBreaker: jest.fn().mockReturnValue(false),
+  recordJobSuccess: jest.fn(),
+  recordJobFailure: jest.fn(),
+}));
+
 jest.mock("node-cron", () => {
   const mockSchedule = jest.fn();
   return {
@@ -65,6 +71,7 @@ import { prisma } from "../../db/prisma";
 import { unifiedTwitchService } from "../../services/unified-twitch.service";
 import cron from "node-cron";
 import { captureJobError } from "../job-error-tracker";
+import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -96,6 +103,7 @@ describe("ChannelStatsSyncJob", () => {
     job = new ChannelStatsSyncJob();
     // Default: no active sessions for daily stats
     setupEmptyDailyStats();
+    (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(false);
   });
 
   // ── isRunning guard ────────────────────────────────────────────────────
@@ -130,6 +138,14 @@ describe("ChannelStatsSyncJob", () => {
       // Assert
       expect(secondResult).toEqual({ synced: 0, failed: 0, dailyStatsUpdated: 0 });
     });
+  });
+
+  it("should skip run when circuit breaker is active", async () => {
+    (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(true);
+    const result = await job.execute();
+
+    expect(result).toEqual({ synced: 0, failed: 0, dailyStatsUpdated: 0 });
+    expect(prisma.channel.findMany).not.toHaveBeenCalled();
   });
 
   // ── Empty channels ────────────────────────────────────────────────────

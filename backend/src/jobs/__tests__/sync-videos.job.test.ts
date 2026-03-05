@@ -47,6 +47,16 @@ jest.mock("../job-error-tracker", () => ({
   captureJobError: jest.fn(),
 }));
 
+jest.mock("../../utils/job-circuit-breaker", () => ({
+  shouldSkipForCircuitBreaker: jest.fn().mockReturnValue(false),
+  recordJobSuccess: jest.fn(),
+  recordJobFailure: jest.fn(),
+}));
+
+jest.mock("../../utils/db-retry", () => ({
+  retryDatabaseOperation: jest.fn((fn: () => unknown) => fn()),
+}));
+
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
 import cron from "node-cron";
@@ -54,6 +64,8 @@ import { prisma } from "../../db/prisma";
 import { twurpleVideoService } from "../../services/twitch-video.service";
 import { logger } from "../../utils/logger";
 import { captureJobError } from "../job-error-tracker";
+import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
+import { retryDatabaseOperation } from "../../utils/db-retry";
 
 // Import the job – this triggers cron.schedule() and registers the handler
 import "../sync-videos.job";
@@ -101,6 +113,8 @@ describe("syncVideosJob", () => {
     (twurpleVideoService.syncClips as jest.Mock).mockResolvedValue(undefined);
     (twurpleVideoService.syncViewerVideos as jest.Mock).mockResolvedValue(undefined);
     (twurpleVideoService.syncViewerClips as jest.Mock).mockResolvedValue(undefined);
+    (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(false);
+    (retryDatabaseOperation as jest.Mock).mockImplementation((fn: () => unknown) => fn());
   });
 
   afterEach(() => {
@@ -128,6 +142,18 @@ describe("syncVideosJob", () => {
     expect(logger.warn).toHaveBeenCalledWith(
       "Jobs",
       "Sync Videos Job 正在執行中，跳過此次排程"
+    );
+  });
+
+  it("skips execution when circuit breaker is active", async () => {
+    (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(true);
+
+    await run();
+
+    expect(prisma.streamer.findMany).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Jobs",
+      expect.stringContaining("circuit breaker")
     );
   });
 

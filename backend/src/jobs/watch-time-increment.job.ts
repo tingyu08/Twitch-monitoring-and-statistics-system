@@ -13,6 +13,11 @@ import { cacheManager } from "../utils/cache-manager";
 import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { WriteGuardKeys } from "../constants";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 
 const parsedIncrementMinutes = Number.parseInt(
   process.env.WATCH_TIME_INCREMENT_MINUTES || "10",
@@ -38,6 +43,8 @@ const ACTIVE_WINDOW_MINUTES = WATCH_TIME_INCREMENT_MINUTES;
 const BATCH_SIZE = 1000;
 const WATERMARK_SETTING_KEY = "watch-time-increment:last-processed-at";
 const RUN_IDEMPOTENCY_KEY_PREFIX = "watch-time-increment:run:";
+const CRON_JITTER_MAX_MS = Number.parseInt(process.env.WATCH_TIME_CRON_JITTER_MAX_MS || "3000", 10);
+const JOB_CIRCUIT_BREAKER_NAME = "watch-time-increment";
 
 /**
  * 將 Date 轉為 SQLite 可解析的 datetime 字串 (YYYY-MM-DD 00:00:00)
@@ -68,6 +75,12 @@ export class WatchTimeIncrementJob {
     logger.info("Jobs", `📋 Watch Time Increment Job 已排程: ${WATCH_TIME_INCREMENT_CRON}`);
 
     this.scheduledTask = cron.schedule(WATCH_TIME_INCREMENT_CRON, async () => {
+      if (CRON_JITTER_MAX_MS > 0) {
+        const jitterMs = Math.floor(Math.random() * CRON_JITTER_MAX_MS);
+        if (jitterMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, jitterMs));
+        }
+      }
       await this.execute();
     });
   }
@@ -81,6 +94,12 @@ export class WatchTimeIncrementJob {
     this.isRunning = true;
     this.lastAttemptAt = new Date();
     const executionStartedAt = Date.now();
+
+    if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+      logger.warn("Jobs", "Watch Time Increment Job 暫停中（circuit breaker），跳過本輪");
+      this.isRunning = false;
+      return;
+    }
 
     try {
       const now = floorToMinute(new Date());
@@ -339,6 +358,7 @@ export class WatchTimeIncrementJob {
       const duration = Date.now() - executionStartedAt;
 
       this.lastSuccessAt = now;
+      recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
       logger.info(
         "Jobs",
         `Watch Time Increment 完成: 更新了 ${activeCount} 個觀眾的觀看時間 (+${
@@ -348,6 +368,7 @@ export class WatchTimeIncrementJob {
     } catch (error) {
       logger.error("Jobs", "❌ Watch Time Increment Job 執行失敗", error);
       captureJobError("watch-time-increment", error);
+      recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
     } finally {
       this.isRunning = false;
     }

@@ -4,6 +4,12 @@ import { revenueService } from "../modules/streamer/revenue.service";
 import { logger } from "../utils/logger";
 import { revenueSyncQueue, type RevenueSyncJobData } from "../utils/revenue-sync-queue";
 import { captureJobError } from "./job-error-tracker";
+import { retryDatabaseOperation } from "../utils/db-retry";
+import {
+  recordJobFailure,
+  recordJobSuccess,
+  shouldSkipForCircuitBreaker,
+} from "../utils/job-circuit-breaker";
 
 // 每個實況主的超時時間（毫秒）- 60 秒
 const PER_STREAMER_TIMEOUT_MS = 60 * 1000;
@@ -42,26 +48,45 @@ revenueSyncQueue.process(async (data: RevenueSyncJobData) => {
  * - 優先級排序
  */
 const SYNC_SUBSCRIPTIONS_CRON = process.env.SYNC_SUBSCRIPTIONS_CRON || "20 0 * * *";
+const CRON_JITTER_MAX_MS = Number.parseInt(
+  process.env.SYNC_SUBSCRIPTIONS_CRON_JITTER_MAX_MS || "8000",
+  10
+);
+const JOB_CIRCUIT_BREAKER_NAME = "sync-subscriptions";
 
 export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async () => {
+  if (CRON_JITTER_MAX_MS > 0) {
+    const jitterMs = Math.floor(Math.random() * CRON_JITTER_MAX_MS);
+    if (jitterMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, jitterMs));
+    }
+  }
+
+  if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
+    logger.warn("Jobs", "Sync Subscriptions Job 暫停中（circuit breaker），跳過本輪");
+    return;
+  }
+
   logger.info("Jobs", "開始執行 Sync Subscriptions Job...");
 
   try {
     // 獲取所有有效 Token 的實況主
-    const streamers = await prisma.streamer.findMany({
-      where: {
-        twitchTokens: {
-          some: {
-            ownerType: "streamer",
-            status: "active",
+    const streamers = await retryDatabaseOperation(() =>
+      prisma.streamer.findMany({
+        where: {
+          twitchTokens: {
+            some: {
+              ownerType: "streamer",
+              status: "active",
+            },
           },
         },
-      },
-      select: {
-        id: true,
-        displayName: true,
-      },
-    });
+        select: {
+          id: true,
+          displayName: true,
+        },
+      })
+    );
 
     let addedCount = 0;
     let rejectedCount = 0;
@@ -88,8 +113,10 @@ export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async
         `佇列狀態: ${status.queued} 排隊中, ${status.processing} 處理中, ` +
         `overflow 已持久化 ${status.overflowPersisted} / 回補 ${status.overflowRecovered}`
     );
+    recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Jobs", "Sync Subscriptions Job 執行失敗", error);
     captureJobError("sync-subscriptions", error);
+    recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
   }
 });

@@ -10,6 +10,7 @@ interface RetryOptions {
   initialDelayMs?: number;
   maxDelayMs?: number;
   backoffMultiplier?: number;
+  jitterMs?: number;
   shouldRetry?: (error: unknown) => boolean;
 }
 
@@ -18,6 +19,7 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
   initialDelayMs: 500,
   maxDelayMs: 5000,
   backoffMultiplier: 2,
+  jitterMs: 300,
   shouldRetry: (error: unknown) => {
     // 檢查是否為可重試的錯誤
     if (error instanceof Error) {
@@ -33,6 +35,7 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
         message.includes("econnreset") ||
         message.includes("etimedout") ||
         message.includes("enotfound") ||
+        message.includes("eai_again") ||
         message.includes("network") ||
         message.includes("fetch failed") ||  // 網路層級錯誤
         message.includes("server_error") ||  // Turso SERVER_ERROR
@@ -62,19 +65,28 @@ export async function retryDatabaseOperation<T>(
 
       // 如果不應該重試，或已達到最大重試次數，直接拋出錯誤
       if (!opts.shouldRetry(error) || attempt === opts.maxRetries) {
+        logger.warn(
+          "DB Retry",
+          `資料庫操作重試失敗 (attempt ${attempt + 1}/${opts.maxRetries + 1})，放棄重試: ${
+            error instanceof Error ? error.message.substring(0, 120) : String(error)
+          }`
+        );
         throw error;
       }
 
       // 記錄重試資訊（使用 debug 級別減少日誌噪音）
+      const jitter = opts.jitterMs > 0 ? Math.floor(Math.random() * opts.jitterMs) : 0;
+      const sleepMs = delay + jitter;
+
       logger.debug(
         "DB Retry",
-        `資料庫操作失敗，將在 ${delay}ms 後重試 (嘗試 ${attempt + 1}/${opts.maxRetries}): ${
+        `資料庫操作失敗，將在 ${sleepMs}ms 後重試 (嘗試 ${attempt + 1}/${opts.maxRetries}): ${
           error instanceof Error ? error.message.substring(0, 50) : String(error)
         }`
       );
 
       // 等待後重試
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, sleepMs));
 
       // 指數退避，但不超過最大延遲
       delay = Math.min(delay * opts.backoffMultiplier, opts.maxDelayMs);

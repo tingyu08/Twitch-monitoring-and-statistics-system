@@ -54,6 +54,13 @@ import { WriteGuardKeys } from "../constants";
 
 const SESSION_WRITE_AUTHORITY = getSessionWriteAuthority();
 const EVENTSUB_WRITES_SESSION = SESSION_WRITE_AUTHORITY !== "job";
+const EVENTSUB_DB_RETRY_OPTIONS = {
+  maxRetries: 4,
+  initialDelayMs: 400,
+  maxDelayMs: 6000,
+  backoffMultiplier: 2,
+  jitterMs: 300,
+};
 
 // EventSub 配置介面
 interface EventSubConfig {
@@ -125,6 +132,10 @@ class TwurpleEventSubService {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  private async withDbRetry<T>(operation: () => Promise<T>): Promise<T> {
+    return retryDatabaseOperation(operation, EVENTSUB_DB_RETRY_OPTIONS);
+  }
+
   private async runCheerDailyAggInitWithRetry(operation: () => Promise<void>): Promise<void> {
     for (let attempt = 1; attempt <= TwurpleEventSubService.CHEER_DAILY_AGG_INIT_MAX_RETRIES; attempt += 1) {
       try {
@@ -154,7 +165,7 @@ class TwurpleEventSubService {
     if (!this.cheerDailyAggInitPromise) {
       this.cheerDailyAggInitPromise = (async () => {
         await this.runCheerDailyAggInitWithRetry(async () => {
-          await prisma.$executeRaw`
+          await this.withDbRetry(() => prisma.$executeRaw`
             CREATE TABLE IF NOT EXISTS cheer_daily_agg (
               streamerId TEXT NOT NULL,
               date TEXT NOT NULL,
@@ -163,12 +174,12 @@ class TwurpleEventSubService {
               updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (streamerId, date)
             )
-          `;
+          `);
 
-          await prisma.$executeRaw`
+          await this.withDbRetry(() => prisma.$executeRaw`
             CREATE INDEX IF NOT EXISTS idx_cheer_daily_agg_streamer_date
             ON cheer_daily_agg(streamerId, date)
-          `;
+          `);
         });
 
         this.cheerDailyAggReady = true;
@@ -253,14 +264,14 @@ class TwurpleEventSubService {
       );
 
       if (values.length > 0) {
-        await prisma.$executeRaw(Prisma.sql`
+        await this.withDbRetry(() => prisma.$executeRaw(Prisma.sql`
           INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
           VALUES ${Prisma.join(values)}
           ON CONFLICT(streamerId, date) DO UPDATE SET
             totalBits = cheer_daily_agg.totalBits + excluded.totalBits,
             eventCount = cheer_daily_agg.eventCount + excluded.eventCount,
             updatedAt = CURRENT_TIMESTAMP
-        `);
+        `));
       }
     } catch (error) {
       logger.warn("TwurpleEventSub", "flush cheer_daily_agg buffer failed", error);
@@ -348,10 +359,12 @@ class TwurpleEventSubService {
 
     try {
       // 獲取所有需要監控的頻道
-      const channels = await prisma.channel.findMany({
-        where: { isMonitored: true },
-        select: { twitchChannelId: true, channelName: true },
-      });
+      const channels = await this.withDbRetry(() =>
+        prisma.channel.findMany({
+          where: { isMonitored: true },
+          select: { twitchChannelId: true, channelName: true },
+        })
+      );
 
       logger.info("TwurpleEventSub", `發現 ${channels.length} 個需要監控的頻道`);
 
@@ -754,9 +767,11 @@ await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_END, async () => {
   }): Promise<void> {
     try {
       // 找到對應的實況主
-      const streamer = await prisma.streamer.findFirst({
-        where: { twitchUserId: event.broadcasterId },
-      });
+      const streamer = await this.withDbRetry(() =>
+        prisma.streamer.findFirst({
+          where: { twitchUserId: event.broadcasterId },
+        })
+      );
 
       if (!streamer) {
         logger.debug(
@@ -769,24 +784,26 @@ await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_END, async () => {
       const cheeredAt = new Date();
 
       // 儲存 CheerEvent
-      const createdCheerEvent = await prisma.cheerEvent.create({
-        data: {
-          streamerId: streamer.id,
-          twitchUserId: event.isAnonymous ? null : event.userId,
-          userName: event.isAnonymous ? null : event.userDisplayName,
-          bits: event.bits,
-          message: event.message,
-          isAnonymous: event.isAnonymous,
-          cheeredAt,
-        },
-      });
+      const createdCheerEvent = await this.withDbRetry(() =>
+        prisma.cheerEvent.create({
+          data: {
+            streamerId: streamer.id,
+            twitchUserId: event.isAnonymous ? null : event.userId,
+            userName: event.isAnonymous ? null : event.userDisplayName,
+            bits: event.bits,
+            message: event.message,
+            isAnonymous: event.isAnonymous,
+            cheeredAt,
+          },
+        })
+      );
 
-      await prisma.$executeRaw`
+      await this.withDbRetry(() => prisma.$executeRaw`
         UPDATE cheer_events
         SET cheeredDate = DATE(${cheeredAt.toISOString()})
         WHERE id = ${createdCheerEvent.id}
           AND cheeredDate IS NULL
-      `;
+      `);
 
       await this.incrementCheerDailyAgg(streamer.id, cheeredAt.toISOString(), event.bits);
 

@@ -19,6 +19,7 @@ import { cacheManager } from "../../utils/cache-manager";
 import { revenueSyncQueue } from "../../utils/revenue-sync-queue";
 import { dataExportQueue } from "../../utils/data-export-queue";
 import { getRedisCircuitBreakerStats } from "../../utils/redis-client";
+import { getJobCircuitBreakerSnapshot } from "../../utils/job-circuit-breaker";
 
 const router = Router();
 
@@ -74,6 +75,9 @@ router.get("/stats", (_req: Request, res: Response) => {
             },
             redis: {
               circuitBreaker: getRedisCircuitBreakerStats(),
+            },
+            jobs: {
+              circuitBreaker: getJobCircuitBreakerSnapshot(),
             },
             alerts,
             system: {
@@ -237,6 +241,9 @@ router.get("/health", (_req: Request, res: Response) => {
           averageResponseTime: 500,
           p95: 1000,
         },
+        jobs: {
+          circuitBreaker: getJobCircuitBreakerSnapshot(),
+        },
         checkedAt: new Date().toISOString(),
       },
     });
@@ -314,6 +321,9 @@ router.get("/watch-time", async (_req: Request, res: Response) => {
       success: true,
       data: {
         job: watchTimeIncrementJob.getStatus(),
+        jobs: {
+          circuitBreaker: getJobCircuitBreakerSnapshot(),
+        },
         activePairsByWindow,
         dailySummary: {
           total: Number(dailySummaryRow?.total ?? 0),

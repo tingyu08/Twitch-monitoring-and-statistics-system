@@ -75,6 +75,12 @@ jest.mock("../job-write-guard", () => ({
   runWithWriteGuard: jest.fn((_key: string, fn: () => unknown) => fn()),
 }));
 
+jest.mock("../../utils/job-circuit-breaker", () => ({
+  shouldSkipForCircuitBreaker: jest.fn().mockReturnValue(false),
+  recordJobSuccess: jest.fn(),
+  recordJobFailure: jest.fn(),
+}));
+
 jest.mock("../../constants", () => ({
   CacheTags: { CHANNEL: "channel", VIEWER: "viewer", VIEWER_CHANNELS: "viewer:channels" },
   WriteGuardKeys: {
@@ -101,6 +107,7 @@ import { logger } from "../../utils/logger";
 import { captureJobError } from "../job-error-tracker";
 import { retryDatabaseOperation } from "../../utils/db-retry";
 import { runWithWriteGuard } from "../job-write-guard";
+import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
 
 // ── Setup ───────────────────────────────────────────────────────────────────
 
@@ -117,6 +124,7 @@ beforeEach(() => {
   (prisma.channel.findMany as jest.Mock).mockResolvedValue([]);
   (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
   (prisma.channel.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+  (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(false);
 });
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -186,6 +194,18 @@ describe("updateLiveStatusFn", () => {
       );
       expect(guardCalls).toHaveLength(0);
     });
+  });
+
+  it("skips execution when circuit breaker is active", async () => {
+    (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(true);
+
+    await updateLiveStatusFn();
+
+    expect(prisma.channel.count).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Jobs",
+      expect.stringContaining("circuit breaker")
+    );
   });
 
   // ── Error handling ───────────────────────────────────────────────────────
