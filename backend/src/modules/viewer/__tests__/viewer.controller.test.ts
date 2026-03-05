@@ -700,7 +700,7 @@ describe("ViewerController", () => {
       const nowSpy = jest
         .spyOn(Date, "now")
         .mockReturnValueOnce(2000)
-        .mockReturnValueOnce(2601);
+        .mockReturnValueOnce(4001); // 超過 BFF_SLOW_QUERY_THRESHOLD_MS (2000ms)
 
       mockedGetChannelStats.mockResolvedValue({
         dailyStats: [],
@@ -725,7 +725,7 @@ describe("ViewerController", () => {
 
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         "BFF",
-        "Slow BFF query: 601ms for channel channel-1"
+        "Slow BFF query: 2001ms for channel channel-1"
       );
       nowSpy.mockRestore();
     });

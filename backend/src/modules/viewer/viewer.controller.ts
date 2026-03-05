@@ -7,6 +7,9 @@ import { CacheTags } from "../../constants";
 import { getChannelGameStatsAndViewerTrends } from "../streamer/streamer.service";
 import { getViewerMessageStats } from "./viewer-message-stats.service";
 
+// Turso 雲端基準延遲約 800-1500ms，BFF 慢查詢門檻調高以減少誤報
+const BFF_SLOW_QUERY_THRESHOLD_MS = Number(process.env.BFF_SLOW_QUERY_THRESHOLD_MS || 2000);
+
 export class ViewerController {
   private readonly BFF_TIMEOUT_MS = 10000;
   public consent = async (req: AuthRequest, res: Response) => {
@@ -187,7 +190,7 @@ export class ViewerController {
       );
 
       const duration = Date.now() - requestStart;
-      if (duration > 500) {
+      if (duration > BFF_SLOW_QUERY_THRESHOLD_MS) {
         logger.warn("BFF", `Slow BFF query: ${duration}ms for channel ${channelId}`);
       }
 
