@@ -418,26 +418,19 @@ export async function updateLiveStatusFn() {
   }
 
   try {
-    // 1. 先取得監控總量與慢速輪詢總量，再做串流分頁處理
-    const [scannedCount, slowChannelCount] = await Promise.all([
-      retryDatabaseOperation(() =>
-        prisma.channel.count({
-          where: {
-            twitchChannelId: { not: "" },
-            isMonitored: true,
-          },
-        })
-      ),
-      retryDatabaseOperation(() =>
-        prisma.channel.count({
-          where: {
-            twitchChannelId: { not: "" },
-            isMonitored: true,
-            isLive: false,
-          },
-        })
-      ),
-    ]);
+    // 1. 一次 groupBy 同時取得監控總量與慢速輪詢總量（省一次 Turso 網路往返）
+    const countRows = await retryDatabaseOperation(() =>
+      prisma.channel.groupBy({
+        by: ["isLive"],
+        where: {
+          twitchChannelId: { not: "" },
+          isMonitored: true,
+        },
+        _count: { id: true },
+      })
+    );
+    const scannedCount = countRows.reduce((sum, row) => sum + row._count.id, 0);
+    const slowChannelCount = countRows.find((r) => !r.isLive)?._count.id ?? 0;
 
     if (scannedCount === 0) {
       logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");

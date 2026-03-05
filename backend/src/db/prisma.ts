@@ -54,7 +54,9 @@ const prismaOptions = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const basePrisma = global.prisma || new PrismaClient(prismaOptions as any);
 
-export const prisma = setupSlowQueryLogger(basePrisma);
+// Turso 雲端的正常延遲約 800-1500ms，預設門檻調整為 2500ms 避免大量正常延遲被誤標
+const SLOW_QUERY_THRESHOLD_MS = Number(process.env.SLOW_QUERY_THRESHOLD_MS || (isTurso ? 5000 : 1000));
+export const prisma = setupSlowQueryLogger(basePrisma, SLOW_QUERY_THRESHOLD_MS);
 
 if (process.env.NODE_ENV !== "production") {
   global.prisma = prisma;

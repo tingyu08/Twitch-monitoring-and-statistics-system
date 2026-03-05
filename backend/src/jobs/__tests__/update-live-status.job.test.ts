@@ -20,7 +20,7 @@ jest.mock("node-cron", () => ({
 jest.mock("../../db/prisma", () => ({
   prisma: {
     channel: {
-      count: jest.fn(),
+      groupBy: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -120,7 +120,7 @@ beforeEach(() => {
 
   // Default: connection is ready, no channels (safe early-exit baseline)
   (isConnectionReady as jest.Mock).mockReturnValue(true);
-  (prisma.channel.count as jest.Mock).mockResolvedValue(0);
+  (prisma.channel.groupBy as jest.Mock).mockResolvedValue([]);
   (prisma.channel.findMany as jest.Mock).mockResolvedValue([]);
   (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
   (prisma.channel.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
@@ -201,7 +201,7 @@ describe("updateLiveStatusFn", () => {
 
     await updateLiveStatusFn();
 
-    expect(prisma.channel.count).not.toHaveBeenCalled();
+    expect(prisma.channel.groupBy).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
       "Jobs",
       expect.stringContaining("circuit breaker")
@@ -211,8 +211,8 @@ describe("updateLiveStatusFn", () => {
   // ── Error handling ───────────────────────────────────────────────────────
 
   describe("error handling", () => {
-    it("calls captureJobError when channel.count throws", async () => {
-      (prisma.channel.count as jest.Mock).mockRejectedValue(new Error("DB down"));
+    it("calls captureJobError when channel.groupBy throws", async () => {
+      (prisma.channel.groupBy as jest.Mock).mockRejectedValue(new Error("DB down"));
 
       await updateLiveStatusFn();
 
@@ -222,8 +222,8 @@ describe("updateLiveStatusFn", () => {
       );
     });
 
-    it("logs error when channel.count throws", async () => {
-      (prisma.channel.count as jest.Mock).mockRejectedValue(new Error("timeout"));
+    it("logs error when channel.groupBy throws", async () => {
+      (prisma.channel.groupBy as jest.Mock).mockRejectedValue(new Error("timeout"));
 
       await updateLiveStatusFn();
 
@@ -235,9 +235,9 @@ describe("updateLiveStatusFn", () => {
     });
 
     it("resets isRunning after an error so subsequent runs can proceed", async () => {
-      (prisma.channel.count as jest.Mock)
+      (prisma.channel.groupBy as jest.Mock)
         .mockRejectedValueOnce(new Error("transient"))
-        .mockResolvedValue(0);
+        .mockResolvedValue([]);
 
       await updateLiveStatusFn(); // errors → finally resets isRunning
       await updateLiveStatusFn(); // must NOT be skipped
@@ -249,8 +249,8 @@ describe("updateLiveStatusFn", () => {
       );
     });
 
-    it("resolves cleanly without throwing to the caller even when count rejects", async () => {
-      (prisma.channel.count as jest.Mock).mockRejectedValue(new Error("fatal"));
+    it("resolves cleanly without throwing to the caller even when groupBy rejects", async () => {
+      (prisma.channel.groupBy as jest.Mock).mockRejectedValue(new Error("fatal"));
 
       await expect(updateLiveStatusFn()).resolves.toBeUndefined();
     });

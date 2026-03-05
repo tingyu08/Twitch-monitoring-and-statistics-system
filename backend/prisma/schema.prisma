@@ -98,6 +98,7 @@ model Channel {
   @@index([channelName]) // P0: hot path lookup by normalized channel name
   @@index([isMonitored, id]) // 優化監控頻道 cursor scan (isMonitored + orderBy id)
   @@index([isMonitored, twitchChannelId]) // 優化 update-live-status 監控頻道掃描
+  @@index([isMonitored, isLive]) // 優化 groupBy isLive 的監控頻道計數查詢
   @@map("channels")
 }
 
