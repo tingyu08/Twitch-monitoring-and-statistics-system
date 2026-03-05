@@ -162,7 +162,8 @@ function startConnectionKeepAlive(): void {
   }
 
   const keepAliveMinutes = Number(process.env.PRISMA_KEEP_ALIVE_MINUTES || 5);
-  const keepAliveTimeoutMs = Number(process.env.PRISMA_KEEP_ALIVE_TIMEOUT_MS || 5000);
+  // Turso 在高負載時查詢可達 6+ 秒，timeout 從 5000 調整為 15000 避免誤判導致 isConnectionWarmed 卡死
+  const keepAliveTimeoutMs = Number(process.env.PRISMA_KEEP_ALIVE_TIMEOUT_MS || 15000);
   const intervalMs = Math.max(1, keepAliveMinutes) * 60 * 1000;
 
   const timer = setInterval(async () => {
