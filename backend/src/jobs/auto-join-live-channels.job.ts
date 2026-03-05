@@ -56,8 +56,9 @@ export class AutoJoinLiveChannelsJob {
             priority: 10,
           });
           // 避免觸發 Twitch IRC 速率限制
-          // Twitch 限制: 20 joins/10 seconds (authenticated) or 50 joins/15 seconds (verified bot)
-          await new Promise((resolve) => setTimeout(resolve, 300));
+          // Twurple _joinRateLimiter: bucketSize=20, timeFrame=11000ms
+          // 11000ms / 600ms ≈ 18 joins/11s，安全低於 20 上限（原 300ms 會超限觸發 queue 警告）
+          await new Promise((resolve) => setTimeout(resolve, 600));
         } else {
           await chatListenerManager.stopListening(channel.channelName);
         }
