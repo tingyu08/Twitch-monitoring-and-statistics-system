@@ -399,8 +399,16 @@ export class StreamStatusJob {
       startedAt: Date;
     }
   ): Promise<void> {
+    let isGenuinelyNew = false;
     await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_CREATE, async () => {
-      // Upsert 並直接返回結果
+      // 先確認此 twitchStreamId 是否已存在（含已結束的 session）
+      const existing = await prisma.streamSession.findUnique({
+        where: { twitchStreamId: stream.id },
+        select: { endedAt: true },
+      });
+      isGenuinelyNew = !existing;
+
+      // Upsert：若是已結束的 session（same twitchStreamId），重新開啟避免無限「新開播」
       const session = await prisma.streamSession.upsert({
         where: { twitchStreamId: stream.id },
         create: {
@@ -416,6 +424,8 @@ export class StreamStatusJob {
           title: stream.title,
           category: stream.gameName,
           peakViewers: { set: stream.viewerCount },
+          endedAt: null,
+          durationSeconds: null,
         },
       });
 
@@ -429,7 +439,11 @@ export class StreamStatusJob {
       });
     });
 
-    logger.info("JOB", `新開播: ${channel.channelName} - ${stream.title}`);
+    if (isGenuinelyNew) {
+      logger.info("JOB", `新開播: ${channel.channelName} - ${stream.title}`);
+    } else {
+      logger.info("JOB", `恢復開播（session 重新開啟）: ${channel.channelName} - ${stream.title}`);
+    }
   }
 
   /**
