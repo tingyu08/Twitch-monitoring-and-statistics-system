@@ -39,8 +39,15 @@ const CHANNEL_QUERY_BATCH_SIZE = 500;
 const CHANNEL_UPDATE_MIN_INTERVAL_MS = Number(
   process.env.CHANNEL_UPDATE_MIN_INTERVAL_MS || 15000
 );
+// stream.online 防抖：同一頻道在此窗口內不重複發送通知，避免 EventSub 假 offline/online 造成重複 toast
+const STREAM_ONLINE_DEBOUNCE_MS = Number(
+  process.env.STREAM_ONLINE_DEBOUNCE_MS || 10 * 60 * 1000 // 預設 10 分鐘
+);
 let slowPollIndex = 0;
 const channelUpdateLastEmittedAt = new Map<string, number>();
+const streamOnlineLastEmittedAt = new Map<string, number>();
+// 重啟後第一輪掃描跳過 stream.online 通知，避免 server 重啟對所有已在播頻道發送 toast
+let isFirstRun = true;
 
 type MonitoredChannelRow = {
   id: string;
@@ -65,6 +72,32 @@ function getPollGroup(channelId: string, groups: number): number {
 function getAdaptiveSlowPollGroups(slowChannelCount: number): number {
   const dynamicGroups = Math.ceil(slowChannelCount / TARGET_SLOW_CHANNELS_PER_CYCLE);
   return Math.max(SLOW_POLL_GROUPS, Math.min(MAX_SLOW_POLL_GROUPS, dynamicGroups || SLOW_POLL_GROUPS));
+}
+
+function shouldEmitStreamOnline(channelId: string, nowMs: number): boolean {
+  // 重啟後第一輪：把目前已在播的頻道記入 Map（不送通知），避免重啟時 toast 爆炸
+  if (isFirstRun) {
+    streamOnlineLastEmittedAt.set(channelId, nowMs);
+    return false;
+  }
+
+  // 清理過期記錄，避免 Map 無限成長
+  if (streamOnlineLastEmittedAt.size > 10000) {
+    const staleBefore = nowMs - STREAM_ONLINE_DEBOUNCE_MS * 2;
+    for (const [id, emittedAt] of streamOnlineLastEmittedAt) {
+      if (emittedAt < staleBefore) {
+        streamOnlineLastEmittedAt.delete(id);
+      }
+    }
+  }
+
+  const lastEmittedAt = streamOnlineLastEmittedAt.get(channelId) ?? 0;
+  if (nowMs - lastEmittedAt < STREAM_ONLINE_DEBOUNCE_MS) {
+    return false;
+  }
+
+  streamOnlineLastEmittedAt.set(channelId, nowMs);
+  return true;
 }
 
 function shouldEmitChannelUpdate(channelId: string, force: boolean, nowMs: number): boolean {
@@ -621,18 +654,26 @@ export async function updateLiveStatusFn() {
           }
 
           if (changedUpdates.length > 0) {
+            const nowMs = Date.now();
             for (const update of changedUpdates) {
               if (!update.wasLive && update.isLive) {
-                webSocketGateway.broadcastStreamStatus("stream.online", {
-                  channelId: update.channelId,
-                  channelName: update.channelName,
-                  twitchChannelId: update.twitchId,
-                  title: update.title,
-                  gameName: update.gameName,
-                  viewerCount: update.viewerCount,
-                  startedAt: update.startedAt,
-                });
-                onlineChanges++;
+                if (shouldEmitStreamOnline(update.channelId, nowMs)) {
+                  webSocketGateway.broadcastStreamStatus("stream.online", {
+                    channelId: update.channelId,
+                    channelName: update.channelName,
+                    twitchChannelId: update.twitchId,
+                    title: update.title,
+                    gameName: update.gameName,
+                    viewerCount: update.viewerCount,
+                    startedAt: update.startedAt,
+                  });
+                  onlineChanges++;
+                } else {
+                  logger.debug(
+                    "Jobs",
+                    `stream.online 防抖跳過: ${update.channelName} (距上次通知未滿 ${STREAM_ONLINE_DEBOUNCE_MS / 1000}s)`
+                  );
+                }
               } else if (update.wasLive && !update.isLive) {
                 webSocketGateway.broadcastStreamStatus("stream.offline", {
                   channelId: update.channelId,
@@ -692,6 +733,10 @@ export async function updateLiveStatusFn() {
   } finally {
     // 確保解鎖，即使發生錯誤
     isRunning = false;
+    // 第一輪完成後解除限制，後續正常發送通知
+    if (isFirstRun) {
+      isFirstRun = false;
+    }
   }
 }
 
