@@ -40,7 +40,9 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
         message.includes("fetch failed") ||  // 網路層級錯誤
         message.includes("server_error") ||  // Turso SERVER_ERROR
         message.includes("batch request") || // 批次請求錯誤
-        message.includes("socket hang up")   // TCP 連線被服務端強制關閉
+        message.includes("socket hang up") || // TCP 連線被服務端強制關閉
+        message.includes("transaction not found") || // P2028: Turso transaction 逾時或連線中斷
+        message.includes("p2028")               // Prisma P2028 error code
       );
     }
     return false;

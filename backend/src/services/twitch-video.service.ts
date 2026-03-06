@@ -318,90 +318,87 @@ export class TwurpleVideoService {
       );
 
       // 優化：差異化更新，避免每次全刪全建
-      await runWithWriteGuard(WriteGuardKeys.SYNC_VIEWER_VIDEOS, () =>
-        retryDatabaseOperation(async () => {
-          await prisma.$transaction(
-            async (tx) => {
-            const existing = await tx.viewerChannelVideo.findMany({
-              where: { channelId },
-              select: {
-                id: true,
-                twitchVideoId: true,
-                title: true,
-                url: true,
-                thumbnailUrl: true,
-                viewCount: true,
-                duration: true,
-                publishedAt: true,
-              },
-            });
+      // 注意：使用循序操作取代 interactive transaction，避免 Turso HTTP transport 下
+      // 多次 round-trip 累積超過 transaction timeout 造成 P2028 錯誤
+      await runWithWriteGuard(WriteGuardKeys.SYNC_VIEWER_VIDEOS, async () => {
+        const existing = await retryDatabaseOperation(() =>
+          prisma.viewerChannelVideo.findMany({
+            where: { channelId },
+            select: {
+              id: true,
+              twitchVideoId: true,
+              title: true,
+              url: true,
+              thumbnailUrl: true,
+              viewCount: true,
+              duration: true,
+              publishedAt: true,
+            },
+          })
+        );
 
-            const incomingIds = incomingVideos.map((video: { twitchVideoId: string }) => video.twitchVideoId);
+        const incomingIds = incomingVideos.map((video: { twitchVideoId: string }) => video.twitchVideoId);
 
-            if (incomingIds.length === 0) {
-              await tx.viewerChannelVideo.deleteMany({ where: { channelId } });
-              return;
-            }
+        await retryDatabaseOperation(() =>
+          prisma.viewerChannelVideo.deleteMany({
+            where: {
+              channelId,
+              ...(incomingIds.length > 0 ? { twitchVideoId: { notIn: incomingIds } } : {}),
+            },
+          })
+        );
 
-            await tx.viewerChannelVideo.deleteMany({
-              where: {
-                channelId,
-                twitchVideoId: { notIn: incomingIds },
-              },
-            });
+        if (incomingIds.length === 0) return;
 
-            const existingByTwitchId = new Map(existing.map((row) => [row.twitchVideoId, row]));
+        const existingByTwitchId = new Map(existing.map((row) => [row.twitchVideoId, row]));
 
-            for (const incoming of incomingVideos) {
-              const prev = existingByTwitchId.get(incoming.twitchVideoId);
+        for (const incoming of incomingVideos) {
+          const prev = existingByTwitchId.get(incoming.twitchVideoId);
 
-              if (!prev) {
-                await tx.viewerChannelVideo.create({
-                  data: {
-                    channelId,
-                    twitchVideoId: incoming.twitchVideoId,
-                    title: incoming.title,
-                    url: incoming.url,
-                    thumbnailUrl: incoming.thumbnailUrl,
-                    viewCount: incoming.viewCount,
-                    duration: incoming.duration,
-                    publishedAt: incoming.publishedAt,
-                  },
-                });
-                continue;
-              }
+          if (!prev) {
+            await retryDatabaseOperation(() =>
+              prisma.viewerChannelVideo.create({
+                data: {
+                  channelId,
+                  twitchVideoId: incoming.twitchVideoId,
+                  title: incoming.title,
+                  url: incoming.url,
+                  thumbnailUrl: incoming.thumbnailUrl,
+                  viewCount: incoming.viewCount,
+                  duration: incoming.duration,
+                  publishedAt: incoming.publishedAt,
+                },
+              })
+            );
+            continue;
+          }
 
-              const changed =
-                prev.title !== incoming.title ||
-                prev.url !== incoming.url ||
-                (prev.thumbnailUrl || "") !== incoming.thumbnailUrl ||
-                prev.viewCount !== incoming.viewCount ||
-                prev.duration !== incoming.duration ||
-                prev.publishedAt.getTime() !== incoming.publishedAt.getTime();
+          const changed =
+            prev.title !== incoming.title ||
+            prev.url !== incoming.url ||
+            (prev.thumbnailUrl || "") !== incoming.thumbnailUrl ||
+            prev.viewCount !== incoming.viewCount ||
+            prev.duration !== incoming.duration ||
+            prev.publishedAt.getTime() !== incoming.publishedAt.getTime();
 
-              if (changed) {
-                await tx.viewerChannelVideo.update({
-                  where: { id: prev.id },
-                  data: {
-                    title: incoming.title,
-                    url: incoming.url,
-                    thumbnailUrl: incoming.thumbnailUrl,
-                    viewCount: incoming.viewCount,
-                    duration: incoming.duration,
-                    publishedAt: incoming.publishedAt,
-                    syncedAt: new Date(),
-                  },
-                });
-              }
-            }
-          },
-            {
-              maxWait: 10000, // 最多等待 10 秒獲取 transaction
-              timeout: 15000, // transaction 超時時間 15 秒
-            }
-          );
-        })
-      );
+          if (changed) {
+            await retryDatabaseOperation(() =>
+              prisma.viewerChannelVideo.update({
+                where: { id: prev.id },
+                data: {
+                  title: incoming.title,
+                  url: incoming.url,
+                  thumbnailUrl: incoming.thumbnailUrl,
+                  viewCount: incoming.viewCount,
+                  duration: incoming.duration,
+                  publishedAt: incoming.publishedAt,
+                  syncedAt: new Date(),
+                },
+              })
+            );
+          }
+        }
+      });
 
       logger.debug(
         "TwitchVideo",
@@ -557,94 +554,91 @@ export class TwurpleVideoService {
       );
 
       // 優化：差異化更新，避免每次全刪全建
-      await runWithWriteGuard(WriteGuardKeys.SYNC_VIEWER_CLIPS, () =>
-        retryDatabaseOperation(async () => {
-          await prisma.$transaction(
-            async (tx) => {
-            const existing = await tx.viewerChannelClip.findMany({
-              where: { channelId },
-              select: {
-                id: true,
-                twitchClipId: true,
-                creatorName: true,
-                title: true,
-                url: true,
-                thumbnailUrl: true,
-                viewCount: true,
-                duration: true,
-                createdAt: true,
-              },
-            });
+      // 注意：使用循序操作取代 interactive transaction，避免 Turso HTTP transport 下
+      // 多次 round-trip 累積超過 transaction timeout 造成 P2028 錯誤
+      await runWithWriteGuard(WriteGuardKeys.SYNC_VIEWER_CLIPS, async () => {
+        const existing = await retryDatabaseOperation(() =>
+          prisma.viewerChannelClip.findMany({
+            where: { channelId },
+            select: {
+              id: true,
+              twitchClipId: true,
+              creatorName: true,
+              title: true,
+              url: true,
+              thumbnailUrl: true,
+              viewCount: true,
+              duration: true,
+              createdAt: true,
+            },
+          })
+        );
 
-            const incomingIds = incomingClips.map((clip: { twitchClipId: string }) => clip.twitchClipId);
+        const incomingIds = incomingClips.map((clip: { twitchClipId: string }) => clip.twitchClipId);
 
-            if (incomingIds.length === 0) {
-              await tx.viewerChannelClip.deleteMany({ where: { channelId } });
-              return;
-            }
+        await retryDatabaseOperation(() =>
+          prisma.viewerChannelClip.deleteMany({
+            where: {
+              channelId,
+              ...(incomingIds.length > 0 ? { twitchClipId: { notIn: incomingIds } } : {}),
+            },
+          })
+        );
 
-            await tx.viewerChannelClip.deleteMany({
-              where: {
-                channelId,
-                twitchClipId: { notIn: incomingIds },
-              },
-            });
+        if (incomingIds.length === 0) return;
 
-            const existingByTwitchId = new Map(existing.map((row) => [row.twitchClipId, row]));
+        const existingByTwitchId = new Map(existing.map((row) => [row.twitchClipId, row]));
 
-            for (const incoming of incomingClips) {
-              const prev = existingByTwitchId.get(incoming.twitchClipId);
+        for (const incoming of incomingClips) {
+          const prev = existingByTwitchId.get(incoming.twitchClipId);
 
-              if (!prev) {
-                await tx.viewerChannelClip.create({
-                  data: {
-                    channelId,
-                    twitchClipId: incoming.twitchClipId,
-                    creatorName: incoming.creatorName,
-                    title: incoming.title,
-                    url: incoming.url,
-                    thumbnailUrl: incoming.thumbnailUrl,
-                    viewCount: incoming.viewCount,
-                    duration: incoming.duration,
-                    createdAt: incoming.createdAt,
-                  },
-                });
-                continue;
-              }
+          if (!prev) {
+            await retryDatabaseOperation(() =>
+              prisma.viewerChannelClip.create({
+                data: {
+                  channelId,
+                  twitchClipId: incoming.twitchClipId,
+                  creatorName: incoming.creatorName,
+                  title: incoming.title,
+                  url: incoming.url,
+                  thumbnailUrl: incoming.thumbnailUrl,
+                  viewCount: incoming.viewCount,
+                  duration: incoming.duration,
+                  createdAt: incoming.createdAt,
+                },
+              })
+            );
+            continue;
+          }
 
-              const changed =
-                (prev.creatorName || "") !== (incoming.creatorName || "") ||
-                prev.title !== incoming.title ||
-                prev.url !== incoming.url ||
-                (prev.thumbnailUrl || "") !== incoming.thumbnailUrl ||
-                prev.viewCount !== incoming.viewCount ||
-                prev.duration !== incoming.duration ||
-                prev.createdAt.getTime() !== incoming.createdAt.getTime();
+          const changed =
+            (prev.creatorName || "") !== (incoming.creatorName || "") ||
+            prev.title !== incoming.title ||
+            prev.url !== incoming.url ||
+            (prev.thumbnailUrl || "") !== incoming.thumbnailUrl ||
+            prev.viewCount !== incoming.viewCount ||
+            prev.duration !== incoming.duration ||
+            prev.createdAt.getTime() !== incoming.createdAt.getTime();
 
-              if (changed) {
-                await tx.viewerChannelClip.update({
-                  where: { id: prev.id },
-                  data: {
-                    creatorName: incoming.creatorName,
-                    title: incoming.title,
-                    url: incoming.url,
-                    thumbnailUrl: incoming.thumbnailUrl,
-                    viewCount: incoming.viewCount,
-                    duration: incoming.duration,
-                    createdAt: incoming.createdAt,
-                    syncedAt: new Date(),
-                  },
-                });
-              }
-            }
-          },
-            {
-              maxWait: 10000, // 最多等待 10 秒獲取 transaction
-              timeout: 15000, // transaction 超時時間 15 秒
-            }
-          );
-        })
-      );
+          if (changed) {
+            await retryDatabaseOperation(() =>
+              prisma.viewerChannelClip.update({
+                where: { id: prev.id },
+                data: {
+                  creatorName: incoming.creatorName,
+                  title: incoming.title,
+                  url: incoming.url,
+                  thumbnailUrl: incoming.thumbnailUrl,
+                  viewCount: incoming.viewCount,
+                  duration: incoming.duration,
+                  createdAt: incoming.createdAt,
+                  syncedAt: new Date(),
+                },
+              })
+            );
+          }
+        }
+      });
 
       logger.debug(
         "TwitchVideo",
