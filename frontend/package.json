@@ -50,7 +50,7 @@
     "@types/react-dom": "^18.3.5"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^2.1.4",
+    "@eslint/eslintrc": "^3.3.4",
     "@playwright/test": "^1.58.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.3",
