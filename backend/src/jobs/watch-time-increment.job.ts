@@ -104,6 +104,8 @@ export class WatchTimeIncrementJob {
     try {
       const now = floorToMinute(new Date());
       const executionResult = await runWithWriteGuard(WriteGuardKeys.WATCH_TIME_EXECUTION, async () => {
+        // Turso 每次 round-trip ~1.5s，transaction 含 8 個操作最多約 12s
+        // 明確設定 timeout 避免使用 Turso 預設 5000ms 造成 P2028
         return prisma.$transaction(async (tx) => {
           const watermark = await tx.systemSetting.findUnique({
             where: { key: WATERMARK_SETTING_KEY },
@@ -329,6 +331,9 @@ export class WatchTimeIncrementJob {
             dailyUpsertCount,
             lifetimeUpsertCount,
           };
+        }, {
+          maxWait: 15000, // 最多等 15s 取得 transaction slot
+          timeout: 30000, // transaction 執行上限 30s（8 次操作 × ~1.5s/次 ≈ 12s，留充足餘裕）
         });
       });
 
