@@ -41,6 +41,17 @@ const apiLogger = {
 interface RequestOptions extends RequestInit {
   timeout?: number;
   skipAuth?: boolean; // 是否跳過自動添加 Authorization 標頭
+  silentStatuses?: number[];
+}
+
+export class HttpClientError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpClientError";
+    this.status = status;
+  }
 }
 
 /**
@@ -50,7 +61,7 @@ export async function httpClient<T = any>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { timeout = 15000, skipAuth = false, ...fetchOptions } = options;
+  const { timeout = 15000, skipAuth = false, silentStatuses = [], ...fetchOptions } = options;
 
   // 確保 endpoint 以 / 開頭（如果不是完整的 URL）
   const url = endpoint.startsWith("http")
@@ -110,7 +121,7 @@ export async function httpClient<T = any>(
           ? data.message
           : `Request failed with status ${response.status}`;
 
-      throw new Error(errorMessage);
+      throw new HttpClientError(errorMessage, response.status);
     }
 
     return data as T;
@@ -122,7 +133,13 @@ export async function httpClient<T = any>(
       throw new Error("Request timed out. Server may be starting up, please try again.");
     }
 
-    apiLogger.error("API Request Error:", error);
+    const shouldSilence =
+      error instanceof HttpClientError && silentStatuses.includes(error.status);
+
+    if (!shouldSilence) {
+      apiLogger.error("API Request Error:", error);
+    }
+
     throw error;
   }
 }

@@ -17,9 +17,6 @@ const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   // Production: Remove console.log but keep console.error and console.warn for monitoring
   compiler: {
     removeConsole:

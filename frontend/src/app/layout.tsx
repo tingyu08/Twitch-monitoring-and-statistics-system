@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Suspense } from "react";
+import { ConsentBannerClient } from "@/components/ConsentBannerClient";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
@@ -22,14 +23,6 @@ const notoSansTC = Noto_Sans_TC({
   display: "swap",
   preload: false,
 });
-
-// 動態導入 ConsentBanner 以避免 SSR 問題
-import dynamic from "next/dynamic";
-const ConsentBannerWrapper = dynamic(
-  () =>
-    import("@/features/privacy/components/ConsentBanner").then((mod) => mod.ConsentBannerWrapper),
-  { ssr: false }
-);
 
 export const metadata = {
   title: "Twitch 實況監控與統計平台",
@@ -56,7 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           {children}
           <Toaster />
           <Suspense fallback={null}>
-            <ConsentBannerWrapper />
+            <ConsentBannerClient />
           </Suspense>
         </Providers>
         {process.env.NEXT_PUBLIC_GA_ID && <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />}

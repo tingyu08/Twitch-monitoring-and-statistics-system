@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { httpClient } from "@/lib/api/httpClient";
+import { HttpClientError, httpClient } from "@/lib/api/httpClient";
 
 interface ConsentBannerProps {
   onAcceptAll: () => void;
@@ -71,12 +71,18 @@ export function ConsentBannerWrapper() {
 
         // Check API for consent record
         // httpClient handles base URL and credentials automatically
-        const data = await httpClient<{ hasConsent: boolean }>("/api/viewer/pref/status");
+        const data = await httpClient<{ hasConsent: boolean }>("/api/viewer/pref/status", {
+          silentStatuses: [401],
+        });
 
         if (!data.hasConsent) {
           setShowBanner(true);
         }
       } catch (error) {
+        if (error instanceof HttpClientError && error.status === 401) {
+          return;
+        }
+
         // Log error but don't crash - just won't show banner if API fails
         console.error("無法檢查同意狀態:", error);
       } finally {
