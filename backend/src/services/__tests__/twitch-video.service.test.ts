@@ -342,13 +342,11 @@ describe("TwurpleVideoService", () => {
     it("creates new viewer videos when none exist", async () => {
       const sdkVideo = makeSdkVideo();
       mockGetVideosByUser.mockResolvedValueOnce({ data: [sdkVideo] });
-
-      const tx = makeTxMock(/* no existing videos */);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelVideo.findMany as jest.Mock).mockResolvedValueOnce([]);
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelVideo.create).toHaveBeenCalledWith(
+      expect(prisma.viewerChannelVideo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ twitchVideoId: "vid-1", channelId: "channel-1" }),
         })
@@ -359,12 +357,9 @@ describe("TwurpleVideoService", () => {
     it("deletes all viewer videos when incoming list is empty", async () => {
       mockGetVideosByUser.mockResolvedValueOnce({ data: [] });
 
-      const tx = makeTxMock();
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
-
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelVideo.deleteMany).toHaveBeenCalledWith({ where: { channelId: "channel-1" } });
+      expect(prisma.viewerChannelVideo.deleteMany).toHaveBeenCalledWith({ where: { channelId: "channel-1" } });
     });
 
     it("does not call update when existing video has no changes", async () => {
@@ -387,13 +382,12 @@ describe("TwurpleVideoService", () => {
         })],
       });
 
-      const tx = makeTxMock(existing);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelVideo.findMany as jest.Mock).mockResolvedValueOnce(existing);
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelVideo.update).not.toHaveBeenCalled();
-      expect(tx.viewerChannelVideo.create).not.toHaveBeenCalled();
+      expect(prisma.viewerChannelVideo.update).not.toHaveBeenCalled();
+      expect(prisma.viewerChannelVideo.create).not.toHaveBeenCalled();
     });
 
     it("calls update when existing video has changed viewCount", async () => {
@@ -417,12 +411,11 @@ describe("TwurpleVideoService", () => {
         })],
       });
 
-      const tx = makeTxMock(existing);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelVideo.findMany as jest.Mock).mockResolvedValueOnce(existing);
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelVideo.update).toHaveBeenCalledWith(
+      expect(prisma.viewerChannelVideo.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "db-id-1" } })
       );
     });
@@ -432,12 +425,11 @@ describe("TwurpleVideoService", () => {
         data: [makeSdkVideo({ thumbnailUrl: "https://thumb/%{width}x%{height}.jpg" })],
       });
 
-      const tx = makeTxMock();
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelVideo.findMany as jest.Mock).mockResolvedValueOnce([]);
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      const createCall = tx.viewerChannelVideo.create.mock.calls[0][0];
+      const createCall = (prisma.viewerChannelVideo.create as jest.Mock).mock.calls[0][0];
       expect(createCall.data.thumbnailUrl).toBe("https://thumb/320x180.jpg");
     });
 
@@ -467,12 +459,11 @@ describe("TwurpleVideoService", () => {
 
       mockGetVideosByUser.mockResolvedValueOnce({ data: [makeSdkVideo({ id: "vid-new" })] });
 
-      const tx = makeTxMock(existing);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelVideo.findMany as jest.Mock).mockResolvedValueOnce(existing);
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelVideo.deleteMany).toHaveBeenCalledWith(
+      expect(prisma.viewerChannelVideo.deleteMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             channelId: "channel-1",
@@ -582,13 +573,11 @@ describe("TwurpleVideoService", () => {
     it("creates new viewer clips when none exist", async () => {
       const sdkClip = makeSdkClip();
       mockGetClipsForBroadcaster.mockResolvedValueOnce({ data: [sdkClip] });
-
-      const tx = makeTxMock([], /* no existing clips */);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelClip.findMany as jest.Mock).mockResolvedValueOnce([]);
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelClip.create).toHaveBeenCalledWith(
+      expect(prisma.viewerChannelClip.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ twitchClipId: "clip-1", channelId: "channel-1" }),
         })
@@ -599,12 +588,9 @@ describe("TwurpleVideoService", () => {
     it("deletes all viewer clips when incoming list is empty", async () => {
       mockGetClipsForBroadcaster.mockResolvedValueOnce({ data: [] });
 
-      const tx = makeTxMock([], []);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
-
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelClip.deleteMany).toHaveBeenCalledWith({ where: { channelId: "channel-1" } });
+      expect(prisma.viewerChannelClip.deleteMany).toHaveBeenCalledWith({ where: { channelId: "channel-1" } });
     });
 
     it("does not call update when existing clip has no changes", async () => {
@@ -628,13 +614,12 @@ describe("TwurpleVideoService", () => {
         })],
       });
 
-      const tx = makeTxMock([], existing);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelClip.findMany as jest.Mock).mockResolvedValueOnce(existing);
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelClip.update).not.toHaveBeenCalled();
-      expect(tx.viewerChannelClip.create).not.toHaveBeenCalled();
+      expect(prisma.viewerChannelClip.update).not.toHaveBeenCalled();
+      expect(prisma.viewerChannelClip.create).not.toHaveBeenCalled();
     });
 
     it("calls update when existing clip has changed viewCount", async () => {
@@ -659,12 +644,11 @@ describe("TwurpleVideoService", () => {
         })],
       });
 
-      const tx = makeTxMock([], existing);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelClip.findMany as jest.Mock).mockResolvedValueOnce(existing);
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelClip.update).toHaveBeenCalledWith(
+      expect(prisma.viewerChannelClip.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "db-clip-1" } })
       );
     });
@@ -674,12 +658,11 @@ describe("TwurpleVideoService", () => {
         data: [makeSdkClip({ thumbnailUrl: "https://thumb/%{width}x%{height}.jpg" })],
       });
 
-      const tx = makeTxMock([], []);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelClip.findMany as jest.Mock).mockResolvedValueOnce([]);
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      const createCall = tx.viewerChannelClip.create.mock.calls[0][0];
+      const createCall = (prisma.viewerChannelClip.create as jest.Mock).mock.calls[0][0];
       expect(createCall.data.thumbnailUrl).toBe("https://thumb/320x180.jpg");
     });
 
@@ -698,12 +681,11 @@ describe("TwurpleVideoService", () => {
 
       mockGetClipsForBroadcaster.mockResolvedValueOnce({ data: [makeSdkClip({ id: "clip-new" })] });
 
-      const tx = makeTxMock([], existing);
-      (prisma.$transaction as jest.Mock).mockImplementationOnce(async (cb: (tx: unknown) => Promise<unknown>) => cb(tx));
+      (prisma.viewerChannelClip.findMany as jest.Mock).mockResolvedValueOnce(existing);
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(tx.viewerChannelClip.deleteMany).toHaveBeenCalledWith(
+      expect(prisma.viewerChannelClip.deleteMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             channelId: "channel-1",

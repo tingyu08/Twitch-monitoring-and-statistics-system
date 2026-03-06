@@ -18,12 +18,16 @@ jest.mock("../logger", () => ({
 import { retryDatabaseOperation, batchOperation } from "../db-retry";
 
 describe("retryDatabaseOperation", () => {
+  let randomSpy: jest.SpyInstance<number, []>;
+
   beforeEach(() => {
+    randomSpy = jest.spyOn(Math, "random").mockReturnValue(0);
     jest.useFakeTimers();
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    randomSpy.mockRestore();
   });
 
   it("should return result on first success", async () => {
@@ -176,12 +180,16 @@ describe("retryDatabaseOperation", () => {
 });
 
 describe("batchOperation", () => {
+  let randomSpy: jest.SpyInstance<number, []>;
+
   beforeEach(() => {
+    randomSpy = jest.spyOn(Math, "random").mockReturnValue(0);
     jest.useFakeTimers();
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    randomSpy.mockRestore();
   });
 
   it("should process all items in batches", async () => {
@@ -302,12 +310,16 @@ describe("batchOperation", () => {
 });
 
 describe("retryDatabaseOperation - 404 retryable pattern", () => {
+  let randomSpy: jest.SpyInstance<number, []>;
+
   beforeEach(() => {
+    randomSpy = jest.spyOn(Math, "random").mockReturnValue(0);
     jest.useFakeTimers();
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    randomSpy.mockRestore();
   });
 
   it("should retry on 404 error (Turso connection issue)", async () => {

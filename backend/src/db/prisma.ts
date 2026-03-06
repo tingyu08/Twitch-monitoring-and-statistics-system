@@ -20,35 +20,30 @@ const isTurso = databaseUrl.startsWith("libsql://");
 
 logger.info("Prisma", `資料庫模式: ${isTurso ? "Turso 雲端" : "本地 SQLite"}`);
 
-// 建立 Prisma adapter
-let adapter: PrismaLibSql | null = null;
+// Prisma 7 需要顯式 driver adapter，包含本地 SQLite 也需要提供
+const adapterConfig = isTurso
+  ? authToken
+    ? { url: databaseUrl, authToken }
+    : { url: databaseUrl }
+  : { url: databaseUrl };
 
-if (isTurso && authToken) {
+if (isTurso) {
   logger.info("Prisma", "使用 Turso 雲端資料庫");
-
-  const adapterConfig = {
-    url: databaseUrl,
-    authToken: authToken,
-  };
-
   if (process.env.NODE_ENV === "development") {
     logger.debug("Prisma", `databaseUrl = ${databaseUrl.substring(0, 30)}...`);
     logger.debug("Prisma", `authToken length = ${authToken?.length || 0}`);
   }
-
-  adapter = new PrismaLibSql(adapterConfig);
-
   logger.info("Prisma", "Turso 連線配置完成");
-} else {
-  if (process.env.NODE_ENV === "development") {
-    logger.debug("Prisma", "使用原生 Prisma Client (本地 SQLite)");
-  }
+} else if (process.env.NODE_ENV === "development") {
+  logger.debug("Prisma", "使用 LibSQL adapter (本地 SQLite)");
 }
+
+const adapter = new PrismaLibSql(adapterConfig);
 
 const prismaOptions = {
   log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  adapter: adapter ?? null,
   // 注意：使用 Driver Adapter 時，datasource URL 在 adapter 中設定，不能在這裡重複設定
+  adapter,
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
