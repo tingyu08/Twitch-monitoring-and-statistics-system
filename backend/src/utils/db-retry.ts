@@ -39,7 +39,8 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
         message.includes("network") ||
         message.includes("fetch failed") ||  // 網路層級錯誤
         message.includes("server_error") ||  // Turso SERVER_ERROR
-        message.includes("batch request")    // 批次請求錯誤
+        message.includes("batch request") || // 批次請求錯誤
+        message.includes("socket hang up")   // TCP 連線被服務端強制關閉
       );
     }
     return false;

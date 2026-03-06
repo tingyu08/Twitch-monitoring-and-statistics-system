@@ -88,6 +88,9 @@ function isRetryableError(errorMessage: string): { retryable: boolean; errorType
   if (lowerMessage.includes("econnreset") || lowerMessage.includes("etimedout")) {
     return { retryable: true, errorType: "connection" };
   }
+  if (lowerMessage.includes("socket hang up") || lowerMessage.includes("hang up")) {
+    return { retryable: true, errorType: "socket_hangup" };
+  }
   if (lowerMessage.includes("batch request")) {
     return { retryable: true, errorType: "batch" };
   }
