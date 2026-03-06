@@ -61,8 +61,8 @@ describe("ChatListenerManager", () => {
       process.env.ENABLE_DISTRIBUTED_MODE = "true";
       jest.resetModules();
 
-      const freshModule = require("../chat-listener-manager");
-      const freshCoordinatorModule = require("../distributed-coordinator");
+      const freshModule = await import("../chat-listener-manager");
+      const freshCoordinatorModule = await import("../distributed-coordinator");
       const freshManager = new freshModule.ChatListenerManager();
 
       await freshManager.start();
@@ -307,7 +307,7 @@ describe("ChatListenerManager", () => {
       process.env.ENABLE_DISTRIBUTED_MODE = "true";
       jest.resetModules();
 
-      const freshModule = require("../chat-listener-manager");
+      const freshModule = await import("../chat-listener-manager");
       const freshManager = new freshModule.ChatListenerManager();
 
       const stats = freshManager.getStats();
