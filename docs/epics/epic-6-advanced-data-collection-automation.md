@@ -145,7 +145,7 @@ model Clip {
 
 - `/health` 端點回報系統狀態
 - API 呼叫次數統計（Rate Limit 監控）
-- 錯誤日誌整合（可選：Sentry）
+- 錯誤日誌整合
 - Cron Job 執行狀態監控
 
 ---

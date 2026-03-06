@@ -28,10 +28,6 @@ jest.mock("../../../utils/crypto.utils", () => ({
   encryptToken: jest.fn((v: string) => `enc:${v}`),
 }));
 
-jest.mock("@sentry/node", () => ({
-  captureException: jest.fn(),
-}));
-
 jest.mock("../../../utils/cache-manager", () => ({
   cacheManager: {
     getOrSetWithTags: jest.fn(),
@@ -666,13 +662,11 @@ describe("RevenueService", () => {
     process.env.TWITCH_CLIENT_SECRET = prevSecret;
   });
 
-  it("fetchSubscriptionsWithTwurple records refresh-save failure and reports sentry", async () => {
+  it("fetchSubscriptionsWithTwurple records refresh-save failure", async () => {
     const prevId = process.env.TWITCH_CLIENT_ID;
     const prevSecret = process.env.TWITCH_CLIENT_SECRET;
-    const prevSentry = process.env.SENTRY_DSN;
     process.env.TWITCH_CLIENT_ID = "cid";
     process.env.TWITCH_CLIENT_SECRET = "sec";
-    process.env.SENTRY_DSN = "dsn";
 
     let refreshCb: ((uid: string, token: { accessToken: string; refreshToken?: string; expiresIn?: number }) => Promise<void>) | undefined;
     class FakeAuth {
@@ -706,7 +700,6 @@ describe("RevenueService", () => {
 
     process.env.TWITCH_CLIENT_ID = prevId;
     process.env.TWITCH_CLIENT_SECRET = prevSecret;
-    process.env.SENTRY_DSN = prevSentry;
   });
 
   it("fetchSubscriptionsWithTwurple handles tier3 and sync timeout in paginator", async () => {
@@ -922,13 +915,11 @@ describe("RevenueService", () => {
     process.env.TWITCH_CLIENT_SECRET = prevSecret;
   });
 
-  it("fetchSubscriptionsWithTwurple handles refresh save error without sentry", async () => {
+  it("fetchSubscriptionsWithTwurple handles refresh save error", async () => {
     const prevId = process.env.TWITCH_CLIENT_ID;
     const prevSecret = process.env.TWITCH_CLIENT_SECRET;
-    const prevSentry = process.env.SENTRY_DSN;
     process.env.TWITCH_CLIENT_ID = "cid";
     process.env.TWITCH_CLIENT_SECRET = "sec";
-    delete process.env.SENTRY_DSN;
 
     let refreshCb:
       | ((uid: string, token: { accessToken: string; refreshToken?: string; expiresIn?: number }) => Promise<void>)
@@ -964,9 +955,6 @@ describe("RevenueService", () => {
 
     process.env.TWITCH_CLIENT_ID = prevId;
     process.env.TWITCH_CLIENT_SECRET = prevSecret;
-    if (prevSentry !== undefined) {
-      process.env.SENTRY_DSN = prevSentry;
-    }
   });
 
   it("fetchSubscriptionsWithTwurple first-page branch handles unknown tier", async () => {

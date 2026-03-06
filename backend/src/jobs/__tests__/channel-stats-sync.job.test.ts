@@ -36,10 +36,6 @@ jest.mock("../../utils/logger", () => ({
   },
 }));
 
-jest.mock("../job-error-tracker", () => ({
-  captureJobError: jest.fn(),
-}));
-
 jest.mock("../job-write-guard", () => ({
   runWithWriteGuard: jest.fn(async (_key: string, op: () => Promise<unknown>) => op()),
 }));
@@ -70,7 +66,6 @@ jest.mock("@prisma/client", () => ({
 import { prisma } from "../../db/prisma";
 import { unifiedTwitchService } from "../../services/unified-twitch.service";
 import cron from "node-cron";
-import { captureJobError } from "../job-error-tracker";
 import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -379,11 +374,16 @@ describe("ChannelStatsSyncJob", () => {
   // ── Error path in execute ─────────────────────────────────────────────
 
   describe("execute error handling", () => {
-    it("should re-throw errors and call captureJobError", async () => {
+    it("should re-throw errors and log them", async () => {
       (prisma.channel.findMany as jest.Mock).mockRejectedValue(new Error("DB unavailable"));
 
       await expect(job.execute()).rejects.toThrow("DB unavailable");
-      expect(captureJobError).toHaveBeenCalledWith("channel-stats-sync", expect.any(Error));
+      const { logger } = jest.requireMock("../../utils/logger");
+      expect(logger.error).toHaveBeenCalledWith(
+        "ChannelStatsSync",
+        "Job execution failed:",
+        expect.any(Error)
+      );
     });
 
     it("should reset isRunning to false even after error", async () => {

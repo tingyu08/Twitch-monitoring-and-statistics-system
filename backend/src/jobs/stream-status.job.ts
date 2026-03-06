@@ -10,7 +10,6 @@ import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
 import { memoryMonitor } from "../utils/memory-monitor";
-import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { chatListenerManager } from "../services/chat-listener-manager";
 import { getSessionWriteAuthority } from "../config/session-write-authority";
@@ -168,7 +167,6 @@ export class StreamStatusJob {
       return result;
     } catch (error) {
       logger.error("JOB", "Stream Status Job 執行失敗:", error);
-      captureJobError("stream-status", error);
       recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
       throw error;
     } finally {

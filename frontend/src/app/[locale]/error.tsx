@@ -21,7 +21,7 @@ export default function Error({ error, reset }: ErrorProps) {
     if (process.env.NODE_ENV === "development") {
       console.error("[Error Boundary]", error);
     }
-    // TODO: Send to error tracking service (e.g., Sentry) in production
+    // TODO: Send to error tracking service in production
   }, [error]);
 
   return (

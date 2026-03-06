@@ -412,13 +412,6 @@ export class RevenueService {
           } catch (error) {
             // Token 刷新成功但儲存失敗 - 記錄錯誤但不中斷流程
             logger.error("RevenueService", "Failed to save refreshed token to database:", error);
-            if (process.env.SENTRY_DSN) {
-              const Sentry = await import("@sentry/node");
-              Sentry.captureException(error, {
-                tags: { component: "token-refresh" },
-                extra: { streamerId: broadcasterId, tokenId: tokenData.id },
-              });
-            }
           }
         }
       );

@@ -19,7 +19,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
     if (process.env.NODE_ENV === "development") {
       console.error("[Global Error Boundary]", error);
     }
-    // TODO: Send to error tracking service (e.g., Sentry) in production
+    // TODO: Send to error tracking service in production
   }, [error]);
 
   return (

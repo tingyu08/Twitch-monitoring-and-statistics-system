@@ -2,7 +2,6 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { chatListenerManager } from "../services/chat-listener-manager";
 import { logger } from "../utils/logger";
-import { captureJobError } from "./job-error-tracker";
 
 // 每 5 分鐘執行，在第 2 分鐘觸發（錯開 Stream Status Job）
 const CHECK_LIVE_CRON = process.env.CHECK_LIVE_CRON || "0 2-59/5 * * * *";
@@ -16,7 +15,6 @@ export class AutoJoinLiveChannelsJob {
     // 啟動時立即執行一次
     this.execute().catch((err) => {
       logger.error("Jobs", "初始 Auto Join 執行失敗", err);
-      captureJobError("auto-join-live-channels-initial", err);
     });
 
     cron.schedule(CHECK_LIVE_CRON, async () => {
@@ -65,7 +63,6 @@ export class AutoJoinLiveChannelsJob {
       }
     } catch (error) {
       logger.error("Jobs", "❌ Auto Join Job 執行失敗", error);
-      captureJobError("auto-join-live-channels", error);
     } finally {
       this.isRunning = false;
     }

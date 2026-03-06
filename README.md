@@ -208,7 +208,7 @@
   - PWA 離線支援
 
 - **Epic 7**: 營運監控與維護
-  - Sentry 錯誤追蹤整合
+  - 錯誤追蹤與告警整合
   - Google Analytics 整合
   - 自動備份機制
 

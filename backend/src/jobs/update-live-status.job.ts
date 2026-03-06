@@ -6,7 +6,6 @@ import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { cacheManager } from "../utils/cache-manager";
 import { memoryMonitor } from "../utils/memory-monitor";
-import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { CacheTags, WriteGuardKeys } from "../constants";
 import {
@@ -728,7 +727,6 @@ export async function updateLiveStatusFn() {
     recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Jobs", "Update Live Status Job 執行失敗", error);
-    captureJobError("update-live-status", error);
     recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
   } finally {
     // 確保解鎖，即使發生錯誤

@@ -1,17 +1,3 @@
-// ========== Sentry 初始化（必須在最開始）==========
-import * as Sentry from "@sentry/node";
-
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV || "development",
-    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
-    // 過濾不需要追蹤的錯誤
-    ignoreErrors: ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND"],
-  });
-  console.log("✅ Sentry 錯誤追蹤已啟用");
-}
-
 import http from "http";
 import app from "./app";
 import { unifiedTwitchService } from "./services/unified-twitch.service";

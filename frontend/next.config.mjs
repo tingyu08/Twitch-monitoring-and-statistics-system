@@ -1,4 +1,3 @@
-import { withSentryConfig } from "@sentry/nextjs";
 import createNextIntlPlugin from "next-intl/plugin";
 import withPWAInit from "@ducanh2912/next-pwa";
 
@@ -81,30 +80,5 @@ const nextConfig = {
   },
 };
 
-// Sentry 配置選項
-const sentryWebpackPluginOptions = {
-  // 靜默模式（不顯示詳細日誌）
-  silent: true,
-
-  // 組織和專案名稱（從環境變數讀取）
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-
-  // 自動上傳 Source Maps
-  widenClientFileUpload: true,
-
-  // 隱藏 Source Maps（不公開給用戶）
-  hideSourceMaps: true,
-
-  // 禁用遙測 (deprecated options removed/updated)
-  // disableLogger: true, -> not directly mappable easily here, removed to silence warning
-  // automaticVercelMonitors: true, -> deprecated, removing
-};
-
-// 只有在配置了 Sentry DSN 時才啟用
-const configWithSentry = process.env.NEXT_PUBLIC_SENTRY_DSN
-  ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
-  : nextConfig;
-
 // 應用 next-intl 插件
-export default withPWA(withNextIntl(configWithSentry));
+export default withPWA(withNextIntl(nextConfig));

@@ -35,7 +35,6 @@
     "@libsql/client": "^0.17.0",
     "@prisma/adapter-libsql": "^7.1.0",
     "@prisma/client": "^6.19.2",
-    "@sentry/node": "^10.32.1",
     "@socket.io/redis-adapter": "^8.3.0",
     "@twurple/api": "^8.0.2",
     "@twurple/auth": "^8.0.2",

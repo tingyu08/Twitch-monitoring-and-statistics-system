@@ -12,7 +12,6 @@ import cron from "node-cron";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
-import { captureJobError } from "./job-error-tracker";
 import {
   recordJobFailure,
   recordJobSuccess,
@@ -142,7 +141,6 @@ export async function aggregateDailyMessages(mode: AggregationMode = "increment"
     recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Cron", "訊息聚合失敗:", error);
-    captureJobError("aggregate-daily-messages", error);
     recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
     throw error;
   } finally {
@@ -166,7 +164,6 @@ export function startMessageAggregationJob(): void {
       await aggregateDailyMessages();
     } catch (error) {
       logger.error("Cron", "訊息聚合任務執行失敗:", error);
-      captureJobError("aggregate-daily-messages-scheduler", error);
     }
   });
 

@@ -10,7 +10,6 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { unifiedTwitchService } from "../services/unified-twitch.service";
 import { logger } from "../utils/logger";
-import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { WriteGuardKeys } from "../constants";
 import {
@@ -140,7 +139,6 @@ export class ChannelStatsSyncJob {
       return result;
     } catch (error) {
       logger.error("ChannelStatsSync", "Job execution failed:", error);
-      captureJobError("channel-stats-sync", error);
       recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
       throw error;
     } finally {

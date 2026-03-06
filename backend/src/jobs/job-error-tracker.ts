@@ -1,25 +1,11 @@
-import * as Sentry from "@sentry/node";
-
 interface JobErrorContext {
   [key: string]: unknown;
 }
 
 export function captureJobError(
-  jobName: string,
-  error: unknown,
-  context?: JobErrorContext
+  _jobName: string,
+  _error: unknown,
+  _context?: JobErrorContext
 ): void {
-  if (!process.env.SENTRY_DSN) {
-    return;
-  }
-
-  const normalizedError = error instanceof Error ? error : new Error(String(error));
-
-  Sentry.captureException(normalizedError, {
-    tags: {
-      component: "job",
-      job: jobName,
-    },
-    extra: context,
-  });
+  // Error tracking integration removed. Keep this shim to avoid touching all callers.
 }

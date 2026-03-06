@@ -318,7 +318,7 @@
 ### 2025-12-20 ~ 2026-01-12 (Phase 1 Foundation)
 
 - 完成深色模式、PWA 離線支援、i18n 繁中/英文多語系。
-- 整合 Google Analytics 4 (GA4) 與 Sentry 錯誤追蹤。
+- 整合 Google Analytics 4 (GA4) 與錯誤追蹤。
 </details>
 
 ---
@@ -333,7 +333,7 @@
 | **Cache/Queue** | Redis, Memory Queue (回壓保護)                           |
 | **Integration** | Twurple (Twitch API), Google Analytics                   |
 | **CI/CD**       | GitHub Actions (自動備份、測試、部署)                     |
-| **Monitoring**  | Sentry (錯誤追蹤), Slow Query Logger, 每日自動資料庫備份 |
+| **Monitoring**  | 錯誤追蹤、Slow Query Logger、每日自動資料庫備份 |
 
 ---
 

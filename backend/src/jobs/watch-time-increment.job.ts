@@ -10,7 +10,6 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { cacheManager } from "../utils/cache-manager";
-import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { WriteGuardKeys } from "../constants";
 import {
@@ -372,7 +371,6 @@ export class WatchTimeIncrementJob {
       );
     } catch (error) {
       logger.error("Jobs", "❌ Watch Time Increment Job 執行失敗", error);
-      captureJobError("watch-time-increment", error);
       recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
     } finally {
       this.isRunning = false;

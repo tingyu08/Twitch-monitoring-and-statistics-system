@@ -5,7 +5,6 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import { runWithWriteGuard } from "./job-write-guard";
-import { captureJobError } from "./job-error-tracker";
 import { WriteGuardKeys } from "../constants";
 
 const CLEANUP_HEARTBEAT_DEDUP_CRON =
@@ -62,7 +61,6 @@ export class CleanupExtensionHeartbeatDedupJob {
       }
     } catch (error) {
       logger.error("Jobs", "Heartbeat dedup cleanup 失敗", error);
-      captureJobError("cleanup-heartbeat-dedup", error);
     } finally {
       this.isRunning = false;
     }

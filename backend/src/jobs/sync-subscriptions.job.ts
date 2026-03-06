@@ -3,7 +3,6 @@ import { prisma } from "../db/prisma";
 import { revenueService } from "../modules/streamer/revenue.service";
 import { logger } from "../utils/logger";
 import { revenueSyncQueue, type RevenueSyncJobData } from "../utils/revenue-sync-queue";
-import { captureJobError } from "./job-error-tracker";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import {
   recordJobFailure,
@@ -116,7 +115,6 @@ export const syncSubscriptionsJob = cron.schedule(SYNC_SUBSCRIPTIONS_CRON, async
     recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Jobs", "Sync Subscriptions Job 執行失敗", error);
-    captureJobError("sync-subscriptions", error);
     recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
   }
 });

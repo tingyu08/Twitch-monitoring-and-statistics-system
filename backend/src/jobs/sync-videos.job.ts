@@ -3,7 +3,6 @@ import { prisma } from "../db/prisma";
 import { twurpleVideoService } from "../services/twitch-video.service";
 import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
-import { captureJobError } from "./job-error-tracker";
 import { retryDatabaseOperation } from "../utils/db-retry";
 import {
   recordJobFailure,
@@ -292,7 +291,6 @@ export const syncVideosJob = cron.schedule("0 0 */6 * * *", async () => {
     recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
     logger.error("Jobs", "Sync Videos Job 執行失敗", error);
-    captureJobError("sync-videos", error);
     recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
   } finally {
     clearTimeout(timeoutHandle);

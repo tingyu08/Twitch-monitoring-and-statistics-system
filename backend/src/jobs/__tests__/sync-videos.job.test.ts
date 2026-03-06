@@ -43,10 +43,6 @@ jest.mock("../../utils/memory-thresholds", () => ({
   MEMORY_THRESHOLDS: { MAX_MB: 9999 }, // effectively unlimited – skips memory-pressure logic
 }));
 
-jest.mock("../job-error-tracker", () => ({
-  captureJobError: jest.fn(),
-}));
-
 jest.mock("../../utils/job-circuit-breaker", () => ({
   shouldSkipForCircuitBreaker: jest.fn().mockReturnValue(false),
   recordJobSuccess: jest.fn(),
@@ -63,7 +59,6 @@ import cron from "node-cron";
 import { prisma } from "../../db/prisma";
 import { twurpleVideoService } from "../../services/twitch-video.service";
 import { logger } from "../../utils/logger";
-import { captureJobError } from "../job-error-tracker";
 import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
 import { retryDatabaseOperation } from "../../utils/db-retry";
 
@@ -314,12 +309,11 @@ describe("syncVideosJob", () => {
 
   // ── Top-level error handling ───────────────────────────────────────────
 
-  it("calls captureJobError when streamer.findMany throws unexpectedly", async () => {
+  it("logs top-level error when streamer.findMany throws unexpectedly", async () => {
     (prisma.streamer.findMany as jest.Mock).mockRejectedValueOnce(new Error("DB error"));
 
     await run();
 
-    expect(captureJobError).toHaveBeenCalledWith("sync-videos", expect.any(Error));
     expect(logger.error).toHaveBeenCalledWith(
       "Jobs",
       "Sync Videos Job 執行失敗",

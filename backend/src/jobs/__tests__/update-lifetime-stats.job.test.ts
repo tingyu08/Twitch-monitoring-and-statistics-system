@@ -2,7 +2,6 @@ import cron from "node-cron";
 import { prisma } from "../../db/prisma";
 import { lifetimeStatsAggregator } from "../../services/lifetime-stats-aggregator.service";
 import { refreshViewerChannelSummaryForViewer } from "../../modules/viewer/viewer.service";
-import { captureJobError } from "../job-error-tracker";
 
 jest.mock("../../db/prisma", () => ({
   prisma: {
@@ -33,10 +32,6 @@ jest.mock("../../services/lifetime-stats-aggregator.service", () => ({
 
 jest.mock("../../modules/viewer/viewer.service", () => ({
   refreshViewerChannelSummaryForViewer: jest.fn().mockResolvedValue(undefined),
-}));
-
-jest.mock("../job-error-tracker", () => ({
-  captureJobError: jest.fn(),
 }));
 
 jest.mock("node-cron", () => ({
@@ -200,7 +195,7 @@ describe("update-lifetime-stats.job", () => {
       expect(lifetimeStatsAggregator.aggregateStats).toHaveBeenCalledTimes(1);
     });
 
-    it("calls captureJobError when aggregateStats throws (propagates through Promise.all)", async () => {
+    it("logs error when aggregateStats throws (propagates through Promise.all)", async () => {
       const rows = makeRows(3, "inc");
       (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockResolvedValueOnce(rows);
 
@@ -211,9 +206,12 @@ describe("update-lifetime-stats.job", () => {
 
       await run(false);
 
-      expect(captureJobError).toHaveBeenCalledWith("update-lifetime-stats", expect.any(Error), {
-        fullUpdate: false,
-      });
+      const { logger } = jest.requireMock("../../utils/logger");
+      expect(logger.error).toHaveBeenCalledWith(
+        "CronJob",
+        "Lifetime Stats 更新失敗:",
+        expect.any(Error)
+      );
     });
   });
 
@@ -271,15 +269,14 @@ describe("update-lifetime-stats.job", () => {
       expect(lifetimeStatsAggregator.aggregateStats).toHaveBeenCalledTimes(4);
     });
 
-    it("calls captureJobError with fullUpdate=true when an error occurs", async () => {
+    it("logs error with fullUpdate=true when an error occurs", async () => {
       const boom = new Error("full update crash");
       (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockRejectedValueOnce(boom);
 
       await run(true);
 
-      expect(captureJobError).toHaveBeenCalledWith("update-lifetime-stats", boom, {
-        fullUpdate: true,
-      });
+      const { logger } = jest.requireMock("../../utils/logger");
+      expect(logger.error).toHaveBeenCalledWith("CronJob", "Lifetime Stats 更新失敗:", boom);
     });
   });
 
@@ -361,15 +358,14 @@ describe("update-lifetime-stats.job", () => {
   // Error handling
   // -------------------------------------------------------------------------
   describe("error handling", () => {
-    it("calls captureJobError with the thrown error and context", async () => {
+    it("logs the thrown error", async () => {
       const boom = new Error("unexpected failure");
       (prisma.viewerChannelDailyStat.findMany as jest.Mock).mockRejectedValueOnce(boom);
 
       await run(false);
 
-      expect(captureJobError).toHaveBeenCalledWith("update-lifetime-stats", boom, {
-        fullUpdate: false,
-      });
+      const { logger } = jest.requireMock("../../utils/logger");
+      expect(logger.error).toHaveBeenCalledWith("CronJob", "Lifetime Stats 更新失敗:", boom);
     });
 
     it("resets isRunning to false after an error so the next run can proceed", async () => {

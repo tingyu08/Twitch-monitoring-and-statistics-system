@@ -12,7 +12,6 @@ import { accountDeletionService } from "../services/account-deletion.service";
 import { dataExportService } from "../services/data-export.service";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
-import { captureJobError } from "./job-error-tracker";
 import { runWithWriteGuard } from "./job-write-guard";
 import { WriteGuardKeys } from "../constants";
 
@@ -119,7 +118,6 @@ export class DataRetentionJob {
       logger.info("DataRetention", "Job 執行完成");
     } catch (error) {
       logger.error("DataRetention", "Job 執行失敗:", error);
-      captureJobError("data-retention", error);
     } finally {
       this.isRunning = false;
     }

@@ -67,10 +67,6 @@ jest.mock("../../utils/memory-monitor", () => ({
   },
 }));
 
-jest.mock("../job-error-tracker", () => ({
-  captureJobError: jest.fn(),
-}));
-
 jest.mock("../job-write-guard", () => ({
   runWithWriteGuard: jest.fn((_key: string, fn: () => unknown) => fn()),
 }));
@@ -104,7 +100,6 @@ import cron from "node-cron";
 import { updateLiveStatusFn } from "../update-live-status.job";
 import { prisma, isConnectionReady } from "../../db/prisma";
 import { logger } from "../../utils/logger";
-import { captureJobError } from "../job-error-tracker";
 import { retryDatabaseOperation } from "../../utils/db-retry";
 import { runWithWriteGuard } from "../job-write-guard";
 import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
@@ -211,13 +206,14 @@ describe("updateLiveStatusFn", () => {
   // ── Error handling ───────────────────────────────────────────────────────
 
   describe("error handling", () => {
-    it("calls captureJobError when channel.groupBy throws", async () => {
+    it("logs error when channel.groupBy throws", async () => {
       (prisma.channel.groupBy as jest.Mock).mockRejectedValue(new Error("DB down"));
 
       await updateLiveStatusFn();
 
-      expect(captureJobError).toHaveBeenCalledWith(
-        "update-live-status",
+      expect(logger.error).toHaveBeenCalledWith(
+        "Jobs",
+        expect.stringContaining("Update Live Status Job 執行失敗"),
         expect.any(Error)
       );
     });
@@ -259,7 +255,11 @@ describe("updateLiveStatusFn", () => {
       (retryDatabaseOperation as jest.Mock).mockRejectedValue(new Error("retry fail"));
 
       await expect(updateLiveStatusFn()).resolves.toBeUndefined();
-      expect(captureJobError).toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalledWith(
+        "Jobs",
+        expect.stringContaining("Update Live Status Job 執行失敗"),
+        expect.any(Error)
+      );
     });
   });
 });

@@ -24,7 +24,6 @@ import {
 } from "../utils/job-circuit-breaker";
 import { isRedisEnabled, redisGetJson, redisSetJson } from "../utils/redis-client";
 import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
-import { captureJobError } from "./job-error-tracker";
 
 // 類型定義
 type TransactionClient = Prisma.TransactionClient;
@@ -546,7 +545,6 @@ export class SyncUserFollowsJob {
     } catch (error) {
       result.executionTimeMs = Date.now() - startTime;
       logger.error("Jobs", "❌ Sync User Follows Job 執行失敗", error);
-      captureJobError("sync-user-follows", error);
       recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
       result.usersFailed += 1;
       return result;
@@ -1454,7 +1452,6 @@ export async function triggerFollowSyncForUser(
     scheduleLiveStatusRefresh();
   } catch (error) {
     logger.error("Jobs", "追蹤同步失敗", error);
-    captureJobError("sync-user-follows-trigger", error, { viewerId });
     throw error;
   }
 }

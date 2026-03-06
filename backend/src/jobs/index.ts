@@ -22,7 +22,6 @@ import { cleanupExtensionHeartbeatDedupJob } from "./cleanup-extension-heartbeat
 import { watchTimeIncrementJob } from "./watch-time-increment.job";
 import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
-import { captureJobError } from "./job-error-tracker";
 
 const CHANNEL_STATS_START_RETRY_MS = 5 * 60 * 1000;
 const CHANNEL_STATS_MAX_DELAYED_START_ATTEMPTS = 6;
@@ -89,7 +88,6 @@ export function startAllJobs(): void {
       logger.info("Jobs", `Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`);
     } catch (error) {
       logger.error("Jobs", "Token 驗證失敗:", error);
-      captureJobError("validate-tokens-scheduler", error);
     }
   });
   scheduledTasks.push(tokenValidationTask);

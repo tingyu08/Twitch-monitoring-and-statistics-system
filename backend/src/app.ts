@@ -4,7 +4,6 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
-import * as Sentry from "@sentry/node";
 import { oauthRoutes, apiRoutes } from "./modules/auth/auth.routes";
 import { streamerRoutes } from "./modules/streamer/streamer.routes";
 import { viewerApiRoutes } from "./modules/viewer/viewer.routes";
@@ -166,11 +165,6 @@ class App {
     this.express.get("/", (_req, res) => {
       res.send("Streamer Backend is running!");
     });
-
-    // Sentry ?航炊??銝剝?隞塚?敹??冽??楝?曹?敺?
-    if (process.env.SENTRY_DSN) {
-      Sentry.setupExpressErrorHandler(this.express);
-    }
 
     // Global error handler (must be registered last)
     this.express.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
