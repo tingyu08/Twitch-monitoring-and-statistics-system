@@ -5,7 +5,7 @@ import type { ViewerChannelLifetimeStats } from "@prisma/client";
 
 export class ViewerLifetimeStatsService {
   async getStats(viewerId: string, channelId: string) {
-    // 1. 嘗試查詢現有聚合數據
+    // 1. 先查詢已彙總的 lifetime stats
     let stat = await prisma.viewerChannelLifetimeStats.findUnique({
       where: { viewerId_channelId: { viewerId, channelId } },
       include: {
@@ -17,14 +17,14 @@ export class ViewerLifetimeStatsService {
       },
     });
 
-    // 2. 如果沒有，嘗試即時計算 (On-demand aggregation for first visit)
+    // 2. 如果沒有資料，首次訪問時即時觸發彙總
     if (!stat) {
       stat = await lifetimeStatsAggregator.aggregateStatsWithChannel(viewerId, channelId);
     }
 
     if (!stat) {
-      // 如果還是沒有，可能因為完全沒資料，需返回默認空結構，以免前端炸裂
-      // 或者返回 null 讓前端顯示 "無資料"
+      // 仍然沒有資料代表該 viewer 與 channel 尚未建立有效統計，
+      // 直接回傳 null，交由上層決定顯示空狀態。
       return null;
     }
 
@@ -77,11 +77,6 @@ export class ViewerLifetimeStatsService {
     };
   }
 
-  // 為了獲取 displayName，我需要一個更新後的 getStats 方法，但我不能在這裡直接改。
-  // 所以我會讓 getStats 內部再查詢一次，或者修改上面的 include。
-  // 但為了避免 type error (因為 stat type inference)，我會在下一步 Controller 中處理，或者這裡用 any or cast.
-  // 正確做法：修改 include。
-
   private calculateRadarScores(stats: ViewerChannelLifetimeStats) {
     // 1. 觀看時長（滿分 500 小時）
     const watchTimeScore = Math.min(100, (stats.totalWatchTimeMinutes / 60 / 500) * 100);
@@ -98,7 +93,7 @@ export class ViewerLifetimeStatsService {
     // 5. 贊助貢獻（滿分 10000 Bits）
     const contributionScore = Math.min(100, (stats.totalBits / 10000) * 100);
 
-    // 6. 社群參與（訂閱次數? AC says months/12, we have totalSubscriptions）
+    // 6. 社群參與（以總訂閱次數近似 months / 12 的概念）
     const communityScore = Math.min(100, (stats.totalSubscriptions / 12) * 100);
 
     return {

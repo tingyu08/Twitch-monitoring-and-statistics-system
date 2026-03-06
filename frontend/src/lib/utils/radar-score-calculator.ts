@@ -38,7 +38,7 @@ export const calculateRadarScores = (stats: ViewerStats): RadarScores => {
   const totalBits = stats.totalBits || 0;
   const contributionScore = Math.min(100, (totalBits / 10000) * 100);
 
-  // 6. 社群參與（訂閱次數? AC says months/12, we have totalSubscriptions）
+  // 6. 社群參與（以總訂閱次數近似 months / 12 的概念）
   const totalSubscriptions = stats.totalSubscriptions || 0;
   const communityScore = Math.min(100, (totalSubscriptions / 12) * 100);
 

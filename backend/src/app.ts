@@ -19,7 +19,7 @@ import extensionRoutes from "./modules/extension/extension.routes";
 import { requireAuth } from "./modules/auth/auth.middleware";
 import { getRedisClient } from "./utils/redis-client";
 
-// Rate Limiting 閮剖?
+// Rate limiting 設定
 const isDev = process.env.NODE_ENV === "development";
 const redisClient = getRedisClient();
 
@@ -36,22 +36,22 @@ function createRateLimitStore(prefix: string): RedisStore | undefined {
 }
 
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 ??
-  max: isDev ? 1000 : 100, // ??啣??曉祝?
+  windowMs: 15 * 60 * 1000, // 15 分鐘
+  max: isDev ? 1000 : 100, // 開發環境放寬限制，正式環境較嚴格
   message: { error: "Too many requests, please try again later." },
-  standardHeaders: true, // 餈? RateLimit-* headers
-  legacyHeaders: false, // ? X-RateLimit-* headers
+  standardHeaders: true, // 啟用標準 RateLimit-* headers
+  legacyHeaders: false, // 停用舊版 X-RateLimit-* headers
   skip: (req) => {
-    // 頝喲??亙熒瑼Ｘ蝡舫?
+    // 跳過首頁與健康檢查端點
     return req.path === "/" || req.path.startsWith("/api/health");
   },
   store: createRateLimitStore("rl:api:"),
 });
 
-// ??隤?蝡舫???湔?
+// 認證相關端點使用更嚴格的限制
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 ??
-  max: isDev ? 100 : 20, // ??啣??曉祝?
+  windowMs: 15 * 60 * 1000, // 15 分鐘
+  max: isDev ? 100 : 20, // 開發環境放寬限制，正式環境較嚴格
   message: {
     error: "Too many authentication attempts, please try again later.",
   },
@@ -68,8 +68,8 @@ class App {
   constructor() {
     this.express = express();
 
-    // Zeabur 反向代理環境：啟用 trust proxy 以正確取得客戶端 IP
-    // 否則 rate limiting 可能把所有請求視為同一來源
+    // Zeabur 等反向代理環境需要設定 trust proxy，
+    // 否則 rate limiting 會拿不到正確的客戶端 IP。
     if (process.env.NODE_ENV === "production") {
       this.express.set("trust proxy", 1);
     }
@@ -79,16 +79,16 @@ class App {
   }
 
   private middleware(): void {
-    // 0. 摰璅 (Helmet)
-    // 敹??冽??嚗??閬矽??CSP 隞亙?閮梯? Twitch API ??
+    // 0. 安全性標頭中介層 (Helmet)
+    // 先維持寬鬆設定，避免 CSP 影響前端或 Twitch API 整合。
     this.express.use(
       helmet({
         crossOriginResourcePolicy: { policy: "cross-origin" },
       })
     );
 
-    // 1. 閮剖? CORS嚗?? Rate Limiting 銋?嚗?
-    // 蝣箔??喃蝙鋡恍?瘚??賣迤蝣箄???CORS headers
+    // 1. 先設定 CORS，再進入後續 Rate Limiting 與 API 處理
+    // 讓瀏覽器預檢與跨網域請求都能拿到正確的 CORS headers。
     this.express.use(
       cors({
         origin: process.env.FRONTEND_URL
@@ -100,11 +100,11 @@ class App {
       })
     );
 
-    // 2. Rate Limiting嚗甇?DoS ?餅?嚗?
+    // 2. Rate limiting，降低濫用與 DoS 風險
     this.express.use("/api", apiLimiter);
     this.express.use("/auth", authLimiter);
 
-    // 3. 閫?? JSON Body (? EventSub 頝臬?嚗???Twurple ?閬?raw body)
+    // 3. 解析 JSON body，但保留 EventSub webhook 的 raw body 給 Twurple 驗證
     this.express.use((req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith("/api/eventsub")) {
         next();
@@ -113,55 +113,55 @@ class App {
       }
     });
 
-    // 4. 閫?? Cookies (?? httpOnly cookie 敹?)
+    // 4. 解析 Cookies（支援 httpOnly cookie 驗證）
     this.express.use(cookieParser());
 
-    // 5. API ???
+    // 5. API 效能監控
     this.express.use(performanceMonitor.middleware());
   }
 
   private routes(): void {
-    // OAuth 頝舐嚗??嚗?auth/twitch/login, /auth/twitch/callback
+    // OAuth 相關路由，例如 /auth/twitch/login、/auth/twitch/callback
     this.express.use("/auth/twitch", oauthRoutes);
 
-    // API 頝舐嚗?閬?霅?嚗?api/auth/me, /api/auth/logout
+    // API 認證路由，例如 /api/auth/me、/api/auth/logout
     this.express.use("/api/auth", apiRoutes);
     this.express.use("/api/viewer", viewerApiRoutes);
     this.express.use("/api/streamer", streamerRoutes);
     this.express.use("/api/proxy", proxyRoutes);
 
-    // Twitch API 頝舐嚗?api/twitch/*
+    // Twitch API 代理路由，例如 /api/twitch/*
     this.express.use("/api/twitch", twitchRoutes);
 
-    // 蝞∠?頝舐嚗??賜?改??? Streamer嚗?
+    // 受保護的效能監控路由，僅限 streamer 角色
     this.express.use(
       "/api/admin/performance",
       requireAuth(["streamer"]),
       performanceRoutes
     );
 
-    // 蝞∠?頝舐嚗oken 蝞∠?嚗???Streamer嚗?
+    // 受保護的 token 管理路由，僅限 streamer 角色
     this.express.use(
       "/api/admin/tokens",
       requireAuth(["streamer"]),
       tokenManagementRoutes
     );
 
-    // 系統健康檢查路由 (公開，供 UptimeRobot 等監控服務使用)
+    // 健康檢查路由（提供給 UptimeRobot 等監控服務使用）
     this.express.use("/api/health", healthRoutes);
 
-    // ?汗?冽????API
-    // 效能監控路由（根據環境變數啟用）
+    // 條件啟用的監控 API
+    // 只有在設定 ENABLE_MONITORING=true 時才開放。
     if (process.env.ENABLE_MONITORING === "true") {
       this.express.use("/api/monitoring", requireAuth(["streamer"]), monitoringRoutes);
     }
 
     this.express.use("/api/sync", extensionRoutes);
 
-    // EventSub Webhook 頝舐 (Twitch 鈭辣閮)
+    // EventSub webhook 路由（Twitch 事件通知回呼）
     this.express.use("/eventsub", eventSubRoutes);
 
-    // ?寡楝敺摨瑟炎??
+    // 根路由健康回應
     this.express.get("/", (_req, res) => {
       res.send("Streamer Backend is running!");
     });
