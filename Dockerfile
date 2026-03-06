@@ -9,14 +9,17 @@ RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists
 # 複製 backend package.json（利用 Docker layer cache）
 COPY backend/package*.json ./backend/
 
-# 安裝 backend 依賴
-RUN cd backend && npm install --loglevel=error
+# 安裝 backend 依賴（建置階段需要 devDependencies 的型別套件）
+RUN cd backend && npm install --include=dev --loglevel=error
 
 # 複製 backend 原始碼
 COPY backend ./backend
 
 # 建構 backend
 RUN cd backend && npm run build
+
+# 建構完成後移除 devDependencies，縮小正式映像
+RUN cd backend && npm prune --omit=dev
 
 EXPOSE 8080
 
