@@ -29,18 +29,12 @@ export function isStreamer(user: UserInfo): user is StreamerInfo {
 }
 
 export function isViewer(user: UserInfo): user is ViewerInfo {
-  return (
-    user.role === "viewer" ||
-    (user.role === "streamer" && !!(user as StreamerInfo).viewerId)
-  );
+  return user.role === "viewer" || (user.role === "streamer" && !!(user as StreamerInfo).viewerId);
 }
 
 export async function getMe(): Promise<UserInfo> {
   // 如果正在登出過程中，阻止自動登入並嘗試完成登出
-  if (
-    typeof window !== "undefined" &&
-    localStorage.getItem("logout_pending") === "true"
-  ) {
+  if (typeof window !== "undefined" && localStorage.getItem("logout_pending") === "true") {
     // 嘗試再次調用登出以確保後端 Token 失效
     try {
       await logout();
@@ -53,9 +47,9 @@ export async function getMe(): Promise<UserInfo> {
   }
 
   // 使用 httpClient 以獲得超時保護
-  const response = await httpClient<UserInfo | { user: UserInfo }>(
-    "/api/auth/me"
-  );
+  const response = await httpClient<UserInfo | { user: UserInfo }>("/api/auth/me", {
+    silentStatuses: [401],
+  });
 
   // 支援兩種格式：{ user: UserInfo } 或直接 UserInfo
   if (response && "user" in response && response.user) {

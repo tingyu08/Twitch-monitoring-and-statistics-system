@@ -2,8 +2,13 @@
 
 import React, { useState, useEffect, useRef, ReactElement, cloneElement } from "react";
 
+type ChartDimensionProps = {
+  width?: number | string;
+  height?: number | string;
+};
+
 interface SafeChartContainerProps {
-  children: ReactElement;
+  children: ReactElement<ChartDimensionProps>;
   width?: string | number;
   height?: string | number;
   className?: string;

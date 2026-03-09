@@ -57,8 +57,15 @@ export function InteractionBreakdownChart({ data, height = 350 }: InteractionBre
     );
   }
 
-  const handlePieClick = (entry: { id: string }) => {
-    openModal(entry.id);
+  const handlePieClick = (sectorData: unknown) => {
+    if (
+      typeof sectorData === "object" &&
+      sectorData !== null &&
+      "payload" in sectorData &&
+      typeof (sectorData as { payload?: { id?: unknown } }).payload?.id === "string"
+    ) {
+      openModal((sectorData as { payload: { id: string } }).payload.id);
+    }
   };
 
   return (

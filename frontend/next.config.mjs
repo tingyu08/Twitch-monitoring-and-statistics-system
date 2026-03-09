@@ -1,5 +1,10 @@
 import createNextIntlPlugin from "next-intl/plugin";
 import withPWAInit from "@ducanh2912/next-pwa";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -28,6 +33,9 @@ const nextConfig = {
     serverActions: {
       allowedOrigins: ["localhost:3000", "app.localhost:3000"],
     },
+  },
+  turbopack: {
+    root: path.join(__dirname, ".."),
   },
   async rewrites() {
     const backendUrl =

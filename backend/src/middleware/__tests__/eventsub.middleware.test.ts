@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { verifyEventSubSignature, EVENTSUB_MESSAGE_TYPE } from "../eventsub.middleware";
-import type { Request, Response, NextFunction } from "express";
 
 jest.mock("../../utils/logger", () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },

@@ -14,5 +14,9 @@
     "dev:frontend": "npm --workspace frontend run dev",
     "dev:extension": "npm --workspace extension run dev",
     "dev": "npm run dev:backend & npm run dev:frontend"
+  },
+  "devDependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   }
 }

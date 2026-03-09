@@ -134,7 +134,9 @@ export async function httpClient<T = any>(
     }
 
     const shouldSilence =
-      error instanceof HttpClientError && silentStatuses.includes(error.status);
+      (error instanceof HttpClientError ||
+        (error instanceof Error && error.name === "HttpClientError")) &&
+      silentStatuses.includes((error as any).status);
 
     if (!shouldSilence) {
       apiLogger.error("API Request Error:", error);
