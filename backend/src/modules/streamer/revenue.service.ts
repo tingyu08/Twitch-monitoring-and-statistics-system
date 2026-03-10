@@ -264,15 +264,21 @@ export class RevenueService {
   private readonly SYNC_TIMEOUT_MS = 60000; // 60 seconds overall timeout
 
   async syncSubscriptionSnapshot(streamerId: string): Promise<void> {
+    let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("SYNC_OVERALL_TIMEOUT")), this.SYNC_TIMEOUT_MS);
+      timeoutId = setTimeout(() => reject(new Error("SYNC_OVERALL_TIMEOUT")), this.SYNC_TIMEOUT_MS);
+      timeoutId.unref?.();
     });
 
     try {
       await Promise.race([
         this._syncSubscriptionSnapshotInner(streamerId),
         timeoutPromise,
-      ]);
+      ]).finally(() => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      });
     } catch (error) {
       if (error instanceof Error && error.message === "SYNC_OVERALL_TIMEOUT") {
         logger.error("RevenueService", `syncSubscriptionSnapshot overall timeout (${this.SYNC_TIMEOUT_MS}ms) for streamer ${streamerId}`);

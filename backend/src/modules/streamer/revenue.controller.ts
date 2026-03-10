@@ -32,15 +32,17 @@ export class RevenueController {
     try {
       const streamerId = getStreamerId(req);
 
-      // Zeabur 免費層超時保護（25 秒）
+      let timeoutId: NodeJS.Timeout | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+        timeoutId = setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+        timeoutId.unref?.();
       });
 
-      const overview = await Promise.race([
-        revenueService.getRevenueOverview(streamerId),
-        timeoutPromise,
-      ]);
+      const overview = await Promise.race([revenueService.getRevenueOverview(streamerId), timeoutPromise]).finally(() => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      });
 
       return res.json(overview);
     } catch (error) {
@@ -78,15 +80,17 @@ export class RevenueController {
         QUERY_LIMITS.MAX_DAYS
       );
 
-      // Zeabur 免費層超時保護（25 秒）
+      let timeoutId: NodeJS.Timeout | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+        timeoutId = setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+        timeoutId.unref?.();
       });
 
-      const stats = await Promise.race([
-        revenueService.getSubscriptionStats(streamerId, days),
-        timeoutPromise,
-      ]);
+      const stats = await Promise.race([revenueService.getSubscriptionStats(streamerId, days), timeoutPromise]).finally(() => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      });
 
       return res.json(stats);
     } catch (error) {
@@ -118,15 +122,17 @@ export class RevenueController {
         QUERY_LIMITS.MAX_DAYS
       );
 
-      // Zeabur 免費層超時保護（25 秒）
+      let timeoutId: NodeJS.Timeout | undefined;
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+        timeoutId = setTimeout(() => reject(new Error("QUERY_TIMEOUT")), 25000);
+        timeoutId.unref?.();
       });
 
-      const stats = await Promise.race([
-        revenueService.getBitsStats(streamerId, days),
-        timeoutPromise,
-      ]);
+      const stats = await Promise.race([revenueService.getBitsStats(streamerId, days), timeoutPromise]).finally(() => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      });
 
       return res.json(stats);
     } catch (error) {

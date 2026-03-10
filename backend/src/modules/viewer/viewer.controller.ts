@@ -148,14 +148,20 @@ export class ViewerController {
             getChannelGameStatsAndViewerTrends(channelId, rangeKey),
           ]);
 
+          let timeoutId: NodeJS.Timeout | undefined;
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("BFF_TIMEOUT")), this.BFF_TIMEOUT_MS);
+            timeoutId = setTimeout(() => reject(new Error("BFF_TIMEOUT")), this.BFF_TIMEOUT_MS);
+            timeoutId.unref?.();
           });
 
           const [channelStatsResult, messageStatsResult, analyticsResult] = await Promise.race([
             queryPromise,
             timeoutPromise,
-          ]);
+          ]).finally(() => {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
+          });
 
           // 提取成功的結果
           const channelStats =

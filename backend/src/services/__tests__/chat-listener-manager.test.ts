@@ -61,13 +61,25 @@ describe("ChatListenerManager", () => {
       process.env.ENABLE_DISTRIBUTED_MODE = "true";
       jest.resetModules();
 
-      const freshModule = await import("../chat-listener-manager");
-      const freshCoordinatorModule = await import("../distributed-coordinator");
-      const freshManager = new freshModule.ChatListenerManager();
+      let ChatListenerManagerCtor: typeof ChatListenerManager | undefined;
+      let freshCoordinatorModule: typeof import("../distributed-coordinator") | undefined;
+
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const freshModule = require("../chat-listener-manager") as typeof import("../chat-listener-manager");
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        freshCoordinatorModule = require("../distributed-coordinator") as typeof import("../distributed-coordinator");
+        ChatListenerManagerCtor = freshModule.ChatListenerManager;
+      });
+
+      expect(ChatListenerManagerCtor).toBeDefined();
+      expect(freshCoordinatorModule).toBeDefined();
+
+      const freshManager = new ChatListenerManagerCtor!();
 
       await freshManager.start();
 
-      expect(freshCoordinatorModule.distributedCoordinator.start).toHaveBeenCalledTimes(1);
+      expect(freshCoordinatorModule!.distributedCoordinator.start).toHaveBeenCalledTimes(1);
       freshManager.stop();
     } finally {
       if (previousMode === undefined) {
@@ -307,8 +319,17 @@ describe("ChatListenerManager", () => {
       process.env.ENABLE_DISTRIBUTED_MODE = "true";
       jest.resetModules();
 
-      const freshModule = await import("../chat-listener-manager");
-      const freshManager = new freshModule.ChatListenerManager();
+      let ChatListenerManagerCtor: typeof ChatListenerManager | undefined;
+
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const freshModule = require("../chat-listener-manager") as typeof import("../chat-listener-manager");
+        ChatListenerManagerCtor = freshModule.ChatListenerManager;
+      });
+
+      expect(ChatListenerManagerCtor).toBeDefined();
+
+      const freshManager = new ChatListenerManagerCtor!();
 
       const stats = freshManager.getStats();
 

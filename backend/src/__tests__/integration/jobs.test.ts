@@ -36,6 +36,13 @@ jest.mock("../../db/prisma", () => ({
   },
 }));
 
+jest.mock("../../utils/memory-monitor", () => ({
+  memoryMonitor: {
+    isOverLimit: jest.fn().mockReturnValue(false),
+    isNearLimit: jest.fn().mockReturnValue(false),
+  },
+}));
+
 describe("Story 3.3: Jobs Integration", () => {
   beforeEach(() => {
     jest.clearAllMocks();

@@ -58,7 +58,9 @@ describe("auth.ts", () => {
 
       const result = await getMe();
 
-      expect(mockHttpClient).toHaveBeenCalledWith("/api/auth/me");
+      expect(mockHttpClient).toHaveBeenCalledWith("/api/auth/me", {
+        silentStatuses: [401],
+      });
       expect(result).toEqual(streamerUser);
     });
 
