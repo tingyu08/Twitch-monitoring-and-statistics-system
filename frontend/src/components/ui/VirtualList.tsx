@@ -1,11 +1,9 @@
 "use client";
 
-import type { ListChildComponentProps } from "react-window";
-import { FixedSizeList, VariableSizeList } from "react-window";
+import type { RowComponentProps } from "react-window";
+import { List, useDynamicRowHeight } from "react-window";
 import {
-  useRef,
   useCallback,
-  forwardRef,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -42,7 +40,7 @@ export function VirtualList<T>({
   overscanCount = 5,
 }: VirtualListProps<T>) {
   const Row = useCallback(
-    ({ index, style }: ListChildComponentProps) => {
+    ({ index, style }: RowComponentProps<{ items: T[]; renderItem: VirtualListProps<T>["renderItem"] }>) => {
       const item = items[index];
       return <>{renderItem(item, index, style)}</>;
     },
@@ -50,16 +48,16 @@ export function VirtualList<T>({
   );
 
   return (
-    <FixedSizeList
-      height={height}
-      width={width}
-      itemCount={items.length}
-      itemSize={itemHeight}
+    <List
+      rowComponent={Row}
+      rowProps={{ items, renderItem }}
+      rowCount={items.length}
+      rowHeight={itemHeight}
+      defaultHeight={height}
       overscanCount={overscanCount}
       className={className}
-    >
-      {Row}
-    </FixedSizeList>
+      style={{ width }}
+    />
   );
 }
 
@@ -85,10 +83,14 @@ export function VirtualListVariable<T>({
   className,
   overscanCount = 5,
 }: VirtualListVariableProps<T>) {
-  const listRef = useRef<VariableSizeList>(null);
+  const rowHeightCache = useDynamicRowHeight({ defaultRowHeight: getItemHeight(0) ?? 48 });
+
+  items.forEach((_, index) => {
+    rowHeightCache.setRowHeight(index, getItemHeight(index));
+  });
 
   const Row = useCallback(
-    ({ index, style }: ListChildComponentProps) => {
+    ({ index, style }: RowComponentProps<{ items: T[]; renderItem: VirtualListVariableProps<T>["renderItem"] }>) => {
       const item = items[index];
       return <>{renderItem(item, index, style)}</>;
     },
@@ -96,17 +98,16 @@ export function VirtualListVariable<T>({
   );
 
   return (
-    <VariableSizeList
-      ref={listRef}
-      height={height}
-      width={width}
-      itemCount={items.length}
-      itemSize={getItemHeight}
+    <List
+      rowComponent={Row}
+      rowProps={{ items, renderItem }}
+      rowCount={items.length}
+      rowHeight={rowHeightCache}
+      defaultHeight={height}
       overscanCount={overscanCount}
       className={className}
-    >
-      {Row}
-    </VariableSizeList>
+      style={{ width }}
+    />
   );
 }
 
