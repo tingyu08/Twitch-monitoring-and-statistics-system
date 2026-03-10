@@ -2,14 +2,16 @@ import type { Response } from "express";
 import { dashboardLayoutService } from "./dashboard-layout.service";
 import { logger } from "../../utils/logger";
 import type { AuthRequest } from "../auth/auth.middleware";
+import { getSingleStringValue } from "../../utils/request-values";
 
 export class DashboardLayoutController {
   public getLayout = async (req: AuthRequest, res: Response) => {
     try {
-      const { channelId } = req.params;
+      const channelId = getSingleStringValue(req.params.channelId);
       const viewerId = req.user?.viewerId;
 
       if (!viewerId) return res.status(401).json({ error: "Unauthorized" });
+      if (!channelId) return res.status(400).json({ error: "channelId is required" });
 
       const layout = await dashboardLayoutService.getLayout(viewerId, channelId);
 
@@ -45,10 +47,11 @@ export class DashboardLayoutController {
 
   public resetLayout = async (req: AuthRequest, res: Response) => {
     try {
-      const { channelId } = req.params;
+      const channelId = getSingleStringValue(req.params.channelId);
       const viewerId = req.user?.viewerId;
 
       if (!viewerId) return res.status(401).json({ error: "Unauthorized" });
+      if (!channelId) return res.status(400).json({ error: "channelId is required" });
 
       await dashboardLayoutService.resetLayout(viewerId, channelId);
       res.json({ success: true, message: "Layout reset to default" });

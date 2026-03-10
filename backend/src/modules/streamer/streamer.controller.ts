@@ -3,6 +3,7 @@ import type { AuthRequest } from "../auth/auth.middleware";
 import { getStreamerSummary, getStreamerTimeSeries, getStreamerHeatmap } from "./streamer.service";
 import { getSubscriptionTrend, syncSubscriptionSnapshot } from "./subscription-sync.service";
 import { streamerLogger } from "../../utils/logger";
+import { getSingleStringValue, getStringWithDefault } from "../../utils/request-values";
 
 export async function getSummaryHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -13,7 +14,7 @@ export async function getSummaryHandler(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    const range = (req.query.range as string) || "30d";
+    const range = getStringWithDefault(req.query.range, "30d");
 
     // 驗證 range 參數
     if (!["7d", "30d", "90d"].includes(range)) {
@@ -36,8 +37,8 @@ export async function getSummaryHandler(req: AuthRequest, res: Response): Promis
  */
 export async function getStreamerSummaryByIdHandler(req: Request, res: Response): Promise<void> {
   try {
-    const { streamerId } = req.params;
-    const range = (req.query.range as string) || "30d";
+    const streamerId = getSingleStringValue(req.params.streamerId);
+    const range = getStringWithDefault(req.query.range, "30d");
 
     if (!streamerId) {
       res.status(400).json({ error: "streamerId is required" });
@@ -70,8 +71,8 @@ export async function getTimeSeriesHandler(req: AuthRequest, res: Response): Pro
       return;
     }
 
-    const range = (req.query.range as string) || "30d";
-    const granularity = (req.query.granularity as string) || "day";
+    const range = getStringWithDefault(req.query.range, "30d");
+    const granularity = getStringWithDefault(req.query.granularity, "day");
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
@@ -109,7 +110,7 @@ export async function getHeatmapHandler(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    const range = (req.query.range as string) || "30d";
+    const range = getStringWithDefault(req.query.range, "30d");
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {
@@ -138,7 +139,7 @@ export async function getSubscriptionTrendHandler(req: AuthRequest, res: Respons
       return;
     }
 
-    const range = (req.query.range as string) || "30d";
+    const range = getStringWithDefault(req.query.range, "30d");
 
     // 驗證參數
     if (!["7d", "30d", "90d"].includes(range)) {

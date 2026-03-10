@@ -10,6 +10,7 @@ import {
 import { streamerLogger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 import { CacheTags } from "../../constants";
+import { getSingleStringValue, getStringWithDefault } from "../../utils/request-values";
 
 /**
  * 取得遊戲/分類統計
@@ -22,7 +23,7 @@ export async function getGameStatsHandler(req: AuthRequest, res: Response): Prom
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    const range = (req.query.range as string) || "30d";
+    const range = getStringWithDefault(req.query.range, "30d");
     if (!["7d", "30d", "90d"].includes(range)) {
       res.status(400).json({ error: "Invalid range parameter." });
       return;
@@ -42,13 +43,13 @@ export async function getGameStatsHandler(req: AuthRequest, res: Response): Prom
  */
 export async function getPublicGameStatsHandler(req: Request, res: Response): Promise<void> {
   try {
-    const { streamerId: channelId } = req.params;
+    const channelId = getSingleStringValue(req.params.streamerId);
     if (!channelId) {
       res.status(400).json({ error: "channelId required" });
       return;
     }
 
-    const range = (req.query.range as string) || "30d";
+    const range = getStringWithDefault(req.query.range, "30d");
     if (!["7d", "30d", "90d"].includes(range)) {
       res.status(400).json({ error: "Invalid range parameter." });
       return;
@@ -85,8 +86,8 @@ export async function getVideosHandler(req: AuthRequest, res: Response): Promise
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
+    const page = parseInt(getStringWithDefault(req.query.page, "1"), 10) || 1;
+    const limit = parseInt(getStringWithDefault(req.query.limit, "20"), 10) || 20;
 
     // Max limit
     const safeLimit = Math.min(limit, 100);
@@ -110,8 +111,8 @@ export async function getClipsHandler(req: AuthRequest, res: Response): Promise<
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
+    const page = parseInt(getStringWithDefault(req.query.page, "1"), 10) || 1;
+    const limit = parseInt(getStringWithDefault(req.query.limit, "20"), 10) || 20;
     const safeLimit = Math.min(limit, 100);
 
     const result = await getStreamerClips(streamerId, safeLimit, page);
@@ -131,7 +132,7 @@ export async function getClipsHandler(req: AuthRequest, res: Response): Promise<
  */
 export async function getPublicVideosHandler(req: Request, res: Response): Promise<void> {
   try {
-    const { streamerId: channelId } = req.params; // 參數名稱是 streamerId 但其實是 channelId
+    const channelId = getSingleStringValue(req.params.streamerId); // 參數名稱是 streamerId 但其實是 channelId
     if (!channelId) {
       res.status(400).json({ error: "channelId required" });
       return;
@@ -176,7 +177,7 @@ export async function getPublicVideosHandler(req: Request, res: Response): Promi
  */
 export async function getPublicClipsHandler(req: Request, res: Response): Promise<void> {
   try {
-    const { streamerId: channelId } = req.params; // 參數名稱是 streamerId 但其實是 channelId
+    const channelId = getSingleStringValue(req.params.streamerId); // 參數名稱是 streamerId 但其實是 channelId
     if (!channelId) {
       res.status(400).json({ error: "channelId required" });
       return;
@@ -219,13 +220,13 @@ export async function getPublicClipsHandler(req: Request, res: Response): Promis
  */
 export async function getPublicViewerTrendsHandler(req: Request, res: Response): Promise<void> {
   try {
-    const { streamerId: channelId } = req.params;
+    const channelId = getSingleStringValue(req.params.streamerId);
     if (!channelId) {
       res.status(400).json({ error: "channelId required" });
       return;
     }
 
-    const range = (req.query.range as string) || "30d";
+    const range = getStringWithDefault(req.query.range, "30d");
     const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
 
     // 快取鍵
@@ -299,8 +300,8 @@ export async function getPublicViewerTrendsHandler(req: Request, res: Response):
  */
 export async function getPublicStreamHourlyHandler(req: Request, res: Response): Promise<void> {
   try {
-    const { streamerId: channelId } = req.params;
-    const { date } = req.query;
+    const channelId = getSingleStringValue(req.params.streamerId);
+    const date = getSingleStringValue(req.query.date);
 
     if (!channelId || !date) {
       res.status(400).json({ error: "channelId and date required" });
@@ -316,11 +317,18 @@ export async function getPublicStreamHourlyHandler(req: Request, res: Response):
     const data = await cacheManager.getOrSetWithTags(
       cacheKey,
       async () => {
-        const startOfDay = new Date(date as string);
-        const endOfDay = new Date(date as string);
+        const startOfDay = new Date(date);
+        const endOfDay = new Date(date);
         endOfDay.setDate(endOfDay.getDate() + 1);
 
-        const session = await prisma.streamSession.findFirst({
+        const session: {
+          id: string;
+          startedAt: Date;
+          durationSeconds: number | null;
+          avgViewers: number | null;
+          peakViewers: number | null;
+          metrics: Array<{ timestamp: Date; viewerCount: number }>;
+        } | null = await prisma.streamSession.findFirst({
           where: {
             channelId: channelId,
             startedAt: {

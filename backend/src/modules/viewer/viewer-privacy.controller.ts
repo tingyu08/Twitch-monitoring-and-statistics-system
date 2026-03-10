@@ -15,6 +15,7 @@ import { accountDeletionService } from "../../services/account-deletion.service"
 import { dataExportService } from "../../services/data-export.service";
 import { dataExportQueue } from "../../utils/data-export-queue";
 import { logger } from "../../utils/logger";
+import { getSingleStringValue } from "../../utils/request-values";
 import { getViewerAuthSnapshotByTwitchUserId } from "./viewer-auth-snapshot.service";
 import * as fs from "fs";
 import * as path from "path";
@@ -246,10 +247,15 @@ export class ViewerPrivacyController {
   async getExportStatus(req: Request, res: Response): Promise<void> {
     try {
       const viewer = await getViewerFromRequest(req);
-      const { jobId } = req.params;
+      const jobId = getSingleStringValue(req.params.jobId);
 
       if (!viewer) {
         res.status(401).json({ error: "未授權" });
+        return;
+      }
+
+      if (!jobId) {
+        res.status(400).json({ error: "jobId 為必填" });
         return;
       }
 
@@ -290,10 +296,15 @@ export class ViewerPrivacyController {
   async downloadExport(req: Request, res: Response): Promise<void> {
     try {
       const viewer = await getViewerFromRequest(req);
-      const { jobId } = req.params;
+      const jobId = getSingleStringValue(req.params.jobId);
 
       if (!viewer) {
         res.status(401).json({ error: "未授權" });
+        return;
+      }
+
+      if (!jobId) {
+        res.status(400).json({ error: "jobId 為必填" });
         return;
       }
 
@@ -554,7 +565,7 @@ export class ViewerPrivacyController {
   async clearChannelMessages(req: Request, res: Response): Promise<void> {
     try {
       const viewer = await getViewerFromRequest(req);
-      const { channelId } = req.params;
+      const channelId = getSingleStringValue(req.params.channelId);
 
       if (!viewer) {
         res.status(401).json({ error: "未授權" });

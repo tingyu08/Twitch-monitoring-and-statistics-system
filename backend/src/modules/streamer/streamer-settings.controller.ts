@@ -2,6 +2,7 @@ import type { Response } from "express";
 import { streamerSettingsService } from "./streamer-settings.service";
 import type { AuthRequest } from "../auth/auth.middleware";
 import { logger } from "../../utils/logger";
+import { getSingleStringValue } from "../../utils/request-values";
 
 export class StreamerSettingsController {
   // 獲取設定
@@ -43,7 +44,7 @@ export class StreamerSettingsController {
   // 搜尋遊戲
   async searchGames(req: AuthRequest, res: Response) {
     try {
-      const query = req.query.q as string;
+      const query = getSingleStringValue(req.query.q) ?? "";
       const games = await streamerSettingsService.searchGames(query);
       return res.json(games);
     } catch (error) {
@@ -90,7 +91,10 @@ export class StreamerSettingsController {
         return res.status(403).json({ error: "Not a streamer or not authenticated" });
       }
 
-      const templateId = req.params.id;
+      const templateId = getSingleStringValue(req.params.id);
+      if (!templateId) {
+        return res.status(400).json({ error: "Template ID is required" });
+      }
       const updatedTemplate = await streamerSettingsService.updateTemplate(streamerId, templateId, req.body);
       return res.json(updatedTemplate);
     } catch (error) {
@@ -109,7 +113,10 @@ export class StreamerSettingsController {
       if (!streamerId) {
         return res.status(403).json({ error: "Not a streamer or not authenticated" });
       }
-      const templateId = req.params.id;
+      const templateId = getSingleStringValue(req.params.id);
+      if (!templateId) {
+        return res.status(400).json({ error: "Template ID is required" });
+      }
       await streamerSettingsService.deleteTemplate(streamerId, templateId);
       return res.json({ success: true });
     } catch (error) {

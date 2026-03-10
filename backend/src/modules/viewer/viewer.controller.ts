@@ -4,6 +4,7 @@ import type { AuthRequest } from "../auth/auth.middleware";
 import { logger } from "../../utils/logger";
 import { cacheManager, CacheTTL, getAdaptiveTTL } from "../../utils/cache-manager";
 import { CacheTags } from "../../constants";
+import { getSingleStringValue, getStringWithDefault } from "../../utils/request-values";
 import { getChannelGameStatsAndViewerTrends } from "../streamer/streamer.service";
 import { getViewerMessageStats } from "./viewer-message-stats.service";
 
@@ -42,7 +43,7 @@ export class ViewerController {
       return res.status(403).json({ error: "Forbidden: No viewer profile" });
     }
 
-    const { channelId } = req.params;
+    const channelId = getSingleStringValue(req.params.channelId);
 
     if (!channelId) {
       return res.status(400).json({ error: "Channel ID is required" });
@@ -53,9 +54,12 @@ export class ViewerController {
     let endDate: Date | undefined;
     let days: number | undefined;
 
-    if (req.query.startDate && req.query.endDate) {
-      startDate = new Date(req.query.startDate as string);
-      endDate = new Date(req.query.endDate as string);
+    const startDateQuery = getSingleStringValue(req.query.startDate);
+    const endDateQuery = getSingleStringValue(req.query.endDate);
+
+    if (startDateQuery && endDateQuery) {
+      startDate = new Date(startDateQuery);
+      endDate = new Date(endDateQuery);
 
       // 驗證日期
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
@@ -65,7 +69,7 @@ export class ViewerController {
         return res.status(400).json({ error: "startDate must be before endDate" });
       }
     } else {
-      days = parseInt((req.query.days as string) || "30");
+      days = parseInt(getStringWithDefault(req.query.days, "30"), 10);
       if (isNaN(days) || days < 1 || days > 365) {
         return res.status(400).json({ error: "days must be between 1 and 365" });
       }
@@ -113,13 +117,13 @@ export class ViewerController {
       return res.status(403).json({ error: "Forbidden: No viewer profile" });
     }
 
-    const { channelId } = req.params;
+    const channelId = getSingleStringValue(req.params.channelId);
     if (!channelId) {
       return res.status(400).json({ error: "Channel ID is required" });
     }
 
     // 解析查詢參數
-    const days = parseInt((req.query.days as string) || "30");
+    const days = parseInt(getStringWithDefault(req.query.days, "30"), 10);
     const rangeKey = days === 7 ? "7d" : days === 90 ? "90d" : "30d";
 
     if (isNaN(days) || days < 1 || days > 365) {

@@ -2,15 +2,20 @@ import type { Response } from "express";
 import { viewerLifetimeStatsService } from "./viewer-lifetime-stats.service";
 import { logger } from "../../utils/logger";
 import type { AuthRequest } from "../auth/auth.middleware";
+import { getSingleStringValue } from "../../utils/request-values";
 
 export class ViewerLifetimeStatsController {
   public getLifetimeStats = async (req: AuthRequest, res: Response) => {
     try {
-      const { channelId } = req.params;
+      const channelId = getSingleStringValue(req.params.channelId);
       const viewerId = req.user?.viewerId;
 
       if (!viewerId) {
         return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      if (!channelId) {
+        return res.status(400).json({ error: "channelId is required" });
       }
 
       const result = await viewerLifetimeStatsService.getStats(viewerId, channelId);

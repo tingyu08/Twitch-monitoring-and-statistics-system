@@ -6,7 +6,6 @@
  */
 
 import cron from "node-cron";
-import pLimit from "p-limit";
 import { randomUUID } from "crypto";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
@@ -22,6 +21,7 @@ import {
   recordJobSuccess,
   shouldSkipForCircuitBreaker,
 } from "../utils/job-circuit-breaker";
+import { importPLimit } from "../utils/esm-import";
 import { isRedisEnabled, redisGetJson, redisSetJson } from "../utils/redis-client";
 import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
 
@@ -278,6 +278,7 @@ async function flushPendingSummaryRefreshes(): Promise<void> {
   const viewerIds = Array.from(pendingSummaryRefreshViewerIds);
   pendingSummaryRefreshViewerIds.clear();
 
+  const { default: pLimit } = await importPLimit();
   const limit = pLimit(Math.max(1, SUMMARY_REFRESH_CONCURRENCY));
 
   for (let i = 0; i < viewerIds.length; i += SUMMARY_REFRESH_BATCH_SIZE) {
@@ -479,6 +480,7 @@ export class SyncUserFollowsJob {
       logger.debug("Jobs", `找到 ${usersWithFollowScope.length} 個有追蹤權限的使用者`);
 
       // 2. 對每個使用者同步追蹤名單 (使用並發控制)
+      const { default: pLimit } = await importPLimit();
       const limit = pLimit(CONCURRENCY_LIMIT);
 
       const USER_CHUNK_SIZE = 100;

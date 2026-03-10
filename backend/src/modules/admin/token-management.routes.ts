@@ -21,6 +21,7 @@ import {
 } from "../../jobs/validate-tokens.job";
 import { getTokenManagementStatus } from "../../services/token-management.init";
 import { logger } from "../../utils/logger";
+import { getSingleStringValue } from "../../utils/request-values";
 import { validateRequest } from "../../middlewares/validate.middleware";
 import * as schemas from "./token-management.schema";
 
@@ -87,7 +88,11 @@ router.post("/validate-all", async (_req: Request, res: Response) => {
  */
 router.post("/:tokenId/validate", async (req: Request, res: Response) => {
   try {
-    const { tokenId } = req.params;
+    const tokenId = getSingleStringValue(req.params.tokenId);
+
+    if (!tokenId) {
+      return res.status(400).json({ success: false, error: "tokenId is required" });
+    }
 
     const result = await validateSingleToken(tokenId);
 
@@ -110,8 +115,12 @@ router.post("/:tokenId/validate", async (req: Request, res: Response) => {
  */
 router.patch("/:tokenId/status", validateRequest(schemas.updateTokenStatusSchema), async (req: Request, res: Response) => {
   try {
-    const { tokenId } = req.params;
+    const tokenId = getSingleStringValue(req.params.tokenId);
     const { status, reason } = req.body;
+
+    if (!tokenId) {
+      return res.status(400).json({ success: false, error: "tokenId is required" });
+    }
 
     // 驗證狀態值
     const validStatuses: TokenStatusType[] = [

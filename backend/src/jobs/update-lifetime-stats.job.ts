@@ -1,8 +1,8 @@
 import cron from "node-cron";
-import pLimit from "p-limit";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { importPLimit } from "../utils/esm-import";
 import { lifetimeStatsAggregator } from "../services/lifetime-stats-aggregator.service";
 import { refreshViewerChannelSummaryForViewer } from "../modules/viewer/viewer.service";
 
@@ -136,6 +136,7 @@ export const runLifetimeStatsUpdate = async (fullUpdate = false) => {
 
     // 批次並行處理 Stats（修復 N+1 問題）
     // P0 Fix: 使用 p-limit 限制並行度
+    const { default: pLimit } = await importPLimit();
     const limit = pLimit(CONCURRENCY_LIMIT);
     let processed = 0;
 
