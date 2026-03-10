@@ -16,7 +16,7 @@ export const validateRequest =
     try {
       // 驗證 body
       if (schema.body) {
-        req.body = await schema.body.parseAsync(req.body);
+        req.body = await schema.body.parseAsync(req.body ?? {});
       }
 
       // 驗證 query
