@@ -309,63 +309,7 @@ async function updateChannelsWithChanges(
             )`;
           });
 
-          await prisma.$executeRaw(
-            Prisma.sql`
-              WITH updates (
-                twitchChannelId,
-                isLiveValue,
-                viewerCount,
-                titleValue,
-                gameNameValue,
-                startedAtValue,
-                checkedAt
-              ) AS (
-                VALUES ${Prisma.join(values)}
-              )
-              UPDATE channels
-              SET
-                isLive = COALESCE(
-                  (
-                    SELECT CASE WHEN updates.isLiveValue = 1 THEN 1 ELSE 0 END
-                    FROM updates
-                    WHERE updates.twitchChannelId = channels.twitchChannelId
-                  ),
-                  isLive
-                ),
-                currentViewerCount = (
-                  SELECT updates.viewerCount
-                  FROM updates
-                  WHERE updates.twitchChannelId = channels.twitchChannelId
-                ),
-                currentTitle = COALESCE(
-                  (
-                    SELECT updates.titleValue
-                    FROM updates
-                    WHERE updates.twitchChannelId = channels.twitchChannelId
-                  ),
-                  currentTitle
-                ),
-                currentGameName = COALESCE(
-                  (
-                    SELECT updates.gameNameValue
-                    FROM updates
-                    WHERE updates.twitchChannelId = channels.twitchChannelId
-                  ),
-                  currentGameName
-                ),
-                currentStreamStartedAt = (
-                  SELECT updates.startedAtValue
-                  FROM updates
-                  WHERE updates.twitchChannelId = channels.twitchChannelId
-                ),
-                lastLiveCheckAt = (
-                  SELECT updates.checkedAt
-                  FROM updates
-                  WHERE updates.twitchChannelId = channels.twitchChannelId
-                )
-              WHERE twitchChannelId IN (SELECT twitchChannelId FROM updates)
-            `
-          );
+          await prisma.$executeRaw(buildChangedChannelUpdateQuery(values));
         })
       );
 
@@ -416,6 +360,76 @@ async function updateChannelsWithChanges(
   }
 
   return { successCount, failCount };
+}
+
+export function buildChangedChannelUpdateQuery(values: ReturnType<typeof Prisma.sql>[]) {
+  return Prisma.sql`
+    WITH updates (
+      twitchChannelId,
+      isLiveValue,
+      viewerCount,
+      titleValue,
+      gameNameValue,
+      startedAtValue,
+      checkedAt
+    ) AS (
+      VALUES ${Prisma.join(values)}
+    )
+    UPDATE channels
+    SET
+      isLive = COALESCE(
+        (
+          SELECT CASE WHEN updates.isLiveValue = 1 THEN 1 ELSE 0 END
+          FROM updates
+          WHERE updates.twitchChannelId = channels.twitchChannelId
+        ),
+        isLive
+      ),
+      currentViewerCount = (
+        SELECT updates.viewerCount
+        FROM updates
+        WHERE updates.twitchChannelId = channels.twitchChannelId
+      ),
+      currentTitle = COALESCE(
+        (
+          SELECT updates.titleValue
+          FROM updates
+          WHERE updates.twitchChannelId = channels.twitchChannelId
+        ),
+        currentTitle
+      ),
+      currentGameName = COALESCE(
+        (
+          SELECT updates.gameNameValue
+          FROM updates
+          WHERE updates.twitchChannelId = channels.twitchChannelId
+        ),
+        currentGameName
+      ),
+      currentStreamStartedAt = (
+        SELECT updates.startedAtValue
+        FROM updates
+        WHERE updates.twitchChannelId = channels.twitchChannelId
+      ),
+      lastLiveCheckAt = (
+        SELECT updates.checkedAt
+        FROM updates
+        WHERE updates.twitchChannelId = channels.twitchChannelId
+      )
+    WHERE twitchChannelId IN (SELECT twitchChannelId FROM updates)
+      AND EXISTS (
+        SELECT 1
+        FROM updates
+        WHERE updates.twitchChannelId = channels.twitchChannelId
+          AND (
+            (updates.isLiveValue IS NOT NULL AND isLive != CASE WHEN updates.isLiveValue = 1 THEN 1 ELSE 0 END)
+            OR COALESCE(currentViewerCount, -1) != COALESCE(updates.viewerCount, -1)
+            OR COALESCE(currentTitle, '') != COALESCE(updates.titleValue, '')
+            OR COALESCE(currentGameName, '') != COALESCE(updates.gameNameValue, '')
+            OR COALESCE(currentStreamStartedAt, '1970-01-01 00:00:00') != COALESCE(updates.startedAtValue, '1970-01-01 00:00:00')
+          )
+      )
+  `;
 }
 
 /**

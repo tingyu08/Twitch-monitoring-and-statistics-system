@@ -97,7 +97,7 @@ jest.mock("@prisma/client", () => ({
 // ── Imports (after jest.mock) ───────────────────────────────────────────────
 
 import cron from "node-cron";
-import { updateLiveStatusFn } from "../update-live-status.job";
+import { buildChangedChannelUpdateQuery, updateLiveStatusFn } from "../update-live-status.job";
 import { prisma, isConnectionReady } from "../../db/prisma";
 import { logger } from "../../utils/logger";
 import { retryDatabaseOperation } from "../../utils/db-retry";
@@ -261,5 +261,20 @@ describe("updateLiveStatusFn", () => {
         expect.any(Error)
       );
     });
+  });
+});
+
+describe("buildChangedChannelUpdateQuery", () => {
+  it("includes a no-op guard so unchanged channel rows are not rewritten", () => {
+    const values = [
+      ["t1", 1, 100, "Title", "Game", new Date("2026-03-11T00:00:00.000Z"), new Date()],
+    ] as any[];
+    const query = buildChangedChannelUpdateQuery(values);
+
+    const queryText = (query as any)[0].join(" ");
+    expect(queryText).toContain("AND EXISTS (");
+    expect(queryText).toContain("COALESCE(currentViewerCount, -1) != COALESCE(updates.viewerCount, -1)");
+    expect(queryText).toContain("COALESCE(currentTitle, '') != COALESCE(updates.titleValue, '')");
+    expect(queryText).toContain("COALESCE(currentGameName, '') != COALESCE(updates.gameNameValue, '')");
   });
 });

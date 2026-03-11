@@ -1,4 +1,6 @@
-import { SyncUserFollowsJob } from "../sync-user-follows.job";
+import { prisma } from "../../db/prisma";
+import { twurpleHelixService } from "../../services/twitch-helix.service";
+import { SyncUserFollowsJob, triggerFollowSyncForUser } from "../sync-user-follows.job";
 import { shouldSkipForCircuitBreaker } from "../../utils/job-circuit-breaker";
 
 jest.mock("node-cron", () => ({
@@ -12,10 +14,12 @@ jest.mock("../../utils/logger", () => ({
 }));
 jest.mock("../../db/prisma", () => ({
   prisma: {
+    viewer: { findUnique: jest.fn() },
     twitchToken: { findMany: jest.fn() },
     channel: { findMany: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
     userFollow: { findMany: jest.fn(), deleteMany: jest.fn() },
     streamer: { findMany: jest.fn() },
+    $executeRaw: jest.fn(),
     $transaction: jest.fn(async (cb: (tx: any) => Promise<unknown>) => cb({
       $executeRaw: jest.fn(),
       streamer: { findMany: jest.fn().mockResolvedValue([]) },
@@ -26,6 +30,7 @@ jest.mock("../../db/prisma", () => ({
 jest.mock("../../services/twitch-helix.service", () => ({
   twurpleHelixService: {
     getFollowedChannels: jest.fn().mockResolvedValue([]),
+    iterateFollowedChannels: jest.fn(async function* () {}),
     getUsersByIds: jest.fn().mockResolvedValue([]),
   },
 }));
@@ -50,6 +55,11 @@ describe("SyncUserFollowsJob resilience", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (shouldSkipForCircuitBreaker as jest.Mock).mockReturnValue(false);
+    (prisma.viewer.findUnique as jest.Mock).mockResolvedValue({ twitchUserId: "twitch-viewer-1" });
+    (prisma.userFollow.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.streamer.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
+    (twurpleHelixService.iterateFollowedChannels as jest.Mock).mockImplementation(async function* () {});
   });
 
   it("returns zero result when circuit breaker is active", async () => {
@@ -79,5 +89,36 @@ describe("SyncUserFollowsJob resilience", () => {
 
     expect(result.usersFailed).toBeGreaterThan(0);
     expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("chunks large follow lookups and flushes follow upserts incrementally on login sync", async () => {
+    const follows = Array.from({ length: 450 }, (_, i) => ({
+      broadcasterId: `b${i}`,
+      broadcasterLogin: `login${i}`,
+      broadcasterName: `Login ${i}`,
+      followedAt: new Date("2026-03-11T00:00:00.000Z"),
+    }));
+
+    (twurpleHelixService.iterateFollowedChannels as jest.Mock).mockImplementation(async function* () {
+      for (const follow of follows) {
+        yield follow;
+      }
+    });
+    (prisma.channel.findMany as jest.Mock).mockImplementation(({ where }: { where: { twitchChannelId: { in: string[] } } }) =>
+      Promise.resolve(
+        where.twitchChannelId.in.map((id) => ({
+          id: `channel-${id}`,
+          twitchChannelId: id,
+          isMonitored: true,
+          streamerId: `streamer-${id}`,
+        }))
+      )
+    );
+
+    await triggerFollowSyncForUser("viewer-1", "access-token");
+
+    expect(prisma.channel.findMany).toHaveBeenCalledTimes(3);
+    expect(prisma.streamer.findMany).toHaveBeenCalledTimes(3);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(5);
   });
 });

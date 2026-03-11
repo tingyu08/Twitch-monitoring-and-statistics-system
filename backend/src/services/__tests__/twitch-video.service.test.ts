@@ -346,11 +346,11 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(prisma.viewerChannelVideo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ twitchVideoId: "vid-1", channelId: "channel-1" }),
-        })
-      );
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      const sqlArg = (prisma.$executeRaw as jest.Mock).mock.calls[0][0];
+      const joined = sqlArg.values.join(" ");
+      expect(joined).toContain("vid-1");
+      expect(joined).toContain("channel-1");
       expect(logger.error).not.toHaveBeenCalled();
     });
 
@@ -386,8 +386,7 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(prisma.viewerChannelVideo.update).not.toHaveBeenCalled();
-      expect(prisma.viewerChannelVideo.create).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
     });
 
     it("calls update when existing video has changed viewCount", async () => {
@@ -415,9 +414,11 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      expect(prisma.viewerChannelVideo.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: "db-id-1" } })
-      );
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      const sqlArg = (prisma.$executeRaw as jest.Mock).mock.calls[0][0];
+      const joined = sqlArg.values.join(" ");
+      expect(joined).toContain("vid-1");
+      expect(joined).toContain("100");
     });
 
     it("normalizes thumbnail URL placeholders in viewer videos", async () => {
@@ -429,8 +430,9 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerVideos("channel-1", "twitch-user-1");
 
-      const createCall = (prisma.viewerChannelVideo.create as jest.Mock).mock.calls[0][0];
-      expect(createCall.data.thumbnailUrl).toBe("https://thumb/320x180.jpg");
+      const sqlArg = (prisma.$executeRaw as jest.Mock).mock.calls[0][0];
+      const joined = sqlArg.values.join(" ");
+      expect(joined).toContain("https://thumb/320x180.jpg");
     });
 
     it("catches errors and calls logger.error", async () => {
@@ -577,11 +579,11 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(prisma.viewerChannelClip.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ twitchClipId: "clip-1", channelId: "channel-1" }),
-        })
-      );
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      const sqlArg = (prisma.$executeRaw as jest.Mock).mock.calls[0][0];
+      const joined = sqlArg.values.join(" ");
+      expect(joined).toContain("clip-1");
+      expect(joined).toContain("channel-1");
       expect(logger.error).not.toHaveBeenCalled();
     });
 
@@ -618,8 +620,7 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(prisma.viewerChannelClip.update).not.toHaveBeenCalled();
-      expect(prisma.viewerChannelClip.create).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
     });
 
     it("calls update when existing clip has changed viewCount", async () => {
@@ -648,9 +649,11 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      expect(prisma.viewerChannelClip.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: "db-clip-1" } })
-      );
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      const sqlArg = (prisma.$executeRaw as jest.Mock).mock.calls[0][0];
+      const joined = sqlArg.values.join(" ");
+      expect(joined).toContain("clip-1");
+      expect(joined).toContain("500");
     });
 
     it("normalizes thumbnail URL placeholders in viewer clips", async () => {
@@ -662,8 +665,9 @@ describe("TwurpleVideoService", () => {
 
       await service.syncViewerClips("channel-1", "twitch-user-1");
 
-      const createCall = (prisma.viewerChannelClip.create as jest.Mock).mock.calls[0][0];
-      expect(createCall.data.thumbnailUrl).toBe("https://thumb/320x180.jpg");
+      const sqlArg = (prisma.$executeRaw as jest.Mock).mock.calls[0][0];
+      const joined = sqlArg.values.join(" ");
+      expect(joined).toContain("https://thumb/320x180.jpg");
     });
 
     it("deletes viewer clips not in the incoming list", async () => {

@@ -420,6 +420,9 @@ describe("LifetimeStatsAggregatorService", () => {
     await service.updatePercentileRankings(channelId);
 
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    const sqlArg = (prisma.$executeRaw as jest.Mock).mock.calls[0][0];
+    const queryText = sqlArg.strings.join(" ");
+    expect(queryText).not.toContain("updatedAt = CURRENT_TIMESTAMP");
   });
 
   it("updatePercentileRankings skips SQL when less than 2 rows", async () => {

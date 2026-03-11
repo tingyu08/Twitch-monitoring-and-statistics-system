@@ -158,6 +158,130 @@ export class TwurpleVideoService {
     );
   }
 
+  private async batchUpsertViewerVideos(
+    channelId: string,
+    videos: Array<{
+      twitchVideoId: string;
+      title: string;
+      url: string;
+      thumbnailUrl: string;
+      viewCount: number;
+      duration: string;
+      publishedAt: Date;
+    }>
+  ): Promise<void> {
+    if (videos.length === 0) return;
+
+    const syncedAt = new Date();
+    const rows = Prisma.join(
+      videos.map((video) =>
+        Prisma.sql`(
+          ${randomUUID()},
+          ${video.twitchVideoId},
+          ${channelId},
+          ${video.title},
+          ${video.url},
+          ${video.thumbnailUrl},
+          ${video.viewCount},
+          ${video.duration},
+          ${video.publishedAt.toISOString()},
+          ${syncedAt.toISOString()}
+        )`
+      )
+    );
+
+    await retryDatabaseOperation(() =>
+      prisma.$executeRaw(Prisma.sql`
+        INSERT INTO viewer_channel_videos (
+          id,
+          twitchVideoId,
+          channelId,
+          title,
+          url,
+          thumbnailUrl,
+          viewCount,
+          duration,
+          publishedAt,
+          syncedAt
+        )
+        VALUES ${rows}
+        ON CONFLICT(twitchVideoId) DO UPDATE SET
+          channelId = excluded.channelId,
+          title = excluded.title,
+          url = excluded.url,
+          thumbnailUrl = excluded.thumbnailUrl,
+          viewCount = excluded.viewCount,
+          duration = excluded.duration,
+          publishedAt = excluded.publishedAt,
+          syncedAt = excluded.syncedAt
+      `)
+    );
+  }
+
+  private async batchUpsertViewerClips(
+    channelId: string,
+    clips: Array<{
+      twitchClipId: string;
+      creatorName: string | null;
+      title: string;
+      url: string;
+      thumbnailUrl: string;
+      viewCount: number;
+      duration: number;
+      createdAt: Date;
+    }>
+  ): Promise<void> {
+    if (clips.length === 0) return;
+
+    const syncedAt = new Date();
+    const rows = Prisma.join(
+      clips.map((clip) =>
+        Prisma.sql`(
+          ${randomUUID()},
+          ${clip.twitchClipId},
+          ${channelId},
+          ${clip.creatorName},
+          ${clip.title},
+          ${clip.url},
+          ${clip.thumbnailUrl},
+          ${clip.viewCount},
+          ${clip.duration},
+          ${clip.createdAt.toISOString()},
+          ${syncedAt.toISOString()}
+        )`
+      )
+    );
+
+    await retryDatabaseOperation(() =>
+      prisma.$executeRaw(Prisma.sql`
+        INSERT INTO viewer_channel_clips (
+          id,
+          twitchClipId,
+          channelId,
+          creatorName,
+          title,
+          url,
+          thumbnailUrl,
+          viewCount,
+          duration,
+          createdAt,
+          syncedAt
+        )
+        VALUES ${rows}
+        ON CONFLICT(twitchClipId) DO UPDATE SET
+          channelId = excluded.channelId,
+          creatorName = excluded.creatorName,
+          title = excluded.title,
+          url = excluded.url,
+          thumbnailUrl = excluded.thumbnailUrl,
+          viewCount = excluded.viewCount,
+          duration = excluded.duration,
+          createdAt = excluded.createdAt,
+          syncedAt = excluded.syncedAt
+      `)
+    );
+  }
+
   /**
    * 同步實況主的 VOD (Videos)
    * 預設同步所有可取得的封存影片 (Archive)
@@ -352,24 +476,13 @@ export class TwurpleVideoService {
 
         const existingByTwitchId = new Map(existing.map((row) => [row.twitchVideoId, row]));
 
+        const videosToUpsert: typeof incomingVideos = [];
+
         for (const incoming of incomingVideos) {
           const prev = existingByTwitchId.get(incoming.twitchVideoId);
 
           if (!prev) {
-            await retryDatabaseOperation(() =>
-              prisma.viewerChannelVideo.create({
-                data: {
-                  channelId,
-                  twitchVideoId: incoming.twitchVideoId,
-                  title: incoming.title,
-                  url: incoming.url,
-                  thumbnailUrl: incoming.thumbnailUrl,
-                  viewCount: incoming.viewCount,
-                  duration: incoming.duration,
-                  publishedAt: incoming.publishedAt,
-                },
-              })
-            );
+            videosToUpsert.push(incoming);
             continue;
           }
 
@@ -382,22 +495,11 @@ export class TwurpleVideoService {
             prev.publishedAt.getTime() !== incoming.publishedAt.getTime();
 
           if (changed) {
-            await retryDatabaseOperation(() =>
-              prisma.viewerChannelVideo.update({
-                where: { id: prev.id },
-                data: {
-                  title: incoming.title,
-                  url: incoming.url,
-                  thumbnailUrl: incoming.thumbnailUrl,
-                  viewCount: incoming.viewCount,
-                  duration: incoming.duration,
-                  publishedAt: incoming.publishedAt,
-                  syncedAt: new Date(),
-                },
-              })
-            );
+            videosToUpsert.push(incoming);
           }
         }
+
+        await this.batchUpsertViewerVideos(channelId, videosToUpsert);
       });
 
       logger.debug(
@@ -589,25 +691,13 @@ export class TwurpleVideoService {
 
         const existingByTwitchId = new Map(existing.map((row) => [row.twitchClipId, row]));
 
+        const clipsToUpsert: typeof incomingClips = [];
+
         for (const incoming of incomingClips) {
           const prev = existingByTwitchId.get(incoming.twitchClipId);
 
           if (!prev) {
-            await retryDatabaseOperation(() =>
-              prisma.viewerChannelClip.create({
-                data: {
-                  channelId,
-                  twitchClipId: incoming.twitchClipId,
-                  creatorName: incoming.creatorName,
-                  title: incoming.title,
-                  url: incoming.url,
-                  thumbnailUrl: incoming.thumbnailUrl,
-                  viewCount: incoming.viewCount,
-                  duration: incoming.duration,
-                  createdAt: incoming.createdAt,
-                },
-              })
-            );
+            clipsToUpsert.push(incoming);
             continue;
           }
 
@@ -621,23 +711,11 @@ export class TwurpleVideoService {
             prev.createdAt.getTime() !== incoming.createdAt.getTime();
 
           if (changed) {
-            await retryDatabaseOperation(() =>
-              prisma.viewerChannelClip.update({
-                where: { id: prev.id },
-                data: {
-                  creatorName: incoming.creatorName,
-                  title: incoming.title,
-                  url: incoming.url,
-                  thumbnailUrl: incoming.thumbnailUrl,
-                  viewCount: incoming.viewCount,
-                  duration: incoming.duration,
-                  createdAt: incoming.createdAt,
-                  syncedAt: new Date(),
-                },
-              })
-            );
+            clipsToUpsert.push(incoming);
           }
         }
+
+        await this.batchUpsertViewerClips(channelId, clipsToUpsert);
       });
 
       logger.debug(

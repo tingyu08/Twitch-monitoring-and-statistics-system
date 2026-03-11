@@ -25,6 +25,7 @@ jest.mock("../../../utils/cache-manager", () => ({
     get: jest.fn().mockReturnValue(null),
     set: jest.fn(),
     delete: jest.fn(),
+    invalidateTag: jest.fn().mockResolvedValue(0),
   },
 }));
 
@@ -131,8 +132,8 @@ describe("ViewerMessageRepository flush batch emits", () => {
       messageCountDelta: 1,
     });
 
-    expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v1:channels_list");
-    expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v2:channels_list");
+    expect(cacheManager.invalidateTag).toHaveBeenCalledWith("viewer:v1");
+    expect(cacheManager.invalidateTag).toHaveBeenCalledWith("viewer:v2");
   });
 
   it("keeps single-channel viewer update as single socket event", async () => {
@@ -202,7 +203,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(ok).toBe(true);
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
-    expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v9:channels_list");
+    expect(cacheManager.invalidateTag).toHaveBeenCalledWith("viewer:v9");
     expect(webSocketGateway.emitViewerStats).not.toHaveBeenCalled();
     expect(webSocketGateway.emitViewerStatsBatch).not.toHaveBeenCalled();
   });
@@ -867,7 +868,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
       },
     ]);
 
-    expect(cacheManager.delete).not.toHaveBeenCalledWith("viewer:skip-viewer:channels_list");
+    expect(cacheManager.invalidateTag).not.toHaveBeenCalledWith("viewer:skip-viewer");
     expect(webSocketGateway.emitViewerStats).not.toHaveBeenCalledWith("skip-viewer", expect.anything());
 
     valuesSpy.mockRestore();

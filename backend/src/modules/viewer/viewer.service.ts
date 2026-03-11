@@ -80,6 +80,7 @@ interface SummaryChannelSnapshot {
 
 const SQLITE_IN_CHUNK_SIZE = 100;
 const SQLITE_SUMMARY_WRITE_CHUNK_SIZE = 50;
+const pendingSummarySyncs = new Map<string, Promise<void>>();
 
 interface PersistableSummaryRow {
   channelId: string;
@@ -305,7 +306,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
           const sorted = sortFollowedChannels(mapped);
 
           // 背景同步 summary 表的 messageCount/totalWatchMin，避免 LEFT JOIN 失效時顯示舊值
-          void syncSummaryStatsFromLifetime(viewerId);
+          void scheduleSummaryStatsSync(viewerId);
 
           const totalTime = Date.now() - startTime;
           logger.debug(
@@ -878,7 +879,7 @@ async function buildFollowedChannelsFromSource(viewerId: string): Promise<Follow
 export async function refreshViewerChannelSummaryForViewer(viewerId: string): Promise<void> {
   const rows = await buildFollowedChannelsFromSource(viewerId);
   await persistSummaryRows(viewerId, rows);
-  cacheManager.delete(`viewer:${viewerId}:channels_list`);
+  await cacheManager.invalidateTag(`viewer:${viewerId}`);
 }
 
 /**
@@ -916,10 +917,50 @@ export async function syncSummaryStatsFromLifetime(viewerId: string): Promise<vo
         ),
         updatedAt = CURRENT_TIMESTAMP
       WHERE viewerId = ${viewerId}
+        AND (
+          messageCount IS NOT COALESCE(
+            (SELECT l.totalMessages
+             FROM viewer_channel_lifetime_stats l
+             WHERE l.viewerId = viewer_channel_summary.viewerId
+               AND l.channelId = viewer_channel_summary.channelId),
+            messageCount
+          )
+          OR totalWatchMin IS NOT MAX(
+            totalWatchMin,
+            COALESCE(
+              (SELECT l.totalWatchTimeMinutes
+               FROM viewer_channel_lifetime_stats l
+               WHERE l.viewerId = viewer_channel_summary.viewerId
+                 AND l.channelId = viewer_channel_summary.channelId),
+              0
+            ),
+            COALESCE(
+              (SELECT SUM(d.watchSeconds) / 60
+               FROM viewer_channel_daily_stats d
+               WHERE d.viewerId = viewer_channel_summary.viewerId
+                 AND d.channelId = viewer_channel_summary.channelId),
+              0
+            )
+          )
+        )
     `);
   } catch (error) {
     logger.debug("ViewerService", "Failed to sync summary stats from lifetime_stats", error);
   }
+}
+
+function scheduleSummaryStatsSync(viewerId: string): Promise<void> {
+  const existing = pendingSummarySyncs.get(viewerId);
+  if (existing) {
+    return existing;
+  }
+
+  const syncPromise = syncSummaryStatsFromLifetime(viewerId).finally(() => {
+    pendingSummarySyncs.delete(viewerId);
+  });
+
+  pendingSummarySyncs.set(viewerId, syncPromise);
+  return syncPromise;
 }
 
 export async function refreshViewerChannelSummaryForChannels(

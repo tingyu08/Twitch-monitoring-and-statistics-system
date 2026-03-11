@@ -26,6 +26,7 @@ jest.mock("../../../utils/logger", () => ({
 jest.mock("../../../utils/cache-manager", () => ({
   cacheManager: {
     delete: jest.fn(),
+    invalidateTag: jest.fn().mockResolvedValue(0),
   },
 }));
 

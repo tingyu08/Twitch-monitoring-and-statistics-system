@@ -295,7 +295,7 @@ async function flushHeartbeatBuffer(): Promise<void> {
       new Set(acceptedHeartbeats.map((heartbeat) => heartbeat.viewerId))
     );
     for (const viewerId of affectedViewerIds) {
-      cacheManager.delete(`viewer:${viewerId}:channels_list`);
+      await cacheManager.invalidateTag(`viewer:${viewerId}`);
     }
 
     heartbeatFlushFailureCount = 0;

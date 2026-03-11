@@ -32,7 +32,7 @@ jest.mock("../../utils/logger", () => ({
 
 jest.mock("../../utils/cache-manager", () => ({
   cacheManager: {
-    delete: jest.fn(),
+    invalidateTags: jest.fn().mockResolvedValue(0),
   },
 }));
 
@@ -100,6 +100,10 @@ describe("WatchTimeIncrementJob", () => {
     await job.execute();
 
     expect(txMock.$queryRaw).toHaveBeenCalledTimes(1);
+    const sqlArg = txMock.$queryRaw.mock.calls[0][0];
+    const queryText = sqlArg.strings.join(" ");
+    expect(queryText).toContain("INNER JOIN channels c ON c.id = vcm.channelId");
+    expect(queryText).toContain("AND c.isLive = 1");
     expect(txMock.$executeRaw).not.toHaveBeenCalled();
   });
 
@@ -112,7 +116,7 @@ describe("WatchTimeIncrementJob", () => {
     await job.execute();
 
     expect(txMock.$executeRaw).toHaveBeenCalled();
-    expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v1:channels_list");
+    expect(cacheManager.invalidateTags).toHaveBeenCalledWith(["viewer:v1"]);
   });
 
   it("batches active pairs into a small number of SQL writes", async () => {
@@ -143,8 +147,8 @@ describe("WatchTimeIncrementJob", () => {
 
     await job.execute();
 
-    expect(cacheManager.delete).toHaveBeenCalledTimes(1);
-    expect(cacheManager.delete).toHaveBeenCalledWith("viewer:v1:channels_list");
+    expect(cacheManager.invalidateTags).toHaveBeenCalledTimes(1);
+    expect(cacheManager.invalidateTags).toHaveBeenCalledWith(["viewer:v1"]);
   });
 
   it("splits large active pairs into multiple batch SQL writes", async () => {
@@ -195,7 +199,7 @@ describe("WatchTimeIncrementJob", () => {
 
     expect(txMock.$queryRaw).not.toHaveBeenCalled();
     expect(txMock.$executeRaw).not.toHaveBeenCalled();
-    expect(cacheManager.delete).not.toHaveBeenCalled();
+    expect(cacheManager.invalidateTags).not.toHaveBeenCalled();
   });
 
   it("skips execution when circuit breaker is active", async () => {

@@ -898,7 +898,7 @@ export class ViewerMessageRepository {
       }
 
       for (const viewerId of affectedViewerIds) {
-        cacheManager.delete(`viewer:${viewerId}:channels_list`);
+        await cacheManager.invalidateTag(`viewer:${viewerId}`);
       }
       return true;
     } catch (error) {
@@ -1019,7 +1019,7 @@ export class ViewerMessageRepository {
           }
         }
         for (const viewerId of affectedViewerIds) {
-          cacheManager.delete(`viewer:${viewerId}:channels_list`);
+          await cacheManager.invalidateTag(`viewer:${viewerId}`);
         }
 
         return true;

@@ -80,6 +80,8 @@ export interface UserTokenInfo {
   tokenId: string; // 用於更新資料庫
 }
 
+const MAX_FOLLOWS = 2000;
+
 // ========== 服務實作 ==========
 
 class TwurpleHelixService {
@@ -345,142 +347,149 @@ class TwurpleHelixService {
    * @param userAccessToken 用戶的 Access Token (需有 user:read:follows scope) - 已棄用，請使用 tokenInfo
    * @param tokenInfo 完整的 Token 資訊（支援自動刷新）
    */
+  private async getFollowedChannelsApiClient(
+    userId: string,
+    userAccessToken?: string,
+    tokenInfo?: UserTokenInfo
+  ): Promise<ApiClient> {
+    let api: ApiClient;
+
+    if (tokenInfo) {
+      const cacheKey = `token:${tokenInfo.tokenId}`;
+      const cachedClient = this.getRememberedUserApiClient(cacheKey);
+      if (cachedClient) {
+        return cachedClient;
+      }
+
+      const { ApiClient } = await importTwurpleApi();
+      const { RefreshingAuthProvider } = await importTwurpleAuth();
+      const clientId = twurpleAuthService.getClientId();
+      const clientSecret = twurpleAuthService.getClientSecret();
+
+      const authProvider = new RefreshingAuthProvider({
+        clientId,
+        clientSecret,
+      });
+
+      authProvider.onRefresh(
+        async (
+          _userId: string,
+          newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData
+        ) => {
+          logger.info(
+            "Twurple Helix",
+            `Token 已自動刷新 (User: ${userId}, TokenID: ${tokenInfo.tokenId})`
+          );
+
+          try {
+            await prisma.twitchToken.update({
+              where: { id: tokenInfo.tokenId },
+              data: {
+                accessToken: encryptToken(newTokenData.accessToken),
+                refreshToken: newTokenData.refreshToken
+                  ? encryptToken(newTokenData.refreshToken)
+                  : undefined,
+                expiresAt: newTokenData.expiresIn
+                  ? new Date(Date.now() + newTokenData.expiresIn * 1000)
+                  : null,
+                status: "active",
+                failureCount: 0,
+                lastValidatedAt: new Date(),
+              },
+            });
+          } catch (dbError) {
+            logger.error("Twurple Helix", `Token 刷新後更新資料庫失敗`, dbError);
+          }
+        }
+      );
+
+      await authProvider.addUserForToken(
+        {
+          accessToken: tokenInfo.accessToken,
+          refreshToken: tokenInfo.refreshToken,
+          expiresIn: tokenInfo.expiresAt
+            ? Math.floor((tokenInfo.expiresAt.getTime() - Date.now()) / 1000)
+            : null,
+          obtainmentTimestamp: Date.now(),
+        },
+        ["user:read:follows"]
+      );
+
+      return this.rememberUserApiClient(
+        cacheKey,
+        new ApiClient({
+          authProvider,
+          logger: { minLevel: "error" },
+        })
+      );
+    }
+
+    if (userAccessToken) {
+      const cacheKey = `legacy:${userId}:${userAccessToken.slice(0, 16)}`;
+      const cachedClient = this.getRememberedUserApiClient(cacheKey);
+      if (cachedClient) {
+        return cachedClient;
+      }
+
+      const { ApiClient } = await importTwurpleApi();
+      const { StaticAuthProvider } = await importTwurpleAuth();
+      const clientId = twurpleAuthService.getClientId();
+      const authProvider = new StaticAuthProvider(clientId, userAccessToken);
+      api = this.rememberUserApiClient(
+        cacheKey,
+        new ApiClient({
+          authProvider,
+          logger: { minLevel: "error" },
+        })
+      );
+      logger.debug("Twurple Helix", `使用 StaticAuthProvider（不支援自動刷新）`);
+      return api;
+    }
+
+    return this.getApiClient();
+  }
+
+  async *iterateFollowedChannels(
+    userId: string,
+    userAccessToken?: string,
+    tokenInfo?: UserTokenInfo
+  ): AsyncGenerator<FollowedChannel, void, void> {
+    try {
+      const api = await this.getFollowedChannelsApiClient(userId, userAccessToken, tokenInfo);
+      const paginator = api.channels.getFollowedChannelsPaginated(userId);
+
+      let count = 0;
+      for await (const follow of paginator) {
+        yield {
+          broadcasterId: follow.broadcasterId,
+          broadcasterLogin: follow.broadcasterName.toLowerCase(),
+          broadcasterName: follow.broadcasterDisplayName,
+          followedAt: follow.followDate,
+        };
+
+        count += 1;
+        if (count >= MAX_FOLLOWS) {
+          logger.warn("Twurple Helix", `用戶 ${userId} 追蹤數量超過 ${MAX_FOLLOWS}，已截斷`);
+          break;
+        }
+      }
+
+      logger.info("Twurple Helix", `已獲取 ${count} 個追蹤頻道 (User ID: ${userId})`);
+    } catch (error) {
+      logger.error("Twurple Helix", `獲取用戶追蹤列表失敗: ${userId}`, error);
+    }
+  }
+
   async getFollowedChannels(
     userId: string,
     userAccessToken?: string,
     tokenInfo?: UserTokenInfo
   ): Promise<FollowedChannel[]> {
-    try {
-      let api: ApiClient;
-
-      // 優先使用 tokenInfo（支援自動刷新）
-      if (tokenInfo) {
-        const cacheKey = `token:${tokenInfo.tokenId}`;
-        const cachedClient = this.getRememberedUserApiClient(cacheKey);
-        if (cachedClient) {
-          api = cachedClient;
-        } else {
-          const { ApiClient } = await importTwurpleApi();
-          const { RefreshingAuthProvider } = await importTwurpleAuth();
-          const clientId = twurpleAuthService.getClientId();
-          const clientSecret = twurpleAuthService.getClientSecret();
-
-          const authProvider = new RefreshingAuthProvider({
-            clientId,
-            clientSecret,
-          });
-
-          // 設定 Token 刷新回調（刷新後更新資料庫）
-          authProvider.onRefresh(
-            async (
-              _userId: string,
-              newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData
-            ) => {
-              logger.info(
-                "Twurple Helix",
-                `Token 已自動刷新 (User: ${userId}, TokenID: ${tokenInfo.tokenId})`
-              );
-
-              try {
-                await prisma.twitchToken.update({
-                  where: { id: tokenInfo.tokenId },
-                  data: {
-                    accessToken: encryptToken(newTokenData.accessToken),
-                    refreshToken: newTokenData.refreshToken
-                      ? encryptToken(newTokenData.refreshToken)
-                      : undefined,
-                    expiresAt: newTokenData.expiresIn
-                      ? new Date(Date.now() + newTokenData.expiresIn * 1000)
-                      : null,
-                    status: "active",
-                    failureCount: 0,
-                    lastValidatedAt: new Date(),
-                  },
-                });
-              } catch (dbError) {
-                logger.error("Twurple Helix", `Token 刷新後更新資料庫失敗`, dbError);
-              }
-            }
-          );
-
-          // 添加使用者的 Token
-          await authProvider.addUserForToken(
-            {
-              accessToken: tokenInfo.accessToken,
-              refreshToken: tokenInfo.refreshToken,
-              expiresIn: tokenInfo.expiresAt
-                ? Math.floor((tokenInfo.expiresAt.getTime() - Date.now()) / 1000)
-                : null,
-              obtainmentTimestamp: Date.now(),
-            },
-            ["user:read:follows"]
-          );
-
-          api = this.rememberUserApiClient(
-            cacheKey,
-            new ApiClient({
-              authProvider,
-              logger: { minLevel: "error" },
-            })
-          );
-        }
-      } else if (userAccessToken) {
-        // 向後兼容：使用 StaticAuthProvider（不支援自動刷新）
-        const cacheKey = `legacy:${userId}:${userAccessToken.slice(0, 16)}`;
-        const cachedClient = this.getRememberedUserApiClient(cacheKey);
-        if (cachedClient) {
-          api = cachedClient;
-        } else {
-          const { ApiClient } = await importTwurpleApi();
-          const { StaticAuthProvider } = await importTwurpleAuth();
-          const clientId = twurpleAuthService.getClientId();
-          const authProvider = new StaticAuthProvider(clientId, userAccessToken);
-          api = this.rememberUserApiClient(
-            cacheKey,
-            new ApiClient({
-              authProvider,
-              logger: { minLevel: "error" },
-            })
-          );
-        }
-        // 登入時使用的 token 是新的，不需要刷新，所以用 debug 級別
-        logger.debug("Twurple Helix", `使用 StaticAuthProvider（不支援自動刷新）`);
-      } else {
-        // 回退到 App Token（但通常不會成功，因為需要 user:read:follows）
-        api = await this.getApiClient();
-      }
-
-      const results: FollowedChannel[] = [];
-
-      // 使用 Twurple 的分頁器獲取所有追蹤的頻道
-      // 記憶體優化：限制最大獲取數量，避免記憶體爆炸
-      const MAX_FOLLOWS = 2000; // 大部分用戶不會追蹤超過 2000 個頻道
-      const paginator = api.channels.getFollowedChannelsPaginated(userId);
-
-      for await (const follow of paginator) {
-        results.push({
-          broadcasterId: follow.broadcasterId,
-          broadcasterLogin: follow.broadcasterName.toLowerCase(),
-          broadcasterName: follow.broadcasterDisplayName,
-          followedAt: follow.followDate,
-        });
-
-        // 記憶體保護：超過上限則停止
-        if (results.length >= MAX_FOLLOWS) {
-          logger.warn(
-            "Twurple Helix",
-            `用戶 ${userId} 追蹤數量超過 ${MAX_FOLLOWS}，已截斷`
-          );
-          break;
-        }
-      }
-
-      logger.info("Twurple Helix", `已獲取 ${results.length} 個追蹤頻道 (User ID: ${userId})`);
-      return results;
-    } catch (error) {
-      logger.error("Twurple Helix", `獲取用戶追蹤列表失敗: ${userId}`, error);
-      return [];
+    const results: FollowedChannel[] = [];
+    for await (const follow of this.iterateFollowedChannels(userId, userAccessToken, tokenInfo)) {
+      results.push(follow);
     }
+    return results;
   }
 
   async getChannelSnapshotsByIds(userIds: string[]): Promise<TwitchChannelSnapshot[]> {

@@ -251,6 +251,19 @@ describe("CacheManager", () => {
       const invalidated = await cache.invalidateTag("nonexistent");
       expect(invalidated).toBe(0);
     });
+
+    it("should invalidate multiple tags in one call", async () => {
+      cache.setWithTags("viewer:v1:channels_list", "d1", 300, ["viewer:v1"]);
+      cache.setWithTags("viewer:v2:channels_list", "d2", 300, ["viewer:v2"]);
+      cache.setWithTags("viewer:v3:channels_list", "d3", 300, ["viewer:v3"]);
+
+      const invalidated = await cache.invalidateTags(["viewer:v1", "viewer:v3", "viewer:v1"]);
+
+      expect(invalidated).toBe(2);
+      expect(cache.get("viewer:v1:channels_list")).toBeNull();
+      expect(cache.get("viewer:v2:channels_list")).toBe("d2");
+      expect(cache.get("viewer:v3:channels_list")).toBeNull();
+    });
   });
 
   // ========== deleteRevenueCache ==========

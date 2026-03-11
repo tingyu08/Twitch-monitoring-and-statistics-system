@@ -36,12 +36,21 @@ const JOB_TIMEOUT_MS = 4 * 60 * 1000; // 4 分鐘
 const METRIC_SAMPLE_MINUTES = Number(process.env.STREAM_METRIC_SAMPLE_MINUTES || 10);
 const SESSION_WRITE_AUTHORITY = getSessionWriteAuthority();
 const STREAM_STATUS_WRITES_SESSION = SESSION_WRITE_AUTHORITY !== "eventsub";
+const RECENT_CHANNEL_STATUS_MAX_AGE_MS = Number(
+  process.env.STREAM_STATUS_RECENT_CHANNEL_STATUS_MAX_AGE_MS || 2 * 60 * 1000
+);
 
 // 避免循環依賴和類型錯誤，定義本地介面
 interface MonitoredChannel {
   id: string;
   twitchChannelId: string;
   channelName: string;
+  isLive: boolean;
+  lastLiveCheckAt: Date | null;
+  currentViewerCount: number | null;
+  currentTitle: string | null;
+  currentGameName: string | null;
+  currentStreamStartedAt: Date | null;
 }
 
 interface ActiveStreamSession {
@@ -204,11 +213,39 @@ export class StreamStatusJob {
     }
 
     // 3. 批次查詢開播狀態
-    const twitchChannelIds = channels.map((c) => c.twitchChannelId);
-    const liveStreams = await this.fetchStreamStatuses(twitchChannelIds);
-    const liveStreamMap = new Map(liveStreams.map((s) => [s.userId, s]));
+    const now = new Date();
+    const staleTwitchChannelIds: string[] = [];
+    const liveStreamMap = new Map<string, {
+      id: string;
+      userId: string;
+      userName: string;
+      title: string;
+      gameName: string;
+      viewerCount: number;
+      startedAt: Date;
+    }>();
 
-    logger.debug("JOB", `正在監控 ${channels.length} 個頻道，發現 ${liveStreams.length} 個直播中`);
+    for (const channel of channels) {
+      if (this.hasFreshChannelStatus(channel, now)) {
+        const freshStream = this.getFreshStreamFromChannel(channel);
+        if (freshStream) {
+          liveStreamMap.set(freshStream.userId, freshStream);
+        }
+        continue;
+      }
+
+      staleTwitchChannelIds.push(channel.twitchChannelId);
+    }
+
+    const liveStreams = await this.fetchStreamStatuses(staleTwitchChannelIds);
+    for (const stream of liveStreams) {
+      liveStreamMap.set(stream.userId, stream);
+    }
+
+    logger.debug(
+      "JOB",
+      `正在監控 ${channels.length} 個頻道，使用 ${channels.length - staleTwitchChannelIds.length} 個近期快照，補抓 ${staleTwitchChannelIds.length} 個頻道，發現 ${liveStreamMap.size} 個直播中`
+    );
 
     // 4. 分批查詢所有 active sessions
     const channelIds = channels.map((c) => c.id);
@@ -308,6 +345,12 @@ export class StreamStatusJob {
         id: true,
         twitchChannelId: true,
         channelName: true,
+        isLive: true,
+        lastLiveCheckAt: true,
+        currentViewerCount: true,
+        currentTitle: true,
+        currentGameName: true,
+        currentStreamStartedAt: true,
       },
     })) as MonitoredChannel[];
 
@@ -322,6 +365,10 @@ export class StreamStatusJob {
    * 批次查詢開播狀態
    */
   private async fetchStreamStatuses(twitchChannelIds: string[]) {
+    if (twitchChannelIds.length === 0) {
+      return [];
+    }
+
     const allStreams: Array<{
       id: string;
       userId: string;
@@ -350,6 +397,47 @@ export class StreamStatusJob {
     }
 
     return allStreams;
+  }
+
+  private hasFreshChannelStatus(channel: MonitoredChannel, now: Date): boolean {
+    if (!channel.lastLiveCheckAt) {
+      return false;
+    }
+
+    const ageMs = now.getTime() - channel.lastLiveCheckAt.getTime();
+    if (ageMs < 0 || ageMs > RECENT_CHANNEL_STATUS_MAX_AGE_MS) {
+      return false;
+    }
+
+    if (!channel.isLive) {
+      return true;
+    }
+
+    return Boolean(channel.currentStreamStartedAt);
+  }
+
+  private getFreshStreamFromChannel(channel: MonitoredChannel): {
+    id: string;
+    userId: string;
+    userName: string;
+    title: string;
+    gameName: string;
+    viewerCount: number;
+    startedAt: Date;
+  } | null {
+    if (!channel.isLive || !channel.currentStreamStartedAt) {
+      return null;
+    }
+
+    return {
+      id: `channel:${channel.id}:${channel.currentStreamStartedAt.toISOString()}`,
+      userId: channel.twitchChannelId,
+      userName: channel.channelName,
+      title: channel.currentTitle || channel.channelName,
+      gameName: channel.currentGameName || "Just Chatting",
+      viewerCount: channel.currentViewerCount ?? 0,
+      startedAt: channel.currentStreamStartedAt,
+    };
   }
 
   /**

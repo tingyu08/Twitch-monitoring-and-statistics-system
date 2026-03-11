@@ -509,8 +509,7 @@ export class LifetimeStatsAggregatorService {
       UPDATE viewer_channel_lifetime_stats
       SET
         watchTimePercentile = (SELECT ranked.watchPercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
-        messagePercentile = (SELECT ranked.messagePercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
-        updatedAt = CURRENT_TIMESTAMP
+        messagePercentile = (SELECT ranked.messagePercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id)
       WHERE channelId = ${channelId}
         AND id IN (SELECT id FROM changed)
     `);

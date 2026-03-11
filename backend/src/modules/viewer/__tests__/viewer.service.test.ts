@@ -43,6 +43,7 @@ jest.mock("../../../utils/cache-manager", () => ({
       async (_key: string, factory: () => Promise<unknown>) => factory()
     ),
     delete: jest.fn(),
+    invalidateTag: jest.fn().mockResolvedValue(0),
   },
   CacheTTL: {
     SHORT: 30,
@@ -85,6 +86,7 @@ const cache = cacheManager as unknown as {
   getOrSet: jest.Mock;
   getOrSetWithTags?: jest.Mock;
   delete: jest.Mock;
+  invalidateTag: jest.Mock;
 };
 
 const log = logger as unknown as {
@@ -1285,6 +1287,51 @@ describe("viewer.service", () => {
       );
     });
 
+    it("syncSummaryStatsFromLifetime only updates changed rows", async () => {
+      prisma.$executeRaw.mockResolvedValueOnce(1);
+
+      await syncSummaryStatsFromLifetime("viewer-1");
+
+      const sqlArg = prisma.$executeRaw.mock.calls[0][0];
+      const queryText = sqlArg.strings.join(" ");
+      expect(queryText).toContain("messageCount IS NOT COALESCE(");
+      expect(queryText).toContain("OR totalWatchMin IS NOT MAX(");
+    });
+
+    it("deduplicates concurrent background summary syncs per viewer", async () => {
+      let resolveWrite!: (value: number) => void;
+      prisma.viewerChannelSummary.findMany.mockResolvedValue([
+        {
+          channelId: "sync-once",
+          channelName: "sync-once",
+          displayName: "sync-once",
+          avatarUrl: "avatar",
+          category: "Game",
+          isLive: false,
+          viewerCount: 1,
+          streamStartedAt: null,
+          lastWatched: null,
+          totalWatchMin: 3,
+          messageCount: 4,
+          isExternal: false,
+          followedAt: null,
+        },
+      ]);
+      prisma.$executeRaw.mockImplementationOnce(
+        () => new Promise<number>((resolve) => {
+          resolveWrite = resolve;
+        })
+      );
+
+      await Promise.all([getFollowedChannels("viewer-sync-once"), getFollowedChannels("viewer-sync-once")]);
+      await flushAsync();
+
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+
+      resolveWrite(1);
+      await flushAsync();
+    });
+
     it("refreshViewerChannelSummaryForChannels deduplicates and chunks updates", async () => {
       prisma.$executeRaw.mockResolvedValue(1);
 
@@ -1362,7 +1409,7 @@ describe("viewer.service", () => {
 
       await refreshViewerChannelSummaryForViewer("viewer-3");
 
-      expect(cache.delete).toHaveBeenCalledWith("viewer:viewer-3:channels_list");
+      expect(cache.invalidateTag).toHaveBeenCalledWith("viewer:viewer-3");
       expect(prisma.$executeRaw).toHaveBeenCalled();
     });
 
@@ -1374,7 +1421,7 @@ describe("viewer.service", () => {
 
       expect(prisma.viewerChannelSummary.findMany).not.toHaveBeenCalled();
       expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
-      expect(cache.delete).toHaveBeenCalledWith("viewer:viewer-empty:channels_list");
+      expect(cache.invalidateTag).toHaveBeenCalledWith("viewer:viewer-empty");
     });
 
     it("warmViewerChannelsCache returns when no active viewers", async () => {

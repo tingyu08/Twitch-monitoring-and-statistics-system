@@ -160,11 +160,14 @@ export class WatchTimeIncrementJob {
           });
 
           const activePairs = await tx.$queryRaw<Array<{ viewerId: string; channelId: string }>>(Prisma.sql`
-            SELECT viewerId, channelId
-            FROM viewer_channel_messages
-            WHERE timestamp >= ${intervalStart}
-              AND timestamp < ${intervalEnd}
-            GROUP BY viewerId, channelId
+            SELECT vcm.viewerId, vcm.channelId
+            FROM viewer_channel_messages vcm
+            INNER JOIN channels c ON c.id = vcm.channelId
+            WHERE vcm.timestamp >= ${intervalStart}
+              AND vcm.timestamp < ${intervalEnd}
+              AND c.isLive = 1
+              AND c.isMonitored = 1
+            GROUP BY vcm.viewerId, vcm.channelId
           `);
 
           let dailyUpsertCount = 0;
@@ -355,9 +358,7 @@ export class WatchTimeIncrementJob {
 
       // 5. 從 JS 陣列提取不重複 viewerId，清理快取（不需要再查 DB）
       const uniqueViewerIds = new Set(executionResult.activePairs.map((p) => p.viewerId));
-      for (const viewerId of uniqueViewerIds) {
-        cacheManager.delete(`viewer:${viewerId}:channels_list`);
-      }
+      await cacheManager.invalidateTags(Array.from(uniqueViewerIds, (viewerId) => `viewer:${viewerId}`));
 
       const duration = Date.now() - executionStartedAt;
 

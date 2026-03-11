@@ -490,6 +490,20 @@ export class CacheManager {
     return keys.length;
   }
 
+  async invalidateTags(tags: string[]): Promise<number> {
+    const uniqueTags = Array.from(new Set(tags.filter(Boolean)));
+    if (uniqueTags.length === 0) {
+      return 0;
+    }
+
+    let invalidated = 0;
+    for (const tag of uniqueTags) {
+      invalidated += await this.invalidateTag(tag);
+    }
+
+    return invalidated;
+  }
+
   /**
    * 獲取快取統計
    */
