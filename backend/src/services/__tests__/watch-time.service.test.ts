@@ -23,7 +23,7 @@ jest.mock("../../utils/logger", () => ({
 
 import { prisma } from "../../db/prisma";
 import { logger } from "../../utils/logger";
-import { updateViewerWatchTime } from "../watch-time.service";
+import { updateViewerWatchTime, __watchTimeTestables } from "../watch-time.service";
 
 describe("watch-time.service updateViewerWatchTime", () => {
   const viewerId = "viewer-1";
@@ -190,5 +190,10 @@ describe("watch-time.service updateViewerWatchTime", () => {
         }),
       })
     );
+  });
+
+  it("finalizeAccumulator returns accumulator unchanged when session bounds are missing", () => {
+    const acc = { currentStart: null, lastMessage: null, totalSeconds: 12 };
+    expect(__watchTimeTestables.finalizeAccumulator(acc)).toEqual(acc);
   });
 });

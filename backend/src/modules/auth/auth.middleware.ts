@@ -96,3 +96,7 @@ export function requireAuth(
 
 // 為了向後兼容，也導出 authMiddleware
 export const authMiddleware = requireAuth;
+
+export const __authMiddlewareTestables = {
+  requireAuthHandler,
+};

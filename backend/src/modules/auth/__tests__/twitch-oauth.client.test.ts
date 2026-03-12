@@ -76,6 +76,18 @@ describe("TwitchOAuthClient", () => {
       await expect(client.getAccessToken("bad-code")).rejects.toBeDefined();
       expect(mockedAxios.post).toHaveBeenCalledTimes(1);
     });
+
+    it("should retry on 429 response and then succeed", async () => {
+      mockedAxios.post
+        .mockRejectedValueOnce({ isAxiosError: true, response: { status: 429 } })
+        .mockResolvedValueOnce({
+          data: { access_token: "at429", refresh_token: "rt429", expires_in: 3600 },
+        });
+
+      const res = await client.getAccessToken("retry429");
+      expect(res.access_token).toBe("at429");
+      expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("getUserInfo", () => {
@@ -143,6 +155,61 @@ describe("TwitchOAuthClient", () => {
     it("should handle generic errors", async () => {
       mockedAxios.get.mockRejectedValueOnce(new Error("Network Error"));
       await expect(client.getBroadcasterSubscriptions("at", "id")).rejects.toThrow(/Failed to get/);
+    });
+
+    it("should use empty array when response.data.data is missing", async () => {
+      mockedAxios.get.mockResolvedValueOnce({ data: { pagination: {} } });
+
+      const res = await client.getBroadcasterSubscriptions("at", "bid");
+      expect(res.total).toBe(0);
+      expect(res.byTier).toEqual({ tier1: 0, tier2: 0, tier3: 0 });
+    });
+
+    it("should throw when pagination exceeds max pages", async () => {
+      for (let i = 0; i < 100; i += 1) {
+        mockedAxios.get.mockResolvedValueOnce({
+          data: { data: [], pagination: { cursor: `cursor-${i}` } },
+        });
+      }
+
+      await expect(client.getBroadcasterSubscriptions("at", "bid")).rejects.toThrow(
+        /Failed to get broadcaster subscriptions/
+      );
+    });
+
+    it("should map axios 500 to generic subscription failure", async () => {
+      mockedAxios.get.mockRejectedValueOnce({ isAxiosError: true, response: { status: 500 } });
+
+      await expect(client.getBroadcasterSubscriptions("at", "id")).rejects.toThrow(
+        "Failed to get broadcaster subscriptions from Twitch"
+      );
+    });
+  });
+
+  describe("refreshAccessToken", () => {
+    it("refreshes token successfully", async () => {
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { access_token: "new-at", refresh_token: "new-rt", expires_in: 3600 },
+      });
+
+      const res = await client.refreshAccessToken("refresh-token");
+      expect(res.access_token).toBe("new-at");
+    });
+
+    it("maps 400/401 errors to re-authenticate message", async () => {
+      mockedAxios.post.mockRejectedValueOnce({ isAxiosError: true, response: { status: 400 } });
+
+      await expect(client.refreshAccessToken("bad-refresh")).rejects.toThrow(
+        "Refresh token is invalid or expired. User needs to re-authenticate."
+      );
+    });
+
+    it("maps other axios errors to generic refresh failure", async () => {
+      mockedAxios.post.mockRejectedValueOnce({ isAxiosError: true, response: { status: 500 } });
+
+      await expect(client.refreshAccessToken("refresh")).rejects.toThrow(
+        "Failed to refresh access token"
+      );
     });
   });
 });

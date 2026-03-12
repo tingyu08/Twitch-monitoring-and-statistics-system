@@ -251,4 +251,10 @@ function createAdapter(): RevenueSyncQueueAdapter {
 
 export const revenueSyncQueue: RevenueSyncQueueAdapter = createAdapter();
 
+export const __revenueSyncQueueTestables = {
+  percentile,
+  MemoryRevenueSyncQueueAdapter,
+  BullMQRevenueSyncQueueAdapter,
+};
+
 export type { RevenueSyncJobData };

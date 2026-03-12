@@ -116,6 +116,19 @@ describe("ChatListenerManager", () => {
     expect(info.isLive).toBe(true);
   });
 
+  it("requestListen tolerates inconsistent has/get state", async () => {
+    (manager as any).channels = {
+      has: jest.fn().mockReturnValue(true),
+      get: jest.fn().mockReturnValue(undefined),
+      size: 0,
+    };
+
+    const ok = await manager.requestListen("demo");
+
+    expect(ok).toBe(true);
+    expect(twurpleChatService.joinChannel).not.toHaveBeenCalled();
+  });
+
   it("requestListen returns false when full and eviction fails", async () => {
     for (let i = 0; i < 80; i += 1) {
       (manager as any).channels.set(`c${i}`, {

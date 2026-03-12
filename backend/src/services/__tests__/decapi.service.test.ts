@@ -176,6 +176,16 @@ describe("DecApiService", () => {
       expect(stats.totalEntries).toBe(0);
       expect(stats.validEntries).toBe(0);
     });
+
+    it("counts expired entries", () => {
+      const service = decApiService as unknown as {
+        cache: Map<string, { data: unknown; expiresAt: number }>;
+      };
+      service.cache.set("expired", { data: 1, expiresAt: Date.now() - 1000 });
+
+      const stats = decApiService.getCacheStats();
+      expect(stats.expiredEntries).toBe(1);
+    });
   });
 
   // ─── pruneCache ──────────────────────────────────────────────────────────

@@ -422,6 +422,21 @@ describe("auth.service", () => {
         expect.objectContaining({ message: "chat require failed" })
       );
     });
+
+    it("logs async warmup failure when getFollowedChannels rejects", async () => {
+      warmupFollowedChannelsCache("viewer-1", async () => ({
+        getFollowedChannels: jest.fn().mockRejectedValue(new Error("warmup failed")),
+      }));
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(logger.error).toHaveBeenCalledWith(
+        "Auth",
+        "Cache warmup failed after login",
+        expect.objectContaining({ message: "warmup failed" })
+      );
+    });
   });
 
   describe("getStreamerById", () => {

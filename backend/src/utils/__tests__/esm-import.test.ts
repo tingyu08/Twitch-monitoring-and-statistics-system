@@ -14,6 +14,7 @@ jest.mock(
   () => ({ EventSubHttpListener: jest.fn() }),
   { virtual: true }
 );
+jest.mock("p-limit", () => ({ default: jest.fn() }), { virtual: true });
 jest.mock("../p-limit-shim", () => ({ default: jest.fn() }));
 
 describe("esm-import helpers", () => {
@@ -60,15 +61,10 @@ describe("esm-import helpers", () => {
   });
 
   it("throws for disallowed module names", async () => {
-    // Use internal function by importing the module and calling a disallowed module
-    // We'll test by trying to get a module not in allowedEsmModules indirectly
-    // The only way to hit that code is through the internal importEsm function,
-    // which is not exported. We'll test it via an indirect check that modules work.
-    // This test ensures the module caching path is covered.
-    const { importTwurpleAuth } = await import("../esm-import");
-    const first = await importTwurpleAuth();
-    const second = await importTwurpleAuth();
-    expect(first).toBe(second);
+    const { __esmImportTestables } = await import("../esm-import");
+    await expect(__esmImportTestables.importEsm("not-allowed")).rejects.toThrow(
+      "[esm-import] Module not allowed: not-allowed"
+    );
   });
 });
 
@@ -81,5 +77,15 @@ describe("importPLimit without JEST env", () => {
     const result = await importPLimit();
     expect(result).toBeDefined();
     delete process.env.JEST_WORKER_ID;
+  });
+
+  it("imports real p-limit module path when JEST_WORKER_ID is absent", async () => {
+    delete process.env.JEST_WORKER_ID;
+    jest.resetModules();
+
+    const { importPLimit } = await import("../esm-import");
+    const result = await importPLimit();
+
+    expect(result).toBeDefined();
   });
 });

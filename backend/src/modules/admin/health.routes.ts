@@ -6,6 +6,7 @@
 
 import { Router, Request, Response } from "express";
 import { chatListenerManager } from "../../services/chat-listener-manager";
+import { distributedCoordinator } from "../../services/distributed-coordinator";
 import { twurpleChatService } from "../../services/twitch-chat.service";
 import { prisma } from "../../db/prisma";
 import { cacheManager } from "../../utils/cache-manager";
@@ -187,8 +188,6 @@ healthRoutes.get("/listeners", (_req: Request, res: Response) => {
  * GET /api/health/distributed
  */
 healthRoutes.get("/distributed", async (_req: Request, res: Response) => {
-  const { distributedCoordinator } = await import("../../services/distributed-coordinator");
-
   const instances = await distributedCoordinator.getAllInstances();
   const locks = await distributedCoordinator.getChannelLocks();
   const currentInstanceId = distributedCoordinator.getInstanceId();

@@ -246,3 +246,9 @@ function createAdapter(): DataExportQueueAdapter {
 }
 
 export const dataExportQueue: DataExportQueueAdapter = createAdapter();
+
+export const __dataExportQueueTestables = {
+  percentile,
+  MemoryDataExportQueueAdapter,
+  BullMQDataExportQueueAdapter,
+};

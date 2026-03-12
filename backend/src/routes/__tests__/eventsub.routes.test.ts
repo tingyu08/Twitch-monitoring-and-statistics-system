@@ -76,6 +76,24 @@ describe("EventSub Routes", () => {
     });
   });
 
+  it("stores rawBody when router-level json parser runs", async () => {
+    const rawApp = express();
+    rawApp.use("/eventsub", eventSubRoutes);
+
+    (verifyEventSubSignature as jest.Mock).mockImplementationOnce((req: any, _res: any, next: any) => {
+      req.eventsubMessageType = "webhook_callback_verification";
+      next();
+    });
+
+    const res = await request(rawApp)
+      .post("/eventsub/callback")
+      .set("Content-Type", "application/json")
+      .send('{"challenge":"raw-check"}');
+
+    expect(res.status).toBe(200);
+    expect(res.text).toBe("raw-check");
+  });
+
   // ============================================================
   // POST /eventsub/callback – verification
   // ============================================================

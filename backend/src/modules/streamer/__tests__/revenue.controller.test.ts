@@ -180,6 +180,20 @@ describe("RevenueController", () => {
         expect.objectContaining({ error: "Failed to get revenue overview" })
       );
     });
+
+    it("handles undefined timer id in getOverview finally branch", async () => {
+      const setTimeoutSpy = jest
+        .spyOn(global, "setTimeout")
+        .mockReturnValue(undefined as unknown as NodeJS.Timeout);
+      (revenueService.getRevenueOverview as jest.Mock).mockResolvedValue({ ok: true });
+
+      const req = makeReq();
+      const res = makeRes();
+      await revenueController.getOverview(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({ ok: true });
+      setTimeoutSpy.mockRestore();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -238,6 +252,20 @@ describe("RevenueController", () => {
         expect.objectContaining({ error: "Failed to get subscription stats" })
       );
     });
+
+    it("handles undefined timer id in getSubscriptionStats finally branch", async () => {
+      const setTimeoutSpy = jest
+        .spyOn(global, "setTimeout")
+        .mockReturnValue(undefined as unknown as NodeJS.Timeout);
+      (revenueService.getSubscriptionStats as jest.Mock).mockResolvedValue([{ ok: true }]);
+
+      const req = makeReq();
+      const res = makeRes();
+      await revenueController.getSubscriptionStats(req, res);
+
+      expect(res.json).toHaveBeenCalledWith([{ ok: true }]);
+      setTimeoutSpy.mockRestore();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -270,6 +298,20 @@ describe("RevenueController", () => {
       jest.useRealTimers();
 
       expect(res.json).toHaveBeenCalledWith([]);
+    });
+
+    it("handles undefined timer id in getBitsStats finally branch", async () => {
+      const setTimeoutSpy = jest
+        .spyOn(global, "setTimeout")
+        .mockReturnValue(undefined as unknown as NodeJS.Timeout);
+      (revenueService.getBitsStats as jest.Mock).mockResolvedValue([{ ok: true }]);
+
+      const req = makeReq();
+      const res = makeRes();
+      await revenueController.getBitsStats(req, res);
+
+      expect(res.json).toHaveBeenCalledWith([{ ok: true }]);
+      setTimeoutSpy.mockRestore();
     });
 
     it("returns 500 on service error", async () => {

@@ -308,6 +308,17 @@ describe("RevenueService", () => {
     jest.useRealTimers();
   });
 
+  it("syncSubscriptionSnapshot handles undefined timer handle", async () => {
+    const timeoutSpy = jest
+      .spyOn(global, "setTimeout")
+      .mockReturnValue(undefined as unknown as NodeJS.Timeout);
+    jest.spyOn(service as any, "_syncSubscriptionSnapshotInner").mockResolvedValue(undefined);
+
+    await expect(service.syncSubscriptionSnapshot("streamer-1")).resolves.toBeUndefined();
+
+    timeoutSpy.mockRestore();
+  });
+
   it("_syncSubscriptionSnapshotInner throws when streamer or token missing", async () => {
     (prisma.streamer.findUnique as jest.Mock).mockResolvedValue(null);
     await expect((service as any)._syncSubscriptionSnapshotInner("streamer-1")).rejects.toThrow(

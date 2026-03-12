@@ -1,5 +1,10 @@
 import { Response, NextFunction } from "express";
-import { requireAuth, AuthRequest, authMiddleware } from "../auth.middleware";
+import {
+  requireAuth,
+  AuthRequest,
+  authMiddleware,
+  __authMiddlewareTestables,
+} from "../auth.middleware";
 import * as JwtUtils from "../jwt.utils";
 
 jest.mock("../jwt.utils");
@@ -93,6 +98,19 @@ describe("auth.middleware", () => {
     await requireAuth(mockReq as AuthRequest, mockRes as Response, mockNext);
 
     expect(statusMock).toHaveBeenCalledWith(401);
+  });
+
+  it("requireAuthHandler uses default allowedRoles parameter", async () => {
+    mockReq.cookies = { auth_token: "good" };
+    (JwtUtils.verifyAccessToken as jest.Mock).mockReturnValue({ role: "viewer" });
+
+    await __authMiddlewareTestables.requireAuthHandler(
+      mockReq as AuthRequest,
+      mockRes as Response,
+      mockNext
+    );
+
+    expect(mockNext).toHaveBeenCalled();
   });
 });
 

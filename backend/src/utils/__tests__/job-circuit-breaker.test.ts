@@ -132,4 +132,14 @@ describe("circuit breaker lifecycle", () => {
     expect(entry?.paused).toBe(true);
     expect(entry?.pausedUntil).not.toBeNull();
   });
+
+  it("snapshot is sorted by job name", () => {
+    cbModule.recordJobSuccess("z-job");
+    cbModule.recordJobSuccess("a-job");
+
+    const snapshot = cbModule.getJobCircuitBreakerSnapshot();
+    const names = snapshot.map((s) => s.jobName);
+
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+  });
 });

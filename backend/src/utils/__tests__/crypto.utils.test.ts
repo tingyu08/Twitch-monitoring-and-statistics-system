@@ -15,6 +15,14 @@ jest.mock("../logger", () => ({
   },
 }));
 
+jest.mock("crypto", () => ({
+  ...jest.requireActual("crypto"),
+  randomBytes: jest.requireActual("crypto").randomBytes,
+  createCipheriv: jest.requireActual("crypto").createCipheriv,
+  createDecipheriv: jest.requireActual("crypto").createDecipheriv,
+}));
+
+import crypto from "crypto";
 import { encryptToken, decryptToken } from "../crypto.utils";
 
 // setupTests.ts 已設定 VIEWER_TOKEN_ENCRYPTION_KEY = 'dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE='
@@ -50,6 +58,15 @@ describe("encryptToken", () => {
     process.env.VIEWER_TOKEN_ENCRYPTION_KEY = Buffer.from("short-key").toString("base64");
     expect(() => encryptToken("token")).toThrow("Token encryption failed");
     process.env.VIEWER_TOKEN_ENCRYPTION_KEY = original;
+  });
+
+  it("非 Error 例外時應記錄 UnknownError 並包裝錯誤", () => {
+    const spy = jest.spyOn(crypto, "createCipheriv").mockImplementation(() => {
+      throw "boom";
+    });
+
+    expect(() => encryptToken("token")).toThrow("Token encryption failed");
+    spy.mockRestore();
   });
 });
 
@@ -93,5 +110,14 @@ describe("decryptToken", () => {
     delete process.env.VIEWER_TOKEN_ENCRYPTION_KEY;
     expect(() => decryptToken(encrypted)).toThrow("Token decryption failed");
     process.env.VIEWER_TOKEN_ENCRYPTION_KEY = original;
+  });
+
+  it("非 Error 解密例外時應記錄 UnknownError 並包裝錯誤", () => {
+    const spy = jest.spyOn(crypto, "createDecipheriv").mockImplementation(() => {
+      throw "boom";
+    });
+
+    expect(() => decryptToken("abcd")).toThrow("Token decryption failed");
+    spy.mockRestore();
   });
 });

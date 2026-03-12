@@ -67,4 +67,36 @@ describe("BadgeService", () => {
     const badge = badges.find((b) => b.id === "streak-7");
     expect(badge?.unlockedAt).toBeDefined();
   });
+
+  it("treats missing thresholds as zero-target badges", () => {
+    const originalBadges = (badgeService as any).BADGES;
+    (badgeService as any).BADGES = [
+      { id: "wt", name: "WT", category: "watch-time" },
+      { id: "msg", name: "MSG", category: "interaction" },
+      { id: "loy", name: "LOY", category: "loyalty" },
+      { id: "stk", name: "STK", category: "streak" },
+    ];
+
+    const badges = badgeService.checkBadges({
+      ...mockStats,
+      totalWatchTimeMinutes: 1,
+      totalMessages: 1,
+      trackingDays: 1,
+      longestStreakDays: 1,
+    });
+
+    expect(badges.every((b) => b.progress === 100)).toBe(true);
+    (badgeService as any).BADGES = originalBadges;
+  });
+
+  it("executes zero-target false branch before unlock override", () => {
+    const originalBadges = (badgeService as any).BADGES;
+    (badgeService as any).BADGES = [{ id: "wt0", name: "WT0", category: "watch-time" }];
+
+    const badges = badgeService.checkBadges({ ...mockStats, totalWatchTimeMinutes: 0 });
+
+    expect(badges[0].unlockedAt).toBeDefined();
+    expect(badges[0].progress).toBe(100);
+    (badgeService as any).BADGES = originalBadges;
+  });
 });

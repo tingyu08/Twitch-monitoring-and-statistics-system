@@ -69,6 +69,30 @@ function accumulateWatchTime(
   };
 }
 
+function finalizeAccumulator(
+  accumulator: WatchTimeAccumulator,
+  streamEndTime?: Date
+): WatchTimeAccumulator {
+  if (accumulator.currentStart && accumulator.lastMessage) {
+    let endTime = new Date(
+      accumulator.lastMessage.getTime() + POST_MESSAGE_BUFFER_MIN * 60 * 1000
+    );
+
+    if (streamEndTime && endTime > streamEndTime) {
+      endTime = streamEndTime;
+    }
+
+    return {
+      ...accumulator,
+      totalSeconds:
+        accumulator.totalSeconds +
+        Math.max(0, (endTime.getTime() - accumulator.currentStart.getTime()) / 1000),
+    };
+  }
+
+  return accumulator;
+}
+
 /**
  * 更新使用者在特定頻道特定日期的觀看時間
  *
@@ -180,20 +204,7 @@ export async function updateViewerWatchTime(
       return;
     }
 
-    if (accumulator.currentStart && accumulator.lastMessage) {
-      let endTime = new Date(
-        accumulator.lastMessage.getTime() + POST_MESSAGE_BUFFER_MIN * 60 * 1000
-      );
-
-      if (streamEndTime && endTime > streamEndTime) {
-        endTime = streamEndTime;
-      }
-
-      accumulator.totalSeconds += Math.max(
-        0,
-        (endTime.getTime() - accumulator.currentStart.getTime()) / 1000
-      );
-    }
+    accumulator = finalizeAccumulator(accumulator, streamEndTime);
 
     const totalWatchSeconds = accumulator.totalSeconds;
 
@@ -229,3 +240,8 @@ export async function updateViewerWatchTime(
     logger.error("WatchTime", "Failed to update watch time", error);
   }
 }
+
+export const __watchTimeTestables = {
+  accumulateWatchTime,
+  finalizeAccumulator,
+};

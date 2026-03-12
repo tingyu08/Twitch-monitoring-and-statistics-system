@@ -99,6 +99,18 @@ describe("UnifiedTwitchService", () => {
         "Helix API 連線失敗 - 部分功能可能無法使用"
       );
     });
+
+    it("skips unref when timer handle does not expose it", async () => {
+      const setIntervalSpy = jest
+        .spyOn(global, "setInterval")
+        .mockReturnValue({} as unknown as NodeJS.Timeout);
+
+      await service.initialize();
+
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+      (service as any).cacheCleanupTimer = null;
+      setIntervalSpy.mockRestore();
+    });
   });
 
   describe("getChannelInfo", () => {
@@ -408,6 +420,15 @@ describe("UnifiedTwitchService", () => {
 
       expect(twurpleHelixService.getChannelSnapshotsByIds).toHaveBeenCalledWith(["expired-only"]);
       expect((service as any).channelInfoByIdCache.get("expired-only")?.value).toBeNull();
+    });
+
+    it("does not add falsy pending result to the map", async () => {
+      (service as any).channelInfoByIdPending.set("pending-null", Promise.resolve(null));
+
+      const result = await service.getChannelInfoByIds(["pending-null"]);
+
+      expect(result.has("pending-null")).toBe(false);
+      expect(twurpleHelixService.getChannelSnapshotsByIds).not.toHaveBeenCalled();
     });
   });
 

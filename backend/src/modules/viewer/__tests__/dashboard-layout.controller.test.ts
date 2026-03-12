@@ -84,6 +84,17 @@ describe("DashboardLayoutController", () => {
       const statusRes = (res.status as jest.Mock).mock.results[0].value;
       expect(statusRes.json).toHaveBeenCalledWith({ error: "Internal server error" });
     });
+
+    it("should return 400 when channelId is missing", async () => {
+      const req = makeReq({ user: { viewerId: "v1" } as any, params: {} });
+      const res = makeRes();
+
+      await controller.getLayout(req, res as Response);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      const statusRes = (res.status as jest.Mock).mock.results[0].value;
+      expect(statusRes.json).toHaveBeenCalledWith({ error: "channelId is required" });
+    });
   });
 
   // ─────────────────────────────── saveLayout ──────────────────────────────
@@ -202,6 +213,17 @@ describe("DashboardLayoutController", () => {
       expect(res.status).toHaveBeenCalledWith(500);
       const statusRes = (res.status as jest.Mock).mock.results[0].value;
       expect(statusRes.json).toHaveBeenCalledWith({ error: "Internal server error" });
+    });
+
+    it("should return 400 when channelId is missing", async () => {
+      const req = makeReq({ user: { viewerId: "v1" } as any, params: {} });
+      const res = makeRes();
+
+      await controller.resetLayout(req, res as Response);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      const statusRes = (res.status as jest.Mock).mock.results[0].value;
+      expect(statusRes.json).toHaveBeenCalledWith({ error: "channelId is required" });
     });
   });
 });

@@ -123,6 +123,17 @@ describe("withTimeout", () => {
     // 清理計時器後，即使時間前進也不應有錯誤
     jest.advanceTimersByTime(10000);
   });
+
+  it("handles undefined timeout handle in finally branch", async () => {
+    const timeoutSpy = jest
+      .spyOn(global, "setTimeout")
+      .mockReturnValue(undefined as unknown as NodeJS.Timeout);
+
+    const result = await withTimeout(Promise.resolve("ok"), 1000);
+
+    expect(result).toBe("ok");
+    timeoutSpy.mockRestore();
+  });
 });
 
 describe("API_TIMEOUT_MS", () => {

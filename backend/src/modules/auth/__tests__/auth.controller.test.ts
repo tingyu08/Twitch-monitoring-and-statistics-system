@@ -361,6 +361,26 @@ describe("AuthController", () => {
       );
     });
 
+    it("should allow malformed redirectUri after trim when configured in allow list", async () => {
+      const previousAllowed = process.env.TWITCH_ALLOWED_REDIRECT_URIS;
+      process.env.TWITCH_ALLOWED_REDIRECT_URIS = "not-a-url";
+      mockReq.body = { code: "auth_code", redirectUri: "  not-a-url  " };
+      mockReq.cookies = {};
+
+      (AuthService.handleStreamerTwitchCallback as jest.Mock).mockResolvedValue({
+        accessToken: "at",
+        refreshToken: "rt",
+      });
+
+      await controller.exchange(mockReq as Request, mockRes as Response);
+
+      expect(AuthService.handleStreamerTwitchCallback).toHaveBeenCalledWith(
+        "auth_code",
+        "  not-a-url  "
+      );
+      process.env.TWITCH_ALLOWED_REDIRECT_URIS = previousAllowed;
+    });
+
     it("should return 500 on generic service error", async () => {
       mockReq.body = { code: "auth_code" };
       mockReq.cookies = {};
@@ -408,6 +428,23 @@ describe("AuthController", () => {
         response: undefined,
       };
       (AuthService.handleStreamerTwitchCallback as jest.Mock).mockRejectedValue(connAbortedError);
+      (axios.isAxiosError as unknown as jest.Mock).mockReturnValue(true);
+
+      await controller.exchange(mockReq as Request, mockRes as Response);
+
+      expect(statusMock).toHaveBeenCalledWith(504);
+    });
+
+    it("should return 504 when axios error message contains timeout", async () => {
+      mockReq.body = { code: "auth_code" };
+      mockReq.cookies = {};
+
+      const timeoutError = Object.assign(new Error("socket timeout while connecting"), {
+        code: "EOTHER",
+        isAxiosError: true,
+        response: undefined,
+      });
+      (AuthService.handleStreamerTwitchCallback as jest.Mock).mockRejectedValue(timeoutError);
       (axios.isAxiosError as unknown as jest.Mock).mockReturnValue(true);
 
       await controller.exchange(mockReq as Request, mockRes as Response);
@@ -521,6 +558,30 @@ describe("AuthController", () => {
       await controller.refresh(mockReq as Request, mockRes as Response);
 
       expect(ViewerAuthSnapshotService.getViewerAuthSnapshotById).not.toHaveBeenCalled();
+      expect(jsonMock).toHaveBeenCalledWith({ message: "refreshed" });
+    });
+
+    it("should refresh successfully when tokenVersion matches viewer snapshot", async () => {
+      mockReq.cookies = { refresh_token: "old_rt" };
+      (JwtUtils.verifyRefreshToken as jest.Mock).mockReturnValue({
+        viewerId: "viewer-1",
+        tokenVersion: 1,
+        tokenType: "refresh",
+      });
+      (ViewerAuthSnapshotService.getViewerAuthSnapshotById as jest.Mock).mockResolvedValue({
+        id: "viewer-1",
+        twitchUserId: "twitch-1",
+        tokenVersion: 1,
+        consentedAt: null,
+        consentVersion: 1,
+        isAnonymized: false,
+      });
+      (JwtUtils.signAccessToken as jest.Mock).mockReturnValue("new_at");
+      (JwtUtils.signRefreshToken as jest.Mock).mockReturnValue("new_rt");
+
+      await controller.refresh(mockReq as Request, mockRes as Response);
+
+      expect(ViewerAuthSnapshotService.invalidateViewerAuthSnapshot).not.toHaveBeenCalled();
       expect(jsonMock).toHaveBeenCalledWith({ message: "refreshed" });
     });
 

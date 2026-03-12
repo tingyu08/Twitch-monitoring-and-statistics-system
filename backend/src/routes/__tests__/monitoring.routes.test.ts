@@ -116,6 +116,17 @@ describe("Monitoring Routes", () => {
 
       process.memoryUsage = origMemoryUsage;
     });
+
+    it("falls back hitRate to 0 when cache stats omit it", async () => {
+      const { cacheManager } = jest.requireMock("../../utils/cache-manager") as {
+        cacheManager: { getStats: jest.Mock };
+      };
+      cacheManager.getStats.mockReturnValueOnce({ itemCount: 1, memoryUsage: 0, hitRate: 0 });
+
+      const res = await request(app).get("/api/monitoring/health");
+
+      expect(res.body.cache.hitRate).toBe(0);
+    });
   });
 
   describe("POST /api/monitoring/reset", () => {

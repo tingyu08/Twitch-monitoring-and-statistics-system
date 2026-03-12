@@ -70,6 +70,17 @@ describe("ViewerLifetimeStatsController", () => {
       expect(mockedViewerLifetimeStatsService.getStats).not.toHaveBeenCalled();
     });
 
+    it("returns 400 when channelId is missing", async () => {
+      const req = makeReq({ params: {}, user: { viewerId: "viewer-1" } as AuthRequest["user"] });
+      const res = makeRes();
+
+      await controller.getLifetimeStats(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: "channelId is required" });
+      expect(mockedViewerLifetimeStatsService.getStats).not.toHaveBeenCalled();
+    });
+
     it("returns service result when data exists", async () => {
       const mockResult = {
         channelId: "channel-1",

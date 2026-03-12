@@ -175,6 +175,17 @@ describe("StreamerSettingsController", () => {
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ error: "Internal server error" });
     });
+
+    it("uses empty string when q is missing", async () => {
+      (streamerSettingsService.searchGames as jest.Mock).mockResolvedValue([]);
+      const req = makeReq({ query: {} });
+      const res = makeRes();
+
+      await streamerSettingsController.searchGames(req, res);
+
+      expect(streamerSettingsService.searchGames).toHaveBeenCalledWith("");
+      expect(res.json).toHaveBeenCalledWith([]);
+    });
   });
 
   describe("listTemplates", () => {
@@ -251,6 +262,30 @@ describe("StreamerSettingsController", () => {
       expect(logger.error).toHaveBeenCalledWith("StreamerSettings", "Create template error:", error);
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({ error: "Failed to create template" });
+    });
+  });
+
+  describe("updateTemplate", () => {
+    it("returns 400 when template id is missing", async () => {
+      const req = makeReq({ body: { name: "tpl" }, params: {} });
+      const res = makeRes();
+
+      await streamerSettingsController.updateTemplate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: "Template ID is required" });
+    });
+  });
+
+  describe("deleteTemplate", () => {
+    it("returns 400 when template id is missing", async () => {
+      const req = makeReq({ params: {} });
+      const res = makeRes();
+
+      await streamerSettingsController.deleteTemplate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: "Template ID is required" });
     });
   });
 

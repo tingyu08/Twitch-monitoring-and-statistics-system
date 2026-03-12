@@ -1,12 +1,12 @@
 type AsyncTask<T> = () => Promise<T>;
 
-export default function pLimit(concurrency: number) {
-  const maxConcurrency = Math.max(1, concurrency);
-  let activeCount = 0;
-  const queue: Array<() => void> = [];
-
-  const runNext = () => {
-    if (activeCount >= maxConcurrency) {
+export function createRunNext(
+  getActiveCount: () => number,
+  maxConcurrency: number,
+  queue: Array<() => void>
+) {
+  return () => {
+    if (getActiveCount() >= maxConcurrency) {
       return;
     }
 
@@ -17,6 +17,14 @@ export default function pLimit(concurrency: number) {
 
     nextTask();
   };
+}
+
+export default function pLimit(concurrency: number) {
+  const maxConcurrency = Math.max(1, concurrency);
+  let activeCount = 0;
+  const queue: Array<() => void> = [];
+
+  const runNext = createRunNext(() => activeCount, maxConcurrency, queue);
 
   return function limit<T>(task: AsyncTask<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -40,3 +48,7 @@ export default function pLimit(concurrency: number) {
     });
   };
 }
+
+export const __pLimitTestables = {
+  createRunNext,
+};

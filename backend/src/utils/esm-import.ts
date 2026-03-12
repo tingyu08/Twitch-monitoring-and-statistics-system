@@ -57,3 +57,7 @@ export async function importPLimit(): Promise<PLimitModule> {
 
   return importEsm<PLimitModule>("p-limit");
 }
+
+export const __esmImportTestables = {
+  importEsm,
+};
