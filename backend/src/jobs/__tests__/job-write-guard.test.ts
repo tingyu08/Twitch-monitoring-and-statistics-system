@@ -2,18 +2,28 @@ jest.mock("../../utils/logger", () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { runWithWriteGuard } from "../job-write-guard";
-
 describe("runWithWriteGuard", () => {
-  beforeEach(() => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  let runWithWriteGuard: typeof import("../job-write-guard").runWithWriteGuard;
+
+  beforeEach(async () => {
     jest.useFakeTimers();
+    jest.resetModules();
     // 設定 keyed mode 並且 gap = 0（測試環境）
     process.env.JOB_WRITE_GUARD_MODE = "keyed";
     process.env.JOB_WRITE_GAP_MS = "0";
+    ({ runWithWriteGuard } = await import("../job-write-guard"));
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    process.env.NODE_ENV = originalNodeEnv;
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    }
     delete process.env.JOB_WRITE_GUARD_MODE;
     delete process.env.JOB_WRITE_GAP_MS;
   });
@@ -92,5 +102,34 @@ describe("runWithWriteGuard", () => {
     jest.runAllTimersAsync();
     const result = await promise;
     expect(result).toBe("ok");
+  });
+
+  it("production + Turso 預設應使用 keyed mode 而非 global", async () => {
+    jest.resetModules();
+    process.env.NODE_ENV = "production";
+    process.env.DATABASE_URL = "libsql://example.turso.io";
+    delete process.env.JOB_WRITE_GUARD_MODE;
+    process.env.JOB_WRITE_GAP_MS = "0";
+
+    ({ runWithWriteGuard } = await import("../job-write-guard"));
+
+    const order: number[] = [];
+    const op1 = jest.fn(async () => {
+      order.push(1);
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      order.push(3);
+    });
+    const op2 = jest.fn(async () => {
+      order.push(2);
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    });
+
+    const p1 = runWithWriteGuard("resource-a:op", op1);
+    const p2 = runWithWriteGuard("resource-b:op", op2);
+
+    await jest.runAllTimersAsync();
+    await Promise.all([p1, p2]);
+
+    expect(order.indexOf(2)).toBeLessThan(order.indexOf(3));
   });
 });
