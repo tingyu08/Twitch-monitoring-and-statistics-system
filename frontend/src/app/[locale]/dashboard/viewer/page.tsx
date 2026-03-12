@@ -11,155 +11,21 @@ import { useSocket } from "@/lib/socket";
 import { DashboardHeader } from "@/components";
 import { useChannels } from "@/hooks/useViewer";
 import { useQueryClient } from "@tanstack/react-query";
+import { ViewerChannelCard } from "./ViewerChannelCard";
+import {
+  applyChannelUpdate,
+  applyStatsDelta,
+  applyStreamOfflineUpdate,
+  applyStreamOnlineUpdate,
+  buildListenChannelsPayload,
+  filterAndSortChannels,
+  getCurrentPageChannels,
+} from "./viewerDashboard.helpers";
 
 // 每頁顯示的頻道數量
 const CHANNELS_PER_PAGE = 24;
 
 
-// 計算並格式化開台時長
-function formatStreamDuration(startedAt: string): string {
-  const start = new Date(startedAt);
-  const now = new Date();
-  const diffMs = now.getTime() - start.getTime();
-
-  const hours = Math.floor(diffMs / (1000 * 60 * 60));
-  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
-
-const ChannelCard = React.memo(function ChannelCard({
-  channel,
-  t,
-  onOpen,
-}: {
-  channel: FollowedChannel;
-  t: (key: string, values?: Record<string, string | number | Date>) => string;
-  onOpen: (channelId: string) => void;
-}) {
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(channel.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          onOpen(channel.id);
-        }
-      }}
-      className="group cursor-pointer bg-white/40 dark:bg-white/10 backdrop-blur-sm rounded-2xl border border-purple-300 dark:border-white/10 hover:border-purple-500/50 p-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-purple-900/10 hover:-translate-y-1 hover:bg-white/50 dark:hover:bg-white/15"
-    >
-      <div className="flex items-center gap-4 mb-4">
-        <div className="relative">
-          <Image
-            src={
-              channel.avatarUrl ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(channel.displayName)}&background=6366f1&color=fff`
-            }
-            alt={channel.displayName}
-            width={60}
-            height={60}
-            className="w-14 h-14 rounded-full object-cover border-2 border-white/20 group-hover:border-purple-500 transition-colors"
-          />
-          {channel.isLive && (
-            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-slate-800 animate-pulse" />
-          )}
-        </div>
-        <div>
-          <h3 className="font-bold text-lg text-purple-900 dark:text-white group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors">
-            {channel.displayName}
-          </h3>
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm text-purple-800/60 dark:text-purple-300/50 font-mono">
-              @{channel.channelName}
-            </p>
-            {channel.isLive && (
-              <a
-                href={`https://twitch.tv/${channel.channelName}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs text-purple-500 hover:text-purple-700 dark:text-purple-400 dark:hover:text-white hover:underline flex items-center gap-0.5 transition-colors z-10 relative"
-              >
-                {t("viewer.watchNow")}
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                  />
-                </svg>
-              </a>
-            )}
-          </div>
-          {channel.isLive && channel.category && (
-            <p className="text-xs text-purple-400/70 mt-0.5 truncate max-w-[180px]">🎮 {channel.category}</p>
-          )}
-          {channel.isLive && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] uppercase tracking-wider text-red-400 font-bold bg-red-500/20 px-1.5 py-0.5 rounded">
-                LIVE
-              </span>
-              {channel.viewerCount !== null && (
-                <span className="text-[10px] text-purple-800/70 dark:text-purple-300/70">
-                  {t("viewer.viewers", {
-                    count: channel.viewerCount.toLocaleString(),
-                  })}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {channel.isLive && channel.streamStartedAt && (
-        <div className="mb-3 px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-red-300/70">{t("viewer.streamDuration")}</span>
-            <span className="text-red-400 font-mono">{formatStreamDuration(channel.streamStartedAt)}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="bg-blue-600/5 dark:bg-blue-500/10 rounded-xl p-3 border border-blue-200 dark:border-blue-500/20">
-          <p className="text-blue-800 dark:text-blue-300/70 text-xs mb-1">{t("stats.watchHours")}</p>
-          <p className="font-semibold text-blue-900 dark:text-blue-400 text-lg">
-            {(channel.totalWatchMinutes / 60).toFixed(1)}{" "}
-            <span className="text-xs text-blue-700/60 dark:text-blue-400/60">h</span>
-          </p>
-        </div>
-        <div className="bg-green-600/5 dark:bg-green-500/10 rounded-xl p-3 border border-green-200 dark:border-green-500/20">
-          <p className="text-green-800 dark:text-green-300/70 text-xs mb-1">{t("stats.messageCount")}</p>
-          <p className="font-semibold text-green-900 dark:text-green-400 text-lg">
-            {channel.messageCount}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 pt-3 border-t border-purple-200 dark:border-white/10 text-xs text-purple-800/60 dark:text-purple-300/50 space-y-1">
-        <div className="flex justify-between items-center">
-          <span>{t("viewer.lastWatched")}</span>
-          <span className="text-purple-900 dark:text-purple-300 font-medium">
-            {channel.lastWatched ? channel.lastWatched.split("T")[0] : "N/A"}
-          </span>
-        </div>
-        {channel.followedAt && (
-          <div className="flex justify-between items-center">
-            <span>{t("viewer.followedAt")}</span>
-            <span className="text-purple-900 dark:text-purple-300 font-medium">
-              {channel.followedAt.split("T")[0]}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
 
 export default function ViewerDashboardPage() {
   const t = useTranslations();
@@ -237,11 +103,6 @@ export default function ViewerDashboardPage() {
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
     const flushMutations = () => {
-      if (pendingMutations.length === 0) {
-        flushTimer = null;
-        return;
-      }
-
       const mutations = pendingMutations.splice(0, pendingMutations.length);
       queryClient.setQueryData<FollowedChannel[]>(["viewer", "channels"], (prev) => {
         if (!prev) return prev;
@@ -292,35 +153,7 @@ export default function ViewerDashboardPage() {
       updateSingleChannel(
         (ch) => ch.id === data.channelId || ch.channelName === data.channelName,
         (ch) => {
-          const nextViewerCount = data.viewerCount ?? ch.viewerCount;
-          const nextCurrentViewerCount = data.viewerCount ?? ch.currentViewerCount ?? 0;
-          const nextTitle = data.title || ch.currentTitle;
-          const nextGame = data.gameName || ch.currentGameName;
-          const nextStartedAt =
-            data.startedAt || ch.currentStreamStartedAt || ch.streamStartedAt || new Date().toISOString();
-
-          if (
-            ch.isLive &&
-            ch.viewerCount === nextViewerCount &&
-            ch.currentViewerCount === nextCurrentViewerCount &&
-            ch.currentTitle === nextTitle &&
-            ch.currentGameName === nextGame &&
-            ch.currentStreamStartedAt === nextStartedAt &&
-            ch.streamStartedAt === nextStartedAt
-          ) {
-            return ch;
-          }
-
-          return {
-            ...ch,
-            isLive: true,
-            viewerCount: nextViewerCount,
-            streamStartedAt: nextStartedAt,
-            currentTitle: nextTitle,
-            currentGameName: nextGame,
-            currentViewerCount: nextCurrentViewerCount,
-            currentStreamStartedAt: nextStartedAt,
-          };
+          return applyStreamOnlineUpdate(ch, data);
         }
       );
     };
@@ -331,23 +164,7 @@ export default function ViewerDashboardPage() {
       updateSingleChannel(
         (ch) => ch.id === data.channelId || ch.channelName === data.channelName,
         (ch) => {
-          if (
-            !ch.isLive &&
-            ch.viewerCount === 0 &&
-            (ch.currentViewerCount ?? 0) === 0 &&
-            !ch.currentStreamStartedAt
-          ) {
-            return ch;
-          }
-
-          return {
-            ...ch,
-            isLive: false,
-            viewerCount: 0,
-            streamStartedAt: null,
-            currentViewerCount: 0,
-            currentStreamStartedAt: undefined,
-          };
+          return applyStreamOfflineUpdate(ch);
         }
       );
     };
@@ -367,30 +184,7 @@ export default function ViewerDashboardPage() {
           ch.channelName === data.channelName ||
           ch.channelName === data.twitchChannelId,
         (ch) => {
-          const nextViewerCount = data.viewerCount ?? ch.viewerCount;
-          const nextCurrentViewerCount = data.viewerCount ?? ch.currentViewerCount;
-          const nextTitle = data.title || ch.currentTitle;
-          const nextGame = data.gameName || ch.currentGameName;
-          const nextStartedAt = data.startedAt || ch.currentStreamStartedAt;
-
-          if (
-            ch.viewerCount === nextViewerCount &&
-            ch.currentViewerCount === nextCurrentViewerCount &&
-            ch.currentTitle === nextTitle &&
-            ch.currentGameName === nextGame &&
-            ch.currentStreamStartedAt === nextStartedAt
-          ) {
-            return ch;
-          }
-
-          return {
-            ...ch,
-            viewerCount: nextViewerCount,
-            currentViewerCount: nextCurrentViewerCount,
-            currentTitle: nextTitle,
-            currentGameName: nextGame,
-            currentStreamStartedAt: nextStartedAt,
-          };
+          return applyChannelUpdate(ch, data);
         }
       );
     };
@@ -400,10 +194,7 @@ export default function ViewerDashboardPage() {
 
       updateSingleChannel(
         (ch) => ch.id === data.channelId,
-        (ch) => ({
-          ...ch,
-          messageCount: ch.messageCount + data.messageCountDelta,
-        })
+        (ch) => applyStatsDelta(ch, data.messageCountDelta)
       );
     };
 
@@ -416,10 +207,7 @@ export default function ViewerDashboardPage() {
 
         updateSingleChannel(
           (ch) => ch.id === update.channelId,
-          (ch) => ({
-            ...ch,
-            messageCount: ch.messageCount + update.messageCountDelta,
-          })
+          (ch) => applyStatsDelta(ch, update.messageCountDelta)
         );
       }
     };
@@ -468,53 +256,7 @@ export default function ViewerDashboardPage() {
   }, [user, refetchChannels]);
 
   const filteredChannels = useMemo(() => {
-    const lowerQuery = searchQuery.trim().toLowerCase();
-    const filtered =
-      lowerQuery.length > 0
-        ? channels.filter(
-            (ch) =>
-              ch.channelName.toLowerCase().includes(lowerQuery) ||
-              ch.displayName.toLowerCase().includes(lowerQuery)
-          )
-        : [...channels];
-
-    filtered.sort((a, b) => {
-      if (a.isLive && !b.isLive) return -1;
-      if (!a.isLive && b.isLive) return 1;
-
-      const messageDiff = (b.messageCount || 0) - (a.messageCount || 0);
-      if (messageDiff !== 0) return messageDiff;
-
-      if (a.isLive && b.isLive) {
-        const aStarted = a.streamStartedAt ? new Date(a.streamStartedAt).getTime() : 0;
-        const bStarted = b.streamStartedAt ? new Date(b.streamStartedAt).getTime() : 0;
-        if (aStarted !== bStarted) return bStarted - aStarted;
-
-        const aFollowed = a.followedAt ? new Date(a.followedAt).getTime() : 0;
-        const bFollowed = b.followedAt ? new Date(b.followedAt).getTime() : 0;
-        if (aFollowed !== bFollowed) return bFollowed - aFollowed;
-
-        const displayDiff = a.displayName.localeCompare(b.displayName, "zh-Hant");
-        if (displayDiff !== 0) return displayDiff;
-
-        return a.id.localeCompare(b.id);
-      }
-
-      const aLast = a.lastWatched ? new Date(a.lastWatched).getTime() : 0;
-      const bLast = b.lastWatched ? new Date(b.lastWatched).getTime() : 0;
-      if (aLast !== bLast) return bLast - aLast;
-
-      const aFollowed = a.followedAt ? new Date(a.followedAt).getTime() : 0;
-      const bFollowed = b.followedAt ? new Date(b.followedAt).getTime() : 0;
-      if (aFollowed !== bFollowed) return bFollowed - aFollowed;
-
-      const displayDiff = a.displayName.localeCompare(b.displayName, "zh-Hant");
-      if (displayDiff !== 0) return displayDiff;
-
-      return a.id.localeCompare(b.id);
-    });
-
-    return filtered;
+    return filterAndSortChannels(channels, searchQuery);
   }, [channels, searchQuery]);
 
   useEffect(() => {
@@ -523,15 +265,11 @@ export default function ViewerDashboardPage() {
 
   // 計算分頁
   const totalPages = Math.ceil(filteredChannels.length / CHANNELS_PER_PAGE);
-  const startIndex = (currentPage - 1) * CHANNELS_PER_PAGE;
-  const endIndex = startIndex + CHANNELS_PER_PAGE;
-  const currentPageChannels = filteredChannels.slice(startIndex, endIndex);
+  const currentPageChannels = getCurrentPageChannels(filteredChannels, currentPage, CHANNELS_PER_PAGE);
 
   // 通知後端監聽追蹤清單中的所有開台頻道（避免翻頁後停止計數）
   const notifyListenChannels = useCallback(async (channelsToListen: FollowedChannel[]) => {
-    const liveChannels = channelsToListen
-      .filter((ch) => ch.isLive)
-      .map((ch) => ({ channelName: ch.channelName, isLive: true }));
+    const liveChannels = buildListenChannelsPayload(channelsToListen);
 
     // 建立唯一識別碼避免重複通知
     const channelKey = liveChannels
@@ -742,7 +480,7 @@ export default function ViewerDashboardPage() {
           <>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {currentPageChannels.map((channel) => (
-                <ChannelCard key={channel.id} channel={channel} t={t} onOpen={handleChannelClick} />
+                <ViewerChannelCard key={channel.id} channel={channel} t={t} onOpen={handleChannelClick} />
               ))}
             </div>
 

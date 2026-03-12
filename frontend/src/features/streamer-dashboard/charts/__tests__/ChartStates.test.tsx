@@ -1,6 +1,6 @@
 ﻿import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ChartLoading, ChartError, ChartEmpty } from '../ChartStates';
+import { ChartLoading, ChartError, ChartEmpty, ChartDataLimitedBanner, ChartEstimatedBadge } from '../ChartStates';
 
 describe('ChartStates', () => {
   describe('ChartLoading', () => {
@@ -92,6 +92,94 @@ describe('ChartStates', () => {
       const { container } = render(<ChartEmpty emoji='🔍' description='無資料' />);
       const emojiDiv = container.querySelector('.text-5xl');
       expect(emojiDiv).toHaveTextContent('🔍');
+    });
+
+    it('有 actionButton 且非 loading 時應該顯示按鈕標籤', () => {
+      const onClick = jest.fn();
+      render(
+        <ChartEmpty
+          description='無資料'
+          actionButton={{ label: '立即同步', onClick, isLoading: false }}
+        />
+      );
+      expect(screen.getByRole('button', { name: '立即同步' })).toBeInTheDocument();
+    });
+
+    it('有 actionButton 且 isLoading=true 時應該顯示 syncing 文字且按鈕 disabled', () => {
+      const onClick = jest.fn();
+      render(
+        <ChartEmpty
+          description='無資料'
+          actionButton={{ label: '立即同步', onClick, isLoading: true }}
+        />
+      );
+      const btn = screen.getByRole('button');
+      expect(btn).toBeDisabled();
+      expect(screen.getByText('syncing')).toBeInTheDocument();
+    });
+
+    it('點擊 actionButton 時應該呼叫 onClick', async () => {
+      const onClick = jest.fn();
+      const user = userEvent.setup();
+      render(
+        <ChartEmpty
+          description='無資料'
+          actionButton={{ label: '立即同步', onClick }}
+        />
+      );
+      await user.click(screen.getByRole('button', { name: '立即同步' }));
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ChartDataLimitedBanner', () => {
+    it('應該顯示 limited data 訊息', () => {
+      render(<ChartDataLimitedBanner currentDays={3} minDays={7} />);
+      expect(screen.getByText('comingSoon')).toBeInTheDocument();
+      // limitedData translation key rendered by mock
+      expect(screen.getByText(/limitedData/i)).toBeInTheDocument();
+    });
+
+    it('沒有 onSync 時不應該顯示同步按鈕', () => {
+      render(<ChartDataLimitedBanner currentDays={3} minDays={7} />);
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('有 onSync 且非 syncing 時應該顯示 syncNow', () => {
+      const onSync = jest.fn();
+      render(<ChartDataLimitedBanner currentDays={3} minDays={7} onSync={onSync} />);
+      expect(screen.getByText('syncNow')).toBeInTheDocument();
+      expect(screen.getByRole('button')).not.toBeDisabled();
+    });
+
+    it('isSyncing=true 時應該顯示 syncing 並且按鈕 disabled', () => {
+      const onSync = jest.fn();
+      render(
+        <ChartDataLimitedBanner currentDays={3} minDays={7} onSync={onSync} isSyncing />
+      );
+      const btn = screen.getByRole('button');
+      expect(btn).toBeDisabled();
+      expect(screen.getByText('syncing')).toBeInTheDocument();
+    });
+
+    it('點擊同步按鈕時應該呼叫 onSync', async () => {
+      const onSync = jest.fn();
+      const user = userEvent.setup();
+      render(<ChartDataLimitedBanner currentDays={3} minDays={7} onSync={onSync} />);
+      await user.click(screen.getByRole('button'));
+      expect(onSync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ChartEstimatedBadge', () => {
+    it('應該顯示 estimate 文字', () => {
+      render(<ChartEstimatedBadge />);
+      expect(screen.getByText('estimate')).toBeInTheDocument();
+    });
+
+    it('應該顯示警告 icon 且有 aria-label', () => {
+      render(<ChartEstimatedBadge />);
+      expect(screen.getByRole('img', { name: 'estimate' })).toBeInTheDocument();
     });
   });
 });

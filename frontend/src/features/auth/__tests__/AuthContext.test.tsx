@@ -232,4 +232,52 @@ describe('AuthContext / AuthProvider', () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it('getMe 失敗時以非 Error 物件設定錯誤訊息', async () => {
+    // Covers the `err instanceof Error ? ... : "Failed to fetch user"` fallback
+    mockGetMe.mockRejectedValueOnce('string error - not an Error instance');
+
+    render(
+      <AuthProvider>
+        <Consumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading').textContent).toBe('false');
+    });
+
+    expect(screen.getByTestId('error').textContent).toBe('Failed to fetch user');
+  });
+
+  it('isStreamer 和 isViewer 在有 user 時正確計算', async () => {
+    mockGetMe.mockResolvedValueOnce({
+      viewerId: 'v1',
+      twitchUserId: 't1',
+      displayName: 'Viewer User',
+      avatarUrl: 'https://example.com/avatar.png',
+      role: 'viewer',
+    });
+
+    function RoleConsumer() {
+      const { isStreamer, isViewer } = useAuthSession();
+      return (
+        <div>
+          <span data-testid='isStreamer'>{isStreamer ? 'true' : 'false'}</span>
+          <span data-testid='isViewer'>{isViewer ? 'true' : 'false'}</span>
+        </div>
+      );
+    }
+
+    render(
+      <AuthProvider>
+        <RoleConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('isStreamer').textContent).toBe('false');
+      expect(screen.getByTestId('isViewer').textContent).toBe('true');
+    });
+  });
 });

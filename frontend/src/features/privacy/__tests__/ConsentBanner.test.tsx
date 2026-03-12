@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { ConsentBannerWrapper } from "../components/ConsentBanner";
-import { httpClient } from "@/lib/api/httpClient";
+import { ConsentBanner, ConsentBannerWrapper } from "../components/ConsentBanner";
+import { httpClient, HttpClientError } from "@/lib/api/httpClient";
 import { useRouter } from "next/navigation";
 
 // Mock httpClient
@@ -79,5 +79,98 @@ describe("ConsentBanner", () => {
         "/dashboard/viewer/settings?mode=privacy"
       );
     });
+  });
+
+  it("should not render banner when consent_banner_shown is in localStorage", async () => {
+    localStorage.setItem("consent_banner_shown", "true");
+
+    const { container } = render(<ConsentBannerWrapper />);
+
+    // Should not call API since localStorage flag is set
+    await waitFor(() => {
+      expect(container.firstChild).toBeNull();
+    });
+
+    expect(httpClient).not.toHaveBeenCalled();
+  });
+
+  it("should silently skip banner when API returns 401 HttpClientError", async () => {
+    const error401 = new HttpClientError("Unauthorized", 401);
+    (httpClient as jest.Mock).mockRejectedValueOnce(error401);
+
+    const { container } = render(<ConsentBannerWrapper />);
+
+    await waitFor(() => {
+      // No banner shown - 401 means unauthenticated
+      expect(container.firstChild).toBeNull();
+    });
+  });
+
+  it("should handle non-401 errors from API gracefully (no crash)", async () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    (httpClient as jest.Mock).mockRejectedValueOnce(new Error("Server error"));
+
+    const { container } = render(<ConsentBannerWrapper />);
+
+    await waitFor(() => {
+      // Error is logged but banner is not shown
+      expect(container.firstChild).toBeNull();
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("should handle accept all error gracefully", async () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    (httpClient as jest.Mock)
+      .mockResolvedValueOnce({ hasConsent: false }) // Check status
+      .mockRejectedValueOnce(new Error("Accept failed")); // Accept all fails
+
+    render(<ConsentBannerWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/接受全部/i)).toBeInTheDocument();
+    });
+
+    const acceptBtn = screen.getByText(/接受全部/i);
+    fireEvent.click(acceptBtn);
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith("接受同意失敗:", expect.any(Error));
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("ConsentBanner standalone should render with onAcceptAll and onCustomize props", () => {
+    const onAcceptAll = jest.fn();
+    const onCustomize = jest.fn();
+
+    render(<ConsentBanner onAcceptAll={onAcceptAll} onCustomize={onCustomize} />);
+
+    expect(screen.getByText(/我們重視您的隱私/i)).toBeInTheDocument();
+    expect(screen.getByText(/接受全部/i)).toBeInTheDocument();
+    expect(screen.getByText(/自訂設定/i)).toBeInTheDocument();
+  });
+
+  it("ConsentBanner onAcceptAll is called when button is clicked", () => {
+    const onAcceptAll = jest.fn();
+    const onCustomize = jest.fn();
+
+    render(<ConsentBanner onAcceptAll={onAcceptAll} onCustomize={onCustomize} />);
+
+    fireEvent.click(screen.getByText(/接受全部/i));
+    expect(onAcceptAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("ConsentBanner onCustomize is called when button is clicked", () => {
+    const onAcceptAll = jest.fn();
+    const onCustomize = jest.fn();
+
+    render(<ConsentBanner onAcceptAll={onAcceptAll} onCustomize={onCustomize} />);
+
+    fireEvent.click(screen.getByText(/自訂設定/i));
+    expect(onCustomize).toHaveBeenCalledTimes(1);
   });
 });

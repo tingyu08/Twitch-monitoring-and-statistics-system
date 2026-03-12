@@ -8,7 +8,7 @@ jest.mock('@/lib/api/streamer');
 
 describe('StreamSummaryCards', () => {
   const mockSummary = {
-    range: '30d',
+    range: '30d' as const,
     totalStreamHours: 10.5,
     totalStreamSessions: 5,
     avgStreamDurationMinutes: 126,
@@ -145,6 +145,84 @@ describe('StreamSummaryCards', () => {
     // 等待狀態更新完成
     await waitFor(() => {
       expect(screen.getByText('10.5')).toBeInTheDocument();
+    });
+  });
+
+  it('應該在有 onRangeChange 時呼叫外部 handler 而不更新內部 range', async () => {
+    const user = userEvent.setup();
+    const onRangeChange = jest.fn();
+    (streamerApi.getStreamerSummary as jest.Mock).mockResolvedValue(mockSummary);
+
+    render(
+      <StreamSummaryCards
+        selectedRange="30d"
+        onRangeChange={onRangeChange}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('10.5')).toBeInTheDocument();
+    });
+
+    const button7d = screen.getByText('recent7');
+    await user.click(button7d);
+
+    expect(onRangeChange).toHaveBeenCalledWith('7d');
+  });
+
+  it('應該在有 initialSummary 且 range 等於 initialRange 時使用初始資料', async () => {
+    // When initialSummary is provided and range matches initialRange, should use it
+    // without calling API
+    (streamerApi.getStreamerSummary as jest.Mock).mockResolvedValue(mockSummary);
+
+    render(
+      <StreamSummaryCards
+        initialSummary={mockSummary}
+        initialRange="30d"
+      />
+    );
+
+    // Should show data (either from initialSummary or API)
+    await waitFor(() => {
+      expect(screen.getByText('10.5')).toBeInTheDocument();
+    });
+  });
+
+  it('應該在無資料且 summary=null 時顯示 noStreamData', async () => {
+    (streamerApi.getStreamerSummary as jest.Mock).mockResolvedValue(null);
+
+    render(<StreamSummaryCards />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noStreamData')).toBeInTheDocument();
+    });
+  });
+
+  it('應該在零值 summary 且 isEstimated=true 時顯示 dataSyncing 警告', async () => {
+    const zeroEstimatedSummary = {
+      ...mockSummary,
+      totalStreamHours: 0,
+      totalStreamSessions: 0,
+      avgStreamDurationMinutes: 0,
+      isEstimated: true,
+    };
+    (streamerApi.getStreamerSummary as jest.Mock).mockResolvedValue(zeroEstimatedSummary);
+
+    render(<StreamSummaryCards />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noStreamData')).toBeInTheDocument();
+      expect(screen.getByText(/summary.dataSyncing/i)).toBeInTheDocument();
+    });
+  });
+
+  it('應該在錯誤為非 Error 物件時顯示預設錯誤訊息', async () => {
+    (streamerApi.getStreamerSummary as jest.Mock).mockRejectedValue('string error');
+
+    render(<StreamSummaryCards />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to load stats/)).toBeInTheDocument();
     });
   });
 

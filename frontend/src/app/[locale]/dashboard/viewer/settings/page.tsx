@@ -339,7 +339,7 @@ export default function ViewerSettingsPage() {
                     {t(`settings.privacy.${category.id}`)}
                   </h3>
                   <p className="theme-text-muted text-sm">
-                    {category.id === "id" ? "" : t(`settings.privacy.${category.id}Desc`)}
+                    {t(`settings.privacy.${category.id}Desc`)}
                   </p>
                 </div>
 

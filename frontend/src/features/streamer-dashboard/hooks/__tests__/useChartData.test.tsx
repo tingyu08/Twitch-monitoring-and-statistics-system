@@ -1,16 +1,16 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
-import { useTimeSeriesData, useHeatmapData } from '../useChartData';
+import { useTimeSeriesData, useHeatmapData, useSubscriptionTrendData } from '../useChartData';
 import type { FC, ReactNode } from 'react';
 import * as streamerApi from '@/lib/api/streamer';
 
 jest.mock('@/lib/api/streamer');
 const mockedStreamerApi = streamerApi as jest.Mocked<typeof streamerApi>;
 
-const wrapper: FC<{ children: ReactNode }> = ({ children }) => {
+const wrapper: any = ({ children }: { children: ReactNode }) => {
   return (
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      {children}
+      {children as any}
     </SWRConfig>
   );
 };
@@ -113,6 +113,91 @@ describe('useChartData Hooks', () => {
 
       await waitFor(() => {
         expect(result.current.error).toBe('Heatmap Error');
+      });
+
+      expect(result.current.data).toEqual([]);
+    });
+  });
+
+  describe('useSubscriptionTrendData', () => {
+    const mockSubData = [
+      { date: '2025-12-01', subsTotal: 100, subsDelta: 5 },
+      { date: '2025-12-02', subsTotal: 105, subsDelta: 5 },
+    ];
+
+    it('should fetch subscription trend data', async () => {
+      mockedStreamerApi.getStreamerSubscriptionTrend.mockResolvedValue({
+        range: '30d',
+        data: mockSubData,
+        hasExactData: true,
+        isEstimated: false,
+        estimateSource: 'daily_snapshot',
+        currentDataDays: 30,
+        minDataDays: 7,
+      });
+
+      const { result } = renderHook(() => useSubscriptionTrendData('30d'), { wrapper });
+
+      await result.current.refresh();
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual(mockSubData);
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.hasExactData).toBe(true);
+      expect(result.current.isEstimated).toBe(false);
+      expect(result.current.currentDataDays).toBe(30);
+      expect(result.current.minDataDays).toBe(7);
+    });
+
+    it('should return defaults when data is undefined', async () => {
+      mockedStreamerApi.getStreamerSubscriptionTrend.mockResolvedValue({
+        range: '7d',
+        data: [],
+        hasExactData: false,
+        isEstimated: true,
+        estimateSource: 'daily_snapshot',
+        currentDataDays: 3,
+        minDataDays: 7,
+      });
+
+      const { result } = renderHook(() => useSubscriptionTrendData('7d'), { wrapper });
+
+      await result.current.refresh();
+
+      await waitFor(() => {
+        expect(result.current.isEstimated).toBe(true);
+      });
+
+      expect(result.current.data).toEqual([]);
+      expect(result.current.hasExactData).toBe(false);
+      expect(result.current.currentDataDays).toBe(3);
+    });
+
+    it('should not fetch when disabled', () => {
+      const { result } = renderHook(
+        () => useSubscriptionTrendData('7d', false),
+        { wrapper }
+      );
+
+      // Disabled — should never call API
+      expect(mockedStreamerApi.getStreamerSubscriptionTrend).not.toHaveBeenCalled();
+      expect(result.current.data).toEqual([]);
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it('should handle subscription trend errors', async () => {
+      mockedStreamerApi.getStreamerSubscriptionTrend.mockRejectedValue(
+        new Error('Sub Trend Error')
+      );
+
+      const { result } = renderHook(() => useSubscriptionTrendData('30d'), { wrapper });
+
+      await result.current.refresh();
+
+      await waitFor(() => {
+        expect(result.current.error).toBe('Sub Trend Error');
       });
 
       expect(result.current.data).toEqual([]);

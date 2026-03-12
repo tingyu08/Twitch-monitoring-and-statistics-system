@@ -1,174 +1,413 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ViewerSettingsPage from "../page";
 import { httpClient } from "@/lib/api/httpClient";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "@/features/auth/AuthContext";
 import { viewerApi } from "@/lib/api/viewer";
 
-// Mock dependencies
+const mockOpen = jest.fn();
+
+jest.mock("next/image", () => ({
+  __esModule: true,
+  default: ({ priority: _priority, ...props }: React.ImgHTMLAttributes<HTMLImageElement> & { priority?: boolean }) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img {...props} alt={props.alt || ""} />
+  ),
+}));
+
 jest.mock("@/lib/api/httpClient");
 jest.mock("@/lib/api/viewer");
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
-  useSearchParams: jest.fn(),
 }));
-
-// Mock AuthContext
 jest.mock("@/features/auth/AuthContext", () => ({
   useAuthSession: jest.fn(),
 }));
 
-describe("ViewerSettingsPage (Privacy)", () => {
+describe("ViewerSettingsPage", () => {
   const mockRouter = {
     push: jest.fn(),
     replace: jest.fn(),
-    refresh: jest.fn(),
   };
+  const mockLogout = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue(mockRouter);
-
-    // Mock authenticated viewer
     (useAuthSession as jest.Mock).mockReturnValue({
       user: {
-        id: "v1",
+        viewerId: "viewer-1",
         twitchUserId: "t1",
         displayName: "TestViewer",
+        avatarUrl: "https://example.com/avatar.png",
         role: "viewer",
-        isViewer: true, // Helper result
+        consentedAt: "2025-01-01T00:00:00.000Z",
       },
       loading: false,
-      logout: jest.fn(),
+      logout: mockLogout,
     });
-
-    // Mock viewerApi
     (viewerApi.getDataSummary as jest.Mock).mockResolvedValue({
       totalMessages: 100,
       totalAggregations: 10,
       channelCount: 5,
-      dateRange: { oldest: null, newest: null },
+      dateRange: { oldest: "2025-01-01T00:00:00.000Z", newest: null },
     });
-
-    // Default mocks for httpClient
-    (httpClient as jest.Mock).mockImplementation((url) => {
-      if (url === "/api/viewer/pref/status") {
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) {
         return Promise.resolve({
-          success: true,
           settings: {
             collectDailyWatchTime: true,
+            collectWatchTimeDistribution: false,
+            collectMonthlyAggregates: true,
             collectChatMessages: false,
+            collectInteractions: true,
+            collectInteractionFrequency: true,
+            collectBadgeProgress: true,
+            collectFootprintData: false,
+            collectRankings: true,
+            collectRadarAnalysis: true,
           },
-          hasConsent: true,
         });
       }
       if (url === "/api/viewer/privacy/deletion-status") {
-        return Promise.resolve({
-          hasPendingDeletion: false,
-        });
+        return Promise.resolve({ hasPendingDeletion: false });
+      }
+      if (url === "/api/viewer/pref/status" && options?.method === "PATCH") {
+        return Promise.resolve({ success: true });
+      }
+      if (url === "/api/viewer/privacy/export" && options?.method === "POST") {
+        return Promise.resolve({ jobId: "job-1", status: "completed" });
+      }
+      if (url === "/api/viewer/privacy/delete-account" && options?.method === "POST") {
+        return Promise.resolve({ scheduledAt: "2025-01-08T00:00:00.000Z" });
+      }
+      if (url === "/api/viewer/privacy/cancel-deletion" && options?.method === "POST") {
+        return Promise.resolve({ success: true });
       }
       return Promise.resolve({});
     });
+    window.open = mockOpen;
   });
 
-  it("should render privacy settings", async () => {
+  it("redirects anonymous users to home", async () => {
+    (useAuthSession as jest.Mock).mockReturnValue({ user: null, loading: false, logout: mockLogout });
+
+    render(<ViewerSettingsPage />);
+
+    await waitFor(() => {
+      expect(mockRouter.replace).toHaveBeenCalledWith("/");
+    });
+  });
+
+  it("shows loading state while auth is pending", () => {
+    (useAuthSession as jest.Mock).mockReturnValue({ user: null, loading: true, logout: mockLogout });
     render(<ViewerSettingsPage />);
 
     expect(screen.getByText("common.loading")).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.queryByText("common.loading")).not.toBeInTheDocument();
-    });
-
-    expect(screen.getByText("settings.privacy.title")).toBeInTheDocument();
   });
 
-  it("should toggle a privacy setting", async () => {
+  it("renders profile, summary, and privacy sections", async () => {
     render(<ViewerSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.queryByText("common.loading")).not.toBeInTheDocument();
+      expect(screen.getByText("settings.profile")).toBeInTheDocument();
     });
 
-    // Find the button associated with "每日觀看時數統計"
-    // The button calls handleToggle. Since it's a custom button, we can find it by closest button relative to text
-    // or assume it's one of the buttons.
-    // Let's use getByText to find label, then traverse or find specific button.
-    // The component structure:
-    // <div ...>Label</div> <button onClick...>
-
-    // We can assume the toggle button is next to the text "每日觀看時數統計"? No, it's flex.
-    // Let's query all buttons.
-    const buttons = screen.getAllByRole("button");
-    // Just click one that looks like a toggle (bg-purple-600 or bg-gray-600)
-    // Actually, let's verify render first, toggling logic is hooked to httpClient which is mocked.
-
-    // Better strategy: Add aria-label to buttons in source code for easier testing?
-    // Or just test that httpClient is called when we click "button" that is NOT "返回儀表板".
-    // "每日觀看時數統計" section contains a button.
+    expect(screen.getByText("TestViewer")).toBeInTheDocument();
+    expect(screen.getByText("Twitch ID: t1")).toBeInTheDocument();
+    expect(screen.getByText("settings.dataSummary.title")).toBeInTheDocument();
   });
 
-  it("should handle export data", async () => {
-    (httpClient as jest.Mock).mockImplementation((url) => {
-      if (url === "/api/viewer/pref/status")
-        return Promise.resolve({ settings: {}, hasConsent: true });
-      if (url === "/api/viewer/privacy/deletion-status")
-        return Promise.resolve({ hasPendingDeletion: false });
-      if (url === "/api/viewer/privacy/export")
-        return Promise.resolve({
-          success: true,
-          jobId: "123",
-          status: "pending",
-        });
+  it("renders non-viewer fallback, placeholder summary values, and disabled delete state", async () => {
+    (useAuthSession as jest.Mock).mockReturnValue({
+      user: {
+        displayName: "Streamer User",
+        twitchUserId: "streamer-1",
+        role: "streamer",
+      },
+      loading: false,
+      logout: mockLogout,
+    });
+    (viewerApi.getDataSummary as jest.Mock).mockResolvedValue(null);
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) return Promise.resolve({ settings: {} });
+      if (url === "/api/viewer/privacy/deletion-status") {
+        return Promise.resolve({ hasPendingDeletion: true, remainingDays: 3 });
+      }
       return Promise.resolve({});
     });
 
     render(<ViewerSettingsPage />);
 
-    await waitFor(() => {
-      expect(screen.queryByText("common.loading")).not.toBeInTheDocument();
+    await screen.findByText("⚠️ 帳號刪除請求進行中");
+    expect(screen.queryByAltText("Streamer User")).not.toBeInTheDocument();
+    expect(screen.getByText("Twitch ID:")).toBeInTheDocument();
+    expect(screen.getAllByText("-").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: "🗑️ settings.dataManagement.deleteButton" })
+    ).toBeDisabled();
+  });
+
+  it("covers export button states and success cancellation flow", async () => {
+    const user = userEvent.setup();
+    let resolveExport: ((value: unknown) => void) | undefined;
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) return Promise.resolve({ settings: {} });
+      if (url === "/api/viewer/privacy/deletion-status") return Promise.resolve({ hasPendingDeletion: true, remainingDays: 1 });
+      if (url === "/api/viewer/privacy/export" && options?.method === "POST") {
+        return new Promise((resolve) => {
+          resolveExport = resolve;
+        });
+      }
+      if (url === "/api/viewer/privacy/cancel-deletion" && options?.method === "POST") {
+        return Promise.resolve({ success: true });
+      }
+      return Promise.resolve({});
     });
 
-    const btn = screen.getByText("📤 settings.dataManagement.exportButton");
-    fireEvent.click(btn);
+    render(<ViewerSettingsPage />);
+    await screen.findByText("撤銷刪除");
+
+    await user.click(screen.getByRole("button", { name: "📤 settings.dataManagement.exportButton" }));
+    expect(screen.getByRole("button", { name: "settings.dataManagement.exporting" })).toBeDisabled();
+    resolveExport?.({ jobId: "job-2", status: "pending" });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "📤 settings.dataManagement.exportButton" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "撤銷刪除" }));
+    await waitFor(() => {
+      expect(screen.getByText("刪除請求已撤銷")).toBeInTheDocument();
+    });
+  });
+
+  it("covers settings fallback and download-without-job branch", async () => {
+    const user = userEvent.setup();
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) {
+        return Promise.resolve({ settings: undefined });
+      }
+      if (url === "/api/viewer/privacy/deletion-status") {
+        return Promise.resolve({ hasPendingDeletion: false });
+      }
+      if (url === "/api/viewer/privacy/export" && options?.method === "POST") {
+        return Promise.resolve({ status: "completed" });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.dataManagement.title");
+
+    await user.click(screen.getByRole("button", { name: "📤 settings.dataManagement.exportButton" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "📥 settings.dataManagement.download" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "📥 settings.dataManagement.download" }));
+    expect(mockOpen).not.toHaveBeenCalled();
+  });
+
+  it("navigates back to the dashboard", async () => {
+    const user = userEvent.setup();
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.title");
+
+    await user.click(screen.getByRole("button", { name: /settings.backToDashboard/i }));
+    expect(mockRouter.push).toHaveBeenCalledWith("/dashboard/viewer");
+  });
+
+  it("saves setting toggles and rolls back on failure", async () => {
+    const user = userEvent.setup();
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.privacy.title");
+
+    const toggles = screen.getAllByRole("button").filter((button) => button.className.includes("rounded-full"));
+    await user.click(toggles[0]);
 
     await waitFor(() => {
-      expect(httpClient).toHaveBeenCalledWith("/api/viewer/privacy/export", {
-        method: "POST",
+      expect(httpClient).toHaveBeenCalledWith("/api/viewer/pref/status", {
+        method: "PATCH",
+        body: JSON.stringify({ collectDailyWatchTime: false }),
       });
     });
+    expect(screen.getByText("設定已儲存")).toBeInTheDocument();
+
+    (httpClient as jest.Mock).mockRejectedValueOnce(new Error("nope"));
+    await user.click(toggles[1]);
+    await waitFor(() => {
+      expect(screen.getByText("儲存設定失敗，請稍後再試")).toBeInTheDocument();
+    });
   });
 
-  it("should show deletion pending status and allow cancel", async () => {
-    (httpClient as jest.Mock).mockImplementation((url) => {
-      if (url === "/api/viewer/pref/status")
-        return Promise.resolve({ settings: {}, hasConsent: true });
-      if (url === "/api/viewer/privacy/deletion-status")
-        return Promise.resolve({
-          hasPendingDeletion: true,
-          remainingDays: 6,
-        });
-      if (url === "/api/viewer/privacy/cancel-deletion")
+  it("exports data and downloads completed exports", async () => {
+    const user = userEvent.setup();
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.dataManagement.title");
+
+    await user.click(screen.getByRole("button", { name: "📤 settings.dataManagement.exportButton" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "📥 settings.dataManagement.download" })).toBeInTheDocument();
+    });
+    expect(screen.getByText("資料匯出完成！")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "📥 settings.dataManagement.download" }));
+    expect(mockOpen).toHaveBeenCalledWith("/api/viewer/privacy/export/job-1/download", "_blank");
+  });
+
+  it("shows export errors", async () => {
+    const user = userEvent.setup();
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) return Promise.resolve({ settings: {} });
+      if (url === "/api/viewer/privacy/deletion-status") return Promise.resolve({ hasPendingDeletion: false });
+      if (url === "/api/viewer/privacy/export" && options?.method === "POST") {
+        return Promise.reject(new Error("export failed"));
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.dataManagement.title");
+    await user.click(screen.getByRole("button", { name: "📤 settings.dataManagement.exportButton" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("匯出失敗，請稍後再試")).toBeInTheDocument();
+    });
+  });
+
+  it("handles pending deletion, cancel deletion, and delete confirmation", async () => {
+    const user = userEvent.setup();
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) return Promise.resolve({ settings: {} });
+      if (url === "/api/viewer/privacy/deletion-status") {
+        return Promise.resolve({ hasPendingDeletion: true, remainingDays: 6 });
+      }
+      if (url === "/api/viewer/privacy/cancel-deletion" && options?.method === "POST") {
         return Promise.resolve({ success: true });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ViewerSettingsPage />);
+    await screen.findByText("⚠️ 帳號刪除請求進行中");
+    await user.click(screen.getByRole("button", { name: "撤銷刪除" }));
+    await waitFor(() => {
+      expect(screen.getByText("刪除請求已撤銷")).toBeInTheDocument();
+    });
+
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) return Promise.resolve({ settings: {} });
+      if (url === "/api/viewer/privacy/deletion-status") return Promise.resolve({ hasPendingDeletion: false });
+      if (url === "/api/viewer/privacy/delete-account" && options?.method === "POST") {
+        return Promise.resolve({ scheduledAt: "2025-01-08T00:00:00.000Z" });
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ViewerSettingsPage />);
+    await screen.findAllByText("settings.dataManagement.delete");
+    await user.click(screen.getAllByRole("button", { name: "🗑️ settings.dataManagement.deleteButton" })[0]);
+    expect(screen.getByText("⚠️ 確認刪除帳號")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "settings.deleteModal.confirmButton" }));
+    await waitFor(() => {
+      expect(screen.getByText("刪除請求已建立，您有 7 天可以撤銷")).toBeInTheDocument();
+    });
+  });
+
+  it("shows delete account failures and logout action", async () => {
+    const user = userEvent.setup();
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) return Promise.resolve({ settings: {} });
+      if (url === "/api/viewer/privacy/deletion-status") return Promise.resolve({ hasPendingDeletion: false });
+      if (url === "/api/viewer/privacy/delete-account" && options?.method === "POST") {
+        return Promise.reject(new Error("delete failed"));
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.dataManagement.title");
+    await user.click(screen.getByRole("button", { name: "common.logout" }));
+    expect(mockLogout).toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "🗑️ settings.dataManagement.deleteButton" }));
+    await user.click(screen.getByRole("button", { name: "settings.deleteModal.confirmButton" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("刪除請求失敗，請稍後再試")).toBeInTheDocument();
+    });
+  });
+
+  it("handles partial privacy data failures and cancel modal dismissal", async () => {
+    const user = userEvent.setup();
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    (viewerApi.getDataSummary as jest.Mock).mockRejectedValue(new Error("async summary error"));
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) {
+        return Promise.reject(new Error("pref fail"));
+      }
+      if (url === "/api/viewer/privacy/deletion-status" && !options?.method) {
+        return Promise.reject(new Error("deletion fail"));
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.dataManagement.title");
+
+    await user.click(screen.getByRole("button", { name: "🗑️ settings.dataManagement.deleteButton" }));
+    expect(screen.getByText("⚠️ 確認刪除帳號")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "common.cancel" }));
+    expect(screen.queryByText("⚠️ 確認刪除帳號")).not.toBeInTheDocument();
+    errorSpy.mockRestore();
+  });
+
+  it("logs when privacy data loading throws before Promise.all resolves", async () => {
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) {
+        throw new Error("sync privacy failure");
+      }
+      if (url === "/api/viewer/privacy/deletion-status") {
+        return Promise.resolve({ hasPendingDeletion: false });
+      }
       return Promise.resolve({});
     });
 
     render(<ViewerSettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("⚠️ 帳號刪除請求進行中")).toBeInTheDocument();
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to load privacy data:",
+        expect.any(Error)
+      );
     });
 
-    expect(screen.getByText("撤銷刪除")).toBeInTheDocument();
+    errorSpy.mockRestore();
+  });
 
-    fireEvent.click(screen.getByText("撤銷刪除"));
+  it("shows cancel deletion errors and clears flash messages after timeout", async () => {
+    const user = userEvent.setup();
+    (httpClient as jest.Mock).mockImplementation((url: string, options?: RequestInit) => {
+      if (url === "/api/viewer/pref/status" && !options?.method) return Promise.resolve({ settings: {} });
+      if (url === "/api/viewer/privacy/deletion-status") {
+        return Promise.resolve({ hasPendingDeletion: true, remainingDays: 2 });
+      }
+      if (url === "/api/viewer/privacy/cancel-deletion" && options?.method === "POST") {
+        return Promise.reject(new Error("cancel failed"));
+      }
+      return Promise.resolve({});
+    });
+
+    render(<ViewerSettingsPage />);
+    await screen.findByText("撤銷刪除");
+    await user.click(screen.getByRole("button", { name: "撤銷刪除" }));
 
     await waitFor(() => {
-      expect(httpClient).toHaveBeenCalledWith(
-        "/api/viewer/privacy/cancel-deletion",
-        { method: "POST" }
-      );
+      expect(screen.getByText("撤銷失敗，請稍後再試")).toBeInTheDocument();
     });
   });
 });

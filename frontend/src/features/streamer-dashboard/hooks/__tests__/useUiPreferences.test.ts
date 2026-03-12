@@ -82,4 +82,97 @@ describe('useUiPreferences', () => {
       });
     });
   });
+
+  it('setPreference should set a specific key to a given value', async () => {
+    const { result } = renderHook(() => useUiPreferences());
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+
+    act(() => {
+      result.current.setPreference('showSummaryCards', false);
+    });
+
+    await waitFor(() => {
+      expect(result.current.preferences.showSummaryCards).toBe(false);
+    });
+
+    act(() => {
+      result.current.setPreference('showSummaryCards', true);
+    });
+
+    await waitFor(() => {
+      expect(result.current.preferences.showSummaryCards).toBe(true);
+    });
+  });
+
+  it('showAll should set all preferences to true', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        showSummaryCards: false,
+        showTimeSeriesChart: false,
+        showHeatmapChart: false,
+        showSubscriptionChart: false,
+      })
+    );
+
+    const { result } = renderHook(() => useUiPreferences());
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+
+    expect(result.current.visibleCount).toBe(0);
+
+    act(() => {
+      result.current.showAll();
+    });
+
+    await waitFor(() => {
+      expect(result.current.preferences).toEqual({
+        showSummaryCards: true,
+        showTimeSeriesChart: true,
+        showHeatmapChart: true,
+        showSubscriptionChart: true,
+      });
+    });
+
+    expect(result.current.visibleCount).toBe(4);
+  });
+
+  it('hideAll should set all preferences to false', async () => {
+    const { result } = renderHook(() => useUiPreferences());
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+
+    expect(result.current.visibleCount).toBe(4);
+
+    act(() => {
+      result.current.hideAll();
+    });
+
+    await waitFor(() => {
+      expect(result.current.preferences).toEqual({
+        showSummaryCards: false,
+        showTimeSeriesChart: false,
+        showHeatmapChart: false,
+        showSubscriptionChart: false,
+      });
+    });
+
+    expect(result.current.visibleCount).toBe(0);
+  });
+
+  it('should handle localStorage parse error gracefully', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem(STORAGE_KEY, 'invalid-json{{{');
+
+    const { result } = renderHook(() => useUiPreferences());
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+
+    // Falls back to defaults
+    expect(result.current.preferences).toEqual({
+      showSummaryCards: true,
+      showTimeSeriesChart: true,
+      showHeatmapChart: true,
+      showSubscriptionChart: true,
+    });
+
+    warnSpy.mockRestore();
+  });
 });

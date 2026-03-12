@@ -195,8 +195,6 @@ export function StreamSettingsEditor({ isOpen, onClose }: StreamSettingsEditorPr
   }, [isOpen, fetchTemplates]);
 
   const handleCreateTemplate = async () => {
-    if (!newTemplateName.trim()) return;
-
     setTemplateActionLoading(true);
     try {
       // 使用 getApiUrl 取得完整後端 URL
