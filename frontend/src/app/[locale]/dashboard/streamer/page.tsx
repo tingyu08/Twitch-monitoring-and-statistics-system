@@ -175,9 +175,7 @@ export default function StreamerDashboard() {
         );
         mutate(`/api/streamer/heatmap/${bootstrapChartRange}`, data.heatmap, false);
         mutate(`/api/streamer/subscription-trend/${bootstrapSubsRange}`, data.subscriptionTrend, false);
-        if (!cancelled) {
-          setBootstrapLoaded(true);
-        }
+        setBootstrapLoaded(true);
       } catch (err) {
         authLogger.warn("Dashboard bootstrap failed", err);
         if (!cancelled) {

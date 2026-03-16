@@ -4,6 +4,31 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { HttpClientError, httpClient } from "@/lib/api/httpClient";
 
+export function isHttpClient401Instance(error: unknown) {
+  return error instanceof HttpClientError && error.status === 401;
+}
+
+export function hasStatus401(error: unknown) {
+  return typeof error === "object" && error !== null && "status" in error && error.status === 401;
+}
+
+export function isUnauthorizedConsentError(error: unknown) {
+  return isHttpClient401Instance(error) || hasStatus401(error);
+}
+
+export function buildConsentBannerHandlers(args: {
+  router: { push: (path: string) => void };
+  setShowBanner: (value: boolean) => void;
+}) {
+  const handleCustomize = () => {
+    localStorage.setItem("consent_banner_shown", "true");
+    args.setShowBanner(false);
+    args.router.push("/dashboard/viewer/settings?mode=privacy");
+  };
+
+  return { handleCustomize };
+}
+
 interface ConsentBannerProps {
   onAcceptAll: () => void;
   onCustomize: () => void;
@@ -79,7 +104,7 @@ export function ConsentBannerWrapper() {
           setShowBanner(true);
         }
       } catch (error) {
-        if (error instanceof HttpClientError && error.status === 401) {
+        if (isUnauthorizedConsentError(error)) {
           return;
         }
 
@@ -107,9 +132,10 @@ export function ConsentBannerWrapper() {
   };
 
   const handleCustomize = () => {
-    localStorage.setItem("consent_banner_shown", "true");
-    setShowBanner(false);
-    router.push("/dashboard/viewer/settings?mode=privacy");
+    buildConsentBannerHandlers({
+      router,
+      setShowBanner,
+    }).handleCustomize();
   };
 
   if (isLoading || !showBanner) {

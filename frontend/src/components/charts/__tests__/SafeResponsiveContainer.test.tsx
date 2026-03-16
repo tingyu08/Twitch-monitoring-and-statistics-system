@@ -87,6 +87,25 @@ describe("SafeResponsiveContainer", () => {
     warnSpy.mockRestore();
   });
 
+  it("ignores empty observer entries and zero-sized measurements", () => {
+    render(
+      <SafeResponsiveContainer>
+        <ChartStub />
+      </SafeResponsiveContainer>
+    );
+
+    act(() => {
+      resizeObserverCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
+      resizeObserverCallback?.(
+        [{ contentRect: { width: 0, height: 0 } }] as ResizeObserverEntry[],
+        {} as ResizeObserver
+      );
+    });
+
+    expect(screen.getByText("載入圖表中...")).toBeInTheDocument();
+    expect(chartRender).not.toHaveBeenCalled();
+  });
+
   it("disconnects the observer on unmount", () => {
     const { unmount } = render(
       <SafeResponsiveContainer>
@@ -97,6 +116,25 @@ describe("SafeResponsiveContainer", () => {
     unmount();
 
     expect(mockDisconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores observer callbacks after unmount", () => {
+    const { unmount } = render(
+      <SafeResponsiveContainer>
+        <ChartStub />
+      </SafeResponsiveContainer>
+    );
+
+    unmount();
+
+    act(() => {
+      resizeObserverCallback?.(
+        [{ contentRect: { width: 240, height: 120 } }] as ResizeObserverEntry[],
+        {} as ResizeObserver
+      );
+    });
+
+    expect(chartRender).not.toHaveBeenCalled();
   });
 });
 

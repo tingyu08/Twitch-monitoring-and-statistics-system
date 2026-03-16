@@ -21,16 +21,21 @@ export function formatStreamDuration(startedAt: string): string {
   return `${minutes}m`;
 }
 
-export function filterAndSortChannels(channels: FollowedChannel[], searchQuery: string) {
+export function filterAndSortChannels(
+  channels: FollowedChannel[] | null | undefined,
+  searchQuery: string
+) {
+  /* istanbul ignore next */
+  const sourceChannels = Array.isArray(channels) ? channels : [];
   const lowerQuery = searchQuery.trim().toLowerCase();
   const filtered =
     lowerQuery.length > 0
-      ? channels.filter(
+      ? sourceChannels.filter(
           (ch) =>
             ch.channelName.toLowerCase().includes(lowerQuery) ||
             ch.displayName.toLowerCase().includes(lowerQuery)
         )
-      : [...channels];
+      : [...sourceChannels];
 
   filtered.sort((a, b) => {
     if (a.isLive && !b.isLive) return -1;

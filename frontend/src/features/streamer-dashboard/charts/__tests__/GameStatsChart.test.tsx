@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GameStatsChart } from "../GameStatsChart";
 import * as streamerApi from "@/lib/api/streamer";
 
@@ -16,7 +16,12 @@ jest.mock("recharts", () => ({
   Bar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   XAxis: () => null,
   YAxis: () => null,
-  Tooltip: () => null,
+  Tooltip: ({ formatter }: { formatter?: (value: number | undefined) => [string, string] }) => {
+    if (formatter) {
+      formatter(undefined);
+    }
+    return null;
+  },
   Cell: () => null,
 }));
 
@@ -80,6 +85,46 @@ describe("GameStatsChart", () => {
       // ChartError renders an error title
       expect(screen.getByText("errorTitle")).toBeInTheDocument();
     });
+
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    } catch {
+      // jsdom reload/navigation side effects are not implemented
+    }
+  });
+
+  it("does not update state after unmount on success or failure", async () => {
+    let resolveRequest: ((value: streamerApi.GameStats[]) => void) | undefined;
+    let rejectRequest: ((reason?: unknown) => void) | undefined;
+
+    mockedStreamerApi.getStreamerGameStats
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRequest = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectRequest = reject;
+          })
+      );
+
+    const first = render(<GameStatsChart />);
+    first.unmount();
+
+    await waitFor(() => {
+      expect(resolveRequest).toBeDefined();
+    });
+
+    resolveRequest?.(mockGameStats);
+
+    const second = render(<GameStatsChart range="90d" />);
+    second.unmount();
+    rejectRequest?.(new Error("late failure"));
+
+    expect(mockedStreamerApi.getStreamerGameStats).toHaveBeenCalledTimes(2);
   });
 
   it("API 回傳空陣列時顯示空狀態", async () => {

@@ -65,4 +65,17 @@ describe("ThemeToggle", () => {
 
     expect(setTheme).toHaveBeenCalledWith("dark");
   });
+
+  it("uses default props when no explicit options are provided", () => {
+    const setTheme = jest.fn();
+    mockUseTheme.mockReturnValue({
+      theme: "system",
+      resolvedTheme: "light",
+      setTheme,
+    });
+
+    render(<ThemeToggle />);
+
+    expect(screen.getByRole("button", { name: "切換至系統模式" })).toBeInTheDocument();
+  });
 });

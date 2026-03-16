@@ -121,6 +121,13 @@ describe('StreamSummaryCards', () => {
       expect(streamerApi.getStreamerSummary).toHaveBeenCalledTimes(2);
     });
     expect(streamerApi.getStreamerSummary).toHaveBeenLastCalledWith('7d');
+
+    const button90d = screen.getByText('recent90');
+    await user.click(button90d);
+
+    await waitFor(() => {
+      expect(streamerApi.getStreamerSummary).toHaveBeenLastCalledWith('90d');
+    });
   });
 
   it('應該在資料為估算值時顯示警告標籤', async () => {

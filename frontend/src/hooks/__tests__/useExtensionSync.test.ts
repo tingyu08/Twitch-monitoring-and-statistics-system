@@ -125,6 +125,18 @@ describe("useExtensionSync", () => {
     );
   });
 
+  it("does not post a message when the backend returns no token", async () => {
+    mockedHttpClient.mockResolvedValue({ token: "", expiresIn: 3600 });
+    const postMessageSpy = jest.spyOn(window, "postMessage");
+    const { result } = renderHook(() => useExtensionSync(null));
+
+    await act(async () => {
+      await result.current.syncToExtension();
+    });
+
+    expect(postMessageSpy).not.toHaveBeenCalled();
+  });
+
   it("auto-syncs when user is logged in and extension becomes installed", async () => {
     const includesSpy = jest.spyOn(Array.prototype, "includes").mockReturnValue(true);
     mockedHttpClient.mockResolvedValue({ token: "auto-jwt", expiresIn: 3600 });

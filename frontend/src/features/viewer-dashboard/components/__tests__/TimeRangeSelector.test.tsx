@@ -150,6 +150,18 @@ describe("TimeRangeSelector", () => {
     });
     expect(mockOnRangeChange).not.toHaveBeenCalled();
   });
+
+  it("shows the custom range badge when currentRange is custom", () => {
+    render(
+      <TimeRangeSelector
+        currentRange="custom"
+        onRangeChange={mockOnRangeChange}
+        onCustomRangeChange={mockOnCustomRangeChange}
+      />
+    );
+
+    expect(screen.getByText("custom")).toBeInTheDocument();
+  });
 });
 
 describe("getRangeDays", () => {

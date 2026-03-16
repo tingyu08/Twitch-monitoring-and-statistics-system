@@ -303,4 +303,124 @@ describe("StreamerDashboardPage", () => {
     });
     expect(screen.getByText("welcome:{\"name\":\"Streamer\"}")).toBeInTheDocument();
   });
+
+  it("covers preference fallback, bootstrap null summary, and remaining chart states", async () => {
+    mockUiPreferences.preferences = undefined;
+    mockUiPreferences.visibleCount = undefined;
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        summary: null,
+        timeSeries: { data: [] },
+        heatmap: [{ dayOfWeek: 1, hour: 1, streamCount: 1 }],
+        subscriptionTrend: [{ date: "2026-03-01", totalSubs: 1 }],
+      }),
+    });
+    mockTimeSeries = { data: [], isLoading: false, error: null, refresh: jest.fn() };
+    mockHeatmap = { data: [], isLoading: true, error: null, refresh: jest.fn(), maxValue: 0 };
+    mockSubscriptionTrend = {
+      data: [],
+      isLoading: true,
+      error: null,
+      refresh: jest.fn(),
+      currentDataDays: 0,
+      minDataDays: 7,
+      isEstimated: false,
+    };
+
+    render(<StreamerDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText("no-summary")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("noStreamData")).toBeInTheDocument();
+    expect(screen.getAllByText("loadingCharts").length).toBeGreaterThan(1);
+  });
+
+  it("counts visible sections from preference values when visibleCount is unavailable", async () => {
+    mockUiPreferences.preferences = {
+      showSummaryCards: true,
+      showTimeSeriesChart: true,
+      showHeatmapChart: false,
+      showSubscriptionChart: false,
+    };
+    mockUiPreferences.visibleCount = undefined;
+
+    render(<StreamerDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("summary-section")).toBeInTheDocument();
+      expect(screen.getByTestId("timeseries-section")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("allHidden")).not.toBeInTheDocument();
+  });
+
+  it("stops bootstrap state updates after unmount", async () => {
+    let resolveBootstrap: ((value: unknown) => void) | undefined;
+    (global.fetch as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBootstrap = resolve;
+        })
+    );
+
+    const { unmount } = render(<StreamerDashboard />);
+    unmount();
+
+    await act(async () => {
+      resolveBootstrap?.({
+        ok: true,
+        json: async () => ({
+          summary: { streamCount: 1 },
+          timeSeries: { data: [{ x: 1 }] },
+          heatmap: [{ dayOfWeek: 1, hour: 1, streamCount: 1 }],
+          subscriptionTrend: [{ date: "2026-03-01", totalSubs: 1 }],
+        }),
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockMutate).not.toHaveBeenCalledWith(
+      "/api/streamer/time-series/30d/day",
+      expect.anything(),
+      false
+    );
+  });
+
+  it("skips bootstrap failure recovery when the component is already unmounted", async () => {
+    let rejectBootstrap: ((reason?: unknown) => void) | undefined;
+    (global.fetch as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectBootstrap = reject;
+        })
+    );
+
+    const { unmount } = render(<StreamerDashboard />);
+    unmount();
+
+    await act(async () => {
+      rejectBootstrap?.(new Error("bootstrap failed after unmount"));
+      await Promise.resolve();
+    });
+
+    expect(mockWarn).toHaveBeenCalled();
+    expect(mockMutate).not.toHaveBeenCalledWith("/api/streamer/time-series/30d/day");
+  });
+
+  it("logs null userId when role mismatch user lacks viewerId", async () => {
+    mockAuthUser = { role: "viewer", displayName: "Viewer Without Id" };
+
+    render(<StreamerDashboard />);
+
+    act(() => {
+      jest.runAllTimers();
+    });
+
+    await waitFor(() => {
+      expect(mockWarn).toHaveBeenCalledWith("Dashboard role mismatch", { userId: null });
+    });
+  });
 });

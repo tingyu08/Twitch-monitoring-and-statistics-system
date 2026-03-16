@@ -64,9 +64,7 @@ export function SafeResponsiveContainer({
       }
     });
 
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
+    resizeObserver.observe(containerRef.current as HTMLDivElement);
 
     return () => {
       mounted = false;

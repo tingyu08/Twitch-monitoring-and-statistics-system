@@ -410,4 +410,35 @@ describe("ViewerSettingsPage", () => {
       expect(screen.getByText("撤銷失敗，請稍後再試")).toBeInTheDocument();
     });
   });
+
+  it("clears success messages after their timeout windows", async () => {
+    jest.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+
+    render(<ViewerSettingsPage />);
+    await screen.findByText("settings.dataManagement.title");
+
+    await user.click(screen.getByRole("button", { name: "📤 settings.dataManagement.exportButton" }));
+    await waitFor(() => {
+      expect(screen.getByText("資料匯出完成！")).toBeInTheDocument();
+    });
+
+    jest.advanceTimersByTime(3000);
+    await waitFor(() => {
+      expect(screen.queryByText("資料匯出完成！")).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "🗑️ settings.dataManagement.deleteButton" }));
+    await user.click(screen.getByRole("button", { name: "settings.deleteModal.confirmButton" }));
+    await waitFor(() => {
+      expect(screen.getByText("刪除請求已建立，您有 7 天可以撤銷")).toBeInTheDocument();
+    });
+
+    jest.advanceTimersByTime(5000);
+    await waitFor(() => {
+      expect(screen.queryByText("刪除請求已建立，您有 7 天可以撤銷")).not.toBeInTheDocument();
+    });
+
+    jest.useRealTimers();
+  });
 });

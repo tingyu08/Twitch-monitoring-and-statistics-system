@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useUiPreferences } from '../useUiPreferences';
+import { __uiPreferencesTestables, useUiPreferences } from '../useUiPreferences';
 
 const STORAGE_KEY = 'bmad.streamerDashboard.uiPreferences.v1';
 
@@ -175,4 +175,55 @@ describe('useUiPreferences', () => {
 
     warnSpy.mockRestore();
   });
+
+  it('savePreferences logs warning when localStorage.setItem throws', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const setItemSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+
+    __uiPreferencesTestables.savePreferences({
+      showSummaryCards: true,
+      showTimeSeriesChart: true,
+      showHeatmapChart: true,
+      showSubscriptionChart: true,
+    });
+
+    expect(warnSpy).toHaveBeenCalled();
+    setItemSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('loadPreferences returns defaults when hasWindow is false', () => {
+    const hasWindowSpy = jest
+      .spyOn(__uiPreferencesTestables, 'hasWindow')
+      .mockReturnValue(false);
+
+    expect(__uiPreferencesTestables.loadPreferences()).toEqual({
+      showSummaryCards: true,
+      showTimeSeriesChart: true,
+      showHeatmapChart: true,
+      showSubscriptionChart: true,
+    });
+
+    hasWindowSpy.mockRestore();
+  });
+
+  it('savePreferences returns early when hasWindow is false', () => {
+    const hasWindowSpy = jest
+      .spyOn(__uiPreferencesTestables, 'hasWindow')
+      .mockReturnValue(false);
+    const setItemSpy = jest.spyOn(Storage.prototype, 'setItem');
+
+    __uiPreferencesTestables.savePreferences({
+      showSummaryCards: true,
+      showTimeSeriesChart: true,
+      showHeatmapChart: true,
+      showSubscriptionChart: true,
+    });
+
+    expect(setItemSpy).not.toHaveBeenCalled();
+    hasWindowSpy.mockRestore();
+  });
+
 });

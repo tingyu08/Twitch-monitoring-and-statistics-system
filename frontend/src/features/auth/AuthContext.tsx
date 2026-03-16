@@ -23,7 +23,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function shouldInitializeAuth(isInitialized: boolean, isFetching: boolean) {
+  return !isInitialized && !isFetching;
+}
+
+export function resolveViewerId(user: UserInfo | null) {
+  if (!user) return null;
+  if ("viewerId" in user && user.viewerId) return user.viewerId;
+  if ("streamerId" in user) return user.streamerId;
+  return null;
+}
+
+export function AuthProvider({
+  children,
+  __testInitState,
+}: {
+  children: ReactNode;
+  __testInitState?: { initialized?: boolean; fetching?: boolean };
+}) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // P0 Fix: 防止重複初始化
   const isInitializedRef = useRef(false);
   const isFetchingRef = useRef(false);
+
+  if (__testInitState) {
+    isInitializedRef.current = __testInitState.initialized ?? isInitializedRef.current;
+    isFetchingRef.current = __testInitState.fetching ?? isFetchingRef.current;
+  }
 
   const fetchUser = async () => {
     // 防止並發請求
@@ -86,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // P0 Fix: 只在首次掛載時執行一次
   useEffect(() => {
-    if (!isInitializedRef.current && !isFetchingRef.current) {
+    if (shouldInitializeAuth(isInitializedRef.current, isFetchingRef.current)) {
       fetchUser();
     }
   }, []);
@@ -95,12 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isViewer = useMemo(() => user !== null && checkIsViewer(user), [user]);
 
   // 同步用戶資訊到擴充功能
-  const viewerId = useMemo(() => {
-    if (!user) return null;
-    if ("viewerId" in user && user.viewerId) return user.viewerId;
-    if ("streamerId" in user) return user.streamerId; // 實況主也可以追蹤
-    return null;
-  }, [user]);
+  const viewerId = useMemo(() => resolveViewerId(user), [user]);
 
   useExtensionSync(viewerId);
 

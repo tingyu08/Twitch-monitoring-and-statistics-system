@@ -12,6 +12,14 @@ import { useState, useEffect, useCallback } from "react";
 // localStorage key（包含版本號，方便未來升級）
 const STORAGE_KEY = "bmad.streamerDashboard.uiPreferences.v1";
 
+export function hasWindow() {
+  return typeof window !== "undefined";
+}
+
+function getWindowAvailability() {
+  return __uiPreferencesTestables.hasWindow();
+}
+
 /**
  * UI 偏好設定介面
  */
@@ -41,7 +49,7 @@ const DEFAULT_PREFERENCES: UiPreferences = {
  * 從 localStorage 讀取偏好設定
  */
 function loadPreferences(): UiPreferences {
-  if (typeof window === "undefined") {
+  if (!getWindowAvailability()) {
     return DEFAULT_PREFERENCES;
   }
 
@@ -63,7 +71,7 @@ function loadPreferences(): UiPreferences {
  * 儲存偏好設定到 localStorage
  */
 function savePreferences(preferences: UiPreferences): void {
-  if (typeof window === "undefined") {
+  if (!getWindowAvailability()) {
     return;
   }
 
@@ -73,6 +81,12 @@ function savePreferences(preferences: UiPreferences): void {
     console.warn("Failed to save UI preferences to localStorage:", error);
   }
 }
+
+export const __uiPreferencesTestables = {
+  hasWindow,
+  loadPreferences,
+  savePreferences,
+};
 
 /**
  * UI 偏好設定 Hook

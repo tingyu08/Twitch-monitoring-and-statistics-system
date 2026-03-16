@@ -147,6 +147,44 @@ describe('DisplayPreferences', () => {
     expect(onToggle).toHaveBeenCalledTimes(4);
   });
 
+  it('compact mode: hide-all only toggles currently visible items', async () => {
+    const onToggle = jest.fn();
+    const user = userEvent.setup();
+    const partialPrefs: UiPreferences = {
+      showSummaryCards: true,
+      showTimeSeriesChart: false,
+      showHeatmapChart: true,
+      showSubscriptionChart: false,
+    };
+
+    render(<DisplayPreferences preferences={partialPrefs} onToggle={onToggle} compact />);
+
+    await user.click(screen.getByTestId('display-preferences-button'));
+    await user.click(screen.getByTestId('hide-all-button'));
+
+    expect(onToggle).toHaveBeenCalledTimes(2);
+    expect(onToggle).toHaveBeenCalledWith('showSummaryCards');
+    expect(onToggle).toHaveBeenCalledWith('showHeatmapChart');
+  });
+
+  it('non-compact hide-all skips preferences that are already hidden', async () => {
+    const onToggle = jest.fn();
+    const user = userEvent.setup();
+    const partialPrefs: UiPreferences = {
+      showSummaryCards: true,
+      showTimeSeriesChart: false,
+      showHeatmapChart: true,
+      showSubscriptionChart: false,
+    };
+
+    render(<DisplayPreferences preferences={partialPrefs} onToggle={onToggle} />);
+
+    await user.click(screen.getByRole('button', { name: /displaySettings/i }));
+    await user.click(screen.getByRole('button', { name: /hideAll/ }));
+
+    expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+
   it('compact mode: should close dropdown when clicking outside', async () => {
     const user = userEvent.setup();
 

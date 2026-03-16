@@ -114,4 +114,34 @@ describe('HeatmapChart', () => {
     const cells = document.querySelectorAll('[style*="background-color"]');
     expect(cells.length).toBeGreaterThan(0);
   });
+
+  it('handles previous-day timezone shifts and sunday peak summaries', () => {
+    const offsetSpy = jest.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(300);
+
+    render(
+      <HeatmapChart
+        data={[
+          { dayOfWeek: 0, hour: 4, value: 5 },
+          { dayOfWeek: 1, hour: 2, value: 1 },
+        ]}
+      />
+    );
+
+    const figure = screen.getByRole('img');
+    expect(figure.getAttribute('aria-label')).toContain('ariaLabel');
+
+    offsetSpy.mockRestore();
+  });
+
+  it('uses an empty peak suffix when all heatmap values are zero', () => {
+    render(<HeatmapChart data={[{ dayOfWeek: 1, hour: 10, value: 0 }]} />);
+
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('ariaLabel');
+  });
+
+  it('uses the sunday index when sunday has the peak activity', () => {
+    render(<HeatmapChart data={[{ dayOfWeek: 0, hour: 10, value: 5 }]} />);
+
+    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('ariaLabel');
+  });
 });

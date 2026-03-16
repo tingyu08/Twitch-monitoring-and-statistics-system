@@ -4,6 +4,10 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
 
+export function redirectToLogin() {
+  window.location.href = "/api/auth/login";
+}
+
 function AuthErrorContent() {
   const searchParams = useSearchParams();
   const reason = searchParams.get("reason") || "unknown";
@@ -46,9 +50,7 @@ function AuthErrorContent() {
             返回首頁
           </Link>
           <button
-            onClick={() => {
-              window.location.href = "/api/auth/login";
-            }}
+            onClick={redirectToLogin}
             className="px-6 py-3 rounded-lg border border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
           >
             重新登入

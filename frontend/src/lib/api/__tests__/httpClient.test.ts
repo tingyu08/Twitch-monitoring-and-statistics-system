@@ -76,6 +76,15 @@ describe("httpClient", () => {
     expect(headers.get("Content-Type")).toBe("application/json");
   });
 
+  it("applies default request options when options are explicitly undefined", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    await httpClient("/explicit-undefined", undefined);
+
+    const requestConfig = mockFetch.mock.calls[0]?.[1] as RequestInit;
+    expect(requestConfig.credentials).toBe("include");
+  });
+
   it("normalizes relative endpoints without leading slash", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ success: true }));
 
@@ -201,6 +210,19 @@ describe("httpClient", () => {
     expect(errorSpy).toHaveBeenCalledWith("[API]", "API Request Error:", networkError);
     errorSpy.mockRestore();
     infoSpy.mockRestore();
+  });
+
+  it("suppresses error logging for configured silent statuses", async () => {
+    process.env = { ...process.env, NODE_ENV: "development" };
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ message: "Not found" }, 404));
+
+    await expect(
+      httpClient("/silent-404", { silentStatuses: [404] })
+    ).rejects.toThrow("Not found");
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it("resolves backend API base URL by environment priority", () => {

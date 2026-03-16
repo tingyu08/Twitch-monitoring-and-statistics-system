@@ -85,6 +85,14 @@ describe('useChartData Hooks', () => {
       expect(result.current.refresh).toBeDefined();
       expect(typeof result.current.refresh).toBe('function');
     });
+
+    it('should not fetch time series when disabled', () => {
+      const { result } = renderHook(() => useTimeSeriesData('7d', 'day', false), { wrapper });
+
+      expect(mockedStreamerApi.getStreamerTimeSeries).not.toHaveBeenCalled();
+      expect(result.current.data).toEqual([]);
+      expect(result.current.isLoading).toBe(false);
+    });
   });
 
   describe('useHeatmapData', () => {
@@ -116,6 +124,14 @@ describe('useChartData Hooks', () => {
       });
 
       expect(result.current.data).toEqual([]);
+    });
+
+    it('should not fetch heatmap when disabled', () => {
+      const { result } = renderHook(() => useHeatmapData('30d', false), { wrapper });
+
+      expect(mockedStreamerApi.getStreamerHeatmap).not.toHaveBeenCalled();
+      expect(result.current.data).toEqual([]);
+      expect(result.current.isLoading).toBe(false);
     });
   });
 

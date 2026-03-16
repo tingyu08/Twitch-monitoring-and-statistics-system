@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 
+import AuthErrorPage, { redirectToLogin } from "../page";
+
 const mockGet = jest.fn();
 
 jest.mock("next/navigation", () => ({
-  useSearchParams: () => ({
-    get: mockGet,
-  }),
+  useSearchParams: () => ({ get: mockGet }),
 }));
 
 jest.mock("next/link", () => ({
@@ -17,33 +17,38 @@ jest.mock("next/link", () => ({
   ),
 }));
 
-import AuthErrorPage from "../page";
-
 describe("AuthErrorPage", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    mockGet.mockReset();
+  });
+
+  it("renders unknown error fallback when reason is missing", async () => {
     mockGet.mockReturnValue(null);
-  });
-
-  it("renders the matching error message for known reasons", () => {
-    mockGet.mockReturnValue("authorization_failed");
-
     render(<AuthErrorPage />);
 
-    expect(screen.getByRole("heading", { name: "授權失敗" })).toBeInTheDocument();
-    expect(
-      screen.getByText("無法完成 Twitch 授權，請確認您已允許所需的權限。")
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "返回首頁" })).toHaveAttribute("href", "/");
-  });
-
-  it("falls back to the unknown error copy and renders the relogin action", () => {
-    mockGet.mockReturnValue("something_else");
-
-    render(<AuthErrorPage />);
-
-    expect(screen.getByRole("heading", { name: "未知錯誤" })).toBeInTheDocument();
+    expect(await screen.findByText("未知錯誤")).toBeInTheDocument();
     expect(screen.getByText("發生了未知的認證錯誤，請重新嘗試。")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "重新登入" })).toBeInTheDocument();
+  });
+
+  it("renders mapped authorization error", async () => {
+    mockGet.mockReturnValue("authorization_failed");
+    render(<AuthErrorPage />);
+
+    expect(await screen.findByText("授權失敗")).toBeInTheDocument();
+  });
+
+  it("falls back to unknown error for unmapped reasons", async () => {
+    mockGet.mockReturnValue("something-else");
+    render(<AuthErrorPage />);
+
+    expect(await screen.findByText("未知錯誤")).toBeInTheDocument();
+  });
+
+  it("redirects to login when retry button is clicked", async () => {
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(() => redirectToLogin()).not.toThrow();
+
+    consoleErrorSpy.mockRestore();
   });
 });

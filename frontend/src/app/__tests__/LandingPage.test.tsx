@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 
 // Mock AuthContext
@@ -110,6 +110,50 @@ describe("LandingPage", () => {
         expect(screen.getByText("home.authErrors.authorizationFailed")).toBeInTheDocument();
       });
     });
+
+    it("顯示 callback exception 與 unknown 錯誤訊息", async () => {
+      const { rerender } = render(<LandingPage />);
+
+      mockGet.mockReturnValue("callback_exception");
+      rerender(<LandingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("home.authErrors.callbackException")).toBeInTheDocument();
+      });
+
+      mockGet.mockReturnValue("something_else");
+      rerender(<LandingPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("home.authErrors.unknown")).toBeInTheDocument();
+      });
+    });
+  });
+
+  it("點擊登入時會清除 logout_pending 並導向登入頁", async () => {
+    const removeItemSpy = jest.spyOn(Storage.prototype, "removeItem");
+
+    mockUseAuthSession.mockReturnValue({
+      user: null,
+      loading: false,
+      error: null,
+      logout: jest.fn(),
+      refresh: jest.fn(),
+      isStreamer: false,
+      isViewer: false,
+    });
+
+    render(<LandingPage />);
+
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "home.loginButton" }));
+    } catch {
+      // jsdom navigation is not implemented; the click still covers the login path
+    }
+
+    expect(removeItemSpy).toHaveBeenCalledWith("logout_pending");
+
+    removeItemSpy.mockRestore();
   });
 
   describe("已登入狀態", () => {

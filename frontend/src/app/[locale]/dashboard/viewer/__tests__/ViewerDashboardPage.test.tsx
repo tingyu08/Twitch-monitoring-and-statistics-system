@@ -298,6 +298,7 @@ describe("ViewerDashboardPage", () => {
       socketHandlers.get("stats-update-batch")?.({});
       socketHandlers.get("channel.update")?.({ channelId: "missing", viewerCount: 1 });
       socketHandlers.get("stream.offline")?.({ channelId: "missing", channelName: "none" });
+      socketHandlers.get("stream.offline")?.({ channelId: "off-a", channelName: "offa" });
       jest.runOnlyPendingTimers();
     });
 
@@ -313,6 +314,88 @@ describe("ViewerDashboardPage", () => {
       socketHandlers.get("stream.online")?.({ channelName: "livealpha" });
       unmount();
     });
+  });
+
+  it("updates channels by channelName and tolerates null channel collections", async () => {
+    mockChannels = buildChannels().slice(0, 2);
+    mockSocketConnected = true;
+    mockSetQueryData.mockImplementation((_key, updater) => {
+      mockChannels = updater(mockChannels);
+      return mockChannels;
+    });
+
+    const { rerender } = render(<ViewerDashboardPage />);
+
+    act(() => {
+      socketHandlers.get("channel.update")?.({
+        channelName: "livebeta",
+        viewerCount: 77,
+        title: "By name update",
+      });
+      socketHandlers.get("stream.online")?.({
+        channelName: "livebeta",
+        viewerCount: 88,
+        startedAt: "2026-03-12T10:00:00.000Z",
+      });
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(mockChannels.find((channel) => channel.id === "live-b")?.viewerCount).toBe(88);
+
+    mockChannels = null as unknown as any[];
+    rerender(<ViewerDashboardPage />);
+
+    expect(screen.getByText("viewer.noFollowedChannels")).toBeInTheDocument();
+  });
+
+  it("matches offline updates by channel name and skips listen notifications for offline-only lists", async () => {
+    mockChannels = buildChannels().map((channel) => ({ ...channel, isLive: false }));
+    mockSocketConnected = true;
+    mockSetQueryData.mockImplementation((_key, updater) => {
+      mockChannels = updater(mockChannels);
+      return mockChannels;
+    });
+
+    render(<ViewerDashboardPage />);
+
+    expect(mockSetListenChannels).not.toHaveBeenCalled();
+
+    act(() => {
+      socketHandlers.get("stream.offline")?.({ channelName: "livealpha" });
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(mockChannels.find((channel) => channel.id === "live-a")?.isLive).toBe(false);
+  });
+
+  it("flushes matched realtime mutations into session cache and listen notifications", async () => {
+    mockChannels = buildChannels().slice(0, 2);
+    mockSocketConnected = true;
+    mockSetQueryData.mockImplementation((_key, updater) => {
+      mockChannels = updater(mockChannels);
+      return mockChannels;
+    });
+
+    render(<ViewerDashboardPage />);
+
+    await waitFor(() => {
+      expect(mockSetListenChannels).toHaveBeenCalledWith([
+        { channelName: "livealpha", isLive: true },
+        { channelName: "livebeta", isLive: true },
+      ]);
+    });
+
+    act(() => {
+      socketHandlers.get("channel.update")?.({
+        channelName: "livealpha",
+        viewerCount: 123,
+        title: "Changed title",
+      });
+      jest.runAllTimers();
+    });
+
+    expect(mockChannels.find((channel) => channel.id === "live-a")?.viewerCount).toBe(123);
+    expect(window.sessionStorage.setItem).toHaveBeenCalled();
   });
 });
 

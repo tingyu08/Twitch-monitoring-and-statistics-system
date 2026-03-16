@@ -32,6 +32,7 @@ jest.mock("recharts", () => ({
     if (formatter) {
       formatter(4.5, "totalHours");
       formatter(2, "sessionCount");
+      formatter(undefined as unknown as number, "unknownKey");
       formatter(3, "unknownKey");
     }
     return null;

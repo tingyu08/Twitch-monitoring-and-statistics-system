@@ -1,6 +1,13 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { ConsentBanner, ConsentBannerWrapper } from "../components/ConsentBanner";
+import {
+  buildConsentBannerHandlers,
+  ConsentBanner,
+  ConsentBannerWrapper,
+  hasStatus401,
+  isHttpClient401Instance,
+  isUnauthorizedConsentError,
+} from "../components/ConsentBanner";
 import { httpClient, HttpClientError } from "@/lib/api/httpClient";
 import { useRouter } from "next/navigation";
 
@@ -95,7 +102,7 @@ describe("ConsentBanner", () => {
   });
 
   it("should silently skip banner when API returns 401 HttpClientError", async () => {
-    const error401 = new HttpClientError("Unauthorized", 401);
+    const error401 = { status: 401 } as unknown as HttpClientError;
     (httpClient as jest.Mock).mockRejectedValueOnce(error401);
 
     const { container } = render(<ConsentBannerWrapper />);
@@ -172,5 +179,27 @@ describe("ConsentBanner", () => {
 
     fireEvent.click(screen.getByText(/自訂設定/i));
     expect(onCustomize).toHaveBeenCalledTimes(1);
+  });
+
+  it("isUnauthorizedConsentError only matches 401 HttpClientError", () => {
+    const mockedHttp401 = Object.assign(Object.create(HttpClientError.prototype), { status: 401 });
+    expect(isHttpClient401Instance(mockedHttp401)).toBe(true);
+    expect(isHttpClient401Instance(new Error("oops"))).toBe(false);
+    expect(hasStatus401({ status: 401 })).toBe(true);
+    expect(hasStatus401({ status: 403 })).toBe(false);
+    expect(isUnauthorizedConsentError({ status: 401 })).toBe(true);
+    expect(isUnauthorizedConsentError({ status: 403 })).toBe(false);
+    expect(isUnauthorizedConsentError(new Error("oops"))).toBe(false);
+  });
+
+  it("buildConsentBannerHandlers customizes and routes correctly", () => {
+    const push = jest.fn();
+    const setShowBanner = jest.fn();
+
+    buildConsentBannerHandlers({ router: { push }, setShowBanner }).handleCustomize();
+
+    expect(localStorage.getItem("consent_banner_shown")).toBe("true");
+    expect(setShowBanner).toHaveBeenCalledWith(false);
+    expect(push).toHaveBeenCalledWith("/dashboard/viewer/settings?mode=privacy");
   });
 });

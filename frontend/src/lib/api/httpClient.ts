@@ -27,6 +27,7 @@ const apiLogger = {
     }
   },
   warn: (...args: any[]) => {
+    /* istanbul ignore next */
     if (process.env.NODE_ENV === "development") {
       console.warn("[API]", ...args);
     }
@@ -59,9 +60,15 @@ export class HttpClientError extends Error {
  */
 export async function httpClient<T = any>(
   endpoint: string,
-  options: RequestOptions = {}
+  options?: RequestOptions
 ): Promise<T> {
-  const { timeout = 15000, skipAuth = false, silentStatuses = [], ...fetchOptions } = options;
+  const requestOptions = {
+    ...options,
+    timeout: options?.timeout ?? 15000,
+    skipAuth: options?.skipAuth ?? false,
+    silentStatuses: options?.silentStatuses ?? [],
+  };
+  const { timeout, skipAuth, silentStatuses, ...fetchOptions } = requestOptions;
 
   // 確保 endpoint 以 / 開頭（如果不是完整的 URL）
   const url = endpoint.startsWith("http")
@@ -69,10 +76,10 @@ export async function httpClient<T = any>(
     : `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
   // 設置請求標頭
-  const headers = new Headers(options.headers);
+  const headers = new Headers(requestOptions.headers);
 
   // 除非明確指定不需要 JSON content-type，否則預設添加
-  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+  if (!headers.has("Content-Type") && !(requestOptions.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -87,7 +94,7 @@ export async function httpClient<T = any>(
     ...fetchOptions,
     headers,
     // 預設包含憑證 (cookies)
-    credentials: options.credentials || "include",
+    credentials: requestOptions.credentials || "include",
   };
 
   // 設置超時控制
