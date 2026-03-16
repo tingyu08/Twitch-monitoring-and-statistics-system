@@ -440,34 +440,6 @@ describe('AuthContext / AuthProvider', () => {
     expect(shouldInitializeAuth(false, true)).toBe(false);
   });
 
-  it('does not call fetchUser on mount when test init state blocks initialization', async () => {
-    render(
-      <AuthProvider __testInitState={{ initialized: true }}>
-        <Consumer />
-      </AuthProvider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).toBe('true');
-    });
-
-    expect(mockGetMe).not.toHaveBeenCalled();
-  });
-
-  it('uses existing initialized ref when __testInitState.initialized is undefined', async () => {
-    render(
-      <AuthProvider __testInitState={{ fetching: true }}>
-        <Consumer />
-      </AuthProvider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').textContent).toBe('true');
-    });
-
-    expect(mockGetMe).not.toHaveBeenCalled();
-  });
-
   it('resolveViewerId returns expected values for user variants', () => {
     expect(resolveViewerId(null)).toBeNull();
     expect(resolveViewerId({ viewerId: 'viewer-1', role: 'viewer' } as any)).toBe('viewer-1');

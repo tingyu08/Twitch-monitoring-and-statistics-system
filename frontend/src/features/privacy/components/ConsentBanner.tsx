@@ -8,12 +8,8 @@ export function isHttpClient401Instance(error: unknown) {
   return error instanceof HttpClientError && error.status === 401;
 }
 
-export function hasStatus401(error: unknown) {
-  return typeof error === "object" && error !== null && "status" in error && error.status === 401;
-}
-
 export function isUnauthorizedConsentError(error: unknown) {
-  return isHttpClient401Instance(error) || hasStatus401(error);
+  return isHttpClient401Instance(error);
 }
 
 export function buildConsentBannerHandlers(args: {

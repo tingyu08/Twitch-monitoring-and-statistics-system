@@ -4,7 +4,6 @@ import {
   buildConsentBannerHandlers,
   ConsentBanner,
   ConsentBannerWrapper,
-  hasStatus401,
   isHttpClient401Instance,
   isUnauthorizedConsentError,
 } from "../components/ConsentBanner";
@@ -102,7 +101,7 @@ describe("ConsentBanner", () => {
   });
 
   it("should silently skip banner when API returns 401 HttpClientError", async () => {
-    const error401 = { status: 401 } as unknown as HttpClientError;
+    const error401 = Object.assign(Object.create(HttpClientError.prototype), { status: 401 });
     (httpClient as jest.Mock).mockRejectedValueOnce(error401);
 
     const { container } = render(<ConsentBannerWrapper />);
@@ -185,10 +184,9 @@ describe("ConsentBanner", () => {
     const mockedHttp401 = Object.assign(Object.create(HttpClientError.prototype), { status: 401 });
     expect(isHttpClient401Instance(mockedHttp401)).toBe(true);
     expect(isHttpClient401Instance(new Error("oops"))).toBe(false);
-    expect(hasStatus401({ status: 401 })).toBe(true);
-    expect(hasStatus401({ status: 403 })).toBe(false);
-    expect(isUnauthorizedConsentError({ status: 401 })).toBe(true);
+    expect(isUnauthorizedConsentError(mockedHttp401)).toBe(true);
     expect(isUnauthorizedConsentError({ status: 403 })).toBe(false);
+    expect(isUnauthorizedConsentError({ status: 401 })).toBe(false);
     expect(isUnauthorizedConsentError(new Error("oops"))).toBe(false);
   });
 

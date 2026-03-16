@@ -3,10 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
-
-export function redirectToLogin() {
-  window.location.href = "/api/auth/login";
-}
+import { redirectToLogin } from "./navigation";
 
 function AuthErrorContent() {
   const searchParams = useSearchParams();

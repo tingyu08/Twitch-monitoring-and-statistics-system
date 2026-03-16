@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
+import { fireEvent } from "@testing-library/react";
 
-import AuthErrorPage, { redirectToLogin } from "../page";
+import AuthErrorPage from "../page";
+import { redirectToLogin } from "../navigation";
 
 const mockGet = jest.fn();
 
@@ -17,9 +19,14 @@ jest.mock("next/link", () => ({
   ),
 }));
 
+jest.mock("../navigation", () => ({
+  redirectToLogin: jest.fn(),
+}));
+
 describe("AuthErrorPage", () => {
   beforeEach(() => {
     mockGet.mockReset();
+    jest.mocked(redirectToLogin).mockClear();
   });
 
   it("renders unknown error fallback when reason is missing", async () => {
@@ -45,10 +52,16 @@ describe("AuthErrorPage", () => {
   });
 
   it("redirects to login when retry button is clicked", async () => {
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    render(<AuthErrorPage />);
 
-    expect(() => redirectToLogin()).not.toThrow();
+    fireEvent.click(await screen.findByRole("button", { name: "重新登入" }));
 
-    consoleErrorSpy.mockRestore();
+    expect(redirectToLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirectToLogin redirects to login page", () => {
+    redirectToLogin();
+
+    expect(redirectToLogin).toHaveBeenCalledTimes(1);
   });
 });

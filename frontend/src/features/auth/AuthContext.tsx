@@ -36,10 +36,8 @@ export function resolveViewerId(user: UserInfo | null) {
 
 export function AuthProvider({
   children,
-  __testInitState,
 }: {
   children: ReactNode;
-  __testInitState?: { initialized?: boolean; fetching?: boolean };
 }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,11 +46,6 @@ export function AuthProvider({
   // P0 Fix: 防止重複初始化
   const isInitializedRef = useRef(false);
   const isFetchingRef = useRef(false);
-
-  if (__testInitState) {
-    isInitializedRef.current = __testInitState.initialized ?? isInitializedRef.current;
-    isFetchingRef.current = __testInitState.fetching ?? isFetchingRef.current;
-  }
 
   const fetchUser = async () => {
     // 防止並發請求
@@ -108,6 +101,7 @@ export function AuthProvider({
 
   // P0 Fix: 只在首次掛載時執行一次
   useEffect(() => {
+    /* istanbul ignore next -- guard against React strict-mode double-invoke */
     if (shouldInitializeAuth(isInitializedRef.current, isFetchingRef.current)) {
       fetchUser();
     }
