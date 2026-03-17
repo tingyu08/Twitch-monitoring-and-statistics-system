@@ -1,4 +1,4 @@
-﻿import request from "supertest";
+import request from "supertest";
 import express from "express";
 import { streamerRoutes } from "../streamer.routes";
 import * as streamerService from "../streamer.service";
@@ -83,6 +83,28 @@ describe("Streamer Integration Tests", () => {
 
       expect(response.body).toHaveProperty("error");
       expect(response.body.error).toBe("Internal Server Error");
+    });
+  });
+
+  describe("GET /api/streamer/:streamerId/summary route registration", () => {
+    it("should NOT register /:streamerId/summary in production", () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+
+      let prodRoutes: typeof streamerRoutes;
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        prodRoutes = require("../streamer.routes").streamerRoutes;
+      });
+
+      const registeredPaths = (prodRoutes! as any).stack
+        .filter((layer: any) => layer.route)
+        .map((layer: any) => layer.route.path);
+
+      // The "/:streamerId/summary" route should NOT be present
+      expect(registeredPaths).not.toContain("/:streamerId/summary");
+
+      process.env.NODE_ENV = originalEnv;
     });
   });
 

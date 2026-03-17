@@ -12,7 +12,7 @@ describe("TwitchOAuthClient", () => {
     jest.clearAllMocks();
     // Default mock for axios.isAxiosError
     (axios.isAxiosError as unknown as jest.Mock).mockImplementation(
-      (payload) => payload?.isAxiosError === true
+        (payload) => payload?.isAxiosError === true
     );
   });
 
@@ -88,6 +88,7 @@ describe("TwitchOAuthClient", () => {
       expect(res.access_token).toBe("at429");
       expect(mockedAxios.post).toHaveBeenCalledTimes(2);
     });
+
   });
 
   describe("getUserInfo", () => {
@@ -198,6 +199,14 @@ describe("TwitchOAuthClient", () => {
 
     it("maps 400/401 errors to re-authenticate message", async () => {
       mockedAxios.post.mockRejectedValueOnce({ isAxiosError: true, response: { status: 400 } });
+
+      await expect(client.refreshAccessToken("bad-refresh")).rejects.toThrow(
+        "Refresh token is invalid or expired. User needs to re-authenticate."
+      );
+    });
+
+    it("maps 401 refresh errors to re-authenticate message", async () => {
+      mockedAxios.post.mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } });
 
       await expect(client.refreshAccessToken("bad-refresh")).rejects.toThrow(
         "Refresh token is invalid or expired. User needs to re-authenticate."

@@ -437,6 +437,32 @@ describe("auth.service", () => {
         expect.objectContaining({ message: "warmup failed" })
       );
     });
+
+    it("logs loader promise rejection for warmup cache branch", async () => {
+      warmupFollowedChannelsCache("viewer-1", () => Promise.reject(new Error("viewer async load failed")));
+
+      await jest.runAllTimersAsync();
+      await Promise.resolve();
+
+      expect(logger.error).toHaveBeenCalledWith(
+        "Auth",
+        "Cache warmup failed after login",
+        expect.objectContaining({ message: "viewer async load failed" })
+      );
+    });
+
+    it("logs loader promise rejection for chat reinit branch", async () => {
+      reinitializeChatServiceAfterLogin(() => Promise.reject(new Error("chat async load failed")));
+
+      await jest.runAllTimersAsync();
+      await Promise.resolve();
+
+      expect(logger.error).toHaveBeenCalledWith(
+        "Auth",
+        "Chat service reinit failed after login",
+        expect.objectContaining({ message: "chat async load failed" })
+      );
+    });
   });
 
   describe("getStreamerById", () => {

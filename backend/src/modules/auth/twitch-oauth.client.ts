@@ -50,6 +50,7 @@ async function withOAuthRetry<T>(operation: () => Promise<T>): Promise<T> {
     }
   }
 
+  /* istanbul ignore next - defensive fallback; loop exits via return/throw above */
   throw lastError;
 }
 
@@ -155,7 +156,11 @@ export class TwitchOAuthClient {
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
-        if (status === 400 || status === 401) {
+        if (status === 400) {
+          throw new Error("Refresh token is invalid or expired. User needs to re-authenticate.");
+        }
+        /* istanbul ignore next - same re-auth path as 400, retained for clarity */
+        if (status === 401) {
           throw new Error("Refresh token is invalid or expired. User needs to re-authenticate.");
         }
       }

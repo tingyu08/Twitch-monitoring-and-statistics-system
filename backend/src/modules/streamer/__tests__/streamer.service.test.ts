@@ -1005,6 +1005,18 @@ describe("StreamerService", () => {
       expect(res.totalPages).toBe(0);
     });
 
+    it("should skip sync when hasRecentSyncAttempt is true (line 837 branch)", async () => {
+      (prisma.video.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.video.count as jest.Mock).mockResolvedValue(0);
+
+      // Pre-set the sync throttle cache so the sync is skipped
+      cacheManager.set("streamer:s1:videos:sync-attempted", true, 120);
+
+      const res = await getStreamerVideos("s1");
+      expect(res.data).toHaveLength(0);
+      expect(twurpleVideoService.syncVideos).not.toHaveBeenCalled();
+    });
+
     it("should trigger one-time sync and refetch when first page is empty", async () => {
       (prisma.video.findMany as jest.Mock)
         .mockResolvedValueOnce([])
@@ -1093,6 +1105,18 @@ describe("StreamerService", () => {
       const res = await getStreamerClips("s1");
       expect(res.data).toHaveLength(0);
       expect(res.totalPages).toBe(0);
+    });
+
+    it("should skip sync when hasRecentSyncAttempt is true (line 888 branch)", async () => {
+      (prisma.clip.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.clip.count as jest.Mock).mockResolvedValue(0);
+
+      // Pre-set the sync throttle cache so the sync is skipped
+      cacheManager.set("streamer:s1:clips:sync-attempted", true, 120);
+
+      const res = await getStreamerClips("s1");
+      expect(res.data).toHaveLength(0);
+      expect(twurpleVideoService.syncClips).not.toHaveBeenCalled();
     });
 
     it("should trigger one-time clip sync and refetch when first page is empty", async () => {

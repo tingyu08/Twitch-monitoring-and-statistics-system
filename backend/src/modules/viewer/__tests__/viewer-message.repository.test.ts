@@ -42,7 +42,11 @@ import { prisma } from "../../../db/prisma";
 import { webSocketGateway } from "../../../services/websocket.gateway";
 import { cacheManager } from "../../../utils/cache-manager";
 import { logger } from "../../../utils/logger";
-import { ViewerMessageRepository } from "../viewer-message.repository";
+import {
+  isRetryableErrorForTesting,
+  retryOnTursoErrorForTesting,
+  ViewerMessageRepository,
+} from "../viewer-message.repository";
 
 describe("ViewerMessageRepository flush batch emits", () => {
   const txExecuteRaw = jest.fn();
@@ -823,6 +827,147 @@ describe("ViewerMessageRepository flush batch emits", () => {
     ]);
 
     expect(txExecuteRaw).toHaveBeenCalled();
+  });
+
+  it("detects socket hang up as retryable error (line 92)", () => {
+    expect(isRetryableErrorForTesting("socket hang up")).toEqual({
+      retryable: true,
+      errorType: "socket_hangup",
+    });
+    expect(isRetryableErrorForTesting("Hang up while sending request")).toEqual({
+      retryable: true,
+      errorType: "socket_hangup",
+    });
+  });
+
+  it("returns null when retryOnTursoError is called with maxRetries < 1 (line 111)", async () => {
+    const operation = jest.fn().mockResolvedValue("ok");
+
+    await expect(retryOnTursoErrorForTesting(operation, "ctx", 0)).resolves.toBeNull();
+    expect(operation).not.toHaveBeenCalled();
+  });
+
+  it("cleans up expired fingerprints (line 184)", () => {
+    const repo = new ViewerMessageRepository();
+    (repo as any).recentMessageFingerprints.set("expired", 10);
+    (repo as any).recentMessageFingerprints.set("fresh", 999999);
+
+    (repo as any).cleanupRecentFingerprints(100);
+
+    expect((repo as any).recentMessageFingerprints.has("expired")).toBe(false);
+    expect((repo as any).recentMessageFingerprints.has("fresh")).toBe(true);
+  });
+
+  it("saveMessage accepts already parsed messages without raw type-guard branch", async () => {
+    const repo = new ViewerMessageRepository();
+    (cacheManager.get as jest.Mock).mockImplementation((key: string) => {
+      if (key.startsWith("lookup:viewer")) return "viewer-parsed";
+      if (key.startsWith("lookup:channel")) return "channel-parsed";
+      return null;
+    });
+
+    await repo.saveMessage("demo", {
+      twitchUserId: "tu-parsed",
+      username: "user",
+      displayName: "User",
+      messageText: "already parsed",
+      messageType: "CHAT",
+      timestamp: new Date("2026-02-26T10:00:00.000Z"),
+      badges: null,
+      emotes: null,
+      bits: 0,
+    } as any);
+
+    expect((repo as any).messageBuffer).toHaveLength(1);
+    expect((repo as any).messageBuffer[0].viewerId).toBe("viewer-parsed");
+  });
+
+  it("logs non-Error retry failure context", async () => {
+    const operation = jest.fn().mockRejectedValue("plain failure");
+    await expect(retryOnTursoErrorForTesting(operation, "plain-ctx", 1)).resolves.toBeNull();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "ViewerMessage",
+      "plain-ctx failed after 1 attempts",
+      "plain failure"
+    );
+  });
+
+  it("flushBatch tracks subscription, gift, raid, and fallback aggregate retry success", async () => {
+    const repo = new ViewerMessageRepository();
+    const ts = new Date("2026-02-26T10:00:00.000Z");
+
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+      { messageDedupKey: "k-sub" },
+      { messageDedupKey: "k-gift" },
+      { messageDedupKey: "k-raid" },
+      { messageDedupKey: "k-cheer" },
+    ]);
+    (prisma.$transaction as jest.Mock).mockRejectedValueOnce(new Error("aggregate failed"));
+    (prisma.$executeRaw as jest.Mock).mockResolvedValueOnce(1);
+
+    const ok = await (repo as any).flushBatch([
+      {
+        viewerId: "vf1",
+        channelId: "cf1",
+        messageText: "sub",
+        messageType: "SUBSCRIPTION",
+        timestamp: ts,
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+        fingerprint: "k-sub",
+      },
+      {
+        viewerId: "vf1",
+        channelId: "cf1",
+        messageText: "gift",
+        messageType: "GIFT_SUBSCRIPTION",
+        timestamp: new Date("2026-02-26T10:01:00.000Z"),
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+        fingerprint: "k-gift",
+      },
+      {
+        viewerId: "vf1",
+        channelId: "cf1",
+        messageText: "raid",
+        messageType: "RAID",
+        timestamp: new Date("2026-02-26T10:02:00.000Z"),
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+        fingerprint: "k-raid",
+      },
+      {
+        viewerId: "vf1",
+        channelId: "cf1",
+        messageText: "cheer",
+        messageType: "CHEER",
+        timestamp: new Date("2026-02-26T10:03:00.000Z"),
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: 100,
+        emoteCount: 0,
+        retryCount: 0,
+        fingerprint: "k-cheer",
+      },
+    ]);
+
+    expect(ok).toBe(true);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith(
+      "ViewerMessage",
+      expect.stringContaining("Standalone lifetime_stats retry succeeded")
+    );
+    expect(cacheManager.invalidateTag).toHaveBeenCalledWith("viewer:vf1");
   });
 
   it("skips daily increments with non-positive messageCount", async () => {

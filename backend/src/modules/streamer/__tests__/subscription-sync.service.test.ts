@@ -70,13 +70,88 @@ describe("SubscriptionSyncService", () => {
       );
     });
 
+    it("should calculate subsDelta from yesterday stats", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
+        id: "c1",
+        twitchChannelId: "t1",
+      });
+      (prisma.twitchToken.findFirst as jest.Mock).mockResolvedValue({ accessToken: "at" });
+      (prisma.channelDailyStat.findUnique as jest.Mock).mockResolvedValue({ subsTotal: 95 });
+      mockGetBroadcasterSubscriptions.mockResolvedValue({ total: 100 });
+
+      await syncSubscriptionSnapshot("s1");
+
+      expect(prisma.channelDailyStat.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ subsDelta: 5 }),
+          create: expect.objectContaining({ subsDelta: 5 }),
+        })
+      );
+    });
+
     it("should throw if channel not found", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue(null);
       await expect(syncSubscriptionSnapshot("s1")).rejects.toThrow("No channel found");
     });
+
+    it("should throw if no Twitch token found (line 51)", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
+        id: "c1",
+        twitchChannelId: "t1",
+      });
+      (prisma.twitchToken.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(syncSubscriptionSnapshot("s1")).rejects.toThrow(
+        "No Twitch token found for streamer ID: s1"
+      );
+    });
   });
 
   describe("getSubscriptionTrend", () => {
+    it("should default range to 30d when omitted", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+      (prisma.channelDailyStat.findMany as jest.Mock).mockResolvedValue([]);
+
+      const res = await getSubscriptionTrend("s1");
+
+      expect(res.range).toBe("30d");
+      expect(res.availableDays).toBe(0);
+    });
+
+    it("should support 7d range", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+      const today = new Date();
+      (prisma.channelDailyStat.findMany as jest.Mock).mockResolvedValue([
+        { date: today, subsTotal: 100, subsDelta: 1 },
+      ]);
+
+      const res = await getSubscriptionTrend("s1", "7d");
+
+      expect(res.range).toBe("7d");
+      expect(res.minDataDays).toBe(7);
+      expect(res.currentDataDays).toBe(1);
+      expect(prisma.channelDailyStat.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ channelId: "c1" }) })
+      );
+    });
+
+    it("should support 90d range", async () => {
+      (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "c1" });
+      const today = new Date();
+      (prisma.channelDailyStat.findMany as jest.Mock).mockResolvedValue([
+        { date: today, subsTotal: 100, subsDelta: null },
+        { date: today, subsTotal: 101, subsDelta: 1 },
+      ]);
+
+      const res = await getSubscriptionTrend("s1", "90d");
+
+      expect(res.range).toBe("90d");
+      expect(res.availableDays).toBe(2);
+      expect(res.data[0]).toEqual(
+        expect.objectContaining({ subsTotal: 100, subsDelta: null })
+      );
+    });
+
     it("should return empty if no channel", async () => {
       (prisma.channel.findFirst as jest.Mock).mockResolvedValue(null);
       const res = await getSubscriptionTrend("s1", "30d");

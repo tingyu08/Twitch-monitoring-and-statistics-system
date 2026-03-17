@@ -646,6 +646,72 @@ describe("ViewerController", () => {
       expect(mockedGetChannelGameStatsAndViewerTrends).toHaveBeenCalledWith("channel-1", "90d");
     });
 
+    it("clears timeout in finally block on successful resolution (line 165)", async () => {
+      const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
+
+      mockedGetChannelStats.mockResolvedValue({
+        dailyStats: [],
+        timeRange: { startDate: "2026-01-01", endDate: "2026-01-31", days: 30 },
+      });
+      mockedGetViewerMessageStats.mockResolvedValue({
+        channelId: "channel-1",
+        summary: { totalMessages: 5 },
+      } as Awaited<ReturnType<typeof getViewerMessageStats>>);
+      mockedGetChannelGameStatsAndViewerTrends.mockResolvedValue({
+        gameStats: [],
+        viewerTrends: [],
+      });
+
+      const req = makeReq({
+        user: { viewerId: "viewer-1" } as AuthRequest["user"],
+        params: { channelId: "channel-1" },
+      });
+      const res = makeRes();
+
+      await controller.getChannelDetailAll(req, res);
+
+      // Verify clearTimeout was called (the finally block executed)
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it("skips clearTimeout when setTimeout returns undefined", async () => {
+      const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
+      const setTimeoutSpy = jest
+        .spyOn(global, "setTimeout")
+        .mockImplementation((((handler: TimerHandler) => {
+          if (typeof handler === "function") {
+            queueMicrotask(handler as () => void);
+          }
+          return undefined as unknown as NodeJS.Timeout;
+        }) as unknown) as typeof setTimeout);
+
+      mockedGetChannelStats.mockResolvedValue({
+        dailyStats: [],
+        timeRange: { startDate: "2026-01-01", endDate: "2026-01-31", days: 30 },
+      });
+      mockedGetViewerMessageStats.mockResolvedValue({
+        channelId: "channel-1",
+        summary: { totalMessages: 5 },
+      } as Awaited<ReturnType<typeof getViewerMessageStats>>);
+      mockedGetChannelGameStatsAndViewerTrends.mockResolvedValue({
+        gameStats: [],
+        viewerTrends: [],
+      });
+
+      const req = makeReq({
+        user: { viewerId: "viewer-1" } as AuthRequest["user"],
+        params: { channelId: "channel-1" },
+      });
+      const res = makeRes();
+
+      await controller.getChannelDetailAll(req, res);
+
+      expect(clearTimeoutSpy).not.toHaveBeenCalled();
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    });
+
     it("returns 504 when BFF request times out", async () => {
       jest.useFakeTimers();
       mockedGetChannelStats.mockImplementation(
