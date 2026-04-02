@@ -144,6 +144,8 @@ function buildDailyUpsertSql(intervalStart: Date, intervalEnd: Date, todayDateTi
       watchSeconds = CASE
         WHEN viewer_channel_daily_stats.source = 'extension'
           THEN viewer_channel_daily_stats.watchSeconds
+        WHEN viewer_channel_daily_stats.source = 'message'
+          THEN viewer_channel_daily_stats.watchSeconds
         ELSE viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds
       END,
       updatedAt = CURRENT_TIMESTAMP
@@ -163,6 +165,7 @@ function buildLifetimeUpsertSql(intervalStart: Date, intervalEnd: Date, todayDat
         active_pairs.channelId,
         CASE
           WHEN daily.source = 'extension' THEN 0
+          WHEN daily.source = 'message' THEN 0
           ELSE ${incrementMinutes}
         END AS incrementMinutes,
         ${intervalEnd.toISOString()} AS lastWatchedAt
@@ -381,11 +384,11 @@ export class WatchTimeIncrementJob {
 
   start(): void {
     if (this.scheduledTask) {
-      logger.debug("Jobs", "Watch Time Increment Job 已啟動，略過重複排程");
+      logger.debug("Jobs", "觀看時數增量任務已啟動，略過重複排程");
       return;
     }
 
-    logger.info("Jobs", `📋 Watch Time Increment Job 已排程: ${WATCH_TIME_INCREMENT_CRON}`);
+    logger.info("Jobs", `📋 觀看時數增量任務已排程：${WATCH_TIME_INCREMENT_CRON}`);
 
     this.scheduledTask = cron.schedule(WATCH_TIME_INCREMENT_CRON, async () => {
       if (CRON_JITTER_MAX_MS > 0) {
@@ -400,7 +403,7 @@ export class WatchTimeIncrementJob {
 
   async execute(): Promise<void> {
     if (this.isRunning) {
-      logger.debug("Jobs", "Watch Time Increment Job 正在執行中，跳過...");
+      logger.debug("Jobs", "觀看時數增量任務正在執行中，跳過本次觸發");
       return;
     }
 
@@ -409,7 +412,7 @@ export class WatchTimeIncrementJob {
     const executionStartedAt = Date.now();
 
     if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
-      logger.warn("Jobs", "Watch Time Increment Job 暫停中（circuit breaker），跳過本輪");
+      logger.warn("Jobs", "觀看時數增量任務暫停中（circuit breaker），跳過本輪");
       this.isRunning = false;
       return;
     }
@@ -524,7 +527,7 @@ export class WatchTimeIncrementJob {
         } 分鐘, dailyUpserts=${executionResult.dailyUpsertCount}, lifetimeUpserts=${executionResult.lifetimeUpsertCount}, invalidatedCaches=${uniqueViewerIds.size}, range=${executionResult.intervalStart.toISOString()} -> ${executionResult.intervalEnd.toISOString()}) [${duration}ms]`
       );
     } catch (error) {
-      logger.error("Jobs", "❌ Watch Time Increment Job 執行失敗", error);
+      logger.error("Jobs", "❌ 觀看時數增量任務執行失敗", error);
       recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
     } finally {
       this.isRunning = false;

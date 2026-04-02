@@ -81,12 +81,12 @@ export class ViewerController {
       // 效能監控：僅記錄慢查詢 (> 200ms)
       const duration = Date.now() - requestStart;
       if (duration > 200) {
-        logger.warn("ViewerAPI", `Slow query: ${duration}ms for channel ${channelId}`);
+        logger.warn("ViewerAPI", `查詢偏慢：頻道 ${channelId} 耗時 ${duration}ms`);
       }
 
       return res.json(stats);
     } catch (err) {
-      logger.error("ViewerAPI", "Error getting viewer stats:", err);
+      logger.error("ViewerAPI", "取得觀眾統計失敗", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   };
@@ -101,7 +101,7 @@ export class ViewerController {
       const channels = await getFollowedChannels(req.user.viewerId);
       return res.json(channels);
     } catch (err) {
-      logger.error("ViewerAPI", "Error getting viewer channels:", err);
+      logger.error("ViewerAPI", "取得觀眾頻道列表失敗", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   };
@@ -179,13 +179,13 @@ export class ViewerController {
 
           // 記錄失敗的請求
           if (channelStatsResult.status === "rejected") {
-            logger.warn("BFF", "channelStats failed:", channelStatsResult.reason);
+            logger.warn("BFF", "取得頻道統計失敗", channelStatsResult.reason);
           }
           if (messageStatsResult.status === "rejected") {
-            logger.warn("BFF", "messageStats failed:", messageStatsResult.reason);
+            logger.warn("BFF", "取得訊息統計失敗", messageStatsResult.reason);
           }
           if (analyticsResult.status === "rejected") {
-            logger.warn("BFF", "channel analytics failed:", analyticsResult.reason);
+            logger.warn("BFF", "取得頻道分析資料失敗", analyticsResult.reason);
           }
 
           return {
@@ -201,16 +201,16 @@ export class ViewerController {
 
       const duration = Date.now() - requestStart;
       if (duration > BFF_SLOW_QUERY_THRESHOLD_MS) {
-        logger.warn("BFF", `Slow BFF query: ${duration}ms for channel ${channelId}`);
+        logger.warn("BFF", `BFF 查詢偏慢：頻道 ${channelId} 耗時 ${duration}ms`);
       }
 
       return res.json(result);
     } catch (err) {
       if (err instanceof Error && err.message === "BFF_TIMEOUT") {
-        logger.error("BFF", `BFF timeout (${this.BFF_TIMEOUT_MS}ms): channel ${channelId}`);
+        logger.error("BFF", `BFF 查詢逾時（${this.BFF_TIMEOUT_MS}ms）：頻道 ${channelId}`);
         return res.status(504).json({ error: "Gateway Timeout" });
       }
-      logger.error("BFF", "Error in getChannelDetailAll:", err);
+      logger.error("BFF", "取得頻道詳細聚合資料失敗", err);
       return res.status(500).json({ error: "Internal Server Error" });
     }
   };

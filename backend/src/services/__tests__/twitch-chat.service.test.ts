@@ -229,7 +229,7 @@ describe("TwurpleChatService heat detection", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Error handling message",
+      "處理聊天室訊息失敗",
       expect.any(Error)
     );
 
@@ -368,7 +368,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       "Twurple Chat",
-      "No user token found in database. Please login first. Chat listener disabled."
+      "資料庫中找不到可用的使用者 Token，請先登入 Twitch。聊天室監聽已停用。"
     );
     expect((service as any).chatClient).toBeNull();
     await service.disconnect();
@@ -383,7 +383,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET. Chat listener disabled."
+      "缺少 TWITCH_CLIENT_ID 或 TWITCH_CLIENT_SECRET，聊天室監聽已停用。"
     );
     await service.disconnect();
   });
@@ -457,7 +457,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
     expect(initSpy).toHaveBeenCalledTimes(1);
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "連接 Twitch Chat 失敗 (嘗試 1 次)",
+      "連接 Twitch Chat 失敗（第 1 次嘗試）",
       expect.any(Error)
     );
     await service.disconnect();
@@ -502,13 +502,13 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
   it("joinChannel warns once when client not initialized", async () => {
     const service = new TwurpleChatService();
 
-    await service.joinChannel("abc");
-    await service.joinChannel("abc");
+    await expect(service.joinChannel("abc")).resolves.toBe(false);
+    await expect(service.joinChannel("abc")).resolves.toBe(false);
 
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Chat client not initialized. Please login first."
+      "聊天客戶端尚未初始化，請先登入 Twitch。"
     );
     await service.disconnect();
   });
@@ -528,13 +528,13 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     (service as any).chatClient = { join, quit: jest.fn() };
 
-    await service.joinChannel("#AbC");
+    await expect(service.joinChannel("#AbC")).resolves.toBe(true);
 
     expect(join).toHaveBeenCalledTimes(2);
     expect(service.getStatus().channels).toContain("abc");
     expect(logger.info).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Successfully joined channel abc after 1 retries"
+      "重試 1 次後成功加入頻道：abc"
     );
     await service.disconnect();
     timeoutSpy.mockRestore();
@@ -552,12 +552,12 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     (service as any).chatClient = { join, quit: jest.fn() };
 
-    await service.joinChannel("abc");
+    await expect(service.joinChannel("abc")).resolves.toBe(false);
 
     expect(join).toHaveBeenCalledTimes(3);
     expect(logger.warn).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Failed to join channel abc after 2 retries: IRC timeout"
+      "加入頻道失敗：abc，重試 2 次後仍發生 IRC 逾時"
     );
     await service.disconnect();
     timeoutSpy.mockRestore();
@@ -574,7 +574,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Failed to leave channel abc",
+      "離開頻道失敗：abc",
       expect.any(Error)
     );
     await service.disconnect();
@@ -612,7 +612,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
     expect(channelId).toBeNull();
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Failed to lookup channelId for demo",
+      "查詢 channelId 失敗：demo",
       expect.any(Error)
     );
     await service.disconnect();
@@ -661,7 +661,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
       expiresIn: 3600,
     });
 
-    expect(logger.info).toHaveBeenCalledWith("Twurple Chat", "Token 已獲刷新: u1");
+    expect(logger.info).toHaveBeenCalledWith("Twurple Chat", "Token 已刷新：u1");
     expect(prisma.twitchToken.update).toHaveBeenCalledTimes(1);
     expect(encryptToken).toHaveBeenCalledWith("new-access");
     expect(encryptToken).toHaveBeenCalledWith("new-refresh");
@@ -740,11 +740,11 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
     const join = jest.fn().mockRejectedValue(new Error("forbidden"));
 
     (service as any).chatClient = { join, quit: jest.fn() };
-    await service.joinChannel("abc");
+    await expect(service.joinChannel("abc")).resolves.toBe(false);
 
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Failed to join channel abc",
+      "加入頻道失敗：abc",
       expect.any(Error)
     );
     await service.disconnect();
@@ -788,7 +788,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Error in heat check",
+      "檢查聊天室熱度時發生錯誤",
       expect.any(Error)
     );
     await service.disconnect();
@@ -814,12 +814,12 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Error handling subscription",
+      "處理訂閱事件失敗",
       expect.any(Error)
     );
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Error handling gift sub",
+      "處理贈送訂閱事件失敗",
       expect.any(Error)
     );
     await service.disconnect();
@@ -859,7 +859,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "Error handling raid",
+      "處理 Raid 事件失敗",
       expect.any(Error)
     );
     await service.disconnect();
@@ -892,7 +892,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       "Twurple Chat",
-      "No user token found in database. Please login first. Chat listener disabled."
+      "資料庫中找不到可用的使用者 Token，請先登入 Twitch。聊天室監聽已停用。"
     );
     await service.disconnect();
   });
@@ -992,9 +992,42 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
     (service as any).chatClient = { join, quit: jest.fn() };
     (service as any).channels.add("abc");
 
-    await service.joinChannel("#AbC");
+    await expect(service.joinChannel("#AbC")).resolves.toBe(true);
 
     expect(join).not.toHaveBeenCalled();
+    await service.disconnect();
+  });
+
+  it("re-joins tracked channels after reconnect", async () => {
+    const service = new TwurpleChatService();
+    let onConnect: (() => void) | undefined;
+    const join = jest.fn().mockResolvedValue(undefined);
+    const fakeChatClient = {
+      onMessage: jest.fn(),
+      onSub: jest.fn(),
+      onResub: jest.fn(),
+      onSubGift: jest.fn(),
+      onRaid: jest.fn(),
+      onDisconnect: jest.fn(),
+      onConnect: jest.fn((cb: () => void) => {
+        onConnect = cb;
+      }),
+      connect: jest.fn(),
+      join,
+      part: jest.fn(),
+      quit: jest.fn(),
+    };
+
+    (service as any).chatClient = fakeChatClient;
+    (service as any).channels.add("abc");
+    (service as any).channels.add("def");
+    (service as any).setupEventHandlers();
+
+    onConnect?.();
+    await Promise.resolve();
+
+    expect(join).toHaveBeenCalledWith("abc");
+    expect(join).toHaveBeenCalledWith("def");
     await service.disconnect();
   });
 
@@ -1156,7 +1189,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
     expect(initSpy).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "連接 Twitch Chat 失敗 (嘗試 2 次)",
+      "連接 Twitch Chat 失敗（第 2 次嘗試）",
       expect.any(Error)
     );
 
@@ -1172,7 +1205,7 @@ describe("TwurpleChatService initialize/join/leave lifecycle", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "Twurple Chat",
-      "連接 Twitch Chat 失敗 (嘗試 1 次)",
+      "連接 Twitch Chat 失敗（第 1 次嘗試）",
       "UND_ERR timeout"
     );
     await service.disconnect();

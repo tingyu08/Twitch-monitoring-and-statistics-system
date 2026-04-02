@@ -9,8 +9,10 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 
 // 配置常數
-const PRE_MESSAGE_BUFFER_MIN = 10; // 第一則訊息前假設看了 10 分鐘
-const POST_MESSAGE_BUFFER_MIN = 30; // 最後一則訊息後假設繼續看 30 分鐘
+const PRE_MESSAGE_BUFFER_MIN = 5; // 第一則訊息前保守回推 5 分鐘
+const POST_MESSAGE_BUFFER_MIN = 10; // 最後一則訊息後保守延伸 10 分鐘
+const MESSAGE_DRIVEN_SOURCE = "message";
+const WATCH_TIME_DEBUG_LOGS = process.env.WATCH_TIME_DEBUG_LOGS === "true";
 
 interface WatchTimeAccumulator {
   currentStart: Date | null;
@@ -224,20 +226,22 @@ export async function updateViewerWatchTime(
         watchSeconds: Math.round(totalWatchSeconds),
         messageCount: totalMessages,
         emoteCount: 0,
+        source: MESSAGE_DRIVEN_SOURCE,
       },
       update: {
         watchSeconds: Math.round(totalWatchSeconds),
+        source: MESSAGE_DRIVEN_SOURCE,
       },
     });
 
-    logger.debug(
-      "WatchTime",
-      `Updated watch time for viewer ${viewerId} in channel ${channelId}: ${Math.round(
-        totalWatchSeconds / 60
-      )} min`
-    );
+    if (WATCH_TIME_DEBUG_LOGS) {
+      logger.debug(
+        "WatchTime",
+        `已更新觀看時數：viewer=${viewerId}，channel=${channelId}，${Math.round(totalWatchSeconds / 60)} 分鐘`
+      );
+    }
   } catch (error) {
-    logger.error("WatchTime", "Failed to update watch time", error);
+    logger.error("WatchTime", "更新觀看時數失敗", error);
   }
 }
 

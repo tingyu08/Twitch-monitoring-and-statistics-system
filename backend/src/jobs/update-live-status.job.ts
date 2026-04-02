@@ -449,16 +449,16 @@ export const updateLiveStatusJob = cron.schedule(UPDATE_LIVE_STATUS_CRON, async 
 export async function updateLiveStatusFn() {
   // 防止重複執行：如果上一次執行還沒完成，跳過此次執行
   if (isRunning) {
-    logger.debug("Jobs", "Update Live Status Job 正在執行中，跳過此次執行");
+    logger.debug("Jobs", "直播狀態更新任務正在執行中，略過此次觸發");
     return;
   }
 
   isRunning = true;
   const startTime = Date.now();
-  logger.debug("Jobs", "🔄 開始執行 Update Live Status Job...");
+  logger.debug("Jobs", "🔄 開始執行直播狀態更新任務...");
 
   if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
-    logger.warn("Jobs", "Update Live Status Job 暫停中（circuit breaker），跳過本輪");
+    logger.warn("Jobs", "直播狀態更新任務暫停中（circuit breaker），跳過本輪");
     isRunning = false;
     return;
   }
@@ -479,7 +479,7 @@ export async function updateLiveStatusFn() {
     const slowChannelCount = countRows.find((r) => !r.isLive)?._count.id ?? 0;
 
     if (scannedCount === 0) {
-      logger.warn("Jobs", "⚠️ 找不到受監控的頻道 (isMonitored=true)，請檢查頻道是否正確同步");
+      logger.warn("Jobs", "⚠️ 找不到受監控的頻道（isMonitored=true），請檢查頻道是否正確同步");
       return;
     }
 
@@ -698,7 +698,7 @@ export async function updateLiveStatusFn() {
             }
           }
         } catch (err) {
-          logger.error("Jobs", `批次獲取直播狀態失敗 (cursor=${cursorId ?? "start"})`, err);
+          logger.error("Jobs", `批次取得直播狀態失敗（cursor=${cursorId ?? "start"}）`, err);
         }
 
         if (i + BATCH_SIZE < channels.length) {
@@ -712,7 +712,7 @@ export async function updateLiveStatusFn() {
     }
 
     if (processedCount === 0) {
-      logger.debug("Jobs", "本輪 slow poll 未命中頻道，略過更新");
+      logger.debug("Jobs", "本輪慢速輪詢未命中任何頻道，略過更新");
       return;
     }
 
@@ -740,7 +740,7 @@ export async function updateLiveStatusFn() {
 
     recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
   } catch (error) {
-    logger.error("Jobs", "Update Live Status Job 執行失敗", error);
+    logger.error("Jobs", "直播狀態更新任務執行失敗", error);
     recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
   } finally {
     // 確保解鎖，即使發生錯誤

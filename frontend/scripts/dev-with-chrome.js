@@ -1,4 +1,4 @@
-const { exec, spawn } = require("child_process");
+const { exec } = require("child_process");
 const http = require("http");
 const path = require("path");
 
@@ -40,12 +40,12 @@ function openChrome() {
 // 啟動 Next.js 開發伺服器（禁用自動開啟瀏覽器）
 const projectRoot = path.join(__dirname, "..");
 
-// 使用 exec 執行 next dev（更相容 Node.js v24）
-const nextDev = exec("npx next dev", {
+// 明確走 workspace 腳本，避免 npx 命中錯的全域 next 指令。
+const nextDev = exec("npm run dev:next", {
   cwd: projectRoot,
   env: {
     ...process.env,
-    BROWSER: "none", // 禁用 Next.js 的自動開啟
+    BROWSER: "none",
   },
 });
 
@@ -59,5 +59,5 @@ checkServer(() => {
 }, 30);
 
 nextDev.on("close", (code) => {
-  process.exit(code);
+  process.exit(code ?? 0);
 });

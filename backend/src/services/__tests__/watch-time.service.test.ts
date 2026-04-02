@@ -98,11 +98,11 @@ describe("watch-time.service updateViewerWatchTime", () => {
     expect(prisma.viewerChannelDailyStat.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          watchSeconds: 4800,
+          watchSeconds: 1800,
           messageCount: 2,
         }),
         update: expect.objectContaining({
-          watchSeconds: 4800,
+          watchSeconds: 1800,
         }),
       })
     );
@@ -123,11 +123,11 @@ describe("watch-time.service updateViewerWatchTime", () => {
     expect(prisma.viewerChannelDailyStat.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          // start clipped to 09:00, end clipped to 09:20 => 1200 seconds
-          watchSeconds: 1200,
+          // start clipped to 09:00, final end 09:16 => 960 seconds
+          watchSeconds: 960,
         }),
         update: expect.objectContaining({
-          watchSeconds: 1200,
+          watchSeconds: 960,
         }),
       })
     );
@@ -142,7 +142,7 @@ describe("watch-time.service updateViewerWatchTime", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "WatchTime",
-      "Failed to update watch time",
+      "更新觀看時數失敗",
       expect.any(Error)
     );
     expect(prisma.viewerChannelDailyStat.upsert).not.toHaveBeenCalled();
@@ -163,8 +163,8 @@ describe("watch-time.service updateViewerWatchTime", () => {
     expect(prisma.viewerChannelDailyStat.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          // first segment: 08:50 -> clipped end 09:20 => 1800 sec
-          watchSeconds: 1800,
+          // first segment: 08:55 -> 09:10 => 900 sec; second segment clips to 0
+          watchSeconds: 900,
         }),
       })
     );
@@ -185,8 +185,8 @@ describe("watch-time.service updateViewerWatchTime", () => {
     expect(prisma.viewerChannelDailyStat.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          // first segment is 0 after clipping; second segment: 10:00 -> 10:10 => 600 sec
-          watchSeconds: 600,
+          // both inferred segments fall before stream start after clipping => 0 sec
+          watchSeconds: 0,
         }),
       })
     );

@@ -79,7 +79,7 @@ export class StreamStatusJob {
    * 啟動 Cron Job
    */
   start(): void {
-    logger.info("JOB", `Stream Status Job 已排程: ${STREAM_STATUS_CRON}`);
+    logger.info("JOB", `開播狀態任務已排程：${STREAM_STATUS_CRON}`);
 
     cron.schedule(STREAM_STATUS_CRON, async () => {
       if (CRON_JITTER_MAX_MS > 0) {
@@ -97,7 +97,7 @@ export class StreamStatusJob {
    */
   async execute(): Promise<StreamStatusResult> {
     if (this.isRunning) {
-      logger.debug("JOB", "Stream Status Job 正在執行中，跳過...");
+      logger.debug("JOB", "開播狀態任務正在執行中，略過本次觸發");
       return {
         checked: 0,
         online: 0,
@@ -123,7 +123,7 @@ export class StreamStatusJob {
     logger.debug("JOB", "開始檢查開播狀態...");
 
     if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
-      logger.warn("JOB", "Stream Status Job 暫停中（circuit breaker），跳過本輪");
+      logger.warn("JOB", "開播狀態任務暫停中（circuit breaker），跳過本輪");
       this.isRunning = false;
       return {
         checked: 0,
@@ -157,25 +157,25 @@ export class StreamStatusJob {
       if (timeoutTriggered) {
         logger.warn(
           "JOB",
-          `Stream Status Job 超時 (${duration}ms, 已處理 ${result.checked} 個頻道)，將在下次執行時繼續`
+          `開播狀態任務逾時（${duration}ms，已處理 ${result.checked} 個頻道），將在下次執行時繼續`
         );
       } else if (result.newSessions > 0 || result.endedSessions > 0) {
         // 只在有新場次或結束場次時輸出 info
         logger.info(
           "JOB",
-          `Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線, ${result.newSessions} 新場次, ${result.endedSessions} 結束場次`
+          `開播狀態任務完成（${duration}ms）：${result.online} 個開播、${result.offline} 個離線、${result.newSessions} 個新場次、${result.endedSessions} 個結束場次`
         );
       } else {
         logger.debug(
           "JOB",
-          `Stream Status Job 完成 (${duration}ms): ${result.online} 開播, ${result.offline} 離線`
+          `開播狀態任務完成（${duration}ms）：${result.online} 個開播、${result.offline} 個離線`
         );
       }
 
       recordJobSuccess(JOB_CIRCUIT_BREAKER_NAME);
       return result;
     } catch (error) {
-      logger.error("JOB", "Stream Status Job 執行失敗:", error);
+      logger.error("JOB", "開播狀態任務執行失敗", error);
       recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
       throw error;
     } finally {
@@ -295,7 +295,7 @@ export class StreamStatusJob {
           result.offline++;
         }
       } catch (err) {
-        logger.error("JOB", `處理頻道 ${channel.channelName} 狀態失敗:`, err);
+        logger.error("JOB", `處理頻道狀態失敗：${channel.channelName}`, err);
       }
     });
 
@@ -355,7 +355,7 @@ export class StreamStatusJob {
     })) as MonitoredChannel[];
 
     if (process.env.NODE_ENV !== "production") {
-      logger.debug("JOB", `頻道統計: 監控中 ${channels.length} 個頻道`);
+      logger.debug("JOB", `頻道統計：目前監控中 ${channels.length} 個頻道`);
     }
 
     return channels;
@@ -387,7 +387,7 @@ export class StreamStatusJob {
         const streams = await unifiedTwitchService.getStreamsByUserIds(batch);
         allStreams.push(...streams);
       } catch (error) {
-        logger.error("JOB", `批次查詢失敗 (${i}-${i + batch.length}):`, error);
+        logger.error("JOB", `批次查詢失敗（${i}-${i + batch.length}）`, error);
       }
 
       // 記憶體/CPU 優化：僅在記憶體壓力高時短暫休息
@@ -526,9 +526,9 @@ export class StreamStatusJob {
     });
 
     if (isGenuinelyNew) {
-      logger.info("JOB", `新開播: ${channel.channelName} - ${stream.title}`);
+      logger.info("JOB", `新開播：${channel.channelName} - ${stream.title}`);
     } else {
-      logger.info("JOB", `恢復開播（session 重新開啟）: ${channel.channelName} - ${stream.title}`);
+      logger.info("JOB", `恢復開播（session 重新開啟）：${channel.channelName} - ${stream.title}`);
     }
   }
 

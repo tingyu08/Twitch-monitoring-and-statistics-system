@@ -323,11 +323,11 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
         const totalTime = Date.now() - startTime;
         logger.debug(
           "ViewerService",
-          `getFollowedChannels rebuilt summary in ${totalTime}ms (${sorted.length} channels)`
+          `getFollowedChannels 已重建摘要，耗時 ${totalTime}ms（共 ${sorted.length} 個頻道）`
         );
         return sorted;
       } catch (error) {
-        logger.error("ViewerService", "getFollowedChannels failed", error);
+        logger.error("ViewerService", "取得追蹤頻道列表失敗", error);
         throw error;
       }
     },
@@ -450,7 +450,7 @@ async function fetchSummaryRows(viewerId: string): Promise<ViewerChannelSummaryR
       WHERE vcs.viewerId = ${viewerId}
     `);
   } catch (error) {
-    logger.debug("ViewerService", "viewer_channel_summary table not ready, fallback to source queries", error);
+    logger.debug("ViewerService", "viewer_channel_summary 尚未就緒，改用來源查詢回退", error);
     return [];
   }
 }
@@ -470,10 +470,10 @@ async function reconcileLiveStatus(rows: ViewerChannelSummaryRow[]): Promise<Vie
 
     // 若 Twitch 回傳空清單但目前有既有直播中資料，視為暫時不一致，避免整批誤判為關台
     if (streams.length === 0 && existingLiveCount > 0) {
-      logger.warn(
-        "ViewerService",
-        "Skip live-status reconciliation due to empty Twitch stream response while local rows contain live channels"
-      );
+        logger.warn(
+          "ViewerService",
+          "Twitch 回傳空的直播清單，但本地仍有直播中頻道，略過直播狀態校正"
+        );
       return rows;
     }
 
@@ -528,7 +528,7 @@ async function reconcileLiveStatus(rows: ViewerChannelSummaryRow[]): Promise<Vie
 
     return reconciled;
   } catch (error) {
-    logger.warn("ViewerService", "Failed to reconcile followed channel live status", error);
+    logger.warn("ViewerService", "校正追蹤頻道直播狀態失敗", error);
     return rows;
   }
 }
@@ -716,7 +716,7 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
       `);
     }
   } catch (error) {
-    logger.warn("ViewerService", "Failed to persist viewer_channel_summary", error);
+    logger.warn("ViewerService", "寫入 viewer_channel_summary 失敗", error);
   }
 }
 
@@ -945,7 +945,7 @@ export async function syncSummaryStatsFromLifetime(viewerId: string): Promise<vo
         )
     `);
   } catch (error) {
-    logger.debug("ViewerService", "Failed to sync summary stats from lifetime_stats", error);
+    logger.debug("ViewerService", "從 lifetime_stats 同步摘要統計失敗", error);
   }
 }
 
@@ -1005,7 +1005,7 @@ export async function refreshViewerChannelSummaryForChannels(
       `);
     }
   } catch (error) {
-    logger.warn("ViewerService", "Failed to refresh channel live snapshot in summary table", error);
+    logger.warn("ViewerService", "更新摘要表中的頻道直播快照失敗", error);
   }
 }
 
@@ -1037,7 +1037,7 @@ export async function warmViewerChannelsCache(limit = 100): Promise<void> {
 
     results.forEach((result, index) => {
       if (result.status === "rejected") {
-        logger.warn("ViewerService", `Cache warmup failed for viewer ${batch[index]}`, result.reason);
+        logger.warn("ViewerService", `預熱觀眾快取失敗：viewer=${batch[index]}`, result.reason);
       }
     });
   }

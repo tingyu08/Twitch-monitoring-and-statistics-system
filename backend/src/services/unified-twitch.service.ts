@@ -114,7 +114,7 @@ export class UnifiedTwitchService {
    * 初始化所有 Twitch 服務
    */
   async initialize(): Promise<void> {
-    logger.info("Twitch Service", "初始化統一 Twitch 服務 (Twurple)...");
+    logger.info("Twitch Service", "正在初始化統一 Twitch 服務（Twurple）...");
 
     this.startCacheCleanup();
 
@@ -124,16 +124,16 @@ export class UnifiedTwitchService {
     // 測試 Helix API
     const helixHealthy = await twurpleHelixService.healthCheck();
     if (helixHealthy) {
-      logger.info("Twitch Service", "Helix API 連線正常 (Twurple)");
+      logger.info("Twitch Service", "Helix API 連線正常（Twurple）");
     } else {
-      logger.warn("Twitch Service", "Helix API 連線失敗 - 部分功能可能無法使用");
+      logger.warn("Twitch Service", "Helix API 連線失敗，部分功能可能無法使用");
     }
 
     // 啟動排程任務
     autoJoinLiveChannelsJob.start();
     watchTimeIncrementJob.start();
 
-    logger.info("Twitch Service", "服務初始化完成 (Twurple)");
+    logger.info("Twitch Service", "統一 Twitch 服務初始化完成（Twurple）");
   }
 
   // ========== 頻道資訊 ==========
@@ -381,8 +381,7 @@ export class UnifiedTwitchService {
    */
   async startListeningToChannel(channelLogin: string): Promise<boolean> {
     try {
-      await twurpleChatService.joinChannel(channelLogin);
-      return true;
+      return await twurpleChatService.joinChannel(channelLogin);
     } catch {
       return false;
     }

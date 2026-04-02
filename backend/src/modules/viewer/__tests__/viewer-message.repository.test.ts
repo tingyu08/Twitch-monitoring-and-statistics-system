@@ -2,6 +2,7 @@ jest.mock("../../../db/prisma", () => ({
   prisma: {
     viewer: {
       findUnique: jest.fn(),
+      upsert: jest.fn(),
     },
     channel: {
       findFirst: jest.fn(),
@@ -38,10 +39,15 @@ jest.mock("../../../utils/logger", () => ({
   },
 }));
 
+jest.mock("../../../services/watch-time.service", () => ({
+  updateViewerWatchTime: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "../../../db/prisma";
 import { webSocketGateway } from "../../../services/websocket.gateway";
 import { cacheManager } from "../../../utils/cache-manager";
 import { logger } from "../../../utils/logger";
+import { updateViewerWatchTime } from "../../../services/watch-time.service";
 import {
   isRetryableErrorForTesting,
   retryOnTursoErrorForTesting,
@@ -55,6 +61,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     (prisma.viewer.findUnique as jest.Mock).mockResolvedValue({ id: "viewer-1" });
+    (prisma.viewer.upsert as jest.Mock).mockResolvedValue({ id: "viewer-1" });
     (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "channel-1" });
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([
       { messageDedupKey: "k1" },
@@ -180,6 +187,60 @@ describe("ViewerMessageRepository flush batch emits", () => {
     });
   });
 
+  it("recalculates watch time for each affected viewer-channel-day after persisting messages", async () => {
+    const repo = new ViewerMessageRepository();
+    const ts = new Date("2026-02-26T10:00:00.000Z");
+
+    const batch = [
+      {
+        viewerId: "v1",
+        channelId: "c1",
+        messageText: "a",
+        messageType: "CHAT",
+        timestamp: ts,
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+      },
+      {
+        viewerId: "v1",
+        channelId: "c1",
+        messageText: "b",
+        messageType: "CHAT",
+        timestamp: new Date("2026-02-26T10:05:00.000Z"),
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+      },
+      {
+        viewerId: "v1",
+        channelId: "c2",
+        messageText: "c",
+        messageType: "CHAT",
+        timestamp: ts,
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+      },
+    ];
+
+    await (repo as any).flushBatch(batch);
+
+    expect(updateViewerWatchTime).toHaveBeenCalledTimes(2);
+    expect(updateViewerWatchTime).toHaveBeenCalledWith("v1", "c1", new Date("2026-02-26T00:00:00.000Z"), {
+      allowOverwrite: true,
+    });
+    expect(updateViewerWatchTime).toHaveBeenCalledWith("v1", "c2", new Date("2026-02-26T00:00:00.000Z"), {
+      allowOverwrite: true,
+    });
+  });
+
   it("returns true and retries lifetime stats when aggregate transaction fails after raw messages persisted", async () => {
     const repo = new ViewerMessageRepository();
     const ts = new Date("2026-02-26T10:00:00.000Z");
@@ -244,11 +305,12 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(webSocketGateway.emitViewerStatsBatch).not.toHaveBeenCalled();
   });
 
-  it("saveMessage skips when viewer lookup resolves to null sentinel", async () => {
+  it("saveMessage upserts viewer when lookup resolves to null sentinel", async () => {
     const repo = new ViewerMessageRepository();
     (cacheManager.get as jest.Mock).mockImplementation((key: string) =>
       key.startsWith("lookup:viewer") ? "__NULL__" : null
     );
+    (prisma.viewer.upsert as jest.Mock).mockResolvedValueOnce({ id: "viewer-new" });
 
     await repo.saveMessage("demo", {
       twitchUserId: "tu-1",
@@ -262,8 +324,43 @@ describe("ViewerMessageRepository flush batch emits", () => {
       bits: 0,
     });
 
-    expect(prisma.channel.findFirst).not.toHaveBeenCalled();
+    expect(prisma.viewer.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { twitchUserId: "tu-1" },
+        create: expect.objectContaining({
+          twitchUserId: "tu-1",
+          displayName: "User",
+        }),
+      })
+    );
+    expect(prisma.channel.findFirst).toHaveBeenCalled();
+    expect((repo as any).messageBuffer).toHaveLength(1);
+  });
+
+  it("saveMessage warns when viewer upsert fails", async () => {
+    const repo = new ViewerMessageRepository();
+    (cacheManager.get as jest.Mock).mockImplementation((key: string) =>
+      key.startsWith("lookup:viewer") ? "__NULL__" : null
+    );
+    (prisma.viewer.upsert as jest.Mock).mockResolvedValueOnce(null);
+
+    await repo.saveMessage("demo", {
+      twitchUserId: "tu-fail",
+      username: "user",
+      displayName: "User",
+      messageText: "hi",
+      messageType: "CHAT",
+      timestamp: new Date("2026-02-26T10:00:00.000Z"),
+      badges: null,
+      emotes: null,
+      bits: 0,
+    });
+
     expect((repo as any).messageBuffer).toHaveLength(0);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ViewerMessage",
+      "略過訊息：找不到對應的 Viewer，twitchUserId=tu-fail"
+    );
   });
 
   it("saveMessage sets null sentinel cache when channel not found", async () => {
@@ -289,6 +386,10 @@ describe("ViewerMessageRepository flush batch emits", () => {
       30
     );
     expect((repo as any).messageBuffer).toHaveLength(0);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ViewerMessage",
+      "略過訊息：找不到對應的頻道，channelName=missing_channel"
+    );
   });
 
   it("saveMessage enqueues normalized payload with json fields and bits", async () => {
@@ -336,7 +437,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "getCachedViewerId(tu-4) failed after 1 attempts",
+      "getCachedViewerId(tu-4) 在重試 1 次後仍失敗",
       expect.any(Error)
     );
   });
@@ -368,7 +469,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect((repo as any).retryBuffer).toHaveLength(0);
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "Dropped 1 messages after 3 retries"
+      "1 筆訊息在重試 3 次後仍失敗，已放棄寫入"
     );
   });
 
@@ -413,7 +514,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(prisma.viewer.findUnique).toHaveBeenCalledTimes(2);
     expect(logger.debug).toHaveBeenCalledWith(
       "ViewerMessage",
-      expect.stringContaining("retry 1/3")
+      expect.stringContaining("第 1/3 次重試")
     );
   });
 
@@ -503,7 +604,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
       bits: 0,
     });
 
-    expect(logger.error).toHaveBeenCalledWith("ViewerMessage", "Error saving message", expect.any(Error));
+    expect(logger.error).toHaveBeenCalledWith("ViewerMessage", "儲存訊息失敗", expect.any(Error));
   });
 
   it("schedules flush when flushBatch fails mid-loop with remaining buffer", async () => {
@@ -557,7 +658,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(ok).toBe(true);
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "Standalone lifetime_stats retry also failed; data will be recovered by periodic aggregation jobs",
+      "寫入 lifetime_stats 的備援重試也失敗；後續將由週期性聚合任務補回資料",
       expect.any(Error)
     );
   });
@@ -601,7 +702,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       "ViewerMessage",
-      expect.stringContaining("Message buffer pressure")
+      expect.stringContaining("訊息緩衝區壓力過高")
     );
 
     jest.clearAllMocks();
@@ -645,7 +746,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "Failed to flush message buffer under pressure",
+      "高壓狀態下刷新訊息緩衝區失敗",
       expect.any(Error)
     );
   });
@@ -674,7 +775,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect((repo as any).messageBuffer.length).toBeLessThanOrEqual(3000);
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "Failed to flush message buffer at capacity",
+      "訊息緩衝區滿載時刷新失敗",
       expect.any(Error)
     );
   });
@@ -725,7 +826,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "Failed to flush message buffer",
+      "刷新訊息緩衝區失敗",
       expect.any(Error)
     );
   });
@@ -739,7 +840,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "Failed to flush message buffer",
+      "刷新訊息緩衝區失敗",
       expect.any(Error)
     );
   });
@@ -888,7 +989,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "ViewerMessage",
-      "plain-ctx failed after 1 attempts",
+      "plain-ctx 在重試 1 次後仍失敗",
       "plain failure"
     );
   });
@@ -965,7 +1066,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     expect(logger.info).toHaveBeenCalledWith(
       "ViewerMessage",
-      expect.stringContaining("Standalone lifetime_stats retry succeeded")
+      expect.stringContaining("lifetime_stats 備援重試成功")
     );
     expect(cacheManager.invalidateTag).toHaveBeenCalledWith("viewer:vf1");
   });

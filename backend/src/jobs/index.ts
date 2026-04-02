@@ -66,7 +66,7 @@ function startChannelStatsSyncWithMemoryGuard(attempt: number = 1): void {
  * 啟動所有定時任務（Zeabur 免費層優化版）
  */
 export function startAllJobs(): void {
-  logger.info("Jobs", "正在啟動定時任務（分階段啟動以減少記憶體壓力）...");
+  logger.info("Jobs", "正在啟動定時任務（分階段啟動以降低記憶體壓力）...");
   initializeFollowSyncMaintenance();
 
   // === 階段 1: 立即啟動核心任務 ===
@@ -85,16 +85,16 @@ export function startAllJobs(): void {
     logger.info("Jobs", "開始執行 Token 驗證任務...");
     try {
       const result = await validateTokensJob();
-      logger.info("Jobs", `Token 驗證完成: ${result.stats.valid}/${result.stats.total} 有效`);
+      logger.info("Jobs", `Token 驗證完成：${result.stats.valid}/${result.stats.total} 個有效`);
     } catch (error) {
-      logger.error("Jobs", "Token 驗證失敗:", error);
+      logger.error("Jobs", "Token 驗證失敗", error);
     }
   });
   scheduledTasks.push(tokenValidationTask);
 
   // === 階段 2: 延遲 5 分鐘後啟動次要任務 ===
   scheduleJobTimeout(() => {
-      logger.info("Jobs", "啟動次要任務...");
+      logger.info("Jobs", "開始啟動次要任務...");
 
       // 訊息聚合任務
       startMessageAggregationJob();
@@ -108,7 +108,7 @@ export function startAllJobs(): void {
 
   // === 階段 3: 延遲 10 分鐘後啟動低優先級任務 ===
   scheduleJobTimeout(() => {
-      logger.info("Jobs", "啟動低優先級任務...");
+      logger.info("Jobs", "開始啟動低優先級任務...");
 
       // Story 2.5: 資料保留與刪除任務
       dataRetentionJob.start();

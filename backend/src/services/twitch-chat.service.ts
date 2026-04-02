@@ -42,6 +42,7 @@ export class TwurpleChatService {
   private channels: Set<string> = new Set();
   private isConnected = false;
   private notInitializedWarned = false; // 避免重複警告
+  private reconnectInFlight = false;
 
   // 熱度追蹤：channelName -> timestamps[]
   private messageTimestamps: Map<string, number[]> = new Map();
@@ -146,7 +147,7 @@ export class TwurpleChatService {
         return channel.id;
       }
     } catch (error) {
-      logger.error("Twurple Chat", `Failed to lookup channelId for ${channelName}`, error);
+      logger.error("Twurple Chat", `查詢 channelId 失敗：${channelName}`, error);
     }
 
     return null;
@@ -186,7 +187,7 @@ export class TwurpleChatService {
         }
 
         // 最後一次嘗試失敗或非可重試錯誤
-        logger.error("Twurple Chat", `連接 Twitch Chat 失敗 (嘗試 ${attempt} 次)`, error);
+        logger.error("Twurple Chat", `連接 Twitch Chat 失敗（第 ${attempt} 次嘗試）`, error);
         this.isConnected = false;
         return;
       }
@@ -216,7 +217,7 @@ export class TwurpleChatService {
     if (!tokenRecord || !tokenRecord.refreshToken) {
       logger.warn(
         "Twurple Chat",
-        "No user token found in database. Please login first. Chat listener disabled."
+        "資料庫中找不到可用的使用者 Token，請先登入 Twitch。聊天室監聽已停用。"
       );
       return;
     }
@@ -227,7 +228,7 @@ export class TwurpleChatService {
     if (!clientId || !clientSecret) {
       logger.warn(
         "Twurple Chat",
-        "Missing TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET. Chat listener disabled."
+        "缺少 TWITCH_CLIENT_ID 或 TWITCH_CLIENT_SECRET，聊天室監聽已停用。"
       );
       return;
     }
@@ -249,7 +250,7 @@ export class TwurpleChatService {
         userId: string,
         newTokenData: import("../types/twitch.types").TwurpleRefreshCallbackData
       ) => {
-        logger.info("Twurple Chat", `Token 已獲刷新: ${userId}`);
+        logger.info("Twurple Chat", `Token 已刷新：${userId}`);
 
         // 更新資料庫中的 Token
         await prisma.twitchToken.update({
@@ -359,7 +360,7 @@ export class TwurpleChatService {
     this.chatClient.onDisconnect((manually: boolean, reason: Error | undefined) => {
       this.isConnected = false;
       if (!manually) {
-        logger.warn("Twurple Chat", `已斷線: ${reason}`);
+        logger.warn("Twurple Chat", `已斷線：${reason}`);
       }
     });
 
@@ -367,19 +368,42 @@ export class TwurpleChatService {
     this.chatClient.onConnect(() => {
       this.isConnected = true;
       logger.info("Twurple Chat", "已連接/重連");
+      void this.rejoinTrackedChannels();
     });
+  }
+
+  private async rejoinTrackedChannels(): Promise<void> {
+    if (!this.chatClient || this.reconnectInFlight || this.channels.size === 0) {
+      return;
+    }
+
+    this.reconnectInFlight = true;
+
+    try {
+      const trackedChannels = Array.from(this.channels);
+
+      for (const channelName of trackedChannels) {
+        try {
+          await this.chatClient.join(channelName);
+        } catch (error) {
+          logger.warn("Twurple Chat", `重連後重新加入頻道失敗：${channelName}`, error);
+        }
+      }
+    } finally {
+      this.reconnectInFlight = false;
+    }
   }
 
   /**
    * 加入頻道
    */
-  public async joinChannel(channel: string, retryCount = 0): Promise<void> {
+  public async joinChannel(channel: string, retryCount = 0): Promise<boolean> {
     if (!this.chatClient) {
       if (!this.notInitializedWarned) {
-        logger.warn("Twurple Chat", "Chat client not initialized. Please login first.");
+        logger.warn("Twurple Chat", "聊天客戶端尚未初始化，請先登入 Twitch。");
         this.notInitializedWarned = true;
       }
-      return;
+      return false;
     }
 
     const channelName = channel.toLowerCase().replace(/^#/, "");
@@ -393,30 +417,33 @@ export class TwurpleChatService {
         if (retryCount > 0) {
           logger.info(
             "Twurple Chat",
-            `Successfully joined channel ${channelName} after ${retryCount} retries`
+            `重試 ${retryCount} 次後成功加入頻道：${channelName}`
           );
         }
-        // logger.info("Twurple Chat", `Joined channel: ${channelName}`);
+        return true;
       }
+      return true;
     } catch (error) {
       // IRC 連線超時：嘗試重試
       if (error instanceof Error && error.message.includes("Did not receive a reply")) {
         if (retryCount < MAX_RETRIES) {
           logger.debug(
             "Twurple Chat",
-            `Join timeout for ${channelName}, retrying in ${RETRY_DELAY}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`
+            `加入頻道逾時：${channelName}，將於 ${RETRY_DELAY}ms 後重試（第 ${retryCount + 1}/${MAX_RETRIES} 次）`
           );
           await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
           return this.joinChannel(channel, retryCount + 1);
         } else {
           logger.warn(
             "Twurple Chat",
-            `Failed to join channel ${channelName} after ${MAX_RETRIES} retries: IRC timeout`
+            `加入頻道失敗：${channelName}，重試 ${MAX_RETRIES} 次後仍發生 IRC 逾時`
           );
         }
       } else {
-        logger.error("Twurple Chat", `Failed to join channel ${channelName}`, error);
+        logger.error("Twurple Chat", `加入頻道失敗：${channelName}`, error);
       }
+
+      return false;
     }
   }
 
@@ -435,7 +462,7 @@ export class TwurpleChatService {
         // logger.info("Twurple Chat", `Left channel: ${channelName}`);
       }
     } catch (error) {
-      logger.error("Twurple Chat", `Failed to leave channel ${channelName}`, error);
+        logger.error("Twurple Chat", `離開頻道失敗：${channelName}`, error);
     }
   }
 
@@ -464,10 +491,10 @@ export class TwurpleChatService {
 
       // 3. 檢測熱度 (Heat Check) - now async, fire and forget
       this.checkChatHeat(channelName, text).catch((err) =>
-        logger.error("Twurple Chat", "Error in heat check", err)
+        logger.error("Twurple Chat", "檢查聊天室熱度時發生錯誤", err)
       );
     } catch (err) {
-      logger.error("Twurple Chat", "Error handling message", err);
+      logger.error("Twurple Chat", "處理聊天室訊息失敗", err);
     }
   }
 
@@ -525,7 +552,7 @@ export class TwurpleChatService {
         // Get channelId for room-based broadcasting
         const channelId = await this.getChannelId(channelName);
         if (!channelId) {
-          logger.debug("Chat Heat", `Skipping heat alert for ${channelName}: channel not found`);
+          logger.debug("Chat Heat", `略過聊天室熱度提醒：找不到頻道 ${channelName}`);
           return;
         }
 
@@ -575,10 +602,10 @@ export class TwurpleChatService {
 
       // 訂閱也算熱度 - now async, fire and forget
       this.checkChatHeat(channelName, "New Subscription!").catch((err) =>
-        logger.error("Twurple Chat", "Error in heat check", err)
+        logger.error("Twurple Chat", "檢查聊天室熱度時發生錯誤", err)
       );
     } catch (err) {
-      logger.error("Twurple Chat", "Error handling subscription", err);
+      logger.error("Twurple Chat", "處理訂閱事件失敗", err);
     }
   }
 
@@ -612,10 +639,10 @@ export class TwurpleChatService {
 
       // Gift sub 也算熱度 - now async, fire and forget
       this.checkChatHeat(channelName, "Gift Sub!").catch((err) =>
-        logger.error("Twurple Chat", "Error in heat check", err)
+        logger.error("Twurple Chat", "檢查聊天室熱度時發生錯誤", err)
       );
     } catch (err) {
-      logger.error("Twurple Chat", "Error handling gift sub", err);
+      logger.error("Twurple Chat", "處理贈送訂閱事件失敗", err);
     }
   }
 
@@ -661,7 +688,7 @@ export class TwurpleChatService {
 
       await this.checkChatHeat(channelName, `Raid from ${user}`);
     } catch (err) {
-      logger.error("Twurple Chat", "Error handling raid", err);
+      logger.error("Twurple Chat", "處理 Raid 事件失敗", err);
     }
   }
 

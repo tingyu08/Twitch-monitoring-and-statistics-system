@@ -92,6 +92,15 @@ export class ChatListenerManager {
       // 更新資訊
       const info = this.channels.get(normalizedName);
       if (info) {
+        const joinedChannels = new Set(twurpleChatService.getStatus().channels);
+        if (!joinedChannels.has(normalizedName)) {
+          const rejoined = await twurpleChatService.joinChannel(normalizedName);
+          if (!rejoined) {
+            logger.warn("ListenerManager", `頻道 ${normalizedName} 狀態不一致且重新加入失敗`);
+            return false;
+          }
+        }
+
         info.lastActivity = new Date();
         if (options?.isLive !== undefined) {
           info.isLive = options.isLive;
@@ -118,7 +127,11 @@ export class ChatListenerManager {
 
     // 加入頻道
     try {
-      await twurpleChatService.joinChannel(normalizedName);
+      const joined = await twurpleChatService.joinChannel(normalizedName);
+      if (!joined) {
+        logger.warn("ListenerManager", `加入頻道未成功：${normalizedName}`);
+        return false;
+      }
 
       this.channels.set(normalizedName, {
         channelName: normalizedName,
@@ -134,7 +147,7 @@ export class ChatListenerManager {
       // );
       return true;
     } catch (error) {
-      logger.error("ListenerManager", `加入頻道失敗: ${normalizedName}`, error);
+      logger.error("ListenerManager", `加入頻道失敗：${normalizedName}`, error);
       return false;
     }
   }
@@ -241,13 +254,13 @@ export class ChatListenerManager {
       // 移除無活動頻道
       for (const name of channelsToRemove) {
         void this.stopListening(name).catch((error) =>
-          logger.error("ListenerManager", `停止頻道失敗: ${name}`, error)
+          logger.error("ListenerManager", `停止頻道失敗：${name}`, error)
         );
-        logger.info("ListenerManager", `自動停止非活躍頻道: ${name}`);
+        logger.info("ListenerManager", `已自動停止非活躍頻道：${name}`);
       }
 
       if (channelsToRemove.length > 0) {
-        logger.info("ListenerManager", `健康檢查: 已移除 ${channelsToRemove.length} 個非活躍頻道`);
+        logger.info("ListenerManager", `健康檢查：已移除 ${channelsToRemove.length} 個非活躍頻道`);
       }
     } catch (error) {
       this.isHealthy = false;

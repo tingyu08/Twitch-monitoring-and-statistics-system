@@ -4,6 +4,7 @@ import { prisma } from "../../db/prisma";
 import { ParsedMessage, RawChatMessage, MessageParser } from "../../utils/message-parser";
 import { logger } from "../../utils/logger";
 import { webSocketGateway } from "../../services/websocket.gateway";
+import { updateViewerWatchTime } from "../../services/watch-time.service";
 import { cacheManager, CacheTTL } from "../../utils/cache-manager";
 
 // 可以接受 ParsedMessage 或 RawChatMessage
@@ -54,6 +55,12 @@ interface BufferedMessage {
   emoteCount: number;
   retryCount: number;
   fingerprint?: string;
+}
+
+interface WatchTimeRecalculationTarget {
+  viewerId: string;
+  channelId: string;
+  date: Date;
 }
 
 // 類型守衛：檢查是否為 RawChatMessage
@@ -118,9 +125,9 @@ export async function retryOnTursoErrorForTesting<T>(
     try {
       const result = await operation();
       // 如果是重試後成功，記錄一下
-      if (attempt > 1) {
-        logger.debug("ViewerMessage", `${context} succeeded on retry ${attempt}`);
-      }
+        if (attempt > 1) {
+          logger.debug("ViewerMessage", `${context} 在第 ${attempt} 次重試後成功`);
+        }
       return result;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -131,14 +138,14 @@ export async function retryOnTursoErrorForTesting<T>(
         // 使用 debug 級別，減少日誌噪音（生產環境通常不顯示 debug）
         logger.debug(
           "ViewerMessage",
-          `${context} failed (${errorType}), retry ${attempt}/${maxRetries} after ${delay}ms`
+          `${context} 失敗（${errorType}），將於 ${delay}ms 後進行第 ${attempt}/${maxRetries} 次重試`
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
 
       // 最後一次嘗試失敗，或非可重試錯誤，記錄並返回 null
-      logger.error("ViewerMessage", `${context} failed after ${attempt} attempts`, error);
+      logger.error("ViewerMessage", `${context} 在重試 ${attempt} 次後仍失敗`, error);
       return null;
     }
   }
@@ -199,6 +206,18 @@ export class ViewerMessageRepository {
     this.recentMessageFingerprints.set(fingerprint, now + Math.max(60_000, MESSAGE_DEDUP_TTL_MS));
   }
 
+  private async recalculateWatchTime(
+    targets: Iterable<WatchTimeRecalculationTarget>
+  ): Promise<void> {
+    // LibSQL/Turso only tolerates limited concurrent write transactions well.
+    // Recalculate watch time sequentially to avoid starving the main batch flush.
+    for (const target of targets) {
+      await updateViewerWatchTime(target.viewerId, target.channelId, target.date, {
+        allowOverwrite: true,
+      });
+    }
+  }
+
   private logOverflowDrop(): void {
     this.overflowDropCount += 1;
     const now = Date.now();
@@ -206,9 +225,7 @@ export class ViewerMessageRepository {
     if (now - this.lastOverflowWarnAt >= BUFFER_OVERFLOW_WARN_INTERVAL_MS) {
       logger.warn(
         "ViewerMessage",
-        `Message buffer pressure: dropped ${this.overflowDropCount} messages in last ${
-          BUFFER_OVERFLOW_WARN_INTERVAL_MS / 1000
-        }s (buffer ${this.messageBuffer.length}/${MESSAGE_BATCH_MAX_SIZE})`
+        `訊息緩衝區壓力過高：最近 ${BUFFER_OVERFLOW_WARN_INTERVAL_MS / 1000} 秒內丟棄了 ${this.overflowDropCount} 筆訊息（buffer ${this.messageBuffer.length}/${MESSAGE_BATCH_MAX_SIZE}）`
       );
       this.lastOverflowWarnAt = now;
       this.overflowDropCount = 0;
@@ -253,6 +270,45 @@ export class ViewerMessageRepository {
     cacheManager.set(cacheKey, viewerId, CacheTTL.LONG);
 
     return viewerId;
+  }
+
+  private async ensureViewerId(
+    twitchUserId: string,
+    displayName?: string | null
+  ): Promise<string | null> {
+    const existingViewerId = await this.getCachedViewerId(twitchUserId);
+    if (existingViewerId) {
+      return existingViewerId;
+    }
+
+    try {
+      const viewer = await retryOnTursoErrorForTesting(
+        () =>
+          prisma.viewer.upsert({
+            where: { twitchUserId },
+            update: {
+              ...(displayName ? { displayName } : {}),
+            },
+            create: {
+              twitchUserId,
+              ...(displayName ? { displayName } : {}),
+            },
+            select: { id: true },
+          }),
+        `ensureViewerId(${twitchUserId})`
+      );
+
+      if (!viewer) {
+        return null;
+      }
+
+      const viewerId = (viewer as { id: string }).id;
+      cacheManager.set(CacheKeys.viewerLookup(twitchUserId), viewerId, CacheTTL.LONG);
+      return viewerId;
+    } catch (error) {
+      logger.error("ViewerMessage", `建立或更新 Viewer 失敗，twitchUserId=${twitchUserId}`, error);
+      return null;
+    }
   }
 
   /**
@@ -310,10 +366,13 @@ export class ViewerMessageRepository {
 
     try {
       // 1. 使用快取查找 Viewer（避免重複 DB 查詢）
-      const viewerId = await this.getCachedViewerId(message.twitchUserId);
+      const viewerId = await this.ensureViewerId(message.twitchUserId, message.displayName);
 
       if (!viewerId) {
-        // 非註冊 Viewer，快速跳過（不需查 DB）
+        logger.warn(
+          "ViewerMessage",
+          `略過訊息：找不到對應的 Viewer，twitchUserId=${message.twitchUserId}`
+        );
         return;
       }
 
@@ -321,6 +380,7 @@ export class ViewerMessageRepository {
       const channelId = await this.getCachedChannelId(channelName);
 
       if (!channelId) {
+        logger.warn("ViewerMessage", `略過訊息：找不到對應的頻道，channelName=${channelName}`);
         return;
       }
 
@@ -349,7 +409,7 @@ export class ViewerMessageRepository {
       // P1 Optimization: Removed real-time WebSocket stats-update broadcast
       // Message counts are now fetched via React Query refetchInterval instead
     } catch (error) {
-      logger.error("ViewerMessage", "Error saving message", error);
+      logger.error("ViewerMessage", "儲存訊息失敗", error);
     }
   }
 
@@ -363,14 +423,14 @@ export class ViewerMessageRepository {
   private enqueueMessage(message: BufferedMessage): void {
     if (this.messageBuffer.length >= MESSAGE_BATCH_SOFT_THRESHOLD && !this.flushInProgress) {
       this.flushBuffers().catch((err) =>
-        logger.error("ViewerMessage", "Failed to flush message buffer under pressure", err)
+        logger.error("ViewerMessage", "高壓狀態下刷新訊息緩衝區失敗", err)
       );
     }
 
     if (this.messageBuffer.length >= MESSAGE_BATCH_MAX_SIZE) {
       if (!this.flushInProgress) {
         this.flushBuffers().catch((err) =>
-          logger.error("ViewerMessage", "Failed to flush message buffer at capacity", err)
+          logger.error("ViewerMessage", "訊息緩衝區滿載時刷新失敗", err)
         );
       }
 
@@ -385,7 +445,7 @@ export class ViewerMessageRepository {
 
     if (this.messageBuffer.length >= MESSAGE_BATCH_SIZE) {
       this.flushBuffers().catch((err) =>
-        logger.error("ViewerMessage", "Failed to flush message buffer", err)
+        logger.error("ViewerMessage", "刷新訊息緩衝區失敗", err)
       );
       return;
     }
@@ -397,7 +457,7 @@ export class ViewerMessageRepository {
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => {
       this.flushBuffers().catch((err) =>
-        logger.error("ViewerMessage", "Failed to flush message buffer", err)
+        logger.error("ViewerMessage", "刷新訊息緩衝區失敗", err)
       );
     }, MESSAGE_BATCH_FLUSH_MS);
   }
@@ -611,10 +671,18 @@ export class ViewerMessageRepository {
         return true;
       }
 
+      const watchTimeTargets = new Map<string, WatchTimeRecalculationTarget>();
+
       for (const msg of persistedBatch) {
         const date = new Date(msg.timestamp);
         date.setUTCHours(0, 0, 0, 0);
         const key = `${msg.viewerId}:${msg.channelId}:${date.getTime()}`;
+
+        watchTimeTargets.set(key, {
+          viewerId: msg.viewerId,
+          channelId: msg.channelId,
+          date,
+        });
 
         const agg = messageAggIncrements.get(key) || {
           viewerId: msg.viewerId,
@@ -879,6 +947,8 @@ export class ViewerMessageRepository {
         }
       });
 
+      await this.recalculateWatchTime(watchTimeTargets.values());
+
       const viewerDeltaMap = new Map<string, Map<string, number>>();
       const affectedViewerIds = new Set<string>();
 
@@ -911,7 +981,7 @@ export class ViewerMessageRepository {
       }
       return true;
     } catch (error) {
-      logger.error("ViewerMessage", "Failed to flush message batch", error);
+      logger.error("ViewerMessage", "批次寫入訊息失敗", error);
 
       // 原始訊息已寫入時，不可整批重送，避免重複訊息
       if (messagesPersisted) {
@@ -1010,16 +1080,24 @@ export class ViewerMessageRepository {
             `);
             logger.info(
               "ViewerMessage",
-              `Standalone lifetime_stats retry succeeded for ${lifetimeRows.length} pairs`
+              `lifetime_stats 備援重試成功，已補寫 ${lifetimeRows.length} 組配對資料`
             );
           }
         } catch (retryError) {
           logger.error(
             "ViewerMessage",
-            "Standalone lifetime_stats retry also failed; data will be recovered by periodic aggregation jobs",
+            "寫入 lifetime_stats 的備援重試也失敗；後續將由週期性聚合任務補回資料",
             retryError
           );
         }
+
+        const watchTimeTargets = Array.from(dailyStatIncrements.values(), (daily) => ({
+          viewerId: daily.viewerId,
+          channelId: daily.channelId,
+          date: daily.date,
+        }));
+
+        await this.recalculateWatchTime(watchTimeTargets);
 
         // 無論 retry 成功與否，都清除受影響觀眾的快取，確保下次 API 請求取得最新資料
         const affectedViewerIds = new Set<string>();
@@ -1052,7 +1130,7 @@ export class ViewerMessageRepository {
       if (droppedMessages > 0) {
         logger.error(
           "ViewerMessage",
-          `Dropped ${droppedMessages} messages after ${MESSAGE_BATCH_MAX_RETRIES} retries`
+          `${droppedMessages} 筆訊息在重試 ${MESSAGE_BATCH_MAX_RETRIES} 次後仍失敗，已放棄寫入`
         );
       }
 

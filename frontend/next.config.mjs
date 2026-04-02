@@ -35,6 +35,8 @@ const nextConfig = {
     },
   },
   turbopack: {
+    // In this npm workspace setup, Next.js is hoisted to the monorepo root.
+    // Point Turbopack at the shared parent so it can resolve hoisted packages.
     root: path.join(__dirname, ".."),
   },
   async rewrites() {

@@ -37,10 +37,10 @@ export class ChannelStatsSyncJob {
   private isRunning = false;
 
   /**
-   * Start Cron Job
+   * 啟動排程任務
    */
   start(): void {
-    logger.info("ChannelStatsSync", `Job scheduled: ${CHANNEL_STATS_CRON}`);
+    logger.info("ChannelStatsSync", `頻道統計同步任務已排程：${CHANNEL_STATS_CRON}`);
 
     cron.schedule(CHANNEL_STATS_CRON, async () => {
       if (CRON_JITTER_MAX_MS > 0) {
@@ -54,19 +54,19 @@ export class ChannelStatsSyncJob {
   }
 
   /**
-   * Execute Channel Stats Sync
+   * 執行頻道統計同步
    */
   async execute(): Promise<ChannelStatsSyncResult> {
     if (this.isRunning) {
-      logger.warn("ChannelStatsSync", "Job already running, skipping...");
+      logger.warn("ChannelStatsSync", "頻道統計同步任務已在執行中，略過本次觸發");
       return { synced: 0, failed: 0, dailyStatsUpdated: 0 };
     }
 
     this.isRunning = true;
-    logger.info("ChannelStatsSync", "Starting Channel Stats Sync...");
+    logger.info("ChannelStatsSync", "開始執行頻道統計同步");
 
     if (shouldSkipForCircuitBreaker(JOB_CIRCUIT_BREAKER_NAME)) {
-      logger.warn("ChannelStatsSync", "Circuit breaker active, skipping this round");
+      logger.warn("ChannelStatsSync", "頻道統計同步任務暫停中（circuit breaker），跳過本輪");
       this.isRunning = false;
       return { synced: 0, failed: 0, dailyStatsUpdated: 0 };
     }
@@ -89,7 +89,7 @@ export class ChannelStatsSyncJob {
       });
 
       if (channels.length === 0) {
-        logger.info("ChannelStatsSync", "No channels to sync");
+        logger.info("ChannelStatsSync", "目前沒有需要同步的頻道");
         return result;
       }
 
@@ -109,7 +109,7 @@ export class ChannelStatsSyncJob {
               );
               return { ok: true as const };
             } catch (error) {
-              logger.error("ChannelStatsSync", `Failed to sync channel ${channel.channelName}:`, error);
+              logger.error("ChannelStatsSync", `同步頻道失敗：${channel.channelName}`, error);
               return { ok: false as const };
             }
           })
@@ -129,8 +129,8 @@ export class ChannelStatsSyncJob {
 
       // 優化日誌：避免 "failed" 關鍵字導致日誌顯示為紅色
       const summary = result.failed > 0
-        ? `Job completed: ${result.synced} synced, ${result.failed} errors, ${result.dailyStatsUpdated} daily stats updated`
-        : `Job completed: ${result.synced} synced, ${result.dailyStatsUpdated} daily stats updated`;
+        ? `頻道統計同步完成：成功 ${result.synced} 個、失敗 ${result.failed} 個、更新每日統計 ${result.dailyStatsUpdated} 筆`
+        : `頻道統計同步完成：成功 ${result.synced} 個、更新每日統計 ${result.dailyStatsUpdated} 筆`;
 
       logger.info("ChannelStatsSync", summary);
 
@@ -138,7 +138,7 @@ export class ChannelStatsSyncJob {
 
       return result;
     } catch (error) {
-      logger.error("ChannelStatsSync", "Job execution failed:", error);
+      logger.error("ChannelStatsSync", "頻道統計同步任務執行失敗", error);
       recordJobFailure(JOB_CIRCUIT_BREAKER_NAME, error);
       throw error;
     } finally {
@@ -164,13 +164,13 @@ export class ChannelStatsSyncJob {
     } | null
   ): Promise<void> {
     if (!channelInfo) {
-      logger.warn("ChannelStatsSync", `Could not get channel info for ID: ${channel.twitchChannelId} (${channel.channelName})`);
+      logger.warn("ChannelStatsSync", `無法取得頻道資訊：ID=${channel.twitchChannelId}（${channel.channelName}）`);
       return;
     }
 
     // 如果頻道名稱有變更，更新資料庫
     if (channelInfo.login !== channel.channelName) {
-      logger.info("ChannelStatsSync", `Channel renamed: ${channel.channelName} -> ${channelInfo.login}`);
+      logger.info("ChannelStatsSync", `頻道名稱已更新：${channel.channelName} -> ${channelInfo.login}`);
       await runWithWriteGuard(WriteGuardKeys.CHANNEL_STATS_RENAME, () =>
         prisma.channel.update({
           where: { id: channel.id },

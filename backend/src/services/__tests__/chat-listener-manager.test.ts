@@ -33,8 +33,8 @@ describe("ChatListenerManager", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    (twurpleChatService.getStatus as jest.Mock).mockReturnValue({ connected: true });
-    (twurpleChatService.joinChannel as jest.Mock).mockResolvedValue(undefined);
+    (twurpleChatService.getStatus as jest.Mock).mockReturnValue({ connected: true, channels: [] });
+    (twurpleChatService.joinChannel as jest.Mock).mockResolvedValue(true);
     (twurpleChatService.leaveChannel as jest.Mock).mockResolvedValue(undefined);
     manager = new ChatListenerManager();
   });
@@ -93,6 +93,7 @@ describe("ChatListenerManager", () => {
   });
 
   it("requestListen updates existing channel info", async () => {
+    (twurpleChatService.getStatus as jest.Mock).mockReturnValue({ connected: true, channels: ["demo"] });
     await manager.requestListen("demo", { priority: 1, isLive: true });
     const ok = await manager.requestListen("#Demo", { priority: 5, isLive: false });
 
@@ -105,6 +106,7 @@ describe("ChatListenerManager", () => {
   });
 
   it("requestListen keeps existing values when update options are omitted", async () => {
+    (twurpleChatService.getStatus as jest.Mock).mockReturnValue({ connected: true, channels: ["demo"] });
     await manager.requestListen("demo", { priority: 3, isLive: true });
 
     const ok = await manager.requestListen("demo");
@@ -169,15 +171,39 @@ describe("ChatListenerManager", () => {
   });
 
   it("requestListen handles joinChannel failure", async () => {
-    (twurpleChatService.joinChannel as jest.Mock).mockRejectedValueOnce(new Error("join failed"));
+    (twurpleChatService.joinChannel as jest.Mock).mockResolvedValueOnce(false);
 
     const ok = await manager.requestListen("demo");
 
     expect(ok).toBe(false);
-    expect(logger.error).toHaveBeenCalledWith(
+    expect(logger.warn).toHaveBeenCalledWith(
       "ListenerManager",
-      "加入頻道失敗: demo",
-      expect.any(Error)
+      "加入頻道未成功：demo"
+    );
+  });
+
+  it("requestListen re-joins tracked channel when chat service lost subscription", async () => {
+    await manager.requestListen("demo", { priority: 1, isLive: true });
+    (twurpleChatService.getStatus as jest.Mock).mockReturnValue({ connected: true, channels: [] });
+
+    const ok = await manager.requestListen("demo", { priority: 2 });
+
+    expect(ok).toBe(true);
+    expect(twurpleChatService.joinChannel).toHaveBeenCalledTimes(2);
+    expect(manager.getChannels()[0].priority).toBe(2);
+  });
+
+  it("requestListen returns false when tracked channel re-join fails", async () => {
+    await manager.requestListen("demo", { priority: 1, isLive: true });
+    (twurpleChatService.getStatus as jest.Mock).mockReturnValue({ connected: true, channels: [] });
+    (twurpleChatService.joinChannel as jest.Mock).mockResolvedValueOnce(false);
+
+    const ok = await manager.requestListen("demo");
+
+    expect(ok).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ListenerManager",
+      "頻道 demo 狀態不一致且重新加入失敗"
     );
   });
 
@@ -236,8 +262,8 @@ describe("ChatListenerManager", () => {
     await Promise.resolve();
 
     expect(twurpleChatService.leaveChannel).toHaveBeenCalledWith("offline-old");
-    expect(logger.info).toHaveBeenCalledWith("ListenerManager", "自動停止非活躍頻道: offline-old");
-    expect(logger.info).toHaveBeenCalledWith("ListenerManager", "健康檢查: 已移除 1 個非活躍頻道");
+    expect(logger.info).toHaveBeenCalledWith("ListenerManager", "已自動停止非活躍頻道：offline-old");
+    expect(logger.info).toHaveBeenCalledWith("ListenerManager", "健康檢查：已移除 1 個非活躍頻道");
   });
 
   it("performHealthCheck marks unhealthy when service throws", () => {
@@ -263,7 +289,7 @@ describe("ChatListenerManager", () => {
 
     expect(logger.error).toHaveBeenCalledWith(
       "ListenerManager",
-      "停止頻道失敗: offline-old",
+      "停止頻道失敗：offline-old",
       expect.any(Error)
     );
   });
@@ -303,7 +329,7 @@ describe("ChatListenerManager", () => {
     (twurpleChatService.getStatus as jest.Mock).mockReturnValueOnce({ connected: false });
     expect(manager.getHealthStatus().status).toBe("unhealthy");
 
-    (twurpleChatService.getStatus as jest.Mock).mockReturnValueOnce({ connected: true });
+    (twurpleChatService.getStatus as jest.Mock).mockReturnValueOnce({ connected: true, channels: [] });
     for (let i = 0; i < 71; i += 1) {
       (manager as any).channels.set(`d${i}`, {
         channelName: `d${i}`,
@@ -318,7 +344,7 @@ describe("ChatListenerManager", () => {
 
   it("returns healthy status when connected and listener count is below threshold", async () => {
     await manager.requestListen("healthy-channel", { isLive: true });
-    (twurpleChatService.getStatus as jest.Mock).mockReturnValueOnce({ connected: true });
+    (twurpleChatService.getStatus as jest.Mock).mockReturnValueOnce({ connected: true, channels: [] });
 
     const health = manager.getHealthStatus();
 
