@@ -105,8 +105,8 @@ export class TwurpleChatService {
     if (cleanedChannels > 0) {
       logger.debug(
         "Twurple Chat",
-        `Cleaned up heat data for ${cleanedChannels} inactive channels. ` +
-          `Active: ${this.messageTimestamps.size} channels`
+        `已清理 ${cleanedChannels} 個非活躍頻道的聊天室熱度資料，` +
+          `目前仍追蹤 ${this.messageTimestamps.size} 個頻道`
       );
     }
   }
@@ -559,7 +559,7 @@ export class TwurpleChatService {
         // 觸發熱度警報！
         logger.debug(
           "Chat Heat",
-          `🔥 Channel ${channelName} is heating up! (${windowCount} msgs/5s)`
+          `🔥 頻道 ${channelName} 聊天熱度正在升高！（5 秒內 ${windowCount} 則訊息）`
         );
 
         webSocketGateway.broadcastChatHeat({

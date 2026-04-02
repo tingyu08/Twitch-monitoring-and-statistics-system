@@ -41,7 +41,7 @@ function cleanupStaleGuardKeys(now: number): void {
   }
 
   if (cleaned > 0) {
-    logger.debug("JobWriteGuard", `Cleaned ${cleaned} stale keyed guard entries`);
+    logger.debug("JobWriteGuard", `已清理 ${cleaned} 筆過期的 keyed guard 紀錄`);
   }
 }
 
@@ -79,7 +79,7 @@ export async function runWithWriteGuard<T>(jobName: string, operation: () => Pro
       writeTailsByKey.delete(guardKey);
     }
     cleanupStaleGuardKeys(now);
-    logger.debug("JobWriteGuard", `Write slot released by ${jobName} (key=${guardKey})`);
+    logger.debug("JobWriteGuard", `已釋放寫入槽位：${jobName}（key=${guardKey}）`);
   }
 }
 
@@ -114,6 +114,6 @@ async function runWithGlobalGuard<T>(jobName: string, operation: () => Promise<T
   } finally {
     lastWriteCompletedAt = Date.now();
     releaseCurrent?.();
-    logger.debug("JobWriteGuard", `Write slot released by ${jobName} (global)`);
+    logger.debug("JobWriteGuard", `已釋放全域寫入槽位：${jobName}`);
   }
 }

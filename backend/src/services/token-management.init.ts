@@ -19,7 +19,7 @@ import { logger } from "../utils/logger";
  * 初始化 Token 管理系統
  */
 export async function initializeTokenManagement(): Promise<void> {
-  logger.info("Token Management", "Initializing token management system");
+  logger.info("Token Management", "正在初始化 Token 管理系統");
 
   // 設定 Token 刷新失敗回調
   twurpleAuthService.setOnTokenFailure(async (userId, error, reason) => {
@@ -84,7 +84,7 @@ export async function initializeTokenManagement(): Promise<void> {
     }
   });
 
-  logger.info("Token Management", "Token management system initialized");
+  logger.info("Token Management", "Token 管理系統初始化完成");
 }
 
 /**

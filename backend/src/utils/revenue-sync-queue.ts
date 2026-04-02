@@ -241,7 +241,7 @@ class BullMQRevenueSyncQueueAdapter implements RevenueSyncQueueAdapter {
 function createAdapter(): RevenueSyncQueueAdapter {
   const connection = getBullMQConnectionOptions();
   if (!connection) {
-    logger.info("RevenueQueue", "Using in-memory queue adapter");
+    logger.info("RevenueQueue", "使用記憶體內佇列 adapter");
     return new MemoryRevenueSyncQueueAdapter();
   }
 

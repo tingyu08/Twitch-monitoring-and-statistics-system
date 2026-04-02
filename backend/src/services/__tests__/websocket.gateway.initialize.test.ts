@@ -67,12 +67,12 @@ describe("WebSocketGateway initialize/setupRedisAdapter", () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       "WebSocket",
-      "setupRedisAdapter failed",
+      "初始化 Redis adapter 失敗",
       expect.any(Error)
     );
     expect(logger.info).toHaveBeenCalledWith(
       "WebSocket",
-      "Socket.IO Gateway initialized with room support"
+      "Socket.IO Gateway 已初始化，支援 room 廣播"
     );
   });
 
@@ -130,7 +130,7 @@ describe("WebSocketGateway initialize/setupRedisAdapter", () => {
     expect(io.adapter).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(
       "WebSocket",
-      "Redis adapter not enabled (Redis unavailable)"
+      "Redis adapter 未啟用（Redis 無法使用）"
     );
   });
 
@@ -164,7 +164,7 @@ describe("WebSocketGateway initialize/setupRedisAdapter", () => {
     expect(io.adapter).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
       "WebSocket",
-      "Failed to enable Redis adapter, using standalone mode",
+      "啟用 Redis adapter 失敗，改用單機模式",
       expect.any(Error)
     );
   });
@@ -233,7 +233,7 @@ describe("WebSocketGateway initialize/setupRedisAdapter", () => {
     pubErrorHandler?.(pubErr);
     subErrorHandler?.(subErr);
 
-    expect(logger.warn).toHaveBeenCalledWith("WebSocket", "Redis pub error", pubErr);
-    expect(logger.warn).toHaveBeenCalledWith("WebSocket", "Redis sub error", subErr);
+    expect(logger.warn).toHaveBeenCalledWith("WebSocket", "Redis 發送端錯誤", pubErr);
+    expect(logger.warn).toHaveBeenCalledWith("WebSocket", "Redis 訂閱端錯誤", subErr);
   });
 });

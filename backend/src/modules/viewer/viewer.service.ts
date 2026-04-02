@@ -311,7 +311,7 @@ export async function getFollowedChannels(viewerId: string): Promise<FollowedCha
           const totalTime = Date.now() - startTime;
           logger.debug(
             "ViewerService",
-            `getFollowedChannels served from summary in ${totalTime}ms (${sorted.length} channels)`
+            `getFollowedChannels 已由摘要表回應，耗時 ${totalTime}ms（共 ${sorted.length} 個頻道）`
           );
           return sorted;
         }

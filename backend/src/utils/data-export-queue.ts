@@ -237,7 +237,7 @@ class BullMQDataExportQueueAdapter implements DataExportQueueAdapter {
 function createAdapter(): DataExportQueueAdapter {
   const connection = getBullMQConnectionOptions();
   if (!connection) {
-    logger.info("DataExportQueue", "Using in-memory queue adapter");
+    logger.info("DataExportQueue", "使用記憶體內佇列 adapter");
     return new MemoryDataExportQueueAdapter();
   }
 

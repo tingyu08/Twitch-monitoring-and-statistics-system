@@ -48,10 +48,10 @@ export class WebSocketGateway {
     });
 
     void this.setupRedisAdapter().catch((err) =>
-      logger.warn("WebSocket", "setupRedisAdapter failed", err)
+      logger.warn("WebSocket", "初始化 Redis adapter 失敗", err)
     );
 
-    logger.info("WebSocket", "Socket.IO Gateway initialized with room support");
+    logger.info("WebSocket", "Socket.IO Gateway 已初始化，支援 room 廣播");
   }
 
   private async setupRedisAdapter(): Promise<void> {
@@ -60,7 +60,7 @@ export class WebSocketGateway {
     const { initRedis } = await import("../utils/redis-client");
     const connected = await initRedis();
     if (!connected) {
-      logger.info("WebSocket", "Redis adapter not enabled (Redis unavailable)");
+      logger.info("WebSocket", "Redis adapter 未啟用（Redis 無法使用）");
       return;
     }
 
@@ -72,17 +72,17 @@ export class WebSocketGateway {
       const subClient = baseClient.duplicate({ lazyConnect: true });
 
       // 持久 error handler，避免 unhandled error 崩潰進程
-      pubClient.on("error", (err) => logger.warn("WebSocket", "Redis pub error", err));
-      subClient.on("error", (err) => logger.warn("WebSocket", "Redis sub error", err));
+      pubClient.on("error", (err) => logger.warn("WebSocket", "Redis 發送端錯誤", err));
+      subClient.on("error", (err) => logger.warn("WebSocket", "Redis 訂閱端錯誤", err));
 
       await Promise.all([pubClient.connect(), subClient.connect()]);
 
       this.pubClient = pubClient;
       this.subClient = subClient;
       this.io.adapter(createAdapter(this.pubClient, this.subClient));
-      logger.info("WebSocket", "Redis adapter enabled for cross-instance broadcast");
+      logger.info("WebSocket", "Redis adapter 已啟用，可進行跨實例廣播");
     } catch (error) {
-      logger.warn("WebSocket", "Failed to enable Redis adapter, using standalone mode", error);
+      logger.warn("WebSocket", "啟用 Redis adapter 失敗，改用單機模式", error);
     }
   }
 
