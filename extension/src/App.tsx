@@ -61,7 +61,7 @@ function App() {
 
       {!status?.isAuthenticated && (
         <div className="hint">
-          <p>請先登入 Bmad 儀表板以啟用追蹤功能</p>
+          <p>請先登入儀表板以啟用追蹤功能</p>
           <a
             href="https://twitch-monitoring-and-statistics-sy.vercel.app"
             target="_blank"
