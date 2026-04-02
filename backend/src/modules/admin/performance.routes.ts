@@ -13,8 +13,6 @@ import {
   performanceLogger,
   API_SLOW_THRESHOLD_MS,
 } from "../../utils/performance-monitor";
-import { prisma } from "../../db/prisma";
-import { watchTimeIncrementJob } from "../../jobs/watch-time-increment.job";
 import { cacheManager } from "../../utils/cache-manager";
 import { revenueSyncQueue } from "../../utils/revenue-sync-queue";
 import { dataExportQueue } from "../../utils/data-export-queue";
@@ -252,102 +250,6 @@ router.get("/health", (_req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: "Health check failed",
-    });
-  }
-});
-
-/**
- * GET /api/admin/performance/watch-time
- * 觀看時數排程與資料寫入診斷
- */
-router.get("/watch-time", async (_req: Request, res: Response) => {
-  try {
-    const windows = [10, 30, 60, 180, 1440];
-    const activePairsByWindow: Record<string, { messageCount: number; activePairs: number }> = {};
-
-    for (const minutes of windows) {
-      const [row] = (await prisma.$queryRawUnsafe(
-        `SELECT
-           COUNT(*) AS messageCount,
-           COUNT(DISTINCT viewerId || '::' || channelId) AS activePairs
-         FROM viewer_channel_messages
-         WHERE timestamp >= datetime('now', '-${minutes} minutes')`
-      )) as Array<{ messageCount: number | null; activePairs: number | null }>;
-
-      activePairsByWindow[`${minutes}m`] = {
-        messageCount: Number(row?.messageCount ?? 0),
-        activePairs: Number(row?.activePairs ?? 0),
-      };
-    }
-
-    const [dailySummaryRow] = (await prisma.$queryRawUnsafe(
-      `SELECT
-         COUNT(*) AS total,
-         SUM(CASE WHEN watchSeconds > 0 THEN 1 ELSE 0 END) AS withWatchSeconds,
-         SUM(CASE WHEN source = 'chat' THEN 1 ELSE 0 END) AS chatRows,
-         SUM(CASE WHEN source = 'extension' THEN 1 ELSE 0 END) AS extensionRows,
-         MAX(updatedAt) AS latestDailyUpdate,
-         MAX(CASE WHEN watchSeconds > 0 THEN updatedAt END) AS latestNonZeroWatchUpdate
-       FROM viewer_channel_daily_stats`
-    )) as Array<{
-      total: number | null;
-      withWatchSeconds: number | null;
-      chatRows: number | null;
-      extensionRows: number | null;
-      latestDailyUpdate: string | null;
-      latestNonZeroWatchUpdate: string | null;
-    }>;
-
-    const dailyByUpdateDay = (await prisma.$queryRawUnsafe(
-      `SELECT
-         date(updatedAt) AS day,
-         COUNT(*) AS rows,
-         SUM(CASE WHEN watchSeconds > 0 THEN 1 ELSE 0 END) AS rowsWithWatch,
-         SUM(watchSeconds) AS watchSecondsSum,
-         SUM(messageCount) AS messageCountSum
-       FROM viewer_channel_daily_stats
-       WHERE updatedAt >= datetime('now', '-14 days')
-       GROUP BY date(updatedAt)
-       ORDER BY day DESC`
-    )) as Array<{
-      day: string;
-      rows: number | null;
-      rowsWithWatch: number | null;
-      watchSecondsSum: number | null;
-      messageCountSum: number | null;
-    }>;
-
-    res.json({
-      success: true,
-      data: {
-        job: watchTimeIncrementJob.getStatus(),
-        jobs: {
-          circuitBreaker: getJobCircuitBreakerSnapshot(),
-        },
-        activePairsByWindow,
-        dailySummary: {
-          total: Number(dailySummaryRow?.total ?? 0),
-          withWatchSeconds: Number(dailySummaryRow?.withWatchSeconds ?? 0),
-          chatRows: Number(dailySummaryRow?.chatRows ?? 0),
-          extensionRows: Number(dailySummaryRow?.extensionRows ?? 0),
-          latestDailyUpdate: dailySummaryRow?.latestDailyUpdate ?? null,
-          latestNonZeroWatchUpdate: dailySummaryRow?.latestNonZeroWatchUpdate ?? null,
-        },
-        dailyByUpdateDay: dailyByUpdateDay.map((row) => ({
-          day: row.day,
-          rows: Number(row.rows ?? 0),
-          rowsWithWatch: Number(row.rowsWithWatch ?? 0),
-          watchSecondsSum: Number(row.watchSecondsSum ?? 0),
-          messageCountSum: Number(row.messageCountSum ?? 0),
-        })),
-        collectedAt: new Date().toISOString(),
-      },
-    });
-  } catch (error) {
-    performanceLogger.error("Failed to get watch-time diagnostics", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to retrieve watch-time diagnostics",
     });
   }
 });

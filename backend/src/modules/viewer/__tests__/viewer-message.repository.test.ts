@@ -2,10 +2,13 @@ jest.mock("../../../db/prisma", () => ({
   prisma: {
     viewer: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
+      createMany: jest.fn(),
       upsert: jest.fn(),
     },
     channel: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
     },
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
@@ -61,8 +64,11 @@ describe("ViewerMessageRepository flush batch emits", () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     (prisma.viewer.findUnique as jest.Mock).mockResolvedValue({ id: "viewer-1" });
+    (prisma.viewer.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.viewer.createMany as jest.Mock).mockResolvedValue({ count: 0 });
     (prisma.viewer.upsert as jest.Mock).mockResolvedValue({ id: "viewer-1" });
     (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "channel-1" });
+    (prisma.channel.findMany as jest.Mock).mockResolvedValue([{ id: "channel-1", channelName: "demo" }]);
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([
       { messageDedupKey: "k1" },
       { messageDedupKey: "k2" },
@@ -187,7 +193,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     });
   });
 
-  it("recalculates watch time for each affected viewer-channel-day after persisting messages", async () => {
+  it("defers watch time recalculation until background flush", async () => {
     const repo = new ViewerMessageRepository();
     const ts = new Date("2026-02-26T10:00:00.000Z");
 
@@ -231,6 +237,10 @@ describe("ViewerMessageRepository flush batch emits", () => {
     ];
 
     await (repo as any).flushBatch(batch);
+
+    expect(updateViewerWatchTime).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(5000);
 
     expect(updateViewerWatchTime).toHaveBeenCalledTimes(2);
     expect(updateViewerWatchTime).toHaveBeenCalledWith("v1", "c1", new Date("2026-02-26T00:00:00.000Z"), {
@@ -305,12 +315,11 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(webSocketGateway.emitViewerStatsBatch).not.toHaveBeenCalled();
   });
 
-  it("saveMessage upserts viewer when lookup resolves to null sentinel", async () => {
+  it("saveMessage defers unknown viewer creation until batch flush", async () => {
     const repo = new ViewerMessageRepository();
     (cacheManager.get as jest.Mock).mockImplementation((key: string) =>
       key.startsWith("lookup:viewer") ? "__NULL__" : null
     );
-    (prisma.viewer.upsert as jest.Mock).mockResolvedValueOnce({ id: "viewer-new" });
 
     await repo.saveMessage("demo", {
       twitchUserId: "tu-1",
@@ -324,49 +333,51 @@ describe("ViewerMessageRepository flush batch emits", () => {
       bits: 0,
     });
 
-    expect(prisma.viewer.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { twitchUserId: "tu-1" },
-        create: expect.objectContaining({
-          twitchUserId: "tu-1",
-          displayName: "User",
-        }),
-      })
-    );
-    expect(prisma.channel.findFirst).toHaveBeenCalled();
+    expect(prisma.viewer.upsert).not.toHaveBeenCalled();
+    expect(prisma.channel.findFirst).not.toHaveBeenCalled();
     expect((repo as any).messageBuffer).toHaveLength(1);
+    expect((repo as any).messageBuffer[0].viewerId).toBeNull();
+    expect((repo as any).messageBuffer[0].channelId).toBeNull();
   });
 
-  it("saveMessage warns when viewer upsert fails", async () => {
+  it("flushBatch creates missing viewers in batch before inserting messages", async () => {
     const repo = new ViewerMessageRepository();
-    (cacheManager.get as jest.Mock).mockImplementation((key: string) =>
-      key.startsWith("lookup:viewer") ? "__NULL__" : null
-    );
-    (prisma.viewer.upsert as jest.Mock).mockResolvedValueOnce(null);
+    const ts = new Date("2026-02-26T10:00:00.000Z");
+    (prisma.viewer.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ twitchUserId: "tu-new", id: "viewer-new" }]);
+    (prisma.viewer.createMany as jest.Mock).mockResolvedValueOnce({ count: 1 });
 
-    await repo.saveMessage("demo", {
-      twitchUserId: "tu-fail",
-      username: "user",
-      displayName: "User",
-      messageText: "hi",
-      messageType: "CHAT",
-      timestamp: new Date("2026-02-26T10:00:00.000Z"),
-      badges: null,
-      emotes: null,
-      bits: 0,
-    });
+    await (repo as any).flushBatch([
+      {
+        viewerId: null,
+        twitchUserId: "tu-new",
+        displayName: "User",
+        channelId: "c1",
+        messageText: "hi",
+        messageType: "CHAT",
+        timestamp: ts,
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+      },
+    ]);
 
-    expect((repo as any).messageBuffer).toHaveLength(0);
-    expect(logger.warn).toHaveBeenCalledWith(
-      "ViewerMessage",
-      "略過訊息：找不到對應的 Viewer，twitchUserId=tu-fail"
+    expect(prisma.viewer.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [expect.objectContaining({ twitchUserId: "tu-new", displayName: "User" })],
+      })
     );
+    expect(prisma.$queryRaw).toHaveBeenCalled();
   });
 
   it("saveMessage sets null sentinel cache when channel not found", async () => {
     const repo = new ViewerMessageRepository();
-    (cacheManager.get as jest.Mock).mockReturnValue(null);
-    (prisma.channel.findFirst as jest.Mock).mockResolvedValueOnce(null);
+    (cacheManager.get as jest.Mock).mockImplementation((key: string) =>
+      key.startsWith("lookup:channel") ? "__NULL__" : null
+    );
 
     await repo.saveMessage("missing_channel", {
       twitchUserId: "tu-2",
@@ -380,7 +391,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
       bits: 0,
     });
 
-    expect(cacheManager.set).toHaveBeenCalledWith(
+    expect(cacheManager.set).not.toHaveBeenCalledWith(
       "lookup:channel:missing_channel",
       "__NULL__",
       30
@@ -411,7 +422,8 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect((repo as any).messageBuffer).toHaveLength(1);
     const queued = (repo as any).messageBuffer[0];
     expect(queued.viewerId).toBe("viewer-1");
-    expect(queued.channelId).toBe("channel-1");
+    expect(queued.channelId).toBeNull();
+    expect(queued.channelName).toBe("demo");
     expect(queued.badges).toBe(JSON.stringify({ subscriber: "1" }));
     expect(queued.emotesUsed).toBe(JSON.stringify(["Kappa"]));
     expect(queued.bitsAmount).toBe(100);
@@ -585,7 +597,61 @@ describe("ViewerMessageRepository flush batch emits", () => {
     });
 
     expect(prisma.channel.findFirst).not.toHaveBeenCalled();
+    expect(prisma.channel.findMany).not.toHaveBeenCalled();
     expect((repo as any).messageBuffer).toHaveLength(0);
+  });
+
+  it("saveMessage defers unknown channel resolution until batch flush", async () => {
+    const repo = new ViewerMessageRepository();
+    (cacheManager.get as jest.Mock).mockImplementation((key: string) =>
+      key.startsWith("lookup:viewer") ? "viewer-1" : null
+    );
+
+    await repo.saveMessage("demo", {
+      twitchUserId: "tu-channel-later",
+      username: "user",
+      displayName: "User",
+      messageText: "hi",
+      messageType: "CHAT",
+      timestamp: new Date("2026-02-26T10:00:00.000Z"),
+      badges: null,
+      emotes: null,
+      bits: 0,
+    });
+
+    expect(prisma.channel.findFirst).not.toHaveBeenCalled();
+    expect((repo as any).messageBuffer).toHaveLength(1);
+    expect((repo as any).messageBuffer[0].channelId).toBeNull();
+    expect((repo as any).messageBuffer[0].channelName).toBe("demo");
+  });
+
+  it("flushBatch resolves missing channels in batch before inserting messages", async () => {
+    const repo = new ViewerMessageRepository();
+    const ts = new Date("2026-02-26T10:00:00.000Z");
+    (prisma.channel.findMany as jest.Mock).mockResolvedValueOnce([{ id: "channel-new", channelName: "demo" }]);
+
+    await (repo as any).flushBatch([
+      {
+        viewerId: "viewer-1",
+        channelId: null,
+        channelName: "demo",
+        messageText: "hi",
+        messageType: "CHAT",
+        timestamp: ts,
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+      },
+    ]);
+
+    expect(prisma.channel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { channelName: { in: ["demo"] } },
+      })
+    );
+    expect(prisma.$queryRaw).toHaveBeenCalled();
   });
 
   it("logs saveMessage error when cached lookup throws", async () => {

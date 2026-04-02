@@ -38,14 +38,18 @@ const RETRY_BUFFER_MAX_SIZE = MESSAGE_BATCH_MAX_SIZE;
 const BUFFER_OVERFLOW_WARN_INTERVAL_MS = 30 * 1000;
 const CACHE_NULL_SENTINEL = "__NULL__";
 const NULL_LOOKUP_TTL_SECONDS = CacheTTL.SHORT;
+const WATCH_TIME_RECALC_DEBOUNCE_MS = 5000;
 const MESSAGE_DEDUP_TTL_MS = Number.parseInt(
   process.env.VIEWER_MESSAGE_DEDUP_TTL_MS || String(15 * 60 * 1000),
   10
 );
 
 interface BufferedMessage {
-  viewerId: string;
-  channelId: string;
+  viewerId: string | null;
+  twitchUserId?: string;
+  displayName?: string | null;
+  channelId: string | null;
+  channelName?: string;
   messageText: string;
   messageType: string;
   timestamp: Date;
@@ -163,13 +167,16 @@ export class ViewerMessageRepository {
   private flushTimer: NodeJS.Timeout | null = null;
   private flushInProgress = false;
   private flushRequested = false;
+  private watchTimeFlushInProgress = false;
   private overflowDropCount = 0;
   private lastOverflowWarnAt = 0;
+  private watchTimeFlushTimer: NodeJS.Timeout | null = null;
+  private pendingWatchTimeTargets = new Map<string, WatchTimeRecalculationTarget>();
   private recentMessageFingerprints = new Map<string, number>();
 
   private buildMessageFingerprint(message: Pick<
     BufferedMessage,
-    "viewerId" | "channelId" | "messageType" | "messageText" | "timestamp" | "bitsAmount"
+    "viewerId" | "twitchUserId" | "channelId" | "channelName" | "messageType" | "messageText" | "timestamp" | "bitsAmount"
   >): string {
     const timestamp =
       message.timestamp instanceof Date
@@ -177,8 +184,8 @@ export class ViewerMessageRepository {
         : new Date(message.timestamp || 0).toISOString();
 
     const material = [
-      message.viewerId,
-      message.channelId,
+      message.viewerId || `twitch:${message.twitchUserId || "unknown"}`,
+      message.channelId || `channel:${message.channelName || "unknown"}`,
       message.messageType,
       message.messageText,
       timestamp,
@@ -206,15 +213,48 @@ export class ViewerMessageRepository {
     this.recentMessageFingerprints.set(fingerprint, now + Math.max(60_000, MESSAGE_DEDUP_TTL_MS));
   }
 
-  private async recalculateWatchTime(
-    targets: Iterable<WatchTimeRecalculationTarget>
-  ): Promise<void> {
-    // LibSQL/Turso only tolerates limited concurrent write transactions well.
-    // Recalculate watch time sequentially to avoid starving the main batch flush.
+  private enqueueWatchTimeTargets(targets: Iterable<WatchTimeRecalculationTarget>): void {
     for (const target of targets) {
-      await updateViewerWatchTime(target.viewerId, target.channelId, target.date, {
-        allowOverwrite: true,
-      });
+      const key = `${target.viewerId}:${target.channelId}:${target.date.getTime()}`;
+      this.pendingWatchTimeTargets.set(key, target);
+    }
+
+    this.scheduleWatchTimeFlush();
+  }
+
+  private scheduleWatchTimeFlush(): void {
+    if (this.watchTimeFlushTimer) {
+      return;
+    }
+
+    this.watchTimeFlushTimer = setTimeout(() => {
+      this.watchTimeFlushTimer = null;
+      void this.flushPendingWatchTimeTargets();
+    }, WATCH_TIME_RECALC_DEBOUNCE_MS);
+
+    this.watchTimeFlushTimer.unref?.();
+  }
+
+  private async flushPendingWatchTimeTargets(): Promise<void> {
+    if (this.watchTimeFlushInProgress || this.pendingWatchTimeTargets.size === 0) {
+      return;
+    }
+
+    this.watchTimeFlushInProgress = true;
+    const targets = Array.from(this.pendingWatchTimeTargets.values());
+    this.pendingWatchTimeTargets.clear();
+
+    try {
+      for (const target of targets) {
+        await updateViewerWatchTime(target.viewerId, target.channelId, target.date, {
+          allowOverwrite: true,
+        });
+      }
+    } finally {
+      this.watchTimeFlushInProgress = false;
+      if (this.pendingWatchTimeTargets.size > 0) {
+        this.scheduleWatchTimeFlush();
+      }
     }
   }
 
@@ -272,43 +312,120 @@ export class ViewerMessageRepository {
     return viewerId;
   }
 
-  private async ensureViewerId(
-    twitchUserId: string,
-    displayName?: string | null
-  ): Promise<string | null> {
-    const existingViewerId = await this.getCachedViewerId(twitchUserId);
-    if (existingViewerId) {
-      return existingViewerId;
+  private async resolveViewerIds(batch: BufferedMessage[]): Promise<BufferedMessage[]> {
+    const unresolved = batch.filter((message) => !message.viewerId && message.twitchUserId);
+    if (unresolved.length === 0) {
+      return batch.filter((message): message is BufferedMessage & { viewerId: string } => Boolean(message.viewerId));
     }
 
-    try {
-      const viewer = await retryOnTursoErrorForTesting(
-        () =>
-          prisma.viewer.upsert({
-            where: { twitchUserId },
-            update: {
-              ...(displayName ? { displayName } : {}),
-            },
-            create: {
-              twitchUserId,
-              ...(displayName ? { displayName } : {}),
-            },
-            select: { id: true },
-          }),
-        `ensureViewerId(${twitchUserId})`
-      );
+    const twitchUserIds = Array.from(new Set(unresolved.map((message) => message.twitchUserId as string)));
 
-      if (!viewer) {
-        return null;
+    const existingViewers = await prisma.viewer.findMany({
+      where: { twitchUserId: { in: twitchUserIds } },
+      select: { id: true, twitchUserId: true },
+    });
+
+    const viewerIdByTwitchUserId = new Map(
+      existingViewers.map((viewer) => [viewer.twitchUserId, viewer.id])
+    );
+
+    const missingViewerData = Array.from(
+      unresolved.reduce((map, message) => {
+        if (!message.twitchUserId || viewerIdByTwitchUserId.has(message.twitchUserId)) {
+          return map;
+        }
+
+        if (!map.has(message.twitchUserId)) {
+          map.set(message.twitchUserId, {
+            twitchUserId: message.twitchUserId,
+            displayName: message.displayName || message.twitchUserId,
+          });
+        }
+
+        return map;
+      }, new Map<string, { twitchUserId: string; displayName: string }>()).values()
+    );
+
+    if (missingViewerData.length > 0) {
+      try {
+        await prisma.viewer.createMany({
+          data: missingViewerData,
+        });
+      } catch (error) {
+        logger.debug("ViewerMessage", "批次建立未知 Viewer 時發生衝突，改以重新查詢結果為準", error);
       }
 
-      const viewerId = (viewer as { id: string }).id;
-      cacheManager.set(CacheKeys.viewerLookup(twitchUserId), viewerId, CacheTTL.LONG);
-      return viewerId;
-    } catch (error) {
-      logger.error("ViewerMessage", `建立或更新 Viewer 失敗，twitchUserId=${twitchUserId}`, error);
-      return null;
+      const refreshedViewers = await prisma.viewer.findMany({
+        where: { twitchUserId: { in: missingViewerData.map((viewer) => viewer.twitchUserId) } },
+        select: { id: true, twitchUserId: true },
+      });
+
+      for (const viewer of refreshedViewers) {
+        viewerIdByTwitchUserId.set(viewer.twitchUserId, viewer.id);
+      }
     }
+
+    const resolvedBatch = batch.flatMap((message) => {
+      const viewerId = message.viewerId || (message.twitchUserId ? viewerIdByTwitchUserId.get(message.twitchUserId) : null);
+
+      if (!viewerId) {
+        logger.warn(
+          "ViewerMessage",
+          `略過訊息：找不到對應的 Viewer，twitchUserId=${message.twitchUserId || "unknown"}`
+        );
+        return [];
+      }
+
+      if (message.twitchUserId) {
+        cacheManager.set(CacheKeys.viewerLookup(message.twitchUserId), viewerId, CacheTTL.LONG);
+      }
+
+      return [{ ...message, viewerId }];
+    });
+
+    return resolvedBatch;
+  }
+
+  private async resolveChannelIds(batch: BufferedMessage[]): Promise<BufferedMessage[]> {
+    const unresolved = batch.filter((message) => !message.channelId && message.channelName);
+    if (unresolved.length === 0) {
+      return batch.filter((message): message is BufferedMessage & { channelId: string } => Boolean(message.channelId));
+    }
+
+    const channelNames = Array.from(
+      new Set(unresolved.map((message) => (message.channelName as string).toLowerCase()))
+    );
+
+    const existingChannels = await prisma.channel.findMany({
+      where: { channelName: { in: channelNames } },
+      select: { id: true, channelName: true },
+    });
+
+    const channelIdByName = new Map(
+      existingChannels.map((channel) => [channel.channelName.toLowerCase(), channel.id])
+    );
+
+    return batch.flatMap((message) => {
+      const normalizedChannelName = message.channelName?.toLowerCase();
+      const channelId = message.channelId || (normalizedChannelName ? channelIdByName.get(normalizedChannelName) : null);
+
+      if (!channelId) {
+        if (normalizedChannelName) {
+          cacheManager.set(CacheKeys.channelLookup(normalizedChannelName), CACHE_NULL_SENTINEL, NULL_LOOKUP_TTL_SECONDS);
+        }
+        logger.warn(
+          "ViewerMessage",
+          `略過訊息：找不到對應的頻道，channelName=${message.channelName || "unknown"}`
+        );
+        return [];
+      }
+
+      if (normalizedChannelName) {
+        cacheManager.set(CacheKeys.channelLookup(normalizedChannelName), channelId, CacheTTL.LONG);
+      }
+
+      return [{ ...message, channelId }];
+    });
   }
 
   /**
@@ -366,20 +483,14 @@ export class ViewerMessageRepository {
 
     try {
       // 1. 使用快取查找 Viewer（避免重複 DB 查詢）
-      const viewerId = await this.ensureViewerId(message.twitchUserId, message.displayName);
+      const viewerId = await this.getCachedViewerId(message.twitchUserId);
 
-      if (!viewerId) {
-        logger.warn(
-          "ViewerMessage",
-          `略過訊息：找不到對應的 Viewer，twitchUserId=${message.twitchUserId}`
-        );
-        return;
-      }
+      // 2. 優先只讀取 channel 快取，cache miss 留給 flush 時批次解析
+      const cachedChannel = cacheManager.get<string>(CacheKeys.channelLookup(channelName));
+      const channelId =
+        cachedChannel === null ? null : cachedChannel === CACHE_NULL_SENTINEL ? CACHE_NULL_SENTINEL : cachedChannel;
 
-      // 2. 使用快取查找 Channel
-      const channelId = await this.getCachedChannelId(channelName);
-
-      if (!channelId) {
+      if (channelId === CACHE_NULL_SENTINEL) {
         logger.warn("ViewerMessage", `略過訊息：找不到對應的頻道，channelName=${channelName}`);
         return;
       }
@@ -387,7 +498,10 @@ export class ViewerMessageRepository {
       // 3. 批次寫入：將訊息加入緩衝，定期批次寫入 DB
       this.enqueueMessage({
         viewerId,
+        twitchUserId: message.twitchUserId,
+        displayName: message.displayName,
         channelId,
+        channelName,
         messageText: message.messageText,
         messageType: message.messageType,
         timestamp: message.timestamp,
@@ -399,6 +513,7 @@ export class ViewerMessageRepository {
         fingerprint: this.buildMessageFingerprint({
           viewerId,
           channelId,
+          channelName,
           messageType: message.messageType,
           messageText: message.messageText,
           timestamp: message.timestamp,
@@ -460,6 +575,7 @@ export class ViewerMessageRepository {
         logger.error("ViewerMessage", "刷新訊息緩衝區失敗", err)
       );
     }, MESSAGE_BATCH_FLUSH_MS);
+    this.flushTimer.unref?.();
   }
 
   private getRetryDelayMs(retryCount: number): number {
@@ -540,10 +656,20 @@ export class ViewerMessageRepository {
   private async flushBatch(batch: BufferedMessage[]): Promise<boolean> {
     if (batch.length === 0) return true;
 
-    const now = Date.now();
-    const dedupedBatch: BufferedMessage[] = [];
-    for (const msg of batch) {
-      const fingerprint = msg.fingerprint || this.buildMessageFingerprint(msg);
+      const channelsResolvedBatch = await this.resolveChannelIds(batch);
+      if (channelsResolvedBatch.length === 0) {
+        return true;
+      }
+
+      const resolvedBatch = await this.resolveViewerIds(channelsResolvedBatch);
+      if (resolvedBatch.length === 0) {
+        return true;
+      }
+
+      const now = Date.now();
+      const dedupedBatch: BufferedMessage[] = [];
+      for (const msg of resolvedBatch) {
+        const fingerprint = msg.fingerprint || this.buildMessageFingerprint(msg);
       if (this.isRecentDuplicate(fingerprint, now)) {
         continue;
       }
@@ -947,7 +1073,7 @@ export class ViewerMessageRepository {
         }
       });
 
-      await this.recalculateWatchTime(watchTimeTargets.values());
+      this.enqueueWatchTimeTargets(watchTimeTargets.values());
 
       const viewerDeltaMap = new Map<string, Map<string, number>>();
       const affectedViewerIds = new Set<string>();
@@ -1097,7 +1223,7 @@ export class ViewerMessageRepository {
           date: daily.date,
         }));
 
-        await this.recalculateWatchTime(watchTimeTargets);
+        this.enqueueWatchTimeTargets(watchTimeTargets);
 
         // 無論 retry 成功與否，都清除受影響觀眾的快取，確保下次 API 請求取得最新資料
         const affectedViewerIds = new Set<string>();

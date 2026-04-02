@@ -19,7 +19,6 @@ import { syncVideosJob } from "./sync-videos.job";
 import { syncSubscriptionsJob } from "./sync-subscriptions.job";
 import { updateLiveStatusJob } from "./update-live-status.job";
 import { cleanupExtensionHeartbeatDedupJob } from "./cleanup-extension-heartbeat-dedup.job";
-import { watchTimeIncrementJob } from "./watch-time-increment.job";
 import { logger } from "../utils/logger";
 import { MEMORY_THRESHOLDS } from "../utils/memory-thresholds";
 
@@ -76,9 +75,6 @@ export function startAllJobs(): void {
 
   // 優化: 即時直播狀態更新任務（核心功能）
   updateLiveStatusJob.start();
-
-  // 觀看時數增量任務（提早啟動，避免依賴 Twitch 初始化流程）
-  watchTimeIncrementJob.start();
 
   // Token 驗證任務 - 每天凌晨 4 點執行（低流量時段）
   const tokenValidationTask = cron.schedule("0 4 * * *", async () => {

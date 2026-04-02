@@ -66,27 +66,12 @@ jest.mock("../../../utils/job-circuit-breaker", () => ({
   getJobCircuitBreakerSnapshot: jest.fn().mockReturnValue({ jobs: {} }),
 }));
 
-jest.mock("../../../jobs/watch-time-increment.job", () => ({
-  watchTimeIncrementJob: {
-    getStatus: jest.fn().mockReturnValue({ running: false, lastRun: null }),
-  },
-}));
-
-jest.mock("../../../db/prisma", () => ({
-  prisma: {
-    $queryRawUnsafe: jest.fn().mockResolvedValue([
-      { messageCount: 10, activePairs: 3 },
-    ]),
-  },
-}));
-
 import request from "supertest";
 import express from "express";
 import { performanceRoutes } from "../performance.routes";
 import { revenueSyncQueue } from "../../../utils/revenue-sync-queue";
 import { dataExportQueue } from "../../../utils/data-export-queue";
 import { performanceMonitor, performanceLogger } from "../../../utils/performance-monitor";
-import { prisma } from "../../../db/prisma";
 
 const app = express();
 app.use(express.json());
@@ -107,9 +92,6 @@ describe("performance.routes", () => {
     (performanceMonitor.getStats as jest.Mock).mockReturnValue({
       totalRequests: 100, averageResponseTime: 120, p95: 300, slowRequests: 5,
     });
-    (prisma.$queryRawUnsafe as jest.Mock).mockResolvedValue([
-      { messageCount: 10, activePairs: 3 },
-    ]);
   });
 
   // ====================================================
@@ -321,83 +303,4 @@ describe("performance.routes", () => {
     });
   });
 
-  // ====================================================
-  // GET /watch-time
-  // ====================================================
-  describe("GET /watch-time", () => {
-    it("returns watch-time diagnostics", async () => {
-      // Mock multiple calls: 5 windows + dailySummary + dailyByUpdateDay
-      (prisma.$queryRawUnsafe as jest.Mock)
-        .mockResolvedValueOnce([{ messageCount: 10, activePairs: 3 }]) // 10m
-        .mockResolvedValueOnce([{ messageCount: 20, activePairs: 5 }]) // 30m
-        .mockResolvedValueOnce([{ messageCount: 30, activePairs: 7 }]) // 60m
-        .mockResolvedValueOnce([{ messageCount: 40, activePairs: 9 }]) // 180m
-        .mockResolvedValueOnce([{ messageCount: 50, activePairs: 11 }]) // 1440m
-        .mockResolvedValueOnce([{
-          total: 100, withWatchSeconds: 80, chatRows: 60, extensionRows: 40,
-          latestDailyUpdate: "2026-01-01", latestNonZeroWatchUpdate: "2026-01-01",
-        }])
-        .mockResolvedValueOnce([
-          { day: "2026-01-01", rows: 10, rowsWithWatch: 8, watchSecondsSum: 3600, messageCountSum: 100 },
-        ]);
-
-      const res = await request(app).get("/api/admin/performance/watch-time");
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data).toHaveProperty("activePairsByWindow");
-      expect(res.body.data).toHaveProperty("dailySummary");
-    });
-
-    it("returns 500 when prisma throws", async () => {
-      (prisma.$queryRawUnsafe as jest.Mock).mockRejectedValue(new Error("db fail"));
-      const res = await request(app).get("/api/admin/performance/watch-time");
-      expect(res.status).toBe(500);
-      expect(res.body.success).toBe(false);
-    });
-
-    it("converts null watch-time fields to zero/null defaults", async () => {
-      (prisma.$queryRawUnsafe as jest.Mock)
-        .mockResolvedValueOnce([{ messageCount: null, activePairs: null }])
-        .mockResolvedValueOnce([{ messageCount: null, activePairs: null }])
-        .mockResolvedValueOnce([{ messageCount: null, activePairs: null }])
-        .mockResolvedValueOnce([{ messageCount: null, activePairs: null }])
-        .mockResolvedValueOnce([{ messageCount: null, activePairs: null }])
-        .mockResolvedValueOnce([{
-          total: null,
-          withWatchSeconds: null,
-          chatRows: null,
-          extensionRows: null,
-          latestDailyUpdate: null,
-          latestNonZeroWatchUpdate: null,
-        }])
-        .mockResolvedValueOnce([
-          {
-            day: "2026-01-01",
-            rows: null,
-            rowsWithWatch: null,
-            watchSecondsSum: null,
-            messageCountSum: null,
-          },
-        ]);
-
-      const res = await request(app).get("/api/admin/performance/watch-time");
-      expect(res.status).toBe(200);
-      expect(res.body.data.activePairsByWindow["10m"]).toEqual({ messageCount: 0, activePairs: 0 });
-      expect(res.body.data.dailySummary).toMatchObject({
-        total: 0,
-        withWatchSeconds: 0,
-        chatRows: 0,
-        extensionRows: 0,
-        latestDailyUpdate: null,
-        latestNonZeroWatchUpdate: null,
-      });
-      expect(res.body.data.dailyByUpdateDay[0]).toMatchObject({
-        day: "2026-01-01",
-        rows: 0,
-        rowsWithWatch: 0,
-        watchSecondsSum: 0,
-        messageCountSum: 0,
-      });
-    });
-  });
 });

@@ -40,12 +40,6 @@ jest.mock("../../jobs/auto-join-live-channels.job", () => ({
   },
 }));
 
-jest.mock("../../jobs/watch-time-increment.job", () => ({
-  watchTimeIncrementJob: {
-    start: jest.fn(),
-  },
-}));
-
 jest.mock("../../utils/logger", () => ({
   logger: {
     debug: jest.fn(),
@@ -56,7 +50,6 @@ jest.mock("../../utils/logger", () => ({
 }));
 
 import { autoJoinLiveChannelsJob } from "../../jobs/auto-join-live-channels.job";
-import { watchTimeIncrementJob } from "../../jobs/watch-time-increment.job";
 import { logger } from "../../utils/logger";
 import { decApiService } from "../decapi.service";
 import { twurpleChatService } from "../twitch-chat.service";
@@ -78,7 +71,7 @@ describe("UnifiedTwitchService", () => {
       await service.initialize();
       await service.initialize();
 
-      expect(logger.info).toHaveBeenCalledWith("Twitch Service", "Helix API 連線正常 (Twurple)");
+      expect(logger.info).toHaveBeenCalledWith("Twitch Service", "Helix API 連線正常（Twurple）");
       expect(setIntervalSpy).toHaveBeenCalledTimes(1);
 
       clearInterval((service as any).cacheCleanupTimer);
@@ -93,10 +86,9 @@ describe("UnifiedTwitchService", () => {
 
       expect(twurpleChatService.initialize).toHaveBeenCalledTimes(1);
       expect(autoJoinLiveChannelsJob.start).toHaveBeenCalledTimes(1);
-      expect(watchTimeIncrementJob.start).toHaveBeenCalledTimes(1);
       expect(logger.warn).toHaveBeenCalledWith(
         "Twitch Service",
-        "Helix API 連線失敗 - 部分功能可能無法使用"
+        "Helix API 連線失敗，部分功能可能無法使用"
       );
     });
 
@@ -531,7 +523,7 @@ describe("UnifiedTwitchService", () => {
 
   describe("chat and live status", () => {
     it("returns true for start/stop channel listening success", async () => {
-      (twurpleChatService.joinChannel as jest.Mock).mockResolvedValue(undefined);
+      (twurpleChatService.joinChannel as jest.Mock).mockResolvedValue(true);
       (twurpleChatService.leaveChannel as jest.Mock).mockResolvedValue(undefined);
 
       await expect(service.startListeningToChannel("abc")).resolves.toBe(true);

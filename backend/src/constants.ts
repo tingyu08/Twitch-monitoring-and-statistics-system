@@ -46,11 +46,6 @@ export const WriteGuardKeys = {
   CLEANUP_HEARTBEAT_DEDUP: "cleanup-heartbeat-dedup:delete",
   DATA_RETENTION_DELETE: "data-retention:delete-messages",
 
-  // Watch time increment
-  WATCH_TIME_EXECUTION: "watch-time-increment:execution",
-  WATCH_TIME_DAILY_UPSERT: "watch-time-increment:daily-stats-upsert",
-  WATCH_TIME_LIFETIME_UPSERT: "watch-time-increment:lifetime-stats-upsert",
-
   // Live status updates
   LIVE_STATUS_CHECK_TIME: "update-live-status:check-time-only",
   LIVE_STATUS_BATCH_UPDATE: "update-live-status:batch-channel-update",

@@ -4,7 +4,6 @@ import { unifiedTwitchService } from "./services/unified-twitch.service";
 import { chatListenerManager } from "./services/chat-listener-manager";
 import { webSocketGateway } from "./services/websocket.gateway";
 import { startAllJobs } from "./jobs";
-import { watchTimeIncrementJob } from "./jobs/watch-time-increment.job";
 import { twurpleEventSubService } from "./services/twurple-eventsub.service";
 import { logger } from "./utils/logger";
 import { memoryMonitor } from "./utils/memory-monitor";
@@ -174,9 +173,6 @@ process.on("unhandledRejection", (reason) => {
 httpServer.listen(PORT, "0.0.0.0", async () => {
   console.log(`伺服器運行於 http://0.0.0.0:${PORT}`);
   console.log(`🚀 環境: ${process.env.NODE_ENV || "development"}`);
-
-  // 觀看時數增量任務提早啟動，避免受記憶體守門與 Twitch 初始化失敗影響
-  watchTimeIncrementJob.start();
 
   // 啟動記憶體監控（生產環境自動啟動，開發環境手動啟動）
   if (process.env.NODE_ENV !== "production") {
