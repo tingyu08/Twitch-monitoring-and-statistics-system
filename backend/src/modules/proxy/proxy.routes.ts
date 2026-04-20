@@ -59,7 +59,13 @@ router.get("/avatar", async (req, res) => {
     });
 
     // 設定回應 headers
-    const contentType = response.headers["content-type"] || "image/png";
+    const rawContentType = response.headers["content-type"];
+    const contentType =
+      typeof rawContentType === "string"
+        ? rawContentType
+        : Array.isArray(rawContentType)
+          ? rawContentType[0]
+          : "image/png";
     res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "public, max-age=86400"); // 快取 1 天
     // 使用 frontendUrl 限制 CORS，而非開放給所有來源

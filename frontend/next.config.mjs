@@ -1,22 +1,9 @@
 import createNextIntlPlugin from "next-intl/plugin";
-import withPWAInit from "@ducanh2912/next-pwa";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const withPWA = withPWAInit({
-  dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
-  reloadOnOnline: true,
-  swcMinify: true,
-  disable: process.env.NODE_ENV === "development",
-  workboxOptions: {
-    disableDevLogs: true,
-  },
-});
 
 const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 
@@ -88,4 +75,4 @@ const nextConfig = {
 };
 
 // 應用 next-intl 插件
-export default withPWA(withNextIntl(nextConfig));
+export default withNextIntl(nextConfig);
