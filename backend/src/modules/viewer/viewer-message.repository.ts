@@ -293,13 +293,13 @@ export class ViewerMessageRepository {
       () =>
         prisma.viewer.findUnique({
           where: { twitchUserId },
-          select: { id: true },
+          select: { id: true, consentedAt: true },
         }),
       `getCachedViewerId(${twitchUserId})`
     );
 
-    // Handle null from retry failure or viewer not found
-    if (!result) {
+    // Handle null from retry failure, viewer not found, or viewer without consent.
+    if (!result || !(result as { consentedAt?: Date | null }).consentedAt) {
       cacheManager.set(cacheKey, CACHE_NULL_SENTINEL, NULL_LOOKUP_TTL_SECONDS);
       return null;
     }
@@ -321,7 +321,10 @@ export class ViewerMessageRepository {
     const twitchUserIds = Array.from(new Set(unresolved.map((message) => message.twitchUserId as string)));
 
     const existingViewers = await prisma.viewer.findMany({
-      where: { twitchUserId: { in: twitchUserIds } },
+      where: {
+        twitchUserId: { in: twitchUserIds },
+        consentedAt: { not: null },
+      },
       select: { id: true, twitchUserId: true },
     });
 
@@ -329,49 +332,13 @@ export class ViewerMessageRepository {
       existingViewers.map((viewer) => [viewer.twitchUserId, viewer.id])
     );
 
-    const missingViewerData = Array.from(
-      unresolved.reduce((map, message) => {
-        if (!message.twitchUserId || viewerIdByTwitchUserId.has(message.twitchUserId)) {
-          return map;
-        }
-
-        if (!map.has(message.twitchUserId)) {
-          map.set(message.twitchUserId, {
-            twitchUserId: message.twitchUserId,
-            displayName: message.displayName || message.twitchUserId,
-          });
-        }
-
-        return map;
-      }, new Map<string, { twitchUserId: string; displayName: string }>()).values()
-    );
-
-    if (missingViewerData.length > 0) {
-      try {
-        await prisma.viewer.createMany({
-          data: missingViewerData,
-        });
-      } catch (error) {
-        logger.debug("ViewerMessage", "批次建立未知 Viewer 時發生衝突，改以重新查詢結果為準", error);
-      }
-
-      const refreshedViewers = await prisma.viewer.findMany({
-        where: { twitchUserId: { in: missingViewerData.map((viewer) => viewer.twitchUserId) } },
-        select: { id: true, twitchUserId: true },
-      });
-
-      for (const viewer of refreshedViewers) {
-        viewerIdByTwitchUserId.set(viewer.twitchUserId, viewer.id);
-      }
-    }
-
     const resolvedBatch = batch.flatMap((message) => {
       const viewerId = message.viewerId || (message.twitchUserId ? viewerIdByTwitchUserId.get(message.twitchUserId) : null);
 
       if (!viewerId) {
         logger.warn(
           "ViewerMessage",
-          `略過訊息：找不到對應的 Viewer，twitchUserId=${message.twitchUserId || "unknown"}`
+          `略過未授權或陌生 Viewer 的訊息：twitchUserId=${message.twitchUserId || "unknown"}`
         );
         return [];
       }

@@ -3,7 +3,6 @@ jest.mock("../../../db/prisma", () => ({
     viewer: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
-      createMany: jest.fn(),
       upsert: jest.fn(),
     },
     channel: {
@@ -63,9 +62,8 @@ describe("ViewerMessageRepository flush batch emits", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
-    (prisma.viewer.findUnique as jest.Mock).mockResolvedValue({ id: "viewer-1" });
+    (prisma.viewer.findUnique as jest.Mock).mockResolvedValue({ id: "viewer-1", consentedAt: new Date("2026-02-01T00:00:00.000Z") });
     (prisma.viewer.findMany as jest.Mock).mockResolvedValue([]);
-    (prisma.viewer.createMany as jest.Mock).mockResolvedValue({ count: 0 });
     (prisma.viewer.upsert as jest.Mock).mockResolvedValue({ id: "viewer-1" });
     (prisma.channel.findFirst as jest.Mock).mockResolvedValue({ id: "channel-1" });
     (prisma.channel.findMany as jest.Mock).mockResolvedValue([{ id: "channel-1", channelName: "demo" }]);
@@ -315,7 +313,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(webSocketGateway.emitViewerStatsBatch).not.toHaveBeenCalled();
   });
 
-  it("saveMessage defers unknown viewer creation until batch flush", async () => {
+  it("saveMessage defers unknown viewer resolution until batch flush", async () => {
     const repo = new ViewerMessageRepository();
     (cacheManager.get as jest.Mock).mockImplementation((key: string) =>
       key.startsWith("lookup:viewer") ? "__NULL__" : null
@@ -340,15 +338,12 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect((repo as any).messageBuffer[0].channelId).toBeNull();
   });
 
-  it("flushBatch creates missing viewers in batch before inserting messages", async () => {
+  it("flushBatch drops messages from unknown viewers instead of creating them", async () => {
     const repo = new ViewerMessageRepository();
     const ts = new Date("2026-02-26T10:00:00.000Z");
-    (prisma.viewer.findMany as jest.Mock)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ twitchUserId: "tu-new", id: "viewer-new" }]);
-    (prisma.viewer.createMany as jest.Mock).mockResolvedValueOnce({ count: 1 });
+    (prisma.viewer.findMany as jest.Mock).mockResolvedValueOnce([]);
 
-    await (repo as any).flushBatch([
+    const ok = await (repo as any).flushBatch([
       {
         viewerId: null,
         twitchUserId: "tu-new",
@@ -365,12 +360,54 @@ describe("ViewerMessageRepository flush batch emits", () => {
       },
     ]);
 
-    expect(prisma.viewer.createMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: [expect.objectContaining({ twitchUserId: "tu-new", displayName: "User" })],
-      })
+    expect(ok).toBe(true);
+    expect(prisma.viewer.upsert).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ViewerMessage",
+      "略過未授權或陌生 Viewer 的訊息：twitchUserId=tu-new"
     );
-    expect(prisma.$queryRaw).toHaveBeenCalled();
+  });
+
+  it("treats viewer without consentedAt as unknown in cached lookup", async () => {
+    const repo = new ViewerMessageRepository();
+    (cacheManager.get as jest.Mock).mockReturnValue(null);
+    (prisma.viewer.findUnique as jest.Mock).mockResolvedValueOnce({ id: "viewer-no-consent", consentedAt: null });
+
+    const viewerId = await (repo as any).getCachedViewerId("tu-no-consent");
+
+    expect(viewerId).toBeNull();
+    expect(cacheManager.set).toHaveBeenCalledWith("lookup:viewer:tu-no-consent", "__NULL__", 30);
+  });
+
+  it("flushBatch drops messages from existing but unconsented viewers", async () => {
+    const repo = new ViewerMessageRepository();
+    const ts = new Date("2026-02-26T10:00:00.000Z");
+    (prisma.viewer.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+    const ok = await (repo as any).flushBatch([
+      {
+        viewerId: null,
+        twitchUserId: "tu-unconsented",
+        displayName: "User",
+        channelId: "c1",
+        messageText: "hi",
+        messageType: "CHAT",
+        timestamp: ts,
+        badges: null,
+        emotesUsed: null,
+        bitsAmount: null,
+        emoteCount: 0,
+        retryCount: 0,
+      },
+    ]);
+
+    expect(ok).toBe(true);
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ViewerMessage",
+      "略過未授權或陌生 Viewer 的訊息：twitchUserId=tu-unconsented"
+    );
   });
 
   it("saveMessage sets null sentinel cache when channel not found", async () => {
@@ -516,7 +553,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     (cacheManager.get as jest.Mock).mockReturnValue(null);
     (prisma.viewer.findUnique as jest.Mock)
       .mockRejectedValueOnce(new Error("502 bad gateway"))
-      .mockResolvedValueOnce({ id: "viewer-retry" });
+      .mockResolvedValueOnce({ id: "viewer-retry", consentedAt: new Date("2026-02-01T00:00:00.000Z") });
 
     const promise = (repo as any).getCachedViewerId("tu-retry");
     await jest.advanceTimersByTimeAsync(120);
@@ -542,7 +579,7 @@ describe("ViewerMessageRepository flush batch emits", () => {
     (cacheManager.get as jest.Mock).mockReturnValue(null);
     (prisma.viewer.findUnique as jest.Mock)
       .mockRejectedValueOnce(new Error(errorMessage))
-      .mockResolvedValueOnce({ id: "viewer-pattern" });
+      .mockResolvedValueOnce({ id: "viewer-pattern", consentedAt: new Date("2026-02-01T00:00:00.000Z") });
 
     const promise = (repo as any).getCachedViewerId("tu-pattern");
     await jest.advanceTimersByTimeAsync(120);
