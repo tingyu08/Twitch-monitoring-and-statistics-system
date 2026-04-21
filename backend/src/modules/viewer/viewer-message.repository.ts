@@ -710,7 +710,7 @@ export class ViewerMessageRepository {
     try {
       const messageValues = dedupedBatch.map(
         (msg) =>
-          Prisma.sql`(${msg.fingerprint}, ${msg.viewerId}, ${msg.channelId}, ${msg.messageText}, ${msg.messageType}, ${msg.timestamp}, ${msg.badges}, ${msg.emotesUsed}, ${msg.bitsAmount}, CURRENT_TIMESTAMP)`
+          Prisma.sql`(${msg.fingerprint}, ${msg.viewerId}, ${msg.channelId}, ${msg.messageText}, ${msg.messageType}, ${msg.timestamp}::timestamptz, ${msg.badges}, ${msg.emotesUsed}, ${msg.bitsAmount}::integer, CURRENT_TIMESTAMP)`
       );
 
       // 先落地原始訊息（DB dedup），縮短後續聚合交易範圍
@@ -854,9 +854,9 @@ export class ViewerMessageRepository {
         /* istanbul ignore next - large SQL upsert block is validated via higher-level flush tests */
         if (messageAggRows.length > 0) {
           const aggValues = messageAggRows.map((agg) =>
-            Prisma.sql`(${agg.viewerId}, ${agg.channelId}, ${agg.date}, ${agg.totalMessages}, ${
+            Prisma.sql`(${agg.viewerId}, ${agg.channelId}, ${agg.date}::timestamptz, ${agg.totalMessages}::integer, ${
               agg.chatMessages
-            }, ${agg.subscriptions}, ${agg.cheers}, ${agg.giftSubs}, ${agg.raids}, ${agg.totalBits})`
+            }::integer, ${agg.subscriptions}::integer, ${agg.cheers}::integer, ${agg.giftSubs}::integer, ${agg.raids}::integer, ${agg.totalBits}::integer)`
           );
 
           await tx.$executeRaw(Prisma.sql`
@@ -919,7 +919,7 @@ export class ViewerMessageRepository {
         /* istanbul ignore next - large SQL upsert block is validated via higher-level flush tests */
         if (dailyRows.length > 0) {
           const dailyValues = dailyRows.map((daily) =>
-            Prisma.sql`(${daily.viewerId}, ${daily.channelId}, ${daily.date}, ${daily.messageCount}, ${daily.emoteCount})`
+            Prisma.sql`(${daily.viewerId}, ${daily.channelId}, ${daily.date}::timestamptz, ${daily.messageCount}::integer, ${daily.emoteCount}::integer)`
           );
 
           await tx.$executeRaw(Prisma.sql`
@@ -968,11 +968,11 @@ export class ViewerMessageRepository {
         /* istanbul ignore next - large SQL upsert block is validated via higher-level flush tests */
         if (lifetimeRows.length > 0) {
           const lifetimeValues = lifetimeRows.map((lifetime) =>
-            Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}, ${
+            Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}::integer, ${
               lifetime.totalChatMessages
-            }, ${lifetime.totalSubscriptions}, ${lifetime.totalCheers}, ${lifetime.totalBits}, ${
+            }::integer, ${lifetime.totalSubscriptions}::integer, ${lifetime.totalCheers}::integer, ${lifetime.totalBits}::integer, ${
               lifetime.lastWatchedAt
-            })`
+            }::timestamptz)`
           );
 
           await tx.$executeRaw(Prisma.sql`
@@ -1102,11 +1102,11 @@ export class ViewerMessageRepository {
           /* istanbul ignore next - fallback SQL retry block is defensive recovery logic */
           if (lifetimeRows.length > 0) {
             const lifetimeValues = lifetimeRows.map((lifetime) =>
-              Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}, ${
+              Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}::integer, ${
                 lifetime.totalChatMessages
-              }, ${lifetime.totalSubscriptions}, ${lifetime.totalCheers}, ${lifetime.totalBits}, ${
+              }::integer, ${lifetime.totalSubscriptions}::integer, ${lifetime.totalCheers}::integer, ${lifetime.totalBits}::integer, ${
                 lifetime.lastWatchedAt
-              })`
+              }::timestamptz)`
             );
 
             await prisma.$executeRaw(Prisma.sql`

@@ -329,13 +329,13 @@ export class RevenueController {
       Array<{ date: string | Date; totalBits: bigint; eventCount: bigint }>
     >`
       SELECT
-        cheeredDate as date,
+        "cheeredDate" as date,
         SUM(bits) as totalBits,
         COUNT(*) as eventCount
       FROM cheer_events
-      WHERE streamerId = ${streamerId}
-        AND cheeredDate >= ${startDateOnly.toISOString()}
-      GROUP BY cheeredDate
+      WHERE "streamerId" = ${streamerId}
+        AND "cheeredDate" >= ${startDateOnly.toISOString()}
+      GROUP BY "cheeredDate"
       ORDER BY date ASC
     `;
 

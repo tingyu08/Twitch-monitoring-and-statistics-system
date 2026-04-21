@@ -251,11 +251,11 @@ async function loadHeatmapAggregate(
 ): Promise<HeatmapResponse | null> {
   try {
     const rows = await prisma.$queryRaw<HeatmapAggregateRow[]>(Prisma.sql`
-      SELECT dayOfWeek, hour, totalHours, updatedAt
+      SELECT "dayOfWeek", hour, "totalHours", "updatedAt"
       FROM channel_hourly_stats
-      WHERE channelId = ${channelId}
-        AND range = ${range}
-      ORDER BY dayOfWeek ASC, hour ASC
+      WHERE "channelId" = ${channelId}
+        AND "range" = ${range}
+      ORDER BY "dayOfWeek" ASC, hour ASC
     `);
 
     if (rows.length !== 7 * 24) {
@@ -295,17 +295,17 @@ async function persistHeatmapAggregate(
 
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO channel_hourly_stats (
-        channelId,
-        dayOfWeek,
+        "channelId",
+        "dayOfWeek",
         hour,
-        totalHours,
-        range,
-        updatedAt
+        "totalHours",
+        "range",
+        "updatedAt"
       )
       VALUES ${Prisma.join(values)}
-      ON CONFLICT(channelId, dayOfWeek, hour, range) DO UPDATE SET
-        totalHours = excluded.totalHours,
-        updatedAt = CURRENT_TIMESTAMP
+      ON CONFLICT("channelId", "dayOfWeek", hour, "range") DO UPDATE SET
+        "totalHours" = excluded."totalHours",
+        "updatedAt" = CURRENT_TIMESTAMP
     `);
   } catch {
     // 聚合表不存在或寫入失敗時，不影響主流程
@@ -344,11 +344,11 @@ export async function getStreamerSummary(
 
       const rows = await prisma.$queryRaw<StreamerSummaryRow[]>(Prisma.sql`
         SELECT
-          SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
+          SUM(COALESCE("durationSeconds", 0)) AS totalSeconds,
           COUNT(*) AS sessionCount
         FROM stream_sessions
-        WHERE channelId = ${channelId}
-          AND startedAt >= ${cutoffDate}
+        WHERE "channelId" = ${channelId}
+          AND "startedAt" >= ${cutoffDate}
       `);
 
       const totalSeconds = toNumber(rows[0]?.totalSeconds);
@@ -404,13 +404,13 @@ export async function getStreamerTimeSeries(
       if (granularity === "day") {
         const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
           SELECT
-            startedAt::date AS "bucketDate",
-            SUM(COALESCE(durationSeconds, 0))::float8 AS "totalSeconds",
+            "startedAt"::date AS "bucketDate",
+            SUM(COALESCE("durationSeconds", 0))::float8 AS "totalSeconds",
             COUNT(*)::integer AS "sessionCount"
           FROM stream_sessions
           WHERE "channelId" = ${channelId}
-            AND startedAt >= ${cutoffDate}
-          GROUP BY startedAt::date
+            AND "startedAt" >= ${cutoffDate}
+          GROUP BY "startedAt"::date
           ORDER BY "bucketDate" ASC
         `);
 
@@ -419,13 +419,13 @@ export async function getStreamerTimeSeries(
 
       const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
         SELECT
-          date_trunc('week', startedAt)::date AS "bucketDate",
-          SUM(COALESCE(durationSeconds, 0))::float8 AS "totalSeconds",
+          date_trunc('week', "startedAt")::date AS "bucketDate",
+          SUM(COALESCE("durationSeconds", 0))::float8 AS "totalSeconds",
           COUNT(*)::integer AS "sessionCount"
         FROM stream_sessions
         WHERE "channelId" = ${channelId}
-          AND startedAt >= ${cutoffDate}
-        GROUP BY date_trunc('week', startedAt)::date
+          AND "startedAt" >= ${cutoffDate}
+        GROUP BY date_trunc('week', "startedAt")::date
         ORDER BY "bucketDate" ASC
       `);
 
@@ -615,12 +615,12 @@ async function getGameStatsByChannelId(channelId: string, cutoffDate: Date): Pro
   const rows = await prisma.$queryRaw<GameStatsRow[]>(Prisma.sql`
     SELECT
       COALESCE(category, 'Uncategorized') AS gameName,
-      SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
-      SUM(COALESCE(avgViewers, 0) * COALESCE(durationSeconds, 0)) AS weightedViewersSum,
-      MAX(COALESCE(peakViewers, 0)) AS peakViewers,
+      SUM(COALESCE("durationSeconds", 0)) AS totalSeconds,
+      SUM(COALESCE("avgViewers", 0) * COALESCE("durationSeconds", 0)) AS weightedViewersSum,
+      MAX(COALESCE("peakViewers", 0)) AS peakViewers,
       COUNT(*) AS streamCount
     FROM stream_sessions
-    WHERE channelId = ${channelId} AND startedAt >= ${cutoffDate}
+    WHERE "channelId" = ${channelId} AND "startedAt" >= ${cutoffDate}
     GROUP BY COALESCE(category, 'Uncategorized')
     ORDER BY totalSeconds DESC
   `);

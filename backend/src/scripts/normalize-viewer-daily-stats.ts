@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 
 type CountRow = { c: number | bigint | string };
-type ColumnRow = { name: string };
+type ColumnRow = { columnName: string };
 
 function toNumber(value: number | bigint | string | null | undefined): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -22,11 +22,13 @@ async function queryCount(sql: Prisma.Sql): Promise<number> {
 
 async function hasSourceColumn(): Promise<boolean> {
   const columns = await prisma.$queryRaw<ColumnRow[]>(Prisma.sql`
-    SELECT name
-    FROM pragma_table_info('viewer_channel_daily_stats')
+    SELECT column_name AS "columnName"
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'viewer_channel_daily_stats'
   `);
 
-  return columns.some((col) => col.name === "source");
+  return columns.some((col) => col.columnName === "source");
 }
 
 async function main(): Promise<void> {
@@ -36,12 +38,12 @@ async function main(): Promise<void> {
     Prisma.sql`SELECT COUNT(*) AS c FROM viewer_channel_daily_stats`
   );
   const beforeDuplicateDays = await queryCount(Prisma.sql`
-    SELECT COUNT(*) AS c
-    FROM (
-      SELECT viewerId, channelId, date(date) AS day, COUNT(*) AS rowsPerDay
+      SELECT COUNT(*) AS c
+      FROM (
+      SELECT "viewerId", "channelId", date::date AS day, COUNT(*) AS rowsPerDay
       FROM viewer_channel_daily_stats
-      GROUP BY viewerId, channelId, date(date)
-      HAVING rowsPerDay > 1
+      GROUP BY "viewerId", "channelId", date::date
+      HAVING COUNT(*) > 1
     ) t
   `);
 
@@ -61,20 +63,20 @@ async function main(): Promise<void> {
       await tx.$executeRaw(Prisma.sql`
         CREATE TEMP TABLE tmp_viewer_daily_stats_agg AS
         SELECT
-          viewerId,
-          channelId,
-          date(date) AS day,
-          SUM(COALESCE(watchSeconds, 0)) AS watchSeconds,
-          SUM(COALESCE(messageCount, 0)) AS messageCount,
-          SUM(COALESCE(emoteCount, 0)) AS emoteCount,
+          "viewerId",
+          "channelId",
+          date::date AS day,
+          SUM(COALESCE("watchSeconds", 0)) AS "watchSeconds",
+          SUM(COALESCE("messageCount", 0)) AS "messageCount",
+          SUM(COALESCE("emoteCount", 0)) AS "emoteCount",
           CASE
             WHEN SUM(CASE WHEN source = 'extension' THEN 1 ELSE 0 END) > 0 THEN 'extension'
             ELSE 'chat'
           END AS source,
-          MIN(createdAt) AS createdAt,
-          MAX(updatedAt) AS updatedAt
+          MIN("createdAt") AS "createdAt",
+          MAX("updatedAt") AS "updatedAt"
         FROM viewer_channel_daily_stats
-        GROUP BY viewerId, channelId, date(date)
+        GROUP BY "viewerId", "channelId", date::date
       `);
 
       await tx.$executeRaw(Prisma.sql`DELETE FROM viewer_channel_daily_stats`);
@@ -82,27 +84,27 @@ async function main(): Promise<void> {
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_daily_stats (
           id,
-          viewerId,
-          channelId,
+          "viewerId",
+          "channelId",
           date,
-          watchSeconds,
-          messageCount,
-          emoteCount,
+          "watchSeconds",
+          "messageCount",
+          "emoteCount",
           source,
-          createdAt,
-          updatedAt
+          "createdAt",
+          "updatedAt"
         )
         SELECT
           gen_random_uuid()::text AS id,
-          viewerId,
-          channelId,
-          day || 'T00:00:00.000+00:00' AS date,
-          CAST(watchSeconds AS INTEGER) AS watchSeconds,
-          CAST(messageCount AS INTEGER) AS messageCount,
-          CAST(emoteCount AS INTEGER) AS emoteCount,
+          "viewerId",
+          "channelId",
+          (day::text || 'T00:00:00.000+00:00')::timestamptz AS date,
+          CAST("watchSeconds" AS INTEGER) AS "watchSeconds",
+          CAST("messageCount" AS INTEGER) AS "messageCount",
+          CAST("emoteCount" AS INTEGER) AS "emoteCount",
           source,
-          createdAt,
-          updatedAt
+          "createdAt",
+          "updatedAt"
         FROM tmp_viewer_daily_stats_agg
       `);
 
@@ -111,16 +113,16 @@ async function main(): Promise<void> {
       await tx.$executeRaw(Prisma.sql`
         CREATE TEMP TABLE tmp_viewer_daily_stats_agg AS
         SELECT
-          viewerId,
-          channelId,
-          date(date) AS day,
-          SUM(COALESCE(watchSeconds, 0)) AS watchSeconds,
-          SUM(COALESCE(messageCount, 0)) AS messageCount,
-          SUM(COALESCE(emoteCount, 0)) AS emoteCount,
-          MIN(createdAt) AS createdAt,
-          MAX(updatedAt) AS updatedAt
+          "viewerId",
+          "channelId",
+          date::date AS day,
+          SUM(COALESCE("watchSeconds", 0)) AS "watchSeconds",
+          SUM(COALESCE("messageCount", 0)) AS "messageCount",
+          SUM(COALESCE("emoteCount", 0)) AS "emoteCount",
+          MIN("createdAt") AS "createdAt",
+          MAX("updatedAt") AS "updatedAt"
         FROM viewer_channel_daily_stats
-        GROUP BY viewerId, channelId, date(date)
+        GROUP BY "viewerId", "channelId", date::date
       `);
 
       await tx.$executeRaw(Prisma.sql`DELETE FROM viewer_channel_daily_stats`);
@@ -128,25 +130,25 @@ async function main(): Promise<void> {
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_daily_stats (
           id,
-          viewerId,
-          channelId,
+          "viewerId",
+          "channelId",
           date,
-          watchSeconds,
-          messageCount,
-          emoteCount,
-          createdAt,
-          updatedAt
+          "watchSeconds",
+          "messageCount",
+          "emoteCount",
+          "createdAt",
+          "updatedAt"
         )
         SELECT
           gen_random_uuid()::text AS id,
-          viewerId,
-          channelId,
-          day || 'T00:00:00.000+00:00' AS date,
-          CAST(watchSeconds AS INTEGER) AS watchSeconds,
-          CAST(messageCount AS INTEGER) AS messageCount,
-          CAST(emoteCount AS INTEGER) AS emoteCount,
-          createdAt,
-          updatedAt
+          "viewerId",
+          "channelId",
+          (day::text || 'T00:00:00.000+00:00')::timestamptz AS date,
+          CAST("watchSeconds" AS INTEGER) AS "watchSeconds",
+          CAST("messageCount" AS INTEGER) AS "messageCount",
+          CAST("emoteCount" AS INTEGER) AS "emoteCount",
+          "createdAt",
+          "updatedAt"
         FROM tmp_viewer_daily_stats_agg
       `);
 
@@ -158,10 +160,10 @@ async function main(): Promise<void> {
   const afterDuplicateDays = await queryCount(Prisma.sql`
     SELECT COUNT(*) AS c
     FROM (
-      SELECT viewerId, channelId, date(date) AS day, COUNT(*) AS rowsPerDay
+      SELECT "viewerId", "channelId", date::date AS day, COUNT(*) AS rowsPerDay
       FROM viewer_channel_daily_stats
-      GROUP BY viewerId, channelId, date(date)
-      HAVING rowsPerDay > 1
+      GROUP BY "viewerId", "channelId", date::date
+      HAVING COUNT(*) > 1
     ) t
   `);
 

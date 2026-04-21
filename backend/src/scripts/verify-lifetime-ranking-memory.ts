@@ -14,9 +14,9 @@ function toMb(bytes: number): number {
 
 async function getTopChannels(limit: number): Promise<ChannelRow[]> {
   const rows = await prisma.$queryRaw<Array<{ channelId: string; cnt: number | string }>>(Prisma.sql`
-    SELECT channelId, COUNT(*) AS cnt
+    SELECT "channelId", COUNT(*) AS cnt
     FROM viewer_channel_lifetime_stats
-    GROUP BY channelId
+    GROUP BY "channelId"
     ORDER BY cnt DESC
     LIMIT ${limit}
   `);

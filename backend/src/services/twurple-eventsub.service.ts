@@ -164,24 +164,7 @@ class TwurpleEventSubService {
 
     if (!this.cheerDailyAggInitPromise) {
       this.cheerDailyAggInitPromise = (async () => {
-        await this.runCheerDailyAggInitWithRetry(async () => {
-          await this.withDbRetry(() => prisma.$executeRaw`
-            CREATE TABLE IF NOT EXISTS cheer_daily_agg (
-              streamerId TEXT NOT NULL,
-              date TEXT NOT NULL,
-              totalBits INTEGER NOT NULL DEFAULT 0,
-              eventCount INTEGER NOT NULL DEFAULT 0,
-              updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              PRIMARY KEY (streamerId, date)
-            )
-          `);
-
-          await this.withDbRetry(() => prisma.$executeRaw`
-            CREATE INDEX IF NOT EXISTS idx_cheer_daily_agg_streamer_date
-            ON cheer_daily_agg(streamerId, date)
-          `);
-        });
-
+        await this.runCheerDailyAggInitWithRetry(async () => undefined);
         this.cheerDailyAggReady = true;
       })().catch((error) => {
         this.cheerDailyAggInitPromise = null;
@@ -265,12 +248,12 @@ class TwurpleEventSubService {
 
       if (values.length > 0) {
         await this.withDbRetry(() => prisma.$executeRaw(Prisma.sql`
-          INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
+          INSERT INTO cheer_daily_agg ("streamerId", date, "totalBits", "eventCount", "updatedAt")
           VALUES ${Prisma.join(values)}
-          ON CONFLICT(streamerId, date) DO UPDATE SET
-            totalBits = cheer_daily_agg.totalBits + excluded.totalBits,
-            eventCount = cheer_daily_agg.eventCount + excluded.eventCount,
-            updatedAt = CURRENT_TIMESTAMP
+          ON CONFLICT("streamerId", date) DO UPDATE SET
+            "totalBits" = cheer_daily_agg."totalBits" + excluded."totalBits",
+            "eventCount" = cheer_daily_agg."eventCount" + excluded."eventCount",
+            "updatedAt" = CURRENT_TIMESTAMP
         `));
       }
     } catch (error) {
@@ -800,9 +783,9 @@ await runWithWriteGuard(WriteGuardKeys.STREAM_SESSION_END, async () => {
 
       await this.withDbRetry(() => prisma.$executeRaw`
         UPDATE cheer_events
-        SET cheeredDate = DATE(${cheeredAt.toISOString()})
+        SET "cheeredDate" = ${cheeredAt}::date
         WHERE id = ${createdCheerEvent.id}
-          AND cheeredDate IS NULL
+          AND "cheeredDate" IS NULL
       `);
 
       await this.incrementCheerDailyAgg(streamer.id, cheeredAt.toISOString(), event.bits);

@@ -176,27 +176,27 @@ export class LifetimeStatsAggregatorService {
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO viewer_channel_lifetime_stats (
         id,
-        viewerId,
-        channelId,
-        totalWatchTimeMinutes,
-        totalSessions,
-        avgSessionMinutes,
-        firstWatchedAt,
-        lastWatchedAt,
-        totalMessages,
-        totalChatMessages,
-        totalSubscriptions,
-        totalCheers,
-        totalBits,
-        trackingStartedAt,
-        trackingDays,
-        longestStreakDays,
-        currentStreakDays,
-        activeDaysLast30,
-        activeDaysLast90,
-        mostActiveMonthCount,
-        createdAt,
-        updatedAt
+        "viewerId",
+        "channelId",
+        "totalWatchTimeMinutes",
+        "totalSessions",
+        "avgSessionMinutes",
+        "firstWatchedAt",
+        "lastWatchedAt",
+        "totalMessages",
+        "totalChatMessages",
+        "totalSubscriptions",
+        "totalCheers",
+        "totalBits",
+        "trackingStartedAt",
+        "trackingDays",
+        "longestStreakDays",
+        "currentStreakDays",
+        "activeDaysLast30",
+        "activeDaysLast90",
+        "mostActiveMonthCount",
+        "createdAt",
+        "updatedAt"
       ) VALUES (
         gen_random_uuid()::text,
         ${viewerId},
@@ -221,65 +221,65 @@ export class LifetimeStatsAggregatorService {
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
       )
-      ON CONFLICT(viewerId, channelId) DO UPDATE SET
-        totalWatchTimeMinutes = CASE
-          WHEN viewer_channel_lifetime_stats.totalWatchTimeMinutes > excluded.totalWatchTimeMinutes
-            THEN viewer_channel_lifetime_stats.totalWatchTimeMinutes
-          ELSE excluded.totalWatchTimeMinutes
+      ON CONFLICT("viewerId", "channelId") DO UPDATE SET
+        "totalWatchTimeMinutes" = CASE
+          WHEN viewer_channel_lifetime_stats."totalWatchTimeMinutes" > excluded."totalWatchTimeMinutes"
+            THEN viewer_channel_lifetime_stats."totalWatchTimeMinutes"
+          ELSE excluded."totalWatchTimeMinutes"
         END,
-        totalSessions = CASE
-          WHEN viewer_channel_lifetime_stats.totalSessions > excluded.totalSessions
-            THEN viewer_channel_lifetime_stats.totalSessions
-          ELSE excluded.totalSessions
+        "totalSessions" = CASE
+          WHEN viewer_channel_lifetime_stats."totalSessions" > excluded."totalSessions"
+            THEN viewer_channel_lifetime_stats."totalSessions"
+          ELSE excluded."totalSessions"
         END,
-        avgSessionMinutes = excluded.avgSessionMinutes,
-        firstWatchedAt = CASE
-          WHEN viewer_channel_lifetime_stats.firstWatchedAt IS NULL THEN excluded.firstWatchedAt
-          WHEN excluded.firstWatchedAt IS NULL THEN viewer_channel_lifetime_stats.firstWatchedAt
-          WHEN viewer_channel_lifetime_stats.firstWatchedAt <= excluded.firstWatchedAt
-            THEN viewer_channel_lifetime_stats.firstWatchedAt
-          ELSE excluded.firstWatchedAt
+        "avgSessionMinutes" = excluded."avgSessionMinutes",
+        "firstWatchedAt" = CASE
+          WHEN viewer_channel_lifetime_stats."firstWatchedAt" IS NULL THEN excluded."firstWatchedAt"
+          WHEN excluded."firstWatchedAt" IS NULL THEN viewer_channel_lifetime_stats."firstWatchedAt"
+          WHEN viewer_channel_lifetime_stats."firstWatchedAt" <= excluded."firstWatchedAt"
+            THEN viewer_channel_lifetime_stats."firstWatchedAt"
+          ELSE excluded."firstWatchedAt"
         END,
-        lastWatchedAt = CASE
-          WHEN viewer_channel_lifetime_stats.lastWatchedAt IS NULL THEN excluded.lastWatchedAt
-          WHEN excluded.lastWatchedAt IS NULL THEN viewer_channel_lifetime_stats.lastWatchedAt
-          WHEN viewer_channel_lifetime_stats.lastWatchedAt >= excluded.lastWatchedAt
-            THEN viewer_channel_lifetime_stats.lastWatchedAt
-          ELSE excluded.lastWatchedAt
+        "lastWatchedAt" = CASE
+          WHEN viewer_channel_lifetime_stats."lastWatchedAt" IS NULL THEN excluded."lastWatchedAt"
+          WHEN excluded."lastWatchedAt" IS NULL THEN viewer_channel_lifetime_stats."lastWatchedAt"
+          WHEN viewer_channel_lifetime_stats."lastWatchedAt" >= excluded."lastWatchedAt"
+            THEN viewer_channel_lifetime_stats."lastWatchedAt"
+          ELSE excluded."lastWatchedAt"
         END,
-        totalMessages = CASE
-          WHEN viewer_channel_lifetime_stats.totalMessages > excluded.totalMessages
-            THEN viewer_channel_lifetime_stats.totalMessages
-          ELSE excluded.totalMessages
+        "totalMessages" = CASE
+          WHEN viewer_channel_lifetime_stats."totalMessages" > excluded."totalMessages"
+            THEN viewer_channel_lifetime_stats."totalMessages"
+          ELSE excluded."totalMessages"
         END,
-        totalChatMessages = CASE
-          WHEN viewer_channel_lifetime_stats.totalChatMessages > excluded.totalChatMessages
-            THEN viewer_channel_lifetime_stats.totalChatMessages
-          ELSE excluded.totalChatMessages
+        "totalChatMessages" = CASE
+          WHEN viewer_channel_lifetime_stats."totalChatMessages" > excluded."totalChatMessages"
+            THEN viewer_channel_lifetime_stats."totalChatMessages"
+          ELSE excluded."totalChatMessages"
         END,
-        totalSubscriptions = CASE
-          WHEN viewer_channel_lifetime_stats.totalSubscriptions > excluded.totalSubscriptions
-            THEN viewer_channel_lifetime_stats.totalSubscriptions
-          ELSE excluded.totalSubscriptions
+        "totalSubscriptions" = CASE
+          WHEN viewer_channel_lifetime_stats."totalSubscriptions" > excluded."totalSubscriptions"
+            THEN viewer_channel_lifetime_stats."totalSubscriptions"
+          ELSE excluded."totalSubscriptions"
         END,
-        totalCheers = CASE
-          WHEN viewer_channel_lifetime_stats.totalCheers > excluded.totalCheers
-            THEN viewer_channel_lifetime_stats.totalCheers
-          ELSE excluded.totalCheers
+        "totalCheers" = CASE
+          WHEN viewer_channel_lifetime_stats."totalCheers" > excluded."totalCheers"
+            THEN viewer_channel_lifetime_stats."totalCheers"
+          ELSE excluded."totalCheers"
         END,
-        totalBits = CASE
-          WHEN viewer_channel_lifetime_stats.totalBits > excluded.totalBits
-            THEN viewer_channel_lifetime_stats.totalBits
-          ELSE excluded.totalBits
+        "totalBits" = CASE
+          WHEN viewer_channel_lifetime_stats."totalBits" > excluded."totalBits"
+            THEN viewer_channel_lifetime_stats."totalBits"
+          ELSE excluded."totalBits"
         END,
-        trackingStartedAt = excluded.trackingStartedAt,
-        trackingDays = excluded.trackingDays,
-        longestStreakDays = excluded.longestStreakDays,
-        currentStreakDays = excluded.currentStreakDays,
-        activeDaysLast30 = excluded.activeDaysLast30,
-        activeDaysLast90 = excluded.activeDaysLast90,
-        mostActiveMonthCount = excluded.mostActiveMonthCount,
-        updatedAt = CURRENT_TIMESTAMP
+        "trackingStartedAt" = excluded."trackingStartedAt",
+        "trackingDays" = excluded."trackingDays",
+        "longestStreakDays" = excluded."longestStreakDays",
+        "currentStreakDays" = excluded."currentStreakDays",
+        "activeDaysLast30" = excluded."activeDaysLast30",
+        "activeDaysLast90" = excluded."activeDaysLast90",
+        "mostActiveMonthCount" = excluded."mostActiveMonthCount",
+        "updatedAt" = CURRENT_TIMESTAMP
     `);
   }
 
@@ -317,14 +317,14 @@ export class LifetimeStatsAggregatorService {
           WITH active_dates AS (
             SELECT date AS d
             FROM viewer_channel_daily_stats
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+            WHERE "viewerId" = ${viewerId} AND "channelId" = ${channelId}
             UNION
             SELECT date AS d
             FROM viewer_channel_message_daily_aggs
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+            WHERE "viewerId" = ${viewerId} AND "channelId" = ${channelId}
           ),
           month_counts AS (
-            SELECT SUBSTR(d, 1, 7) AS month, COUNT(*) AS cnt
+            SELECT TO_CHAR(d AT TIME ZONE 'UTC', 'YYYY-MM') AS month, COUNT(*) AS cnt
             FROM active_dates
             GROUP BY month
           ),
@@ -337,8 +337,8 @@ export class LifetimeStatsAggregatorService {
           SELECT
             MIN(d) AS trackingStartedAt,
             COUNT(*) AS trackingDays,
-            COALESCE(SUM(CASE WHEN d >= DATE(${thirtyDaysAgo.toISOString()}) THEN 1 ELSE 0 END), 0) AS activeDaysLast30,
-            COALESCE(SUM(CASE WHEN d >= DATE(${ninetyDaysAgo.toISOString()}) THEN 1 ELSE 0 END), 0) AS activeDaysLast90,
+            COALESCE(SUM(CASE WHEN d >= ${thirtyDaysAgo}::date THEN 1 ELSE 0 END), 0) AS activeDaysLast30,
+            COALESCE(SUM(CASE WHEN d >= ${ninetyDaysAgo}::date THEN 1 ELSE 0 END), 0) AS activeDaysLast90,
             (SELECT month FROM best_month) AS mostActiveMonth,
             COALESCE((SELECT cnt FROM best_month), 0) AS mostActiveMonthCount
           FROM active_dates
@@ -347,11 +347,11 @@ export class LifetimeStatsAggregatorService {
           WITH active_dates AS (
             SELECT date AS d
             FROM viewer_channel_daily_stats
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+            WHERE "viewerId" = ${viewerId} AND "channelId" = ${channelId}
             UNION
             SELECT date AS d
             FROM viewer_channel_message_daily_aggs
-            WHERE viewerId = ${viewerId} AND channelId = ${channelId}
+            WHERE "viewerId" = ${viewerId} AND "channelId" = ${channelId}
           ),
           ordered AS (
             SELECT d, LAG(d) OVER (ORDER BY d) AS prev_d
@@ -489,28 +489,28 @@ export class LifetimeStatsAggregatorService {
 
     await prisma.$executeRaw(Prisma.sql`
       WITH base AS (
-        SELECT id, totalWatchTimeMinutes, totalMessages
+        SELECT id, "totalWatchTimeMinutes", "totalMessages"
         FROM viewer_channel_lifetime_stats
-        WHERE channelId = ${channelId}
+        WHERE "channelId" = ${channelId}
       ),
       changed AS (
         SELECT id
         FROM viewer_channel_lifetime_stats
-        WHERE channelId = ${channelId}
-          AND updatedAt >= ${recentCutoff}
+        WHERE "channelId" = ${channelId}
+          AND "updatedAt" >= ${recentCutoff}
       ),
       ranked AS (
         SELECT
           id,
-          PERCENT_RANK() OVER (ORDER BY totalWatchTimeMinutes, id) * 100.0 AS watchPercentile,
-          PERCENT_RANK() OVER (ORDER BY totalMessages, id) * 100.0 AS messagePercentile
+          PERCENT_RANK() OVER (ORDER BY "totalWatchTimeMinutes", id) * 100.0 AS watchPercentile,
+          PERCENT_RANK() OVER (ORDER BY "totalMessages", id) * 100.0 AS messagePercentile
         FROM base
       )
       UPDATE viewer_channel_lifetime_stats
       SET
-        watchTimePercentile = (SELECT ranked.watchPercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
-        messagePercentile = (SELECT ranked.messagePercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id)
-      WHERE channelId = ${channelId}
+        "watchTimePercentile" = (SELECT ranked.watchPercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
+        "messagePercentile" = (SELECT ranked.messagePercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id)
+      WHERE "channelId" = ${channelId}
         AND id IN (SELECT id FROM changed)
     `);
 
