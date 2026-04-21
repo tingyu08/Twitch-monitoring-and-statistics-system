@@ -17,10 +17,10 @@ async function main(): Promise<void> {
   }
 
   const indexRows = await prisma.$queryRaw<Array<{ name: string }>>(Prisma.sql`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'index'
-      AND name = 'channels_isMonitored_id_idx'
+    SELECT indexname AS name
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = 'channels_isMonitored_id_idx'
   `);
 
   if (indexRows.length === 0) {

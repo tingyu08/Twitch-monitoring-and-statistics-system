@@ -13,24 +13,16 @@ const REMOVED_INDEX_NAMES = [
   "idx_viewer_channel_lifetime_stats_channelId_messagePercentile",
 ] as const;
 
-type SqliteIndexRow = { name: string };
-type QueryPlanRow = { detail: string };
-
-async function printQueryPlan(label: string, query: Prisma.Sql): Promise<void> {
-  const rows = await prisma.$queryRaw<QueryPlanRow[]>(query);
-  const details = rows.map((row) => row.detail).join(" | ");
-  console.log(`- ${label}: ${details}`);
-}
+type PgIndexRow = { name: string };
 
 async function main(): Promise<void> {
   console.log("\n[SCHEMA-01] 檢查索引清理狀態\n");
 
-  const indexRows = await prisma.$queryRaw<SqliteIndexRow[]>(Prisma.sql`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'index'
-      AND name NOT LIKE 'sqlite_%'
-    ORDER BY name
+  const indexRows = await prisma.$queryRaw<PgIndexRow[]>(Prisma.sql`
+    SELECT indexname AS name
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+    ORDER BY indexname
   `);
 
   const existing = new Set(indexRows.map((row) => row.name));
@@ -45,14 +37,25 @@ async function main(): Promise<void> {
   }
 
   console.log("查詢計畫檢查（請確認有使用索引）:");
-  await printQueryPlan(
-    "channel_daily_stats(channelId, date)",
-    Prisma.sql`EXPLAIN QUERY PLAN SELECT * FROM channel_daily_stats WHERE channelId = ${"demo-channel"} AND date = ${"2026-02-13"} LIMIT 1`
-  );
-  await printQueryPlan(
-    "viewer_channel_daily_stats(viewerId, channelId, date)",
-    Prisma.sql`EXPLAIN QUERY PLAN SELECT * FROM viewer_channel_daily_stats WHERE viewerId = ${"demo-viewer"} AND channelId = ${"demo-channel"} AND date = ${"2026-02-13"} LIMIT 1`
-  );
+
+  const plan1 = await prisma.$queryRaw<Array<{ "QUERY PLAN": string }>>(Prisma.sql`
+    EXPLAIN SELECT id, "twitchChannelId"
+    FROM channel_daily_stats
+    WHERE "channelId" = ${"demo-channel"}
+      AND date = ${"2026-02-13"}
+    LIMIT 1
+  `);
+  console.log(`- channel_daily_stats(channelId, date): ${plan1.map((r) => r["QUERY PLAN"]).join(" | ")}`);
+
+  const plan2 = await prisma.$queryRaw<Array<{ "QUERY PLAN": string }>>(Prisma.sql`
+    EXPLAIN SELECT id
+    FROM viewer_channel_daily_stats
+    WHERE "viewerId" = ${"demo-viewer"}
+      AND "channelId" = ${"demo-channel"}
+      AND date = ${"2026-02-13"}
+    LIMIT 1
+  `);
+  console.log(`- viewer_channel_daily_stats(viewerId, channelId, date): ${plan2.map((r) => r["QUERY PLAN"]).join(" | ")}`);
 
   if (process.exitCode === 1) {
     console.error("\nSCHEMA-01 驗證未通過。\n");

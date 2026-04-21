@@ -93,7 +93,7 @@ async function main(): Promise<void> {
           updatedAt
         )
         SELECT
-          lower(hex(randomblob(16))) AS id,
+          gen_random_uuid()::text AS id,
           viewerId,
           channelId,
           day || 'T00:00:00.000+00:00' AS date,
@@ -138,7 +138,7 @@ async function main(): Promise<void> {
           updatedAt
         )
         SELECT
-          lower(hex(randomblob(16))) AS id,
+          gen_random_uuid()::text AS id,
           viewerId,
           channelId,
           day || 'T00:00:00.000+00:00' AS date,

@@ -115,37 +115,37 @@ async function buildHeatmapFromSessionsSql(
   range: string
 ): Promise<HeatmapResponse> {
   const rows = await prisma.$queryRaw<HeatmapSqlRow[]>(Prisma.sql`
-    WITH RECURSIVE expanded(sessionId, bucketStart, endedAt) AS (
+    WITH RECURSIVE expanded("sessionId", "bucketStart", "endedAt") AS (
       SELECT
         id,
         startedAt,
-        DATETIME(startedAt, '+' || durationSeconds || ' seconds')
+        startedAt + (durationSeconds || ' seconds')::interval
       FROM stream_sessions
-      WHERE channelId = ${channelId}
+      WHERE "channelId" = ${channelId}
         AND startedAt >= ${cutoffDate}
         AND durationSeconds IS NOT NULL
         AND durationSeconds > 0
       UNION ALL
       SELECT
-        sessionId,
-        DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart), '+1 hour'),
-        endedAt
+        "sessionId",
+        date_trunc('hour', "bucketStart") + interval '1 hour',
+        "endedAt"
       FROM expanded
-      WHERE DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart), '+1 hour') < endedAt
+      WHERE date_trunc('hour', "bucketStart") + interval '1 hour' < "endedAt"
     ),
     hourly AS (
       SELECT
-        CAST(STRFTIME('%w', bucketStart) AS INTEGER) AS dayOfWeek,
-        CAST(STRFTIME('%H', bucketStart) AS INTEGER) AS hour,
-        (
-          JULIANDAY(MIN(endedAt, DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart), '+1 hour')))
-          - JULIANDAY(MAX(bucketStart, DATETIME(STRFTIME('%Y-%m-%d %H:00:00', bucketStart))))
-        ) * 24.0 AS durationHours
+        EXTRACT(DOW FROM "bucketStart")::integer AS "dayOfWeek",
+        EXTRACT(HOUR FROM "bucketStart")::integer AS hour,
+        EXTRACT(EPOCH FROM (
+          LEAST("endedAt", date_trunc('hour', "bucketStart") + interval '1 hour')
+          - GREATEST("bucketStart", date_trunc('hour', "bucketStart"))
+        )) / 3600.0 AS "durationHours"
       FROM expanded
     )
-    SELECT dayOfWeek, hour, SUM(durationHours) AS totalHours
+    SELECT "dayOfWeek", hour, SUM("durationHours")::float8 AS "totalHours"
     FROM hourly
-    GROUP BY dayOfWeek, hour
+    GROUP BY "dayOfWeek", hour
   `);
 
   const matrix = new Map<string, number>();
@@ -404,14 +404,14 @@ export async function getStreamerTimeSeries(
       if (granularity === "day") {
         const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
           SELECT
-            date(startedAt) AS bucketDate,
-            SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
-            COUNT(*) AS sessionCount
+            startedAt::date AS "bucketDate",
+            SUM(COALESCE(durationSeconds, 0))::float8 AS "totalSeconds",
+            COUNT(*)::integer AS "sessionCount"
           FROM stream_sessions
-          WHERE channelId = ${channelId}
+          WHERE "channelId" = ${channelId}
             AND startedAt >= ${cutoffDate}
-          GROUP BY date(startedAt)
-          ORDER BY bucketDate ASC
+          GROUP BY startedAt::date
+          ORDER BY "bucketDate" ASC
         `);
 
         return buildDailyTimeSeries(rows, range, cutoffDate, now);
@@ -419,14 +419,14 @@ export async function getStreamerTimeSeries(
 
       const rows = await prisma.$queryRaw<TimeSeriesAggregateRow[]>(Prisma.sql`
         SELECT
-          date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days') AS bucketDate,
-          SUM(COALESCE(durationSeconds, 0)) AS totalSeconds,
-          COUNT(*) AS sessionCount
+          date_trunc('week', startedAt)::date AS "bucketDate",
+          SUM(COALESCE(durationSeconds, 0))::float8 AS "totalSeconds",
+          COUNT(*)::integer AS "sessionCount"
         FROM stream_sessions
-        WHERE channelId = ${channelId}
+        WHERE "channelId" = ${channelId}
           AND startedAt >= ${cutoffDate}
-        GROUP BY date(startedAt, '-' || ((CAST(strftime('%w', startedAt) AS INTEGER) + 6) % 7) || ' days')
-        ORDER BY bucketDate ASC
+        GROUP BY date_trunc('week', startedAt)::date
+        ORDER BY "bucketDate" ASC
       `);
 
       return buildWeeklyTimeSeries(rows, range, cutoffDate, now);

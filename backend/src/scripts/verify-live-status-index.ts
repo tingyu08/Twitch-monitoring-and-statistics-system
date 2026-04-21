@@ -10,10 +10,10 @@ async function main(): Promise<void> {
   console.log("\n[SCHEMA-02] 檢查 update-live-status 索引\n");
 
   const indexRows = await prisma.$queryRaw<SqliteIndexRow[]>(Prisma.sql`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'index'
-      AND name = ${REQUIRED_INDEX}
+    SELECT indexname AS name
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = ${REQUIRED_INDEX}
   `);
 
   if (indexRows.length === 0) {
@@ -27,17 +27,17 @@ async function main(): Promise<void> {
 
   console.log(`索引已存在: ${REQUIRED_INDEX}`);
 
-  const planRows = await prisma.$queryRaw<Array<{ detail: string }>>(Prisma.sql`
-    EXPLAIN QUERY PLAN
-    SELECT id, twitchChannelId
+  const planRows = await prisma.$queryRaw<Array<{ "QUERY PLAN": string }>>(Prisma.sql`
+    EXPLAIN
+    SELECT id, "twitchChannelId"
     FROM channels
-    WHERE isMonitored = 1
-      AND twitchChannelId != ''
+    WHERE "isMonitored" = true
+      AND "twitchChannelId" != ''
     ORDER BY id ASC
     LIMIT 50
   `);
 
-  console.log(`Query plan: ${planRows.map((row) => row.detail).join(" | ")}`);
+  console.log(`Query plan: ${planRows.map((row) => row["QUERY PLAN"]).join(" | ")}`);
   console.log("\nSCHEMA-02 驗證通過。\n");
 }
 

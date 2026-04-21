@@ -198,7 +198,7 @@ export class LifetimeStatsAggregatorService {
         createdAt,
         updatedAt
       ) VALUES (
-        lower(hex(randomblob(16))),
+        gen_random_uuid()::text,
         ${viewerId},
         ${channelId},
         ${stats.totalWatchTimeMinutes},
@@ -362,7 +362,7 @@ export class LifetimeStatsAggregatorService {
               d,
               CASE
                 WHEN prev_d IS NULL THEN 1
-                WHEN CAST(julianday(d) - julianday(prev_d) AS INTEGER) = 1 THEN 0
+                WHEN (d::date - prev_d::date) = 1 THEN 0
                 ELSE 1
               END AS is_new_group
             FROM ordered
@@ -389,7 +389,7 @@ export class LifetimeStatsAggregatorService {
             COALESCE((SELECT MAX(streak_len) FROM streaks), 0) AS longestStreakDays,
             CASE
               WHEN (SELECT last_d FROM latest) IS NULL THEN 0
-              WHEN CAST(julianday(DATE('now')) - julianday((SELECT last_d FROM latest)) AS INTEGER) <= 1
+              WHEN (CURRENT_DATE - (SELECT last_d FROM latest)::date) <= 1
                 THEN COALESCE(
                   (
                     SELECT streak_len
