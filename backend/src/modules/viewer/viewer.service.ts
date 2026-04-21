@@ -802,7 +802,7 @@ async function buildFollowedChannelsFromSource(viewerId: string): Promise<Follow
       WHERE "viewerId" = ${viewerId}
     ),
     daily_watch AS (
-      SELECT "channelId", SUM("watchSeconds") / 60 AS "dailyWatchMin"
+      SELECT "channelId", SUM("watchSeconds")::float8 / 60 AS "dailyWatchMin"
       FROM viewer_channel_daily_stats
       WHERE "viewerId" = ${viewerId}
       GROUP BY "channelId"
@@ -908,7 +908,7 @@ export async function syncSummaryStatsFromLifetime(viewerId: string): Promise<vo
             0
           ),
           COALESCE(
-            (SELECT SUM(d."watchSeconds") / 60
+            (SELECT SUM(d."watchSeconds")::float8 / 60
              FROM viewer_channel_daily_stats d
              WHERE d."viewerId" = viewer_channel_summary."viewerId"
                AND d."channelId" = viewer_channel_summary."channelId"),

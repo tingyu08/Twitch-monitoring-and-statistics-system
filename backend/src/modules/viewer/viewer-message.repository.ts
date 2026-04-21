@@ -710,7 +710,7 @@ export class ViewerMessageRepository {
     try {
       const messageValues = dedupedBatch.map(
         (msg) =>
-          Prisma.sql`(${msg.fingerprint}, ${msg.viewerId}, ${msg.channelId}, ${msg.messageText}, ${msg.messageType}, ${msg.timestamp}::timestamptz, ${msg.badges}, ${msg.emotesUsed}, ${msg.bitsAmount}::integer, CURRENT_TIMESTAMP)`
+          Prisma.sql`(${msg.fingerprint}::text, ${msg.viewerId}::text, ${msg.channelId}::text, ${msg.messageText}::text, ${msg.messageType}::text, ${msg.timestamp}::timestamptz, ${msg.badges}::text, ${msg.emotesUsed}::text, ${msg.bitsAmount}::integer, CURRENT_TIMESTAMP)`
       );
 
       // 先落地原始訊息（DB dedup），縮短後續聚合交易範圍
@@ -919,7 +919,7 @@ export class ViewerMessageRepository {
         /* istanbul ignore next - large SQL upsert block is validated via higher-level flush tests */
         if (dailyRows.length > 0) {
           const dailyValues = dailyRows.map((daily) =>
-            Prisma.sql`(${daily.viewerId}, ${daily.channelId}, ${daily.date}::timestamptz, ${daily.messageCount}::integer, ${daily.emoteCount}::integer)`
+            Prisma.sql`(${daily.viewerId}::text, ${daily.channelId}::text, ${daily.date}::timestamptz, ${daily.messageCount}::integer, ${daily.emoteCount}::integer)`
           );
 
           await tx.$executeRaw(Prisma.sql`
