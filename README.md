@@ -9,7 +9,7 @@
 ![Node.js](https://img.shields.io/badge/Node.js-43853D?style=flat-square&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-404D59?style=flat-square&logo=express&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=flat-square&logo=prisma&logoColor=white)
-![Turso](https://img.shields.io/badge/Turso-4FF8D2?style=flat-square&logo=turso&logoColor=black)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-45ba4b?style=flat-square&logo=playwright&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-235%2B_Passing-brightgreen?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Production-success?style=flat-square)
@@ -102,7 +102,7 @@
 │         │                │                    │             │
 │         └────────────────┼────────────────────┘             │
 │                          ▼                                  │
-│               Prisma ORM + Turso (Cloud)                   │
+│               Prisma ORM + Supabase (PostgreSQL)            │
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │ 17+ Models: Streamer, Viewer, Channel, Stats,        │   │
 │  │ LifetimeStats, Privacy, ExportJob, AuditLog...       │   │
@@ -140,7 +140,7 @@
 | Express        | 4.19.2 | HTTP 框架          |
 | TypeScript     | 5.6.3  | 類型安全           |
 | Prisma         | 7.1.0  | ORM                |
-| Turso (LibSQL) | -      | 雲端邊緣資料庫     |
+| Supabase       | -      | 雲端 PostgreSQL 資料庫 |
 | Twurple        | 8.0.2  | Twitch API 客戶端  |
 | Socket.IO      | 4.8.x  | WebSocket 即時推送 |
 | node-cron      | 4.2.1  | 排程任務           |
@@ -282,7 +282,8 @@ Twitch-Analytics/
 
 - Node.js 20.x 或更高版本
 - npm 9.x 或更高版本
-- [Twitch 開發者帳號](https://dev.twitch.tv/console/apps) (用於 OAuth)
+- [Twitch 開發者帳號](https://dev.twitch.tv/console/apps)（用於 OAuth）
+- [Supabase 帳號](https://supabase.com)（用於 PostgreSQL 資料庫）
 
 ### 1. 複製專案
 
@@ -308,16 +309,19 @@ npm install
 **後端 (`backend/.env`)**
 
 ```env
-# 資料庫
-DATABASE_URL="file:./prisma/dev.db"
-
 # Twitch OAuth
 TWITCH_CLIENT_ID=your_twitch_client_id
 TWITCH_CLIENT_SECRET=your_twitch_client_secret
-TWITCH_CALLBACK_URL=http://localhost:4000/api/auth/twitch/callback
+TWITCH_REDIRECT_URI=http://localhost:3000/auth/callback
+
+# Supabase 資料庫
+# Transaction Mode（一般查詢，port 6543）
+DATABASE_URL=postgresql://postgres.xxxx:password@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+# Session Mode（Prisma migrate 專用，port 5432）
+DIRECT_DATABASE_URL=postgresql://postgres.xxxx:password@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres
 
 # JWT
-JWT_SECRET=your_jwt_secret_key
+APP_JWT_SECRET=your_jwt_secret_key
 
 # CORS
 FRONTEND_URL=http://localhost:3000
@@ -325,11 +329,9 @@ FRONTEND_URL=http://localhost:3000
 # 伺服器
 PORT=4000
 NODE_ENV=development
-
-# 資料匯出 (Story 2.5)
-EXPORT_STORAGE_PATH=./exports
-EXPORT_EXPIRY_HOURS=24
 ```
+
+> 詳細設定步驟請參閱 [`backend/README-ENV-SETUP.md`](./backend/README-ENV-SETUP.md)
 
 **前端 (`frontend/.env.local`)**
 
@@ -342,8 +344,7 @@ NEXT_PUBLIC_TWITCH_CLIENT_ID=your_twitch_client_id
 
 ```bash
 cd backend
-npx prisma migrate dev
-npx prisma db seed  # 載入演示數據 (選用)
+npx prisma migrate deploy  # 套用所有 migration 至 Supabase
 ```
 
 ### 5. 啟動開發伺服器
@@ -556,6 +557,7 @@ MIT License - 詳見 [LICENSE](LICENSE) 檔案
 - [Next.js](https://nextjs.org/) - React 框架
 - [Recharts](https://recharts.org/) - 圖表庫
 - [Prisma](https://www.prisma.io/) - 資料庫 ORM
+- [Supabase](https://supabase.com/) - 雲端 PostgreSQL 資料庫
 - [Playwright](https://playwright.dev/) - E2E 測試框架
 
 ---
