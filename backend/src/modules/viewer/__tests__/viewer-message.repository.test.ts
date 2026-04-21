@@ -363,9 +363,9 @@ describe("ViewerMessageRepository flush batch emits", () => {
     expect(ok).toBe(true);
     expect(prisma.viewer.upsert).not.toHaveBeenCalled();
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       "ViewerMessage",
-      "略過未授權或陌生 Viewer 的訊息：twitchUserId=tu-new"
+      "最近 30 秒內略過了 1 筆未授權或陌生 Viewer 的訊息"
     );
   });
 
@@ -404,9 +404,9 @@ describe("ViewerMessageRepository flush batch emits", () => {
 
     expect(ok).toBe(true);
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       "ViewerMessage",
-      "略過未授權或陌生 Viewer 的訊息：twitchUserId=tu-unconsented"
+      "最近 30 秒內略過了 1 筆未授權或陌生 Viewer 的訊息"
     );
   });
 

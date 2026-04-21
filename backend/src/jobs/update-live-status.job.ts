@@ -422,11 +422,11 @@ export function buildChangedChannelUpdateQuery(values: ReturnType<typeof Prisma.
         FROM updates
         WHERE updates."twitchChannelId" = channels."twitchChannelId"
           AND (
-            (updates."isLiveValue" IS NOT NULL AND "isLive" != updates."isLiveValue")
-            OR COALESCE("currentViewerCount", -1) != COALESCE(updates."viewerCount", -1)
-            OR COALESCE("currentTitle", '') != COALESCE(updates."titleValue", '')
-            OR COALESCE("currentGameName", '') != COALESCE(updates."gameNameValue", '')
-            OR COALESCE("currentStreamStartedAt", '1970-01-01 00:00:00'::timestamptz) != COALESCE(updates."startedAtValue", '1970-01-01 00:00:00'::timestamptz)
+            (updates."isLiveValue" IS NOT NULL AND "isLive" IS DISTINCT FROM updates."isLiveValue")
+            OR "currentViewerCount" IS DISTINCT FROM updates."viewerCount"::integer
+            OR "currentTitle" IS DISTINCT FROM updates."titleValue"::text
+            OR "currentGameName" IS DISTINCT FROM updates."gameNameValue"::text
+            OR "currentStreamStartedAt" IS DISTINCT FROM updates."startedAtValue"::timestamptz
           )
       )
   `;

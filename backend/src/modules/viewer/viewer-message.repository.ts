@@ -170,6 +170,8 @@ export class ViewerMessageRepository {
   private watchTimeFlushInProgress = false;
   private overflowDropCount = 0;
   private lastOverflowWarnAt = 0;
+  private skippedUnauthorizedViewerCount = 0;
+  private lastUnauthorizedViewerLogAt = 0;
   private watchTimeFlushTimer: NodeJS.Timeout | null = null;
   private pendingWatchTimeTargets = new Map<string, WatchTimeRecalculationTarget>();
   private recentMessageFingerprints = new Map<string, number>();
@@ -272,6 +274,20 @@ export class ViewerMessageRepository {
     }
   }
 
+  private logSkippedUnauthorizedViewer(): void {
+    this.skippedUnauthorizedViewerCount += 1;
+    const now = Date.now();
+
+    if (now - this.lastUnauthorizedViewerLogAt >= BUFFER_OVERFLOW_WARN_INTERVAL_MS) {
+      logger.debug(
+        "ViewerMessage",
+        `最近 ${BUFFER_OVERFLOW_WARN_INTERVAL_MS / 1000} 秒內略過了 ${this.skippedUnauthorizedViewerCount} 筆未授權或陌生 Viewer 的訊息`
+      );
+      this.lastUnauthorizedViewerLogAt = now;
+      this.skippedUnauthorizedViewerCount = 0;
+    }
+  }
+
   /**
    * P1 Memory: Use cacheManager instead of raw Map (with LRU eviction)
    * 使用快取獲取 Viewer ID（減少 DB 查詢）
@@ -336,10 +352,7 @@ export class ViewerMessageRepository {
       const viewerId = message.viewerId || (message.twitchUserId ? viewerIdByTwitchUserId.get(message.twitchUserId) : null);
 
       if (!viewerId) {
-        logger.warn(
-          "ViewerMessage",
-          `略過未授權或陌生 Viewer 的訊息：twitchUserId=${message.twitchUserId || "unknown"}`
-        );
+        this.logSkippedUnauthorizedViewer();
         return [];
       }
 
