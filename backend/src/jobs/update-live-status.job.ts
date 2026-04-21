@@ -299,13 +299,13 @@ async function updateChannelsWithChanges(
               typeof update.isLive === "boolean" ? update.isLive : null;
 
             return Prisma.sql`(
-              ${update.twitchId},
+              ${update.twitchId}::text,
               ${isLiveValue}::boolean,
-              ${update.viewerCount},
-              ${update.title || null},
-              ${update.gameName || null},
-              ${update.startedAt},
-              ${now}
+              ${update.viewerCount}::integer,
+              ${update.title || null}::text,
+              ${update.gameName || null}::text,
+              ${update.startedAt}::timestamptz,
+              ${now}::timestamptz
             )`;
           });
 
@@ -426,7 +426,7 @@ export function buildChangedChannelUpdateQuery(values: ReturnType<typeof Prisma.
             OR COALESCE("currentViewerCount", -1) != COALESCE(updates."viewerCount", -1)
             OR COALESCE("currentTitle", '') != COALESCE(updates."titleValue", '')
             OR COALESCE("currentGameName", '') != COALESCE(updates."gameNameValue", '')
-            OR COALESCE("currentStreamStartedAt", '1970-01-01 00:00:00') != COALESCE(updates."startedAtValue", '1970-01-01 00:00:00')
+            OR COALESCE("currentStreamStartedAt", '1970-01-01 00:00:00'::timestamptz) != COALESCE(updates."startedAtValue", '1970-01-01 00:00:00'::timestamptz)
           )
       )
   `;
