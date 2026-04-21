@@ -185,10 +185,10 @@ export async function flushHeartbeatBuffer(): Promise<void> {
 
       const insertedRows = await prisma.$queryRaw<Array<{ dedupKey: string }>>(Prisma.sql`
         INSERT INTO extension_heartbeat_dedups
-          (id, dedupKey, viewerId, channelId, heartbeatTimestamp, durationSeconds)
+          (id, "dedupKey", "viewerId", "channelId", "heartbeatTimestamp", "durationSeconds")
         VALUES ${Prisma.join(dedupInsertRows)}
-        ON CONFLICT(dedupKey) DO NOTHING
-        RETURNING dedupKey
+        ON CONFLICT("dedupKey") DO NOTHING
+        RETURNING "dedupKey"
       `);
 
       accepted = insertedRows
@@ -246,52 +246,52 @@ export async function flushHeartbeatBuffer(): Promise<void> {
     const acceptedHeartbeats = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_daily_stats
-          (id, viewerId, channelId, date, watchSeconds, source, updatedAt)
+          (id, "viewerId", "channelId", date, "watchSeconds", source, "updatedAt")
         VALUES ${Prisma.join(dailyRows)}
-        ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-          watchSeconds = CASE
+        ON CONFLICT("viewerId", "channelId", date) DO UPDATE SET
+          "watchSeconds" = CASE
             WHEN viewer_channel_daily_stats.source = 'chat'
-              THEN excluded.watchSeconds
-            ELSE viewer_channel_daily_stats.watchSeconds + excluded.watchSeconds
+              THEN excluded."watchSeconds"
+            ELSE viewer_channel_daily_stats."watchSeconds" + excluded."watchSeconds"
           END,
           source = 'extension',
-          updatedAt = excluded.updatedAt
+          "updatedAt" = excluded."updatedAt"
       `);
 
       await tx.$executeRaw(Prisma.sql`
-        WITH src (viewerId, channelId, lastWatchedAt, watchSeconds) AS (
+        WITH src ("viewerId", "channelId", "lastWatchedAt", "watchSeconds") AS (
           VALUES ${Prisma.join(lifetimeRows)}
         )
         INSERT INTO viewer_channel_lifetime_stats (
-          id, viewerId, channelId, lastWatchedAt, totalWatchTimeMinutes,
-          totalSessions, avgSessionMinutes, firstWatchedAt,
-          totalMessages, totalChatMessages, totalSubscriptions, totalCheers, totalBits,
-          trackingStartedAt, trackingDays, longestStreakDays, currentStreakDays,
-          activeDaysLast30, activeDaysLast90, mostActiveMonthCount,
-          createdAt, updatedAt
+          id, "viewerId", "channelId", "lastWatchedAt", "totalWatchTimeMinutes",
+          "totalSessions", "avgSessionMinutes", "firstWatchedAt",
+          "totalMessages", "totalChatMessages", "totalSubscriptions", "totalCheers", "totalBits",
+          "trackingStartedAt", "trackingDays", "longestStreakDays", "currentStreakDays",
+          "activeDaysLast30", "activeDaysLast90", "mostActiveMonthCount",
+          "createdAt", "updatedAt"
         )
         SELECT
-          lower(hex(randomblob(16))) AS id,
-          src.viewerId,
-          src.channelId,
-          src.lastWatchedAt,
-          CAST(ROUND(src.watchSeconds / 60.0) AS INTEGER),
-          0, 0, src.lastWatchedAt,
+          gen_random_uuid()::text AS id,
+          src."viewerId",
+          src."channelId",
+          src."lastWatchedAt",
+          CAST(ROUND(src."watchSeconds" / 60.0) AS INTEGER),
+          0, 0, src."lastWatchedAt",
           0, 0, 0, 0, 0,
           CURRENT_TIMESTAMP, 0, 0, 0,
           0, 0, 0,
           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         FROM src
         WHERE 1 = 1
-        ON CONFLICT(viewerId, channelId) DO UPDATE SET
-          lastWatchedAt = CASE
-            WHEN excluded.lastWatchedAt > viewer_channel_lifetime_stats.lastWatchedAt
-              THEN excluded.lastWatchedAt
-            ELSE viewer_channel_lifetime_stats.lastWatchedAt
+        ON CONFLICT("viewerId", "channelId") DO UPDATE SET
+          "lastWatchedAt" = CASE
+            WHEN excluded."lastWatchedAt" > viewer_channel_lifetime_stats."lastWatchedAt"
+              THEN excluded."lastWatchedAt"
+            ELSE viewer_channel_lifetime_stats."lastWatchedAt"
           END,
-          totalWatchTimeMinutes =
-            viewer_channel_lifetime_stats.totalWatchTimeMinutes + excluded.totalWatchTimeMinutes,
-          updatedAt = CURRENT_TIMESTAMP
+          "totalWatchTimeMinutes" =
+            viewer_channel_lifetime_stats."totalWatchTimeMinutes" + excluded."totalWatchTimeMinutes",
+          "updatedAt" = CURRENT_TIMESTAMP
       `);
 
       return accepted;

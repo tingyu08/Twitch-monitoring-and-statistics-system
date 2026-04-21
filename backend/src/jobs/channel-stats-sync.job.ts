@@ -302,36 +302,36 @@ export class ChannelStatsSyncJob {
 
       await runWithWriteGuard(WriteGuardKeys.CHANNEL_STATS_DAILY_UPSERT, () =>
         prisma.$executeRaw(Prisma.sql`
-          WITH src(channelId, date, streamSeconds, streamCount, avgViewers, peakViewers) AS (
+          WITH src("channelId", date, "streamSeconds", "streamCount", "avgViewers", "peakViewers") AS (
             VALUES ${Prisma.join(values)}
           )
           INSERT INTO channel_daily_stats (
             id,
-            channelId,
+            "channelId",
             date,
-            streamSeconds,
-            streamCount,
-            avgViewers,
-            peakViewers,
-            updatedAt
+            "streamSeconds",
+            "streamCount",
+            "avgViewers",
+            "peakViewers",
+            "updatedAt"
           )
           SELECT
-            lower(hex(randomblob(16))) AS id,
-            src.channelId,
+            gen_random_uuid()::text AS id,
+            src."channelId",
             src.date,
-            src.streamSeconds,
-            src.streamCount,
-            src.avgViewers,
-            src.peakViewers,
+            src."streamSeconds",
+            src."streamCount",
+            src."avgViewers",
+            src."peakViewers",
             CURRENT_TIMESTAMP
           FROM src
           WHERE 1 = 1
-          ON CONFLICT(channelId, date) DO UPDATE SET
-            streamSeconds = excluded.streamSeconds,
-            streamCount = excluded.streamCount,
-            avgViewers = excluded.avgViewers,
-            peakViewers = excluded.peakViewers,
-            updatedAt = CURRENT_TIMESTAMP
+          ON CONFLICT("channelId", date) DO UPDATE SET
+            "streamSeconds" = excluded."streamSeconds",
+            "streamCount" = excluded."streamCount",
+            "avgViewers" = excluded."avgViewers",
+            "peakViewers" = excluded."peakViewers",
+            "updatedAt" = CURRENT_TIMESTAMP
         `)
       );
       updated += batch.length;

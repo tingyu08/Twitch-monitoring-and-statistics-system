@@ -365,68 +365,68 @@ async function updateChannelsWithChanges(
 export function buildChangedChannelUpdateQuery(values: ReturnType<typeof Prisma.sql>[]) {
   return Prisma.sql`
     WITH updates (
-      twitchChannelId,
-      isLiveValue,
-      viewerCount,
-      titleValue,
-      gameNameValue,
-      startedAtValue,
-      checkedAt
+      "twitchChannelId",
+      "isLiveValue",
+      "viewerCount",
+      "titleValue",
+      "gameNameValue",
+      "startedAtValue",
+      "checkedAt"
     ) AS (
       VALUES ${Prisma.join(values)}
     )
     UPDATE channels
     SET
-      isLive = COALESCE(
+      "isLive" = COALESCE(
         (
-          SELECT CASE WHEN updates.isLiveValue = 1 THEN 1 ELSE 0 END
+          SELECT CASE WHEN updates."isLiveValue" = 1 THEN true ELSE false END
           FROM updates
-          WHERE updates.twitchChannelId = channels.twitchChannelId
+          WHERE updates."twitchChannelId" = channels."twitchChannelId"
         ),
-        isLive
+        "isLive"
       ),
-      currentViewerCount = (
-        SELECT updates.viewerCount
+      "currentViewerCount" = (
+        SELECT updates."viewerCount"
         FROM updates
-        WHERE updates.twitchChannelId = channels.twitchChannelId
+        WHERE updates."twitchChannelId" = channels."twitchChannelId"
       ),
-      currentTitle = COALESCE(
+      "currentTitle" = COALESCE(
         (
-          SELECT updates.titleValue
+          SELECT updates."titleValue"
           FROM updates
-          WHERE updates.twitchChannelId = channels.twitchChannelId
+          WHERE updates."twitchChannelId" = channels."twitchChannelId"
         ),
-        currentTitle
+        "currentTitle"
       ),
-      currentGameName = COALESCE(
+      "currentGameName" = COALESCE(
         (
-          SELECT updates.gameNameValue
+          SELECT updates."gameNameValue"
           FROM updates
-          WHERE updates.twitchChannelId = channels.twitchChannelId
+          WHERE updates."twitchChannelId" = channels."twitchChannelId"
         ),
-        currentGameName
+        "currentGameName"
       ),
-      currentStreamStartedAt = (
-        SELECT updates.startedAtValue
+      "currentStreamStartedAt" = (
+        SELECT updates."startedAtValue"
         FROM updates
-        WHERE updates.twitchChannelId = channels.twitchChannelId
+        WHERE updates."twitchChannelId" = channels."twitchChannelId"
       ),
-      lastLiveCheckAt = (
-        SELECT updates.checkedAt
+      "lastLiveCheckAt" = (
+        SELECT updates."checkedAt"
         FROM updates
-        WHERE updates.twitchChannelId = channels.twitchChannelId
+        WHERE updates."twitchChannelId" = channels."twitchChannelId"
       )
-    WHERE twitchChannelId IN (SELECT twitchChannelId FROM updates)
+    WHERE "twitchChannelId" IN (SELECT "twitchChannelId" FROM updates)
       AND EXISTS (
         SELECT 1
         FROM updates
-        WHERE updates.twitchChannelId = channels.twitchChannelId
+        WHERE updates."twitchChannelId" = channels."twitchChannelId"
           AND (
-            (updates.isLiveValue IS NOT NULL AND isLive != CASE WHEN updates.isLiveValue = 1 THEN 1 ELSE 0 END)
-            OR COALESCE(currentViewerCount, -1) != COALESCE(updates.viewerCount, -1)
-            OR COALESCE(currentTitle, '') != COALESCE(updates.titleValue, '')
-            OR COALESCE(currentGameName, '') != COALESCE(updates.gameNameValue, '')
-            OR COALESCE(currentStreamStartedAt, '1970-01-01 00:00:00') != COALESCE(updates.startedAtValue, '1970-01-01 00:00:00')
+            (updates."isLiveValue" IS NOT NULL AND "isLive" != CASE WHEN updates."isLiveValue" = 1 THEN true ELSE false END)
+            OR COALESCE("currentViewerCount", -1) != COALESCE(updates."viewerCount", -1)
+            OR COALESCE("currentTitle", '') != COALESCE(updates."titleValue", '')
+            OR COALESCE("currentGameName", '') != COALESCE(updates."gameNameValue", '')
+            OR COALESCE("currentStreamStartedAt", '1970-01-01 00:00:00') != COALESCE(updates."startedAtValue", '1970-01-01 00:00:00')
           )
       )
   `;

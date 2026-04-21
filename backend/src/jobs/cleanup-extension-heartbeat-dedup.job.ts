@@ -37,7 +37,7 @@ export class CleanupExtensionHeartbeatDedupJob {
                 WHERE id IN (
                   SELECT id
                   FROM extension_heartbeat_dedups
-                  WHERE createdAt < ${cutoff}
+                  WHERE "createdAt" < ${cutoff}
                   LIMIT ${HEARTBEAT_DEDUP_CLEANUP_BATCH_SIZE}
                 )
               `

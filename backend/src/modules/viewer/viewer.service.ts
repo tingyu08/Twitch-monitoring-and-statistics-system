@@ -416,38 +416,38 @@ async function fetchSummaryRows(viewerId: string): Promise<ViewerChannelSummaryR
   try {
     return await prisma.$queryRaw<ViewerChannelSummaryRow[]>(Prisma.sql`
       WITH daily_watch AS (
-        SELECT viewerId, channelId, SUM(watchSeconds) / 60 AS dailyWatchMin
+        SELECT "viewerId", "channelId", SUM("watchSeconds") / 60 AS "dailyWatchMin"
         FROM viewer_channel_daily_stats
-        WHERE viewerId = ${viewerId}
-        GROUP BY viewerId, channelId
+        WHERE "viewerId" = ${viewerId}
+        GROUP BY "viewerId", "channelId"
       )
       SELECT
-        vcs.viewerId,
-        vcs.channelId,
-        c.twitchChannelId,
-        COALESCE(c.channelName, vcs.channelName) AS channelName,
-        COALESCE(s.displayName, vcs.displayName) AS displayName,
-        COALESCE(s.avatarUrl, vcs.avatarUrl) AS avatarUrl,
-        COALESCE(c.currentGameName, vcs.category) AS category,
-        COALESCE(c.isLive, vcs.isLive) AS isLive,
-        COALESCE(c.currentViewerCount, vcs.viewerCount) AS viewerCount,
-        COALESCE(c.currentStreamStartedAt, vcs.streamStartedAt) AS streamStartedAt,
-        vcs.lastWatched,
-        MAX(
-          COALESCE(l.totalWatchTimeMinutes, 0),
-          COALESCE(dw.dailyWatchMin, 0),
-          COALESCE(vcs.totalWatchMin, 0)
-        ) AS totalWatchMin,
-        COALESCE(l.totalMessages, vcs.messageCount) AS messageCount,
-        vcs.isExternal,
-        vcs.followedAt,
-        vcs.updatedAt
+        vcs."viewerId",
+        vcs."channelId",
+        c."twitchChannelId",
+        COALESCE(c."channelName", vcs."channelName") AS "channelName",
+        COALESCE(s."displayName", vcs."displayName") AS "displayName",
+        COALESCE(s."avatarUrl", vcs."avatarUrl") AS "avatarUrl",
+        COALESCE(c."currentGameName", vcs.category) AS category,
+        COALESCE(c."isLive", vcs."isLive") AS "isLive",
+        COALESCE(c."currentViewerCount", vcs."viewerCount") AS "viewerCount",
+        COALESCE(c."currentStreamStartedAt", vcs."streamStartedAt") AS "streamStartedAt",
+        vcs."lastWatched",
+        GREATEST(
+          COALESCE(l."totalWatchTimeMinutes", 0),
+          COALESCE(dw."dailyWatchMin", 0),
+          COALESCE(vcs."totalWatchMin", 0)
+        ) AS "totalWatchMin",
+        COALESCE(l."totalMessages", vcs."messageCount") AS "messageCount",
+        vcs."isExternal",
+        vcs."followedAt",
+        vcs."updatedAt"
       FROM viewer_channel_summary vcs
-      LEFT JOIN channels c ON c.id = vcs.channelId
-      LEFT JOIN streamers s ON s.id = c.streamerId
-      LEFT JOIN viewer_channel_lifetime_stats l ON l.viewerId = vcs.viewerId AND l.channelId = vcs.channelId
-      LEFT JOIN daily_watch dw ON dw.viewerId = vcs.viewerId AND dw.channelId = vcs.channelId
-      WHERE vcs.viewerId = ${viewerId}
+      LEFT JOIN channels c ON c.id = vcs."channelId"
+      LEFT JOIN streamers s ON s.id = c."streamerId"
+      LEFT JOIN viewer_channel_lifetime_stats l ON l."viewerId" = vcs."viewerId" AND l."channelId" = vcs."channelId"
+      LEFT JOIN daily_watch dw ON dw."viewerId" = vcs."viewerId" AND dw."channelId" = vcs."channelId"
+      WHERE vcs."viewerId" = ${viewerId}
     `);
   } catch (error) {
     logger.debug("ViewerService", "viewer_channel_summary 尚未就緒，改用來源查詢回退", error);
@@ -538,7 +538,7 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
     if (rows.length === 0) {
       await prisma.$executeRaw(Prisma.sql`
         DELETE FROM viewer_channel_summary
-        WHERE viewerId = ${viewerId}
+        WHERE "viewerId" = ${viewerId}
       `);
       return;
     }
@@ -609,8 +609,8 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
       const deleteChunk = deletes.slice(i, i + SQLITE_IN_CHUNK_SIZE);
       await prisma.$executeRaw(Prisma.sql`
         DELETE FROM viewer_channel_summary
-        WHERE viewerId = ${viewerId}
-          AND channelId IN (${Prisma.join(deleteChunk)})
+        WHERE "viewerId" = ${viewerId}
+          AND "channelId" IN (${Prisma.join(deleteChunk)})
       `);
     }
 
@@ -624,13 +624,13 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
           ${row.displayName},
           ${row.avatarUrl},
           ${row.category},
-          ${row.isLive ? 1 : 0},
+          ${row.isLive},
           ${row.viewerCount},
           ${row.streamStartedAt},
           ${row.lastWatched},
           ${row.totalWatchMin},
           ${row.messageCount},
-          ${row.isExternal ? 1 : 0},
+          ${row.isExternal},
           ${row.followedAt},
           CURRENT_TIMESTAMP
         )`
@@ -638,21 +638,21 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
 
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_summary (
-          viewerId,
-          channelId,
-          channelName,
-          displayName,
-          avatarUrl,
+          "viewerId",
+          "channelId",
+          "channelName",
+          "displayName",
+          "avatarUrl",
           category,
-          isLive,
-          viewerCount,
-          streamStartedAt,
-          lastWatched,
-          totalWatchMin,
-          messageCount,
-          isExternal,
-          followedAt,
-          updatedAt
+          "isLive",
+          "viewerCount",
+          "streamStartedAt",
+          "lastWatched",
+          "totalWatchMin",
+          "messageCount",
+          "isExternal",
+          "followedAt",
+          "updatedAt"
         )
         VALUES ${Prisma.join(values)}
       `);
@@ -667,52 +667,52 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
           ${row.displayName},
           ${row.avatarUrl},
           ${row.category},
-          ${row.isLive ? 1 : 0},
+          ${row.isLive},
           ${row.viewerCount},
           ${row.streamStartedAt},
           ${row.lastWatched},
           ${row.totalWatchMin},
           ${row.messageCount},
-          ${row.isExternal ? 1 : 0},
+          ${row.isExternal},
           ${row.followedAt}
         )`
       );
 
       await prisma.$executeRaw(Prisma.sql`
         WITH updates(
-          channelId,
-          channelName,
-          displayName,
-          avatarUrl,
+          "channelId",
+          "channelName",
+          "displayName",
+          "avatarUrl",
           category,
-          isLive,
-          viewerCount,
-          streamStartedAt,
-          lastWatched,
-          totalWatchMin,
-          messageCount,
-          isExternal,
-          followedAt
+          "isLive",
+          "viewerCount",
+          "streamStartedAt",
+          "lastWatched",
+          "totalWatchMin",
+          "messageCount",
+          "isExternal",
+          "followedAt"
         ) AS (
           VALUES ${Prisma.join(values)}
         )
         UPDATE viewer_channel_summary
         SET
-          channelName = (SELECT updates.channelName FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          displayName = (SELECT updates.displayName FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          avatarUrl = (SELECT updates.avatarUrl FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          category = (SELECT updates.category FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          isLive = (SELECT updates.isLive FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          viewerCount = (SELECT updates.viewerCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          streamStartedAt = (SELECT updates.streamStartedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          lastWatched = (SELECT updates.lastWatched FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          totalWatchMin = (SELECT updates.totalWatchMin FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          messageCount = (SELECT updates.messageCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          isExternal = (SELECT updates.isExternal FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          followedAt = (SELECT updates.followedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          updatedAt = CURRENT_TIMESTAMP
-        WHERE viewerId = ${viewerId}
-          AND channelId IN (SELECT channelId FROM updates)
+          "channelName" = (SELECT updates."channelName" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "displayName" = (SELECT updates."displayName" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "avatarUrl" = (SELECT updates."avatarUrl" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          category = (SELECT updates.category FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "isLive" = (SELECT updates."isLive" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "viewerCount" = (SELECT updates."viewerCount" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "streamStartedAt" = (SELECT updates."streamStartedAt" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "lastWatched" = (SELECT updates."lastWatched" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "totalWatchMin" = (SELECT updates."totalWatchMin" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "messageCount" = (SELECT updates."messageCount" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "isExternal" = (SELECT updates."isExternal" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "followedAt" = (SELECT updates."followedAt" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "viewerId" = ${viewerId}
+          AND "channelId" IN (SELECT "channelId" FROM updates)
       `);
     }
   } catch (error) {
@@ -797,58 +797,58 @@ async function buildFollowedChannelsFromSource(viewerId: string): Promise<Follow
 
   const rows = await prisma.$queryRaw<SourceRow[]>(Prisma.sql`
     WITH stat_rows AS (
-      SELECT channelId, totalWatchTimeMinutes, totalMessages, lastWatchedAt
+      SELECT "channelId", "totalWatchTimeMinutes", "totalMessages", "lastWatchedAt"
       FROM viewer_channel_lifetime_stats
-      WHERE viewerId = ${viewerId}
+      WHERE "viewerId" = ${viewerId}
     ),
     daily_watch AS (
-      SELECT channelId, SUM(watchSeconds) / 60 AS dailyWatchMin
+      SELECT "channelId", SUM("watchSeconds") / 60 AS "dailyWatchMin"
       FROM viewer_channel_daily_stats
-      WHERE viewerId = ${viewerId}
-      GROUP BY channelId
+      WHERE "viewerId" = ${viewerId}
+      GROUP BY "channelId"
     ),
     follow_rows AS (
-      SELECT channelId, followedAt
+      SELECT "channelId", "followedAt"
       FROM user_follows
-      WHERE userId = ${viewerId} AND userType = 'viewer'
+      WHERE "userId" = ${viewerId} AND "userType" = 'viewer'
     ),
     merged_channels AS (
-      SELECT channelId FROM stat_rows
+      SELECT "channelId" FROM stat_rows
       UNION
-      SELECT channelId FROM daily_watch
+      SELECT "channelId" FROM daily_watch
       UNION
-      SELECT channelId FROM follow_rows
+      SELECT "channelId" FROM follow_rows
     ),
     active_sessions AS (
-      SELECT channelId, 1 AS hasActiveSession
+      SELECT "channelId", 1 AS "hasActiveSession"
       FROM stream_sessions
-      WHERE endedAt IS NULL
-        AND channelId IN (SELECT channelId FROM merged_channels)
-      GROUP BY channelId
+      WHERE "endedAt" IS NULL
+        AND "channelId" IN (SELECT "channelId" FROM merged_channels)
+      GROUP BY "channelId"
     )
     SELECT
       c.id,
-      c.channelName,
-      c.isLive,
-      COALESCE(a.hasActiveSession, 0) AS hasActiveSession,
-      c.currentViewerCount,
-      c.currentStreamStartedAt,
-      c.currentGameName,
+      c."channelName",
+      c."isLive",
+      COALESCE(a."hasActiveSession", 0) AS "hasActiveSession",
+      c."currentViewerCount",
+      c."currentStreamStartedAt",
+      c."currentGameName",
       c.source,
-      s.displayName,
-      s.avatarUrl,
-      MAX(COALESCE(st.totalWatchTimeMinutes, 0), COALESCE(dw.dailyWatchMin, 0)) AS totalWatchTimeMinutes,
-      st.totalMessages,
-      st.lastWatchedAt,
-      f.followedAt
+      s."displayName",
+      s."avatarUrl",
+      GREATEST(COALESCE(st."totalWatchTimeMinutes", 0), COALESCE(dw."dailyWatchMin", 0)) AS "totalWatchTimeMinutes",
+      st."totalMessages",
+      st."lastWatchedAt",
+      f."followedAt"
     FROM merged_channels mc
-    JOIN channels c ON c.id = mc.channelId
-    LEFT JOIN streamers s ON s.id = c.streamerId
-    LEFT JOIN stat_rows st ON st.channelId = c.id
-    LEFT JOIN daily_watch dw ON dw.channelId = c.id
-    LEFT JOIN follow_rows f ON f.channelId = c.id
-    LEFT JOIN active_sessions a ON a.channelId = c.id
-    ORDER BY COALESCE(st.lastWatchedAt, f.followedAt, c.updatedAt) DESC
+    JOIN channels c ON c.id = mc."channelId"
+    LEFT JOIN streamers s ON s.id = c."streamerId"
+    LEFT JOIN stat_rows st ON st."channelId" = c.id
+    LEFT JOIN daily_watch dw ON dw."channelId" = c.id
+    LEFT JOIN follow_rows f ON f."channelId" = c.id
+    LEFT JOIN active_sessions a ON a."channelId" = c.id
+    ORDER BY COALESCE(st."lastWatchedAt", f."followedAt", c."updatedAt") DESC
   `);
 
   return rows.map((row) => {
@@ -891,54 +891,54 @@ export async function syncSummaryStatsFromLifetime(viewerId: string): Promise<vo
     await prisma.$executeRaw(Prisma.sql`
       UPDATE viewer_channel_summary
       SET
-        messageCount = COALESCE(
-          (SELECT l.totalMessages
+        "messageCount" = COALESCE(
+          (SELECT l."totalMessages"
            FROM viewer_channel_lifetime_stats l
-           WHERE l.viewerId = viewer_channel_summary.viewerId
-             AND l.channelId = viewer_channel_summary.channelId),
-          messageCount
+           WHERE l."viewerId" = viewer_channel_summary."viewerId"
+             AND l."channelId" = viewer_channel_summary."channelId"),
+          "messageCount"
         ),
-        totalWatchMin = MAX(
-          totalWatchMin,
+        "totalWatchMin" = GREATEST(
+          "totalWatchMin",
           COALESCE(
-            (SELECT l.totalWatchTimeMinutes
+            (SELECT l."totalWatchTimeMinutes"
              FROM viewer_channel_lifetime_stats l
-             WHERE l.viewerId = viewer_channel_summary.viewerId
-               AND l.channelId = viewer_channel_summary.channelId),
+             WHERE l."viewerId" = viewer_channel_summary."viewerId"
+               AND l."channelId" = viewer_channel_summary."channelId"),
             0
           ),
           COALESCE(
-            (SELECT SUM(d.watchSeconds) / 60
+            (SELECT SUM(d."watchSeconds") / 60
              FROM viewer_channel_daily_stats d
-             WHERE d.viewerId = viewer_channel_summary.viewerId
-               AND d.channelId = viewer_channel_summary.channelId),
+             WHERE d."viewerId" = viewer_channel_summary."viewerId"
+               AND d."channelId" = viewer_channel_summary."channelId"),
             0
           )
         ),
-        updatedAt = CURRENT_TIMESTAMP
-      WHERE viewerId = ${viewerId}
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "viewerId" = ${viewerId}
         AND (
-          messageCount IS NOT COALESCE(
-            (SELECT l.totalMessages
+          "messageCount" IS DISTINCT FROM COALESCE(
+            (SELECT l."totalMessages"
              FROM viewer_channel_lifetime_stats l
-             WHERE l.viewerId = viewer_channel_summary.viewerId
-               AND l.channelId = viewer_channel_summary.channelId),
-            messageCount
+             WHERE l."viewerId" = viewer_channel_summary."viewerId"
+               AND l."channelId" = viewer_channel_summary."channelId"),
+            "messageCount"
           )
-          OR totalWatchMin IS NOT MAX(
-            totalWatchMin,
+          OR "totalWatchMin" IS DISTINCT FROM GREATEST(
+            "totalWatchMin",
             COALESCE(
-              (SELECT l.totalWatchTimeMinutes
+              (SELECT l."totalWatchTimeMinutes"
                FROM viewer_channel_lifetime_stats l
-               WHERE l.viewerId = viewer_channel_summary.viewerId
-                 AND l.channelId = viewer_channel_summary.channelId),
+               WHERE l."viewerId" = viewer_channel_summary."viewerId"
+                 AND l."channelId" = viewer_channel_summary."channelId"),
               0
             ),
             COALESCE(
-              (SELECT SUM(d.watchSeconds) / 60
+              (SELECT SUM(d."watchSeconds") / 60
                FROM viewer_channel_daily_stats d
-               WHERE d.viewerId = viewer_channel_summary.viewerId
-                 AND d.channelId = viewer_channel_summary.channelId),
+               WHERE d."viewerId" = viewer_channel_summary."viewerId"
+                 AND d."channelId" = viewer_channel_summary."channelId"),
               0
             )
           )
@@ -979,28 +979,28 @@ export async function refreshViewerChannelSummaryForChannels(
     for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
       const chunk = deduped.slice(i, i + CHUNK_SIZE);
       const values = chunk.map((snapshot) =>
-        Prisma.sql`(${snapshot.channelId}, ${snapshot.isLive ? 1 : 0}, ${snapshot.viewerCount}, ${
+        Prisma.sql`(${snapshot.channelId}, ${snapshot.isLive}, ${snapshot.viewerCount}, ${
           snapshot.streamStartedAt
         }, ${snapshot.category})`
       );
 
       await prisma.$executeRaw(Prisma.sql`
-        WITH updates(channelId, isLive, viewerCount, streamStartedAt, category) AS (
+        WITH updates("channelId", "isLive", "viewerCount", "streamStartedAt", category) AS (
           VALUES ${Prisma.join(values)}
         )
         UPDATE viewer_channel_summary
         SET
-          isLive = (SELECT updates.isLive FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          viewerCount = (SELECT updates.viewerCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          streamStartedAt = (SELECT updates.streamStartedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          category = (SELECT updates.category FROM updates WHERE updates.channelId = viewer_channel_summary.channelId),
-          updatedAt = CURRENT_TIMESTAMP
-        WHERE channelId IN (SELECT channelId FROM updates)
+          "isLive" = (SELECT updates."isLive" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "viewerCount" = (SELECT updates."viewerCount" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "streamStartedAt" = (SELECT updates."streamStartedAt" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          category = (SELECT updates.category FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"),
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "channelId" IN (SELECT "channelId" FROM updates)
           AND (
-            isLive != (SELECT updates.isLive FROM updates WHERE updates.channelId = viewer_channel_summary.channelId)
-            OR COALESCE(viewerCount, -1) != COALESCE((SELECT updates.viewerCount FROM updates WHERE updates.channelId = viewer_channel_summary.channelId), -1)
-            OR COALESCE(streamStartedAt, '1970-01-01 00:00:00') != COALESCE((SELECT updates.streamStartedAt FROM updates WHERE updates.channelId = viewer_channel_summary.channelId), '1970-01-01 00:00:00')
-            OR COALESCE(category, '') != COALESCE((SELECT updates.category FROM updates WHERE updates.channelId = viewer_channel_summary.channelId), '')
+            "isLive" IS DISTINCT FROM (SELECT updates."isLive" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId")
+            OR COALESCE("viewerCount", -1) != COALESCE((SELECT updates."viewerCount" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"), -1)
+            OR COALESCE("streamStartedAt", '1970-01-01 00:00:00') != COALESCE((SELECT updates."streamStartedAt" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"), '1970-01-01 00:00:00')
+            OR COALESCE(category, '') != COALESCE((SELECT updates.category FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"), '')
           )
       `);
     }

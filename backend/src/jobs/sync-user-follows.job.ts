@@ -884,12 +884,12 @@ export class SyncUserFollowsJob {
 
         await tx.$executeRaw(
           Prisma.sql`
-            INSERT INTO streamers (id, twitchUserId, displayName, avatarUrl, updatedAt)
+            INSERT INTO streamers (id, "twitchUserId", "displayName", "avatarUrl", "updatedAt")
             VALUES ${Prisma.join(streamerRows)}
-            ON CONFLICT(twitchUserId) DO UPDATE SET
-              displayName = excluded.displayName,
-              avatarUrl = excluded.avatarUrl,
-              updatedAt = excluded.updatedAt
+            ON CONFLICT("twitchUserId") DO UPDATE SET
+              "displayName" = excluded."displayName",
+              "avatarUrl" = excluded."avatarUrl",
+              "updatedAt" = excluded."updatedAt"
           `
         );
 
@@ -926,14 +926,14 @@ export class SyncUserFollowsJob {
         if (channelRows.length > 0) {
           await tx.$executeRaw(
             Prisma.sql`
-              INSERT INTO channels (id, twitchChannelId, channelName, channelUrl, streamerId, source, isMonitored, updatedAt)
+              INSERT INTO channels (id, "twitchChannelId", "channelName", "channelUrl", "streamerId", source, "isMonitored", "updatedAt")
               VALUES ${Prisma.join(channelRows)}
-              ON CONFLICT(twitchChannelId) DO UPDATE SET
-                channelName = excluded.channelName,
-                channelUrl = excluded.channelUrl,
-                streamerId = excluded.streamerId,
-                isMonitored = 1,
-                updatedAt = excluded.updatedAt
+              ON CONFLICT("twitchChannelId") DO UPDATE SET
+                "channelName" = excluded."channelName",
+                "channelUrl" = excluded."channelUrl",
+                "streamerId" = excluded."streamerId",
+                "isMonitored" = true,
+                "updatedAt" = excluded."updatedAt"
             `
           );
 
@@ -1004,9 +1004,9 @@ export class SyncUserFollowsJob {
         const insertedCount = await retryDatabaseOperation(() =>
           prisma.$executeRaw(
             Prisma.sql`
-              INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
+              INSERT INTO user_follows (id, "userId", "userType", "channelId", "followedAt")
               VALUES ${Prisma.join(rows)}
-              ON CONFLICT(userId, channelId) DO NOTHING
+              ON CONFLICT("userId", "channelId") DO NOTHING
             `
           )
         );
@@ -1189,9 +1189,9 @@ export async function triggerFollowSyncForUser(
           () =>
             prisma.$executeRaw(
               Prisma.sql`
-                INSERT INTO user_follows (id, userId, userType, channelId, followedAt)
+                INSERT INTO user_follows (id, "userId", "userType", "channelId", "followedAt")
                 VALUES ${Prisma.join(rows)}
-                ON CONFLICT(userId, channelId) DO NOTHING
+                ON CONFLICT("userId", "channelId") DO NOTHING
               `
             ),
           DB_RETRY_OPTIONS
@@ -1330,12 +1330,12 @@ export async function triggerFollowSyncForUser(
 
                 await tx.$executeRaw(
                   Prisma.sql`
-                    INSERT INTO streamers (id, twitchUserId, displayName, avatarUrl, updatedAt)
+                    INSERT INTO streamers (id, "twitchUserId", "displayName", "avatarUrl", "updatedAt")
                     VALUES ${Prisma.join(streamerRows)}
-                    ON CONFLICT(twitchUserId) DO UPDATE SET
-                      displayName = excluded.displayName,
-                      avatarUrl = excluded.avatarUrl,
-                      updatedAt = excluded.updatedAt
+                    ON CONFLICT("twitchUserId") DO UPDATE SET
+                      "displayName" = excluded."displayName",
+                      "avatarUrl" = excluded."avatarUrl",
+                      "updatedAt" = excluded."updatedAt"
                   `
                 );
 
@@ -1372,13 +1372,13 @@ export async function triggerFollowSyncForUser(
                 if (channelRows.length > 0) {
                   await tx.$executeRaw(
                     Prisma.sql`
-                      INSERT INTO channels (id, twitchChannelId, channelName, channelUrl, streamerId, source, isMonitored, updatedAt)
+                      INSERT INTO channels (id, "twitchChannelId", "channelName", "channelUrl", "streamerId", source, "isMonitored", "updatedAt")
                       VALUES ${Prisma.join(channelRows)}
-                      ON CONFLICT(twitchChannelId) DO UPDATE SET
-                        channelName = excluded.channelName,
-                        isMonitored = 1,
-                        streamerId = excluded.streamerId,
-                        updatedAt = excluded.updatedAt
+                      ON CONFLICT("twitchChannelId") DO UPDATE SET
+                        "channelName" = excluded."channelName",
+                        "isMonitored" = true,
+                        "streamerId" = excluded."streamerId",
+                        "updatedAt" = excluded."updatedAt"
                     `
                   );
 

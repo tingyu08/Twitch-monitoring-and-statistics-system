@@ -39,8 +39,8 @@ export class DataRetentionJob {
         prisma.$executeRaw(
           Prisma.sql`
             DELETE FROM viewer_channel_messages
-            WHERE rowid IN (
-              SELECT rowid FROM viewer_channel_messages
+            WHERE id IN (
+              SELECT id FROM viewer_channel_messages
               WHERE timestamp < ${before}
               ORDER BY timestamp ASC
               LIMIT ${this.MESSAGE_DELETE_BATCH_SIZE}

@@ -703,48 +703,48 @@ export class ViewerMessageRepository {
       // 先落地原始訊息（DB dedup），縮短後續聚合交易範圍
       const insertedRows = await prisma.$queryRaw<Array<{ messageDedupKey: string }>>(Prisma.sql`
         WITH src (
-          messageDedupKey,
-          viewerId,
-          channelId,
-          messageText,
-          messageType,
+          "messageDedupKey",
+          "viewerId",
+          "channelId",
+          "messageText",
+          "messageType",
           timestamp,
           badges,
-          emotesUsed,
-          bitsAmount,
-          createdAt
+          "emotesUsed",
+          "bitsAmount",
+          "createdAt"
         ) AS (
           VALUES ${Prisma.join(messageValues)}
         )
         INSERT INTO viewer_channel_messages (
           id,
-          messageDedupKey,
-          viewerId,
-          channelId,
-          messageText,
-          messageType,
+          "messageDedupKey",
+          "viewerId",
+          "channelId",
+          "messageText",
+          "messageType",
           timestamp,
           badges,
-          emotesUsed,
-          bitsAmount,
-          createdAt
+          "emotesUsed",
+          "bitsAmount",
+          "createdAt"
         )
         SELECT
-          lower(hex(randomblob(16))) AS id,
-          src.messageDedupKey,
-          src.viewerId,
-          src.channelId,
-          src.messageText,
-          src.messageType,
+          gen_random_uuid()::text AS id,
+          src."messageDedupKey",
+          src."viewerId",
+          src."channelId",
+          src."messageText",
+          src."messageType",
           src.timestamp,
           src.badges,
-          src.emotesUsed,
-          src.bitsAmount,
-          src.createdAt
+          src."emotesUsed",
+          src."bitsAmount",
+          src."createdAt"
         FROM src
         WHERE 1 = 1
-        ON CONFLICT(messageDedupKey) DO NOTHING
-        RETURNING messageDedupKey
+        ON CONFLICT("messageDedupKey") DO NOTHING
+        RETURNING "messageDedupKey"
       `);
       messagesPersisted = true;
       for (const msg of dedupedBatch) {
@@ -848,57 +848,57 @@ export class ViewerMessageRepository {
 
           await tx.$executeRaw(Prisma.sql`
             WITH src (
-              viewerId,
-              channelId,
+              "viewerId",
+              "channelId",
               date,
-              totalMessages,
-              chatMessages,
+              "totalMessages",
+              "chatMessages",
               subscriptions,
               cheers,
-              giftSubs,
+              "giftSubs",
               raids,
-              totalBits
+              "totalBits"
             ) AS (
               VALUES ${Prisma.join(aggValues)}
             )
             INSERT INTO viewer_channel_message_daily_aggs (
               id,
-              viewerId,
-              channelId,
+              "viewerId",
+              "channelId",
               date,
-              totalMessages,
-              chatMessages,
+              "totalMessages",
+              "chatMessages",
               subscriptions,
               cheers,
-              giftSubs,
+              "giftSubs",
               raids,
-              totalBits,
-              updatedAt
+              "totalBits",
+              "updatedAt"
             )
             SELECT
-              lower(hex(randomblob(16))) AS id,
-              src.viewerId,
-              src.channelId,
+              gen_random_uuid()::text AS id,
+              src."viewerId",
+              src."channelId",
               src.date,
-              src.totalMessages,
-              src.chatMessages,
+              src."totalMessages",
+              src."chatMessages",
               src.subscriptions,
               src.cheers,
-              src.giftSubs,
+              src."giftSubs",
               src.raids,
-              src.totalBits,
+              src."totalBits",
               CURRENT_TIMESTAMP
             FROM src
             WHERE 1 = 1
-            ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-              totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
-              chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
+            ON CONFLICT("viewerId", "channelId", date) DO UPDATE SET
+              "totalMessages" = viewer_channel_message_daily_aggs."totalMessages" + excluded."totalMessages",
+              "chatMessages" = viewer_channel_message_daily_aggs."chatMessages" + excluded."chatMessages",
               subscriptions = viewer_channel_message_daily_aggs.subscriptions + excluded.subscriptions,
               cheers = viewer_channel_message_daily_aggs.cheers + excluded.cheers,
-              giftSubs = viewer_channel_message_daily_aggs.giftSubs + excluded.giftSubs,
+              "giftSubs" = viewer_channel_message_daily_aggs."giftSubs" + excluded."giftSubs",
               raids = viewer_channel_message_daily_aggs.raids + excluded.raids,
-              totalBits = COALESCE(viewer_channel_message_daily_aggs.totalBits, 0) + COALESCE(excluded.totalBits, 0),
-              updatedAt = CURRENT_TIMESTAMP
+              "totalBits" = COALESCE(viewer_channel_message_daily_aggs."totalBits", 0) + COALESCE(excluded."totalBits", 0),
+              "updatedAt" = CURRENT_TIMESTAMP
           `);
         }
 
@@ -911,43 +911,43 @@ export class ViewerMessageRepository {
 
           await tx.$executeRaw(Prisma.sql`
             WITH src (
-              viewerId,
-              channelId,
+              "viewerId",
+              "channelId",
               date,
-              messageCount,
-              emoteCount
+              "messageCount",
+              "emoteCount"
             ) AS (
               VALUES ${Prisma.join(dailyValues)}
             )
             INSERT INTO viewer_channel_daily_stats (
               id,
-              viewerId,
-              channelId,
+              "viewerId",
+              "channelId",
               date,
-              watchSeconds,
-              messageCount,
-              emoteCount,
+              "watchSeconds",
+              "messageCount",
+              "emoteCount",
               source,
-              createdAt,
-              updatedAt
+              "createdAt",
+              "updatedAt"
             )
             SELECT
-              lower(hex(randomblob(16))) AS id,
-              src.viewerId,
-              src.channelId,
+              gen_random_uuid()::text AS id,
+              src."viewerId",
+              src."channelId",
               src.date,
               0,
-              src.messageCount,
-              src.emoteCount,
+              src."messageCount",
+              src."emoteCount",
               'chat',
               CURRENT_TIMESTAMP,
               CURRENT_TIMESTAMP
             FROM src
             WHERE 1 = 1
-            ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
-              messageCount = viewer_channel_daily_stats.messageCount + excluded.messageCount,
-              emoteCount = viewer_channel_daily_stats.emoteCount + excluded.emoteCount,
-              updatedAt = CURRENT_TIMESTAMP
+            ON CONFLICT("viewerId", "channelId", date) DO UPDATE SET
+              "messageCount" = viewer_channel_daily_stats."messageCount" + excluded."messageCount",
+              "emoteCount" = viewer_channel_daily_stats."emoteCount" + excluded."emoteCount",
+              "updatedAt" = CURRENT_TIMESTAMP
           `);
         }
 
@@ -964,55 +964,55 @@ export class ViewerMessageRepository {
 
           await tx.$executeRaw(Prisma.sql`
             WITH src (
-              viewerId,
-              channelId,
-              totalMessages,
-              totalChatMessages,
-              totalSubscriptions,
-              totalCheers,
-              totalBits,
-              lastWatchedAt
+              "viewerId",
+              "channelId",
+              "totalMessages",
+              "totalChatMessages",
+              "totalSubscriptions",
+              "totalCheers",
+              "totalBits",
+              "lastWatchedAt"
             ) AS (
               VALUES ${Prisma.join(lifetimeValues)}
             )
             INSERT INTO viewer_channel_lifetime_stats (
               id,
-              viewerId,
-              channelId,
-              totalWatchTimeMinutes,
-              totalSessions,
-              avgSessionMinutes,
-              firstWatchedAt,
-              lastWatchedAt,
-              totalMessages,
-              totalChatMessages,
-              totalSubscriptions,
-              totalCheers,
-              totalBits,
-              trackingStartedAt,
-              trackingDays,
-              longestStreakDays,
-              currentStreakDays,
-              activeDaysLast30,
-              activeDaysLast90,
-              mostActiveMonthCount,
-              createdAt,
-              updatedAt
+              "viewerId",
+              "channelId",
+              "totalWatchTimeMinutes",
+              "totalSessions",
+              "avgSessionMinutes",
+              "firstWatchedAt",
+              "lastWatchedAt",
+              "totalMessages",
+              "totalChatMessages",
+              "totalSubscriptions",
+              "totalCheers",
+              "totalBits",
+              "trackingStartedAt",
+              "trackingDays",
+              "longestStreakDays",
+              "currentStreakDays",
+              "activeDaysLast30",
+              "activeDaysLast90",
+              "mostActiveMonthCount",
+              "createdAt",
+              "updatedAt"
             )
             SELECT
-              lower(hex(randomblob(16))) AS id,
-              src.viewerId,
-              src.channelId,
+              gen_random_uuid()::text AS id,
+              src."viewerId",
+              src."channelId",
               0,
               0,
               0,
-              src.lastWatchedAt,
-              src.lastWatchedAt,
-              src.totalMessages,
-              src.totalChatMessages,
-              src.totalSubscriptions,
-              src.totalCheers,
-              src.totalBits,
+              src."lastWatchedAt",
+              src."lastWatchedAt",
+              src."totalMessages",
+              src."totalChatMessages",
+              src."totalSubscriptions",
+              src."totalCheers",
+              src."totalBits",
               CURRENT_TIMESTAMP,
               0,
               0,
@@ -1024,18 +1024,18 @@ export class ViewerMessageRepository {
               CURRENT_TIMESTAMP
             FROM src
             WHERE 1 = 1
-            ON CONFLICT(viewerId, channelId) DO UPDATE SET
-              totalMessages = viewer_channel_lifetime_stats.totalMessages + excluded.totalMessages,
-              totalChatMessages = viewer_channel_lifetime_stats.totalChatMessages + excluded.totalChatMessages,
-              totalSubscriptions = viewer_channel_lifetime_stats.totalSubscriptions + excluded.totalSubscriptions,
-              totalCheers = viewer_channel_lifetime_stats.totalCheers + excluded.totalCheers,
-              totalBits = viewer_channel_lifetime_stats.totalBits + excluded.totalBits,
-              lastWatchedAt = CASE
-                WHEN viewer_channel_lifetime_stats.lastWatchedAt IS NULL THEN excluded.lastWatchedAt
-                WHEN excluded.lastWatchedAt > viewer_channel_lifetime_stats.lastWatchedAt THEN excluded.lastWatchedAt
-                ELSE viewer_channel_lifetime_stats.lastWatchedAt
+            ON CONFLICT("viewerId", "channelId") DO UPDATE SET
+              "totalMessages" = viewer_channel_lifetime_stats."totalMessages" + excluded."totalMessages",
+              "totalChatMessages" = viewer_channel_lifetime_stats."totalChatMessages" + excluded."totalChatMessages",
+              "totalSubscriptions" = viewer_channel_lifetime_stats."totalSubscriptions" + excluded."totalSubscriptions",
+              "totalCheers" = viewer_channel_lifetime_stats."totalCheers" + excluded."totalCheers",
+              "totalBits" = viewer_channel_lifetime_stats."totalBits" + excluded."totalBits",
+              "lastWatchedAt" = CASE
+                WHEN viewer_channel_lifetime_stats."lastWatchedAt" IS NULL THEN excluded."lastWatchedAt"
+                WHEN excluded."lastWatchedAt" > viewer_channel_lifetime_stats."lastWatchedAt" THEN excluded."lastWatchedAt"
+                ELSE viewer_channel_lifetime_stats."lastWatchedAt"
               END,
-              updatedAt = CURRENT_TIMESTAMP
+              "updatedAt" = CURRENT_TIMESTAMP
           `);
         }
       });
@@ -1098,55 +1098,55 @@ export class ViewerMessageRepository {
 
             await prisma.$executeRaw(Prisma.sql`
               WITH src (
-                viewerId,
-                channelId,
-                totalMessages,
-                totalChatMessages,
-                totalSubscriptions,
-                totalCheers,
-                totalBits,
-                lastWatchedAt
+                "viewerId",
+                "channelId",
+                "totalMessages",
+                "totalChatMessages",
+                "totalSubscriptions",
+                "totalCheers",
+                "totalBits",
+                "lastWatchedAt"
               ) AS (
                 VALUES ${Prisma.join(lifetimeValues)}
               )
               INSERT INTO viewer_channel_lifetime_stats (
                 id,
-                viewerId,
-                channelId,
-                totalWatchTimeMinutes,
-                totalSessions,
-                avgSessionMinutes,
-                firstWatchedAt,
-                lastWatchedAt,
-                totalMessages,
-                totalChatMessages,
-                totalSubscriptions,
-                totalCheers,
-                totalBits,
-                trackingStartedAt,
-                trackingDays,
-                longestStreakDays,
-                currentStreakDays,
-                activeDaysLast30,
-                activeDaysLast90,
-                mostActiveMonthCount,
-                createdAt,
-                updatedAt
+                "viewerId",
+                "channelId",
+                "totalWatchTimeMinutes",
+                "totalSessions",
+                "avgSessionMinutes",
+                "firstWatchedAt",
+                "lastWatchedAt",
+                "totalMessages",
+                "totalChatMessages",
+                "totalSubscriptions",
+                "totalCheers",
+                "totalBits",
+                "trackingStartedAt",
+                "trackingDays",
+                "longestStreakDays",
+                "currentStreakDays",
+                "activeDaysLast30",
+                "activeDaysLast90",
+                "mostActiveMonthCount",
+                "createdAt",
+                "updatedAt"
               )
               SELECT
-                lower(hex(randomblob(16))) AS id,
-                src.viewerId,
-                src.channelId,
+                gen_random_uuid()::text AS id,
+                src."viewerId",
+                src."channelId",
                 0,
                 0,
                 0,
-                src.lastWatchedAt,
-                src.lastWatchedAt,
-                src.totalMessages,
-                src.totalChatMessages,
-                src.totalSubscriptions,
-                src.totalCheers,
-                src.totalBits,
+                src."lastWatchedAt",
+                src."lastWatchedAt",
+                src."totalMessages",
+                src."totalChatMessages",
+                src."totalSubscriptions",
+                src."totalCheers",
+                src."totalBits",
                 CURRENT_TIMESTAMP,
                 0,
                 0,
@@ -1158,18 +1158,18 @@ export class ViewerMessageRepository {
                 CURRENT_TIMESTAMP
               FROM src
               WHERE 1 = 1
-              ON CONFLICT(viewerId, channelId) DO UPDATE SET
-                totalMessages = viewer_channel_lifetime_stats.totalMessages + excluded.totalMessages,
-                totalChatMessages = viewer_channel_lifetime_stats.totalChatMessages + excluded.totalChatMessages,
-                totalSubscriptions = viewer_channel_lifetime_stats.totalSubscriptions + excluded.totalSubscriptions,
-                totalCheers = viewer_channel_lifetime_stats.totalCheers + excluded.totalCheers,
-                totalBits = viewer_channel_lifetime_stats.totalBits + excluded.totalBits,
-                lastWatchedAt = CASE
-                  WHEN viewer_channel_lifetime_stats.lastWatchedAt IS NULL THEN excluded.lastWatchedAt
-                  WHEN excluded.lastWatchedAt > viewer_channel_lifetime_stats.lastWatchedAt THEN excluded.lastWatchedAt
-                  ELSE viewer_channel_lifetime_stats.lastWatchedAt
+              ON CONFLICT("viewerId", "channelId") DO UPDATE SET
+                "totalMessages" = viewer_channel_lifetime_stats."totalMessages" + excluded."totalMessages",
+                "totalChatMessages" = viewer_channel_lifetime_stats."totalChatMessages" + excluded."totalChatMessages",
+                "totalSubscriptions" = viewer_channel_lifetime_stats."totalSubscriptions" + excluded."totalSubscriptions",
+                "totalCheers" = viewer_channel_lifetime_stats."totalCheers" + excluded."totalCheers",
+                "totalBits" = viewer_channel_lifetime_stats."totalBits" + excluded."totalBits",
+                "lastWatchedAt" = CASE
+                  WHEN viewer_channel_lifetime_stats."lastWatchedAt" IS NULL THEN excluded."lastWatchedAt"
+                  WHEN excluded."lastWatchedAt" > viewer_channel_lifetime_stats."lastWatchedAt" THEN excluded."lastWatchedAt"
+                  ELSE viewer_channel_lifetime_stats."lastWatchedAt"
                 END,
-                updatedAt = CURRENT_TIMESTAMP
+                "updatedAt" = CURRENT_TIMESTAMP
             `);
             logger.info(
               "ViewerMessage",

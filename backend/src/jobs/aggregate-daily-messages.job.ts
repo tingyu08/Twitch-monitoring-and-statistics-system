@@ -68,59 +68,59 @@ export async function aggregateDailyMessages(mode: AggregationMode = "increment"
     const conflictUpdateSql =
       mode === "replace"
         ? Prisma.sql`
-            totalMessages = excluded.totalMessages,
-            chatMessages = excluded.chatMessages,
+            "totalMessages" = excluded."totalMessages",
+            "chatMessages" = excluded."chatMessages",
             subscriptions = excluded.subscriptions,
             cheers = excluded.cheers,
-            giftSubs = excluded.giftSubs,
+            "giftSubs" = excluded."giftSubs",
             raids = excluded.raids,
-            totalBits = COALESCE(excluded.totalBits, 0),
-            updatedAt = CURRENT_TIMESTAMP
+            "totalBits" = COALESCE(excluded."totalBits", 0),
+            "updatedAt" = CURRENT_TIMESTAMP
           `
         : Prisma.sql`
-            totalMessages = viewer_channel_message_daily_aggs.totalMessages + excluded.totalMessages,
-            chatMessages = viewer_channel_message_daily_aggs.chatMessages + excluded.chatMessages,
+            "totalMessages" = viewer_channel_message_daily_aggs."totalMessages" + excluded."totalMessages",
+            "chatMessages" = viewer_channel_message_daily_aggs."chatMessages" + excluded."chatMessages",
             subscriptions = viewer_channel_message_daily_aggs.subscriptions + excluded.subscriptions,
             cheers = viewer_channel_message_daily_aggs.cheers + excluded.cheers,
-            giftSubs = viewer_channel_message_daily_aggs.giftSubs + excluded.giftSubs,
+            "giftSubs" = viewer_channel_message_daily_aggs."giftSubs" + excluded."giftSubs",
             raids = viewer_channel_message_daily_aggs.raids + excluded.raids,
-            totalBits = COALESCE(viewer_channel_message_daily_aggs.totalBits, 0) + COALESCE(excluded.totalBits, 0),
-            updatedAt = CURRENT_TIMESTAMP
+            "totalBits" = COALESCE(viewer_channel_message_daily_aggs."totalBits", 0) + COALESCE(excluded."totalBits", 0),
+            "updatedAt" = CURRENT_TIMESTAMP
           `;
 
     await prisma.$transaction(async (tx) => {
       const affectedRows = await tx.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_message_daily_aggs (
           id,
-          viewerId,
-          channelId,
+          "viewerId",
+          "channelId",
           date,
-          totalMessages,
-          chatMessages,
+          "totalMessages",
+          "chatMessages",
           subscriptions,
           cheers,
-          giftSubs,
+          "giftSubs",
           raids,
-          totalBits,
-          updatedAt
+          "totalBits",
+          "updatedAt"
         )
         SELECT
-          lower(hex(randomblob(16))) AS id,
-          viewerId,
-          channelId,
-          datetime(date(timestamp)) AS date,
-          COUNT(*) AS totalMessages,
-          SUM(CASE WHEN messageType = 'CHAT' THEN 1 ELSE 0 END) AS chatMessages,
-          SUM(CASE WHEN messageType = 'SUBSCRIPTION' THEN 1 ELSE 0 END) AS subscriptions,
-          SUM(CASE WHEN messageType = 'CHEER' THEN 1 ELSE 0 END) AS cheers,
-          SUM(CASE WHEN messageType = 'GIFT_SUBSCRIPTION' THEN 1 ELSE 0 END) AS giftSubs,
-          SUM(CASE WHEN messageType = 'RAID' THEN 1 ELSE 0 END) AS raids,
-          SUM(CASE WHEN messageType = 'CHEER' THEN COALESCE(bitsAmount, 0) ELSE 0 END) AS totalBits,
-          CURRENT_TIMESTAMP AS updatedAt
+          gen_random_uuid()::text AS id,
+          "viewerId",
+          "channelId",
+          DATE(timestamp) AS date,
+          COUNT(*) AS "totalMessages",
+          SUM(CASE WHEN "messageType" = 'CHAT' THEN 1 ELSE 0 END) AS "chatMessages",
+          SUM(CASE WHEN "messageType" = 'SUBSCRIPTION' THEN 1 ELSE 0 END) AS subscriptions,
+          SUM(CASE WHEN "messageType" = 'CHEER' THEN 1 ELSE 0 END) AS cheers,
+          SUM(CASE WHEN "messageType" = 'GIFT_SUBSCRIPTION' THEN 1 ELSE 0 END) AS "giftSubs",
+          SUM(CASE WHEN "messageType" = 'RAID' THEN 1 ELSE 0 END) AS raids,
+          SUM(CASE WHEN "messageType" = 'CHEER' THEN COALESCE("bitsAmount", 0) ELSE 0 END) AS "totalBits",
+          CURRENT_TIMESTAMP AS "updatedAt"
         FROM viewer_channel_messages
         WHERE timestamp >= ${fromDate} AND timestamp < ${now}
-        GROUP BY viewerId, channelId, datetime(date(timestamp))
-        ON CONFLICT(viewerId, channelId, date) DO UPDATE SET
+        GROUP BY "viewerId", "channelId", DATE(timestamp)
+        ON CONFLICT("viewerId", "channelId", date) DO UPDATE SET
           ${conflictUpdateSql}
       `);
       upsertCount = Number(affectedRows);

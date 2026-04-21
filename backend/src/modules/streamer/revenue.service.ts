@@ -180,22 +180,22 @@ export class RevenueService {
   private async refreshBitsDailyAgg(streamerId: string, startDateKey: string): Promise<void> {
     await this.runBitsDailyAggWithRetry("refreshBitsDailyAgg", async () => {
       await prisma.$executeRaw`
-        INSERT INTO cheer_daily_agg (streamerId, date, totalBits, eventCount, updatedAt)
+        INSERT INTO cheer_daily_agg ("streamerId", date, "totalBits", "eventCount", "updatedAt")
         SELECT
-          streamerId,
-          date(cheeredDate) as date,
-          COALESCE(SUM(bits), 0) as totalBits,
-          COUNT(*) as eventCount,
-          CURRENT_TIMESTAMP as updatedAt
+          "streamerId",
+          DATE("cheeredDate") as date,
+          COALESCE(SUM(bits), 0) as "totalBits",
+          COUNT(*) as "eventCount",
+          CURRENT_TIMESTAMP as "updatedAt"
         FROM cheer_events
-        WHERE streamerId = ${streamerId}
-          AND cheeredDate IS NOT NULL
-          AND date(cheeredDate) >= ${startDateKey}
-        GROUP BY streamerId, date(cheeredDate)
-        ON CONFLICT(streamerId, date) DO UPDATE SET
-          totalBits = excluded.totalBits,
-          eventCount = excluded.eventCount,
-          updatedAt = CURRENT_TIMESTAMP
+        WHERE "streamerId" = ${streamerId}
+          AND "cheeredDate" IS NOT NULL
+          AND DATE("cheeredDate") >= ${startDateKey}
+        GROUP BY "streamerId", DATE("cheeredDate")
+        ON CONFLICT("streamerId", date) DO UPDATE SET
+          "totalBits" = excluded."totalBits",
+          "eventCount" = excluded."eventCount",
+          "updatedAt" = CURRENT_TIMESTAMP
       `;
     });
   }
@@ -204,7 +204,7 @@ export class RevenueService {
     const rows = await prisma.$queryRaw<Array<{ count: bigint | number }>>`
       SELECT COUNT(1) as count
       FROM cheer_daily_agg
-      WHERE streamerId = ${streamerId}
+      WHERE "streamerId" = ${streamerId}
         AND date >= ${startDateKey}
     `;
 
@@ -559,16 +559,16 @@ export class RevenueService {
               }>
             >`
               SELECT
-                snapshotDate,
-                tier1Count,
-                tier2Count,
-                tier3Count,
-                totalSubscribers,
-                estimatedRevenue
+                "snapshotDate",
+                "tier1Count",
+                "tier2Count",
+                "tier3Count",
+                "totalSubscribers",
+                "estimatedRevenue"
               FROM subscription_snapshots
-              WHERE streamerId = ${streamerId}
-                AND snapshotDate >= ${startDate.toISOString()}
-              ORDER BY snapshotDate ASC
+              WHERE "streamerId" = ${streamerId}
+                AND "snapshotDate" >= ${startDate.toISOString()}
+              ORDER BY "snapshotDate" ASC
               LIMIT 90
             `
           );
@@ -636,10 +636,10 @@ export class RevenueService {
             >`
               SELECT
                 date,
-                totalBits,
-                eventCount
+                "totalBits",
+                "eventCount"
               FROM cheer_daily_agg
-              WHERE streamerId = ${streamerId}
+              WHERE "streamerId" = ${streamerId}
                 AND date >= ${startDateKey}
               ORDER BY date ASC
               LIMIT 90
@@ -705,10 +705,10 @@ export class RevenueService {
               }),
               prisma.$queryRaw<Array<{ totalBits: bigint | number | null; eventCount: bigint | number }>>`
                 SELECT
-                  COALESCE(SUM(totalBits), 0) as totalBits,
-                  COALESCE(SUM(eventCount), 0) as eventCount
+                  COALESCE(SUM("totalBits"), 0) as "totalBits",
+                  COALESCE(SUM("eventCount"), 0) as "eventCount"
                 FROM cheer_daily_agg
-                WHERE streamerId = ${streamerId}
+                WHERE "streamerId" = ${streamerId}
                   AND date >= ${startOfMonthKey}
               `,
             ])
