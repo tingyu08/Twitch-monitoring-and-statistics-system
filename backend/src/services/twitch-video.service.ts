@@ -65,25 +65,25 @@ export class TwurpleVideoService {
         prisma.$executeRaw(Prisma.sql`
       INSERT INTO videos (
         id,
-        twitchVideoId,
-        streamerId,
+        "twitchVideoId",
+        "streamerId",
         title,
         description,
         url,
-        thumbnailUrl,
-        viewCount,
+        "thumbnailUrl",
+        "viewCount",
         duration,
         language,
         type,
-        createdAt,
-        publishedAt
+        "createdAt",
+        "publishedAt"
       )
       VALUES ${rows}
-      ON CONFLICT(twitchVideoId) DO UPDATE SET
+      ON CONFLICT("twitchVideoId") DO UPDATE SET
         title = excluded.title,
         description = excluded.description,
-        thumbnailUrl = excluded.thumbnailUrl,
-        viewCount = excluded.viewCount
+        "thumbnailUrl" = excluded."thumbnailUrl",
+        "viewCount" = excluded."viewCount"
     `)
       )
     );
@@ -134,25 +134,25 @@ export class TwurpleVideoService {
         prisma.$executeRaw(Prisma.sql`
       INSERT INTO clips (
         id,
-        twitchClipId,
-        streamerId,
-        creatorId,
-        creatorName,
-        videoId,
-        gameId,
+        "twitchClipId",
+        "streamerId",
+        "creatorId",
+        "creatorName",
+        "videoId",
+        "gameId",
         title,
         url,
-        embedUrl,
-        thumbnailUrl,
-        viewCount,
+        "embedUrl",
+        "thumbnailUrl",
+        "viewCount",
         duration,
-        createdAt
+        "createdAt"
       )
       VALUES ${rows}
-      ON CONFLICT(twitchClipId) DO UPDATE SET
+      ON CONFLICT("twitchClipId") DO UPDATE SET
         title = excluded.title,
-        viewCount = excluded.viewCount,
-        thumbnailUrl = excluded.thumbnailUrl
+        "viewCount" = excluded."viewCount",
+        "thumbnailUrl" = excluded."thumbnailUrl"
     `)
       )
     );
@@ -194,26 +194,26 @@ export class TwurpleVideoService {
       prisma.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_videos (
           id,
-          twitchVideoId,
-          channelId,
+          "twitchVideoId",
+          "channelId",
           title,
           url,
-          thumbnailUrl,
-          viewCount,
+          "thumbnailUrl",
+          "viewCount",
           duration,
-          publishedAt,
-          syncedAt
+          "publishedAt",
+          "syncedAt"
         )
         VALUES ${rows}
-        ON CONFLICT(twitchVideoId) DO UPDATE SET
-          channelId = excluded.channelId,
+        ON CONFLICT("twitchVideoId") DO UPDATE SET
+          "channelId" = excluded."channelId",
           title = excluded.title,
           url = excluded.url,
-          thumbnailUrl = excluded.thumbnailUrl,
-          viewCount = excluded.viewCount,
+          "thumbnailUrl" = excluded."thumbnailUrl",
+          "viewCount" = excluded."viewCount",
           duration = excluded.duration,
-          publishedAt = excluded.publishedAt,
-          syncedAt = excluded.syncedAt
+          "publishedAt" = excluded."publishedAt",
+          "syncedAt" = excluded."syncedAt"
       `)
     );
   }
@@ -256,28 +256,28 @@ export class TwurpleVideoService {
       prisma.$executeRaw(Prisma.sql`
         INSERT INTO viewer_channel_clips (
           id,
-          twitchClipId,
-          channelId,
-          creatorName,
+          "twitchClipId",
+          "channelId",
+          "creatorName",
           title,
           url,
-          thumbnailUrl,
-          viewCount,
+          "thumbnailUrl",
+          "viewCount",
           duration,
-          createdAt,
-          syncedAt
+          "createdAt",
+          "syncedAt"
         )
         VALUES ${rows}
-        ON CONFLICT(twitchClipId) DO UPDATE SET
-          channelId = excluded.channelId,
-          creatorName = excluded.creatorName,
+        ON CONFLICT("twitchClipId") DO UPDATE SET
+          "channelId" = excluded."channelId",
+          "creatorName" = excluded."creatorName",
           title = excluded.title,
           url = excluded.url,
-          thumbnailUrl = excluded.thumbnailUrl,
-          viewCount = excluded.viewCount,
+          "thumbnailUrl" = excluded."thumbnailUrl",
+          "viewCount" = excluded."viewCount",
           duration = excluded.duration,
-          createdAt = excluded.createdAt,
-          syncedAt = excluded.syncedAt
+          "createdAt" = excluded."createdAt",
+          "syncedAt" = excluded."syncedAt"
       `)
     );
   }

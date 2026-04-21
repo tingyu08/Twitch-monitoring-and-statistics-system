@@ -118,13 +118,13 @@ async function buildHeatmapFromSessionsSql(
     WITH RECURSIVE expanded("sessionId", "bucketStart", "endedAt") AS (
       SELECT
         id,
-        startedAt,
-        startedAt + (durationSeconds || ' seconds')::interval
+        "startedAt",
+        "startedAt" + ("durationSeconds" || ' seconds')::interval
       FROM stream_sessions
       WHERE "channelId" = ${channelId}
-        AND startedAt >= ${cutoffDate}
-        AND durationSeconds IS NOT NULL
-        AND durationSeconds > 0
+        AND "startedAt" >= ${cutoffDate}
+        AND "durationSeconds" IS NOT NULL
+        AND "durationSeconds" > 0
       UNION ALL
       SELECT
         "sessionId",
@@ -344,8 +344,8 @@ export async function getStreamerSummary(
 
       const rows = await prisma.$queryRaw<StreamerSummaryRow[]>(Prisma.sql`
         SELECT
-          SUM(COALESCE("durationSeconds", 0)) AS totalSeconds,
-          COUNT(*) AS sessionCount
+          SUM(COALESCE("durationSeconds", 0)) AS "totalSeconds",
+          COUNT(*) AS "sessionCount"
         FROM stream_sessions
         WHERE "channelId" = ${channelId}
           AND "startedAt" >= ${cutoffDate}
@@ -614,15 +614,15 @@ function toNumber(value: number | bigint | string | null | undefined): number {
 async function getGameStatsByChannelId(channelId: string, cutoffDate: Date): Promise<GameStats[]> {
   const rows = await prisma.$queryRaw<GameStatsRow[]>(Prisma.sql`
     SELECT
-      COALESCE(category, 'Uncategorized') AS gameName,
-      SUM(COALESCE("durationSeconds", 0)) AS totalSeconds,
-      SUM(COALESCE("avgViewers", 0) * COALESCE("durationSeconds", 0)) AS weightedViewersSum,
-      MAX(COALESCE("peakViewers", 0)) AS peakViewers,
-      COUNT(*) AS streamCount
+      COALESCE(category, 'Uncategorized') AS "gameName",
+      SUM(COALESCE("durationSeconds", 0)) AS "totalSeconds",
+      SUM(COALESCE("avgViewers", 0) * COALESCE("durationSeconds", 0)) AS "weightedViewersSum",
+      MAX(COALESCE("peakViewers", 0)) AS "peakViewers",
+      COUNT(*) AS "streamCount"
     FROM stream_sessions
     WHERE "channelId" = ${channelId} AND "startedAt" >= ${cutoffDate}
     GROUP BY COALESCE(category, 'Uncategorized')
-    ORDER BY totalSeconds DESC
+    ORDER BY "totalSeconds" DESC
   `);
 
   if (rows.length === 0) {

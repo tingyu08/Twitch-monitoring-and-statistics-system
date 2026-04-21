@@ -335,12 +335,12 @@ export class LifetimeStatsAggregatorService {
             LIMIT 1
           )
           SELECT
-            MIN(d) AS trackingStartedAt,
-            COUNT(*) AS trackingDays,
-            COALESCE(SUM(CASE WHEN d >= ${thirtyDaysAgo}::date THEN 1 ELSE 0 END), 0) AS activeDaysLast30,
-            COALESCE(SUM(CASE WHEN d >= ${ninetyDaysAgo}::date THEN 1 ELSE 0 END), 0) AS activeDaysLast90,
-            (SELECT month FROM best_month) AS mostActiveMonth,
-            COALESCE((SELECT cnt FROM best_month), 0) AS mostActiveMonthCount
+            MIN(d) AS "trackingStartedAt",
+            COUNT(*) AS "trackingDays",
+            COALESCE(SUM(CASE WHEN d >= ${thirtyDaysAgo}::date THEN 1 ELSE 0 END), 0) AS "activeDaysLast30",
+            COALESCE(SUM(CASE WHEN d >= ${ninetyDaysAgo}::date THEN 1 ELSE 0 END), 0) AS "activeDaysLast90",
+            (SELECT month FROM best_month) AS "mostActiveMonth",
+            COALESCE((SELECT cnt FROM best_month), 0) AS "mostActiveMonthCount"
           FROM active_dates
         `),
         prisma.$queryRaw<StreakSummaryRow[]>(Prisma.sql`
@@ -386,7 +386,7 @@ export class LifetimeStatsAggregatorService {
             FROM active_dates
           )
           SELECT
-            COALESCE((SELECT MAX(streak_len) FROM streaks), 0) AS longestStreakDays,
+            COALESCE((SELECT MAX(streak_len) FROM streaks), 0) AS "longestStreakDays",
             CASE
               WHEN (SELECT last_d FROM latest) IS NULL THEN 0
               WHEN (CURRENT_DATE - (SELECT last_d FROM latest)::date) <= 1
@@ -401,7 +401,7 @@ export class LifetimeStatsAggregatorService {
                   0
                 )
               ELSE 0
-            END AS currentStreakDays
+            END AS "currentStreakDays"
         `),
       ]);
 
@@ -502,14 +502,14 @@ export class LifetimeStatsAggregatorService {
       ranked AS (
         SELECT
           id,
-          PERCENT_RANK() OVER (ORDER BY "totalWatchTimeMinutes", id) * 100.0 AS watchPercentile,
-          PERCENT_RANK() OVER (ORDER BY "totalMessages", id) * 100.0 AS messagePercentile
+          PERCENT_RANK() OVER (ORDER BY "totalWatchTimeMinutes", id) * 100.0 AS "watchPercentile",
+          PERCENT_RANK() OVER (ORDER BY "totalMessages", id) * 100.0 AS "messagePercentile"
         FROM base
       )
       UPDATE viewer_channel_lifetime_stats
       SET
-        "watchTimePercentile" = (SELECT ranked.watchPercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
-        "messagePercentile" = (SELECT ranked.messagePercentile FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id)
+        "watchTimePercentile" = (SELECT ranked."watchPercentile" FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id),
+        "messagePercentile" = (SELECT ranked."messagePercentile" FROM ranked WHERE ranked.id = viewer_channel_lifetime_stats.id)
       WHERE "channelId" = ${channelId}
         AND id IN (SELECT id FROM changed)
     `);

@@ -330,8 +330,8 @@ export class RevenueController {
     >`
       SELECT
         "cheeredDate" as date,
-        SUM(bits) as totalBits,
-        COUNT(*) as eventCount
+        SUM(bits) as "totalBits",
+        COUNT(*) as "eventCount"
       FROM cheer_events
       WHERE "streamerId" = ${streamerId}
         AND "cheeredDate" >= ${startDateOnly.toISOString()}

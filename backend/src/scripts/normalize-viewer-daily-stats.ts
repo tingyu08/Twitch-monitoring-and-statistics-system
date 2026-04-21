@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   const beforeDuplicateDays = await queryCount(Prisma.sql`
       SELECT COUNT(*) AS c
       FROM (
-      SELECT "viewerId", "channelId", date::date AS day, COUNT(*) AS rowsPerDay
+      SELECT "viewerId", "channelId", date::date AS day, COUNT(*) AS "rowsPerDay"
       FROM viewer_channel_daily_stats
       GROUP BY "viewerId", "channelId", date::date
       HAVING COUNT(*) > 1
@@ -160,7 +160,7 @@ async function main(): Promise<void> {
   const afterDuplicateDays = await queryCount(Prisma.sql`
     SELECT COUNT(*) AS c
     FROM (
-      SELECT "viewerId", "channelId", date::date AS day, COUNT(*) AS rowsPerDay
+      SELECT "viewerId", "channelId", date::date AS day, COUNT(*) AS "rowsPerDay"
       FROM viewer_channel_daily_stats
       GROUP BY "viewerId", "channelId", date::date
       HAVING COUNT(*) > 1
