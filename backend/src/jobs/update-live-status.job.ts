@@ -296,11 +296,11 @@ async function updateChannelsWithChanges(
 
           const values = batch.map((update) => {
             const isLiveValue =
-              typeof update.isLive === "boolean" ? (update.isLive ? 1 : 0) : null;
+              typeof update.isLive === "boolean" ? update.isLive : null;
 
             return Prisma.sql`(
               ${update.twitchId},
-              ${isLiveValue},
+              ${isLiveValue}::boolean,
               ${update.viewerCount},
               ${update.title || null},
               ${update.gameName || null},
@@ -379,7 +379,7 @@ export function buildChangedChannelUpdateQuery(values: ReturnType<typeof Prisma.
     SET
       "isLive" = COALESCE(
         (
-          SELECT CASE WHEN updates."isLiveValue" = 1 THEN true ELSE false END
+          SELECT updates."isLiveValue"
           FROM updates
           WHERE updates."twitchChannelId" = channels."twitchChannelId"
         ),
@@ -422,7 +422,7 @@ export function buildChangedChannelUpdateQuery(values: ReturnType<typeof Prisma.
         FROM updates
         WHERE updates."twitchChannelId" = channels."twitchChannelId"
           AND (
-            (updates."isLiveValue" IS NOT NULL AND "isLive" != CASE WHEN updates."isLiveValue" = 1 THEN true ELSE false END)
+            (updates."isLiveValue" IS NOT NULL AND "isLive" != updates."isLiveValue")
             OR COALESCE("currentViewerCount", -1) != COALESCE(updates."viewerCount", -1)
             OR COALESCE("currentTitle", '') != COALESCE(updates."titleValue", '')
             OR COALESCE("currentGameName", '') != COALESCE(updates."gameNameValue", '')
