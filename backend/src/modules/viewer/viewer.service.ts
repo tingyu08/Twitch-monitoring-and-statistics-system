@@ -416,7 +416,7 @@ async function fetchSummaryRows(viewerId: string): Promise<ViewerChannelSummaryR
   try {
     return await prisma.$queryRaw<ViewerChannelSummaryRow[]>(Prisma.sql`
       WITH daily_watch AS (
-        SELECT "viewerId", "channelId", SUM("watchSeconds") / 60 AS "dailyWatchMin"
+        SELECT "viewerId", "channelId", (SUM("watchSeconds")::float8 / 60) AS "dailyWatchMin"
         FROM viewer_channel_daily_stats
         WHERE "viewerId" = ${viewerId}
         GROUP BY "viewerId", "channelId"
@@ -434,10 +434,10 @@ async function fetchSummaryRows(viewerId: string): Promise<ViewerChannelSummaryR
         COALESCE(c."currentStreamStartedAt", vcs."streamStartedAt") AS "streamStartedAt",
         vcs."lastWatched",
         GREATEST(
-          COALESCE(l."totalWatchTimeMinutes", 0),
-          COALESCE(dw."dailyWatchMin", 0),
-          COALESCE(vcs."totalWatchMin", 0)
-        ) AS "totalWatchMin",
+          COALESCE(l."totalWatchTimeMinutes"::float8, 0),
+          COALESCE(dw."dailyWatchMin"::float8, 0),
+          COALESCE(vcs."totalWatchMin"::float8, 0)
+        )::float8 AS "totalWatchMin",
         COALESCE(l."totalMessages", vcs."messageCount") AS "messageCount",
         vcs."isExternal",
         vcs."followedAt",
@@ -618,20 +618,20 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
       const insertChunk = inserts.slice(i, i + SQLITE_SUMMARY_WRITE_CHUNK_SIZE);
       const values = insertChunk.map((row) =>
         Prisma.sql`(
-          ${viewerId},
-          ${row.channelId},
-          ${row.channelName},
-          ${row.displayName},
-          ${row.avatarUrl},
-          ${row.category},
-          ${row.isLive},
-          ${row.viewerCount},
-          ${row.streamStartedAt},
-          ${row.lastWatched},
-          ${row.totalWatchMin},
-          ${row.messageCount},
-          ${row.isExternal},
-          ${row.followedAt},
+          ${viewerId}::text,
+          ${row.channelId}::text,
+          ${row.channelName}::text,
+          ${row.displayName}::text,
+          ${row.avatarUrl}::text,
+          ${row.category}::text,
+          ${row.isLive}::boolean,
+          ${row.viewerCount}::integer,
+          ${row.streamStartedAt}::timestamptz,
+          ${row.lastWatched}::timestamptz,
+          ${row.totalWatchMin}::float8,
+          ${row.messageCount}::integer,
+          ${row.isExternal}::boolean,
+          ${row.followedAt}::timestamptz,
           CURRENT_TIMESTAMP
         )`
       );
@@ -662,19 +662,19 @@ async function persistSummaryRows(viewerId: string, rows: FollowedChannelResult[
       const updateChunk = updates.slice(i, i + SQLITE_SUMMARY_WRITE_CHUNK_SIZE);
       const values = updateChunk.map((row) =>
         Prisma.sql`(
-          ${row.channelId},
-          ${row.channelName},
-          ${row.displayName},
-          ${row.avatarUrl},
-          ${row.category},
-          ${row.isLive},
-          ${row.viewerCount},
-          ${row.streamStartedAt},
-          ${row.lastWatched},
-          ${row.totalWatchMin},
-          ${row.messageCount},
-          ${row.isExternal},
-          ${row.followedAt}
+          ${row.channelId}::text,
+          ${row.channelName}::text,
+          ${row.displayName}::text,
+          ${row.avatarUrl}::text,
+          ${row.category}::text,
+          ${row.isLive}::boolean,
+          ${row.viewerCount}::integer,
+          ${row.streamStartedAt}::timestamptz,
+          ${row.lastWatched}::timestamptz,
+          ${row.totalWatchMin}::float8,
+          ${row.messageCount}::integer,
+          ${row.isExternal}::boolean,
+          ${row.followedAt}::timestamptz
         )`
       );
 
@@ -979,9 +979,9 @@ export async function refreshViewerChannelSummaryForChannels(
     for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
       const chunk = deduped.slice(i, i + CHUNK_SIZE);
       const values = chunk.map((snapshot) =>
-        Prisma.sql`(${snapshot.channelId}, ${snapshot.isLive}, ${snapshot.viewerCount}, ${
+        Prisma.sql`(${snapshot.channelId}::text, ${snapshot.isLive}::boolean, ${snapshot.viewerCount}::integer, ${
           snapshot.streamStartedAt
-        }, ${snapshot.category})`
+        }::timestamptz, ${snapshot.category}::text)`
       );
 
       await prisma.$executeRaw(Prisma.sql`
@@ -998,9 +998,9 @@ export async function refreshViewerChannelSummaryForChannels(
         WHERE "channelId" IN (SELECT "channelId" FROM updates)
           AND (
             "isLive" IS DISTINCT FROM (SELECT updates."isLive" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId")
-            OR COALESCE("viewerCount", -1) != COALESCE((SELECT updates."viewerCount" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"), -1)
-            OR COALESCE("streamStartedAt", '1970-01-01 00:00:00') != COALESCE((SELECT updates."streamStartedAt" FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"), '1970-01-01 00:00:00')
-            OR COALESCE(category, '') != COALESCE((SELECT updates.category FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId"), '')
+            OR "viewerCount" IS DISTINCT FROM (SELECT updates."viewerCount"::integer FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId")
+            OR "streamStartedAt" IS DISTINCT FROM (SELECT updates."streamStartedAt"::timestamptz FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId")
+            OR category IS DISTINCT FROM (SELECT updates.category FROM updates WHERE updates."channelId" = viewer_channel_summary."channelId")
           )
       `);
     }
