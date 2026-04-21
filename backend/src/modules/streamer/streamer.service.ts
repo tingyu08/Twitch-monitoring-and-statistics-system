@@ -118,8 +118,8 @@ async function buildHeatmapFromSessionsSql(
     WITH RECURSIVE expanded("sessionId", "bucketStart", "endedAt") AS (
       SELECT
         id,
-        "startedAt",
-        "startedAt" + ("durationSeconds" || ' seconds')::interval
+        "startedAt"::timestamp,
+        ("startedAt" + ("durationSeconds" || ' seconds')::interval)::timestamp
       FROM stream_sessions
       WHERE "channelId" = ${channelId}
         AND "startedAt" >= ${cutoffDate}
