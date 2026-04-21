@@ -291,12 +291,12 @@ export class ChannelStatsSyncJob {
           stats._count._all > 0 ? Math.round((stats._sum.avgViewers ?? 0) / stats._count._all) : null;
 
         return Prisma.sql`(
-          ${stats.channelId},
-          ${today},
-          ${stats._sum.durationSeconds ?? 0},
-          ${stats._count._all},
-          ${avgViewers},
-          ${stats._max.peakViewers ?? 0}
+          ${stats.channelId}::text,
+          ${today}::date,
+          ${stats._sum.durationSeconds ?? 0}::integer,
+          ${stats._count._all}::integer,
+          ${avgViewers}::integer,
+          ${stats._max.peakViewers ?? 0}::integer
         )`;
       });
 

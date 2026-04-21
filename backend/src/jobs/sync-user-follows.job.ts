@@ -879,7 +879,7 @@ export class SyncUserFollowsJob {
 
       if (streamersToUpsert.length > 0) {
         const streamerRows = streamersToUpsert.map((streamerData) =>
-          Prisma.sql`(${randomUUID()}, ${streamerData.twitchUserId}, ${streamerData.displayName}, ${streamerData.avatarUrl}, ${now})`
+          Prisma.sql`(${randomUUID()}::text, ${streamerData.twitchUserId}::text, ${streamerData.displayName}::text, ${streamerData.avatarUrl}::text, ${now}::timestamptz)`
         );
 
         await tx.$executeRaw(
@@ -919,7 +919,7 @@ export class SyncUserFollowsJob {
           }
 
           channelRows.push(
-            Prisma.sql`(${randomUUID()}, ${channelData.twitchChannelId}, ${channelData.channelName}, ${channelData.channelUrl}, ${streamer.id}, ${"external"}, ${1}, ${now})`
+            Prisma.sql`(${randomUUID()}::text, ${channelData.twitchChannelId}::text, ${channelData.channelName}::text, ${channelData.channelUrl}::text, ${streamer.id}::text, ${"external"}::text, ${true}::boolean, ${now}::timestamptz)`
           );
         }
 
@@ -996,9 +996,9 @@ export class SyncUserFollowsJob {
 
       try {
         const rows = batch.map((followData) =>
-          Prisma.sql`(${randomUUID()}, ${followData.userId}, ${followData.userType}, ${
+          Prisma.sql`(${randomUUID()}::text, ${followData.userId}::text, ${followData.userType}::text, ${
             followData.channelId
-          }, ${followData.followedAt})`
+          }::text, ${followData.followedAt}::timestamptz)`
         );
 
         const insertedCount = await retryDatabaseOperation(() =>
@@ -1179,9 +1179,9 @@ export async function triggerFollowSyncForUser(
 
       const rows = followsToUpsert.map(
         (followData) =>
-          Prisma.sql`(${randomUUID()}, ${followData.userId}, ${followData.userType}, ${
+          Prisma.sql`(${randomUUID()}::text, ${followData.userId}::text, ${followData.userType}::text, ${
             followData.channelId
-          }, ${followData.followedAt})`
+          }::text, ${followData.followedAt}::timestamptz)`
       );
 
       try {
@@ -1323,9 +1323,9 @@ export async function triggerFollowSyncForUser(
 
               if (streamersToUpsert.size > 0) {
                 const streamerRows = [...streamersToUpsert.values()].map((streamer) =>
-                  Prisma.sql`(${randomUUID()}, ${streamer.twitchUserId}, ${streamer.displayName}, ${
+                  Prisma.sql`(${randomUUID()}::text, ${streamer.twitchUserId}::text, ${streamer.displayName}::text, ${
                     streamer.avatarUrl ?? null
-                  }, ${now})`
+                  }::text, ${now}::timestamptz)`
                 );
 
                 await tx.$executeRaw(
@@ -1363,9 +1363,9 @@ export async function triggerFollowSyncForUser(
                   }
 
                   channelRows.push(
-                    Prisma.sql`(${randomUUID()}, ${channelData.twitchChannelId}, ${channelData.channelName}, ${
+                    Prisma.sql`(${randomUUID()}::text, ${channelData.twitchChannelId}::text, ${channelData.channelName}::text, ${
                       channelData.channelUrl ?? null
-                    }, ${streamerId}, ${"external"}, ${1}, ${now})`
+                    }::text, ${streamerId}::text, ${"external"}::text, ${true}::boolean, ${now}::timestamptz)`
                   );
                 }
 
