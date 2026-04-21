@@ -243,7 +243,7 @@ class TwurpleEventSubService {
       }
 
       const values = entries.map(([, item]) =>
-        Prisma.sql`(${item.streamerId}, ${item.date}, ${item.totalBits}, ${item.eventCount}, CURRENT_TIMESTAMP)`
+        Prisma.sql`(${item.streamerId}::text, ${item.date}::date, ${item.totalBits}::integer, ${item.eventCount}::integer, CURRENT_TIMESTAMP)`
       );
 
       if (values.length > 0) {

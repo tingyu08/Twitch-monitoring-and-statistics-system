@@ -854,7 +854,7 @@ export class ViewerMessageRepository {
         /* istanbul ignore next - large SQL upsert block is validated via higher-level flush tests */
         if (messageAggRows.length > 0) {
           const aggValues = messageAggRows.map((agg) =>
-            Prisma.sql`(${agg.viewerId}, ${agg.channelId}, ${agg.date}::timestamptz, ${agg.totalMessages}::integer, ${
+            Prisma.sql`(${agg.viewerId}::text, ${agg.channelId}::text, ${agg.date}::timestamptz, ${agg.totalMessages}::integer, ${
               agg.chatMessages
             }::integer, ${agg.subscriptions}::integer, ${agg.cheers}::integer, ${agg.giftSubs}::integer, ${agg.raids}::integer, ${agg.totalBits}::integer)`
           );
@@ -968,7 +968,7 @@ export class ViewerMessageRepository {
         /* istanbul ignore next - large SQL upsert block is validated via higher-level flush tests */
         if (lifetimeRows.length > 0) {
           const lifetimeValues = lifetimeRows.map((lifetime) =>
-            Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}::integer, ${
+            Prisma.sql`(${lifetime.viewerId}::text, ${lifetime.channelId}::text, ${lifetime.totalMessages}::integer, ${
               lifetime.totalChatMessages
             }::integer, ${lifetime.totalSubscriptions}::integer, ${lifetime.totalCheers}::integer, ${lifetime.totalBits}::integer, ${
               lifetime.lastWatchedAt
@@ -1102,7 +1102,7 @@ export class ViewerMessageRepository {
           /* istanbul ignore next - fallback SQL retry block is defensive recovery logic */
           if (lifetimeRows.length > 0) {
             const lifetimeValues = lifetimeRows.map((lifetime) =>
-              Prisma.sql`(${lifetime.viewerId}, ${lifetime.channelId}, ${lifetime.totalMessages}::integer, ${
+              Prisma.sql`(${lifetime.viewerId}::text, ${lifetime.channelId}::text, ${lifetime.totalMessages}::integer, ${
                 lifetime.totalChatMessages
               }::integer, ${lifetime.totalSubscriptions}::integer, ${lifetime.totalCheers}::integer, ${lifetime.totalBits}::integer, ${
                 lifetime.lastWatchedAt

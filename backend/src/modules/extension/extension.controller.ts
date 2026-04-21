@@ -178,9 +178,9 @@ export async function flushHeartbeatBuffer(): Promise<void> {
     try {
       const pendingByDedupKey = new Map(allPending.map((p) => [p.dedupKey, p]));
       const dedupInsertRows = allPending.map((pending) =>
-        Prisma.sql`(${randomUUID()}, ${pending.dedupKey}, ${pending.viewerId}, ${pending.channelId}, ${
+        Prisma.sql`(${randomUUID()}::text, ${pending.dedupKey}::text, ${pending.viewerId}::text, ${pending.channelId}::text, ${
           pending.heartbeatTimestamp
-        }, ${pending.watchSeconds})`
+        }::timestamptz, ${pending.watchSeconds}::integer)`
       );
 
       const insertedRows = await prisma.$queryRaw<Array<{ dedupKey: string }>>(Prisma.sql`
@@ -235,12 +235,12 @@ export async function flushHeartbeatBuffer(): Promise<void> {
 
     const aggregated = Array.from(aggregatedByDay.values());
     const dailyRows = aggregated.map((pending) =>
-      Prisma.sql`(${randomUUID()}, ${pending.viewerId}, ${pending.channelId}, ${pending.date}, ${
+      Prisma.sql`(${randomUUID()}::text, ${pending.viewerId}::text, ${pending.channelId}::text, ${pending.date}::date, ${
         pending.watchSeconds
-      }, ${"extension"}, ${new Date()})`
+      }::integer, ${"extension"}::text, ${new Date()}::timestamptz)`
     );
     const lifetimeRows = aggregated.map((pending) =>
-      Prisma.sql`(${pending.viewerId}, ${pending.channelId}, ${pending.lastWatchedAt}, ${pending.watchSeconds})`
+      Prisma.sql`(${pending.viewerId}::text, ${pending.channelId}::text, ${pending.lastWatchedAt}::timestamptz, ${pending.watchSeconds}::integer)`
     );
 
     const acceptedHeartbeats = await prisma.$transaction(async (tx) => {
