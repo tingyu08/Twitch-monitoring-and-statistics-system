@@ -160,15 +160,25 @@ describe("DataRetentionJob", () => {
       process.env.STREAM_METRIC_RAW_RETENTION_DAYS = "7";
       process.env.STREAM_METRIC_DOWNSAMPLE_BATCH_SIZE = "50";
       try {
-        // 設定值在模組載入時讀取，要重新載入；重新載入後的 mock 也是新的一份
-        jest.resetModules();
-        const { DataRetentionJob: IsolatedJob } = await import("../data-retention.job");
-        const isolatedExecuteRaw = (await import("../../db/prisma")).prisma
-          .$executeRaw as unknown as jest.Mock;
-        const isolatedDeletion = (await import("../../services/account-deletion.service"))
-          .accountDeletionService.executeExpiredDeletions as jest.Mock;
-        const isolatedExports = (await import("../../services/data-export.service"))
-          .dataExportService.cleanupExpiredExports as jest.Mock;
+        // 設定值在模組載入時讀取，要在獨立 registry 重新載入；裡面的 mock 也是新的一份。
+        // npm test 開了 --experimental-vm-modules，await import() 會走 ESM 路徑而失敗，
+        // 所以照 config/__tests__/env.test.ts 的做法用 require
+        let IsolatedJob!: typeof DataRetentionJob;
+        let isolatedExecuteRaw!: jest.Mock;
+        let isolatedDeletion!: jest.Mock;
+        let isolatedExports!: jest.Mock;
+        jest.isolateModules(() => {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          IsolatedJob = require("../data-retention.job").DataRetentionJob;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          isolatedExecuteRaw = require("../../db/prisma").prisma.$executeRaw;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          isolatedDeletion = require("../../services/account-deletion.service")
+            .accountDeletionService.executeExpiredDeletions;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          isolatedExports = require("../../services/data-export.service").dataExportService
+            .cleanupExpiredExports;
+        });
         isolatedDeletion.mockResolvedValue({ processed: 0, success: 0, failed: 0 });
         isolatedExports.mockResolvedValue(0);
         isolatedExecuteRaw.mockResolvedValue(0);

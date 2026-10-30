@@ -27,17 +27,24 @@ jest.mock("../../utils/logger", () => ({
 
 type PrismaModule = typeof import("../prisma");
 
-// prisma.ts 在載入時就讀 DATABASE_URL 並寫 log，每次都要重新載入
-async function loadPrismaModule(databaseUrl: string): Promise<{
+// prisma.ts 在載入時就讀 DATABASE_URL 並寫 log，每次都要在獨立 registry 重新載入。
+// npm test 開了 --experimental-vm-modules，await import() 會走 ESM 路徑而失敗，
+// 所以照 config/__tests__/env.test.ts 的做法用 require
+function loadPrismaModule(databaseUrl: string): {
   mod: PrismaModule;
   infoLogs: string[];
-}> {
+} {
   const previous = process.env.DATABASE_URL;
   process.env.DATABASE_URL = databaseUrl;
   try {
-    jest.resetModules();
-    const mod = await import("../prisma");
-    const info = (await import("../../utils/logger")).logger.info as jest.Mock;
+    let mod!: PrismaModule;
+    let info!: jest.Mock;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      mod = require("../prisma");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      info = require("../../utils/logger").logger.info;
+    });
     return {
       mod,
       infoLogs: info.mock.calls.map((args: unknown[]) => args.map(String).join(" ")),
@@ -54,10 +61,8 @@ async function loadPrismaModule(databaseUrl: string): Promise<{
 describe("describeDatabaseTarget", () => {
   let describeDatabaseTarget: PrismaModule["describeDatabaseTarget"];
 
-  beforeAll(async () => {
-    ({ describeDatabaseTarget } = (
-      await loadPrismaModule("postgresql://u:p@localhost:5432/db")
-    ).mod);
+  beforeAll(() => {
+    ({ describeDatabaseTarget } = loadPrismaModule("postgresql://u:p@localhost:5432/db").mod);
   });
 
   it("顯示主機、埠與資料庫名稱", () => {
@@ -92,8 +97,8 @@ describe("describeDatabaseTarget", () => {
 });
 
 describe("db/prisma 啟動 log", () => {
-  it("印出實際連線的主機，不再寫死 Supabase，也不洩漏密碼", async () => {
-    const { infoLogs } = await loadPrismaModule("postgresql://twitch:s3cret@twitch-db:5432/twitch");
+  it("印出實際連線的主機，不再寫死 Supabase，也不洩漏密碼", () => {
+    const { infoLogs } = loadPrismaModule("postgresql://twitch:s3cret@twitch-db:5432/twitch");
 
     const dbLog = infoLogs.find((line) => line.includes("資料庫"));
     expect(dbLog).toContain("PostgreSQL @ twitch-db:5432/twitch");

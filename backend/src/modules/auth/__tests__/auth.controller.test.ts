@@ -6,6 +6,7 @@ import * as JwtUtils from "../jwt.utils";
 import * as ViewerAuthSnapshotService from "../../viewer/viewer-auth-snapshot.service";
 import crypto from "crypto";
 import axios from "axios";
+import { env } from "../../../config/env";
 
 // Must mock prisma before auth modules are loaded (auth.controller -> auth.service -> prisma)
 jest.mock("../../../db/prisma", () => ({
@@ -344,7 +345,8 @@ describe("AuthController", () => {
     });
 
     it("should pass redirectUri to handleStreamerTwitchCallback when valid", async () => {
-      const allowedUri = process.env.TWITCH_REDIRECT_URI || "http://localhost:3001/auth/callback";
+      // 以程式實際採用的設定為準（config/env 在未設定時預設 localhost:3000，不是 3001）
+      const allowedUri = env.twitchRedirectUri;
       mockReq.body = { code: "auth_code", redirectUri: allowedUri };
       mockReq.cookies = {};
 

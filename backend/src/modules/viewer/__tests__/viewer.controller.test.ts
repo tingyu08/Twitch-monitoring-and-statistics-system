@@ -356,7 +356,7 @@ describe("ViewerController", () => {
 
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         "ViewerAPI",
-        "Slow query: 251ms for channel channel-1"
+        "查詢偏慢：頻道 channel-1 耗時 251ms"
       );
       nowSpy.mockRestore();
     });
@@ -374,7 +374,7 @@ describe("ViewerController", () => {
 
       expect(mockedLogger.error).toHaveBeenCalledWith(
         "ViewerAPI",
-        "Error getting viewer stats:",
+        "取得觀眾統計失敗",
         expect.any(Error)
       );
       expect(res.status).toHaveBeenCalledWith(500);
@@ -435,7 +435,7 @@ describe("ViewerController", () => {
 
       expect(mockedLogger.error).toHaveBeenCalledWith(
         "ViewerAPI",
-        "Error getting viewer channels:",
+        "取得觀眾頻道列表失敗",
         expect.any(Error)
       );
       expect(res.status).toHaveBeenCalledWith(500);
@@ -552,12 +552,12 @@ describe("ViewerController", () => {
       });
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         "BFF",
-        "channelStats failed:",
+        "取得頻道統計失敗",
         expect.any(Error)
       );
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         "BFF",
-        "channel analytics failed:",
+        "取得頻道分析資料失敗",
         expect.any(Error)
       );
     });
@@ -589,7 +589,7 @@ describe("ViewerController", () => {
       });
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         "BFF",
-        "messageStats failed:",
+        "取得訊息統計失敗",
         expect.any(Error)
       );
     });
@@ -736,7 +736,7 @@ describe("ViewerController", () => {
 
       expect(mockedLogger.error).toHaveBeenCalledWith(
         "BFF",
-        "BFF timeout (10000ms): channel channel-1"
+        "BFF 查詢逾時（10000ms）：頻道 channel-1"
       );
       expect(res.status).toHaveBeenCalledWith(504);
       expect(res.json).toHaveBeenCalledWith({ error: "Gateway Timeout" });
@@ -755,7 +755,7 @@ describe("ViewerController", () => {
 
       expect(mockedLogger.error).toHaveBeenCalledWith(
         "BFF",
-        "Error in getChannelDetailAll:",
+        "取得頻道詳細聚合資料失敗",
         expect.any(Error)
       );
       expect(res.status).toHaveBeenCalledWith(500);
@@ -791,7 +791,7 @@ describe("ViewerController", () => {
 
       expect(mockedLogger.warn).toHaveBeenCalledWith(
         "BFF",
-        "Slow BFF query: 2001ms for channel channel-1"
+        "BFF 查詢偏慢：頻道 channel-1 耗時 2001ms"
       );
       nowSpy.mockRestore();
     });

@@ -412,7 +412,7 @@ describe("viewer.service", () => {
       });
       expect(log.warn).toHaveBeenCalledWith(
         "ViewerService",
-        "Skip live-status reconciliation due to empty Twitch stream response while local rows contain live channels"
+        "Twitch 回傳空的直播清單，但本地仍有直播中頻道，略過直播狀態校正"
       );
       expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     });
@@ -451,7 +451,7 @@ describe("viewer.service", () => {
       });
       expect(log.warn).toHaveBeenCalledWith(
         "ViewerService",
-        "Failed to reconcile followed channel live status",
+        "校正追蹤頻道直播狀態失敗",
         expect.any(Error)
       );
       expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
@@ -547,7 +547,7 @@ describe("viewer.service", () => {
       await expect(getFollowedChannels("viewer-err")).rejects.toThrow("source query failed");
       expect(log.error).toHaveBeenCalledWith(
         "ViewerService",
-        "getFollowedChannels failed",
+        "取得追蹤頻道列表失敗",
         expect.any(Error)
       );
     });
@@ -659,7 +659,7 @@ describe("viewer.service", () => {
       expect(result).toHaveLength(3);
       expect(log.debug).toHaveBeenCalledWith(
         "ViewerService",
-        "viewer_channel_summary table not ready, fallback to source queries",
+        "viewer_channel_summary 尚未就緒，改用來源查詢回退",
         expect.any(Error)
       );
       expect(prisma.$executeRaw).toHaveBeenCalledTimes(3);
@@ -1160,7 +1160,7 @@ describe("viewer.service", () => {
       expect(result).toHaveLength(1);
       expect(log.warn).toHaveBeenCalledWith(
         "ViewerService",
-        "Failed to persist viewer_channel_summary",
+        "寫入 viewer_channel_summary 失敗",
         expect.any(Error)
       );
     });
@@ -1282,7 +1282,7 @@ describe("viewer.service", () => {
       await expect(syncSummaryStatsFromLifetime("viewer-1")).resolves.toBeUndefined();
       expect(log.debug).toHaveBeenCalledWith(
         "ViewerService",
-        "Failed to sync summary stats from lifetime_stats",
+        "從 lifetime_stats 同步摘要統計失敗",
         expect.any(Error)
       );
     });
@@ -1294,8 +1294,8 @@ describe("viewer.service", () => {
 
       const sqlArg = prisma.$executeRaw.mock.calls[0][0];
       const queryText = sqlArg.strings.join(" ");
-      expect(queryText).toContain("messageCount IS NOT COALESCE(");
-      expect(queryText).toContain("OR totalWatchMin IS NOT MAX(");
+      expect(queryText).toContain('"messageCount" IS DISTINCT FROM COALESCE(');
+      expect(queryText).toContain('OR "totalWatchMin" IS DISTINCT FROM GREATEST(');
     });
 
     it("deduplicates concurrent background summary syncs per viewer", async () => {
@@ -1378,7 +1378,7 @@ describe("viewer.service", () => {
 
       expect(log.warn).toHaveBeenCalledWith(
         "ViewerService",
-        "Failed to refresh channel live snapshot in summary table",
+        "更新摘要表中的頻道直播快照失敗",
         expect.any(Error)
       );
     });
@@ -1458,7 +1458,7 @@ describe("viewer.service", () => {
 
       expect(log.warn).toHaveBeenCalledWith(
         "ViewerService",
-        expect.stringContaining("Cache warmup failed for viewer"),
+        expect.stringContaining("預熱觀眾快取失敗：viewer="),
         expect.any(Error)
       );
     });

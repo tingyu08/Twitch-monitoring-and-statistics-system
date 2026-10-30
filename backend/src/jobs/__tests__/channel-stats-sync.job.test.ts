@@ -381,7 +381,7 @@ describe("ChannelStatsSyncJob", () => {
       const { logger } = jest.requireMock("../../utils/logger");
       expect(logger.error).toHaveBeenCalledWith(
         "ChannelStatsSync",
-        "Job execution failed:",
+        "頻道統計同步任務執行失敗",
         expect.any(Error)
       );
     });

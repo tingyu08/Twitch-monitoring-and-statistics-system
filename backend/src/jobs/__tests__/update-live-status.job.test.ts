@@ -213,7 +213,7 @@ describe("updateLiveStatusFn", () => {
 
       expect(logger.error).toHaveBeenCalledWith(
         "Jobs",
-        expect.stringContaining("Update Live Status Job 執行失敗"),
+        expect.stringContaining("直播狀態更新任務執行失敗"),
         expect.any(Error)
       );
     });
@@ -225,7 +225,7 @@ describe("updateLiveStatusFn", () => {
 
       expect(logger.error).toHaveBeenCalledWith(
         "Jobs",
-        expect.stringContaining("Update Live Status Job 執行失敗"),
+        expect.stringContaining("直播狀態更新任務執行失敗"),
         expect.any(Error)
       );
     });
@@ -257,7 +257,7 @@ describe("updateLiveStatusFn", () => {
       await expect(updateLiveStatusFn()).resolves.toBeUndefined();
       expect(logger.error).toHaveBeenCalledWith(
         "Jobs",
-        expect.stringContaining("Update Live Status Job 執行失敗"),
+        expect.stringContaining("直播狀態更新任務執行失敗"),
         expect.any(Error)
       );
     });
@@ -273,8 +273,8 @@ describe("buildChangedChannelUpdateQuery", () => {
 
     const queryText = (query as any)[0].join(" ");
     expect(queryText).toContain("AND EXISTS (");
-    expect(queryText).toContain("COALESCE(currentViewerCount, -1) != COALESCE(updates.viewerCount, -1)");
-    expect(queryText).toContain("COALESCE(currentTitle, '') != COALESCE(updates.titleValue, '')");
-    expect(queryText).toContain("COALESCE(currentGameName, '') != COALESCE(updates.gameNameValue, '')");
+    expect(queryText).toContain('"currentViewerCount" IS DISTINCT FROM updates."viewerCount"::integer');
+    expect(queryText).toContain('"currentTitle" IS DISTINCT FROM updates."titleValue"::text');
+    expect(queryText).toContain('"currentGameName" IS DISTINCT FROM updates."gameNameValue"::text');
   });
 });
