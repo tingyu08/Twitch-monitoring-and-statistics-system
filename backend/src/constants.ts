@@ -45,6 +45,7 @@ export const WriteGuardKeys = {
   // Cleanup / retention
   CLEANUP_HEARTBEAT_DEDUP: "cleanup-heartbeat-dedup:delete",
   DATA_RETENTION_DELETE: "data-retention:delete-messages",
+  DATA_RETENTION_DOWNSAMPLE_METRICS: "data-retention:downsample-stream-metrics",
 
   // Live status updates
   LIVE_STATUS_CHECK_TIME: "update-live-status:check-time-only",

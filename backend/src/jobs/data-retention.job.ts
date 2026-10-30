@@ -13,23 +13,59 @@ import { dataExportService } from "../services/data-export.service";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { runWithWriteGuard } from "./job-write-guard";
+import { buildStreamMetricDownsampleSql } from "./stream-metric-retention";
 import { WriteGuardKeys } from "../constants";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
 
 // 每日凌晨 3 點執行
 const DATA_RETENTION_CRON = process.env.DATA_RETENTION_CRON_EXPRESSION || "0 3 * * *";
-const DEFAULT_MESSAGE_DELETE_BATCH_SIZE = 3000;
-const DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE = (() => {
-  const parsed = Number(process.env.DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    return DEFAULT_MESSAGE_DELETE_BATCH_SIZE;
-  }
-  return Math.floor(parsed);
-})();
+const DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE = readPositiveIntEnv(
+  "DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE",
+  3000
+);
+// stream_metrics 保留 10 分鐘原始採樣的天數，更舊的合併為每場每小時一筆
+const STREAM_METRIC_RAW_RETENTION_DAYS = readPositiveIntEnv("STREAM_METRIC_RAW_RETENTION_DAYS", 30);
+// 每批合併的「場次 × 小時」區段數
+const STREAM_METRIC_DOWNSAMPLE_BATCH_SIZE = readPositiveIntEnv(
+  "STREAM_METRIC_DOWNSAMPLE_BATCH_SIZE",
+  2000
+);
 
 export class DataRetentionJob {
   private isRunning = false;
   private readonly MESSAGE_DELETE_BATCH_SIZE = DATA_RETENTION_MESSAGE_DELETE_BATCH_SIZE;
-  private readonly MESSAGE_DELETE_BATCH_DELAY_MS = 200;
+  private readonly BATCH_DELAY_MS = 200;
+
+  private async batchDownsampleStreamMetrics(before: Date): Promise<number> {
+    let totalMerged = 0;
+
+    while (true) {
+      const merged = await runWithWriteGuard(WriteGuardKeys.DATA_RETENTION_DOWNSAMPLE_METRICS, () =>
+        prisma.$executeRaw(
+          buildStreamMetricDownsampleSql(before, STREAM_METRIC_DOWNSAMPLE_BATCH_SIZE)
+        )
+      );
+
+      totalMerged += merged;
+
+      if (merged < STREAM_METRIC_DOWNSAMPLE_BATCH_SIZE) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, this.BATCH_DELAY_MS));
+    }
+
+    return totalMerged;
+  }
 
   private async batchDeleteViewerMessages(before: Date): Promise<number> {
     let totalDeleted = 0;
@@ -59,7 +95,7 @@ export class DataRetentionJob {
         break;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, this.MESSAGE_DELETE_BATCH_DELAY_MS));
+      await new Promise((resolve) => setTimeout(resolve, this.BATCH_DELAY_MS));
     }
 
     return totalDeleted;
@@ -113,6 +149,14 @@ export class DataRetentionJob {
       logger.info(
         "DataRetention",
         `清理了 ${deletedViewerMessageCount} 則過期訊息`
+      );
+
+      // 4. stream_metrics 超過保留天數的合併為每場每小時一筆
+      const metricCutoff = new Date(Date.now() - STREAM_METRIC_RAW_RETENTION_DAYS * DAY_MS);
+      const mergedMetricHours = await this.batchDownsampleStreamMetrics(metricCutoff);
+      logger.info(
+        "DataRetention",
+        `stream_metrics 降採樣：合併了 ${mergedMetricHours} 個小時區段（${STREAM_METRIC_RAW_RETENTION_DAYS} 天前）`
       );
 
       logger.info("DataRetention", "Job 執行完成");

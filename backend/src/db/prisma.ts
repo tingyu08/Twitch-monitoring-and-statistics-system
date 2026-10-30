@@ -15,7 +15,20 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL 環境變數未設定，請設定 PostgreSQL 連線字串");
 }
 
-logger.info("Prisma", "資料庫模式: PostgreSQL (Supabase)");
+/**
+ * 給 log 用的連線目標描述：只有主機、埠與資料庫名稱，不含帳號、密碼與查詢參數
+ */
+export function describeDatabaseTarget(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const database = parsed.pathname.replace(/^\//, "");
+    return `PostgreSQL @ ${parsed.hostname}:${parsed.port || "5432"}/${database}`;
+  } catch {
+    return "PostgreSQL @ (無法解析的連線字串)";
+  }
+}
+
+logger.info("Prisma", `資料庫: ${describeDatabaseTarget(databaseUrl)}`);
 
 if (process.env.NODE_ENV === "development") {
   const safeUrl = databaseUrl.replace(/:\/\/[^@]+@/, "://***@");
