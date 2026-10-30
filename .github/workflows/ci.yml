@@ -43,11 +43,14 @@ jobs:
       - name: Lint
         working-directory: backend
         run: npm run lint
+      # github-actions reporter 把失敗的測試寫成 annotation：公開 repo 的 log 要登入才看得到，
+      # annotation 則任何人都能從 API 讀到
       - name: Test
         working-directory: backend
         env:
-          TEST_POSTGRES_URL: postgresql://postgres:test@localhost:5432/postgres
-        run: npm test
+          # 用 127.0.0.1 而非 localhost：Node 17+ 可能先解析成 ::1，service container 未必綁 IPv6
+          TEST_POSTGRES_URL: postgresql://postgres:test@127.0.0.1:5432/postgres
+        run: npm test -- --reporters=default --reporters=github-actions
 
   deploy-backend:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
