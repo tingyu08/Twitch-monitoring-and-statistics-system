@@ -32,9 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # 與正式環境的 Dockerfile（FROM node:22，每次 build 拿最新的 22.x）一致。
-      # 不加 check-latest 會用 runner 預先快取的 22.x。esm-import.test.ts 曾只在 CI 報
-      # 「Provided module is not an instance of Module」（jest 的 vm-modules 與 Node 版本相關），
-      # 而在最新的 node:22（v22.23.4）上會過，懷疑是快取版本較舊
+      # 不加 check-latest 會用 runner 預先快取的 22.x，不一定是正式環境實際跑的版本
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -11,9 +11,13 @@ const allowedEsmModules = new Set([
   "p-limit",
 ]);
 
-const nativeImport = new Function("modulePath", "return import(modulePath);") as (
-  modulePath: string
-) => Promise<unknown>;
+type NativeImport = (modulePath: string) => Promise<unknown>;
+
+const defaultNativeImport = new Function(
+  "modulePath",
+  "return import(modulePath);"
+) as NativeImport;
+let nativeImport: NativeImport = defaultNativeImport;
 const moduleCache = new Map<string, Promise<unknown>>();
 
 type LimitRunner = <T>(task: () => Promise<T>) => Promise<T>;
@@ -60,4 +64,13 @@ export async function importPLimit(): Promise<PLimitModule> {
 
 export const __esmImportTestables = {
   importEsm,
+  /**
+   * 測試用：換掉原生 import()（不帶參數則還原），並清掉快取。
+   * jest --experimental-vm-modules 下真的 import() 會受同一 process 先前載入的 ESM 影響，
+   * 結果取決於測試執行順序
+   */
+  setNativeImport(fn?: NativeImport): void {
+    nativeImport = fn ?? defaultNativeImport;
+    moduleCache.clear();
+  },
 };
