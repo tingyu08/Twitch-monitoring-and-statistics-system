@@ -26,6 +26,9 @@ npm-debug.log
 backup
 backups
 
+# 觀眾資料匯出檔（含個資）：執行期才產生，不該被打包進映像
+backend/exports
+
 # Frontend/extension source not needed for backend image
 frontend
 extension
