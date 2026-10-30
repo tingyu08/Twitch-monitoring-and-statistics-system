@@ -4,9 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 手動重新部署：Actions → CI → Run workflow（main）
+  workflow_dispatch:
 
 permissions:
   contents: read
+  # 變更偵測要查過去的 run 是否真的部署過
+  actions: read
 
 jobs:
   backend:
@@ -60,7 +64,7 @@ jobs:
         run: npm test -- --reporters=default --reporters=github-actions
 
   deploy-backend:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: [backend]
     runs-on: ubuntu-latest
     timeout-minutes: 40 # VPS 端可能排在 StockwiseAI 的部署後面，再加建置時間
@@ -75,18 +79,45 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # 只改文件或前端時不必重啟後端（重啟會讓聊天機器人斷線、EventSub 重新訂閱）
+      # 只改文件或前端時不必重啟後端（重啟會讓聊天機器人斷線、EventSub 重新訂閱）。
+      # 比較基準是「上一次真的部署成功的版本」，不是上一次 push：CI 失敗的 push 不會部署，
+      # 若只跟上一次 push 比，那些 push 裡的後端變更在下一次只改文件的 push 時會被當成
+      # 「沒變更」而永遠不上線（1e1be94 就是這樣：CI 綠了卻什麼都沒部署）
       - name: Detect backend changes
         id: changes
         env:
-          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "手動觸發，直接部署"
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$BEFORE" "$GITHUB_SHA" -- backend Dockerfile .dockerignore deploy/vps; then
-            echo "backend/、Dockerfile、deploy/vps/ 沒有變更，略過部署"
+            exit 0
+          fi
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          auth="Authorization: Bearer $GH_TOKEN"
+          base=""
+          runs=$(curl -fsSL -H "$auth" "$api/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=30" \
+            | jq -r '.workflow_runs[] | "\(.id) \(.head_sha)"') || runs=""
+          while read -r run_id sha; do
+            [ -n "$run_id" ] || continue
+            deployed=$(curl -fsSL -H "$auth" "$api/actions/runs/$run_id/jobs" \
+              | jq '[.jobs[] | select(.name == "deploy-backend") | .steps[]
+                     | select(.name == "Deploy to VPS" and .conclusion == "success")] | length') || deployed=0
+            if [ "${deployed:-0}" -gt 0 ]; then
+              base=$sha
+              break
+            fi
+          done <<EOF
+          $runs
+          EOF
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "找不到上一次成功部署的版本，部署"
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$base" "$GITHUB_SHA" -- backend Dockerfile .dockerignore deploy/vps; then
+            echo "自上次部署（$base）以來 backend/、Dockerfile、deploy/vps/ 沒有變更，略過部署"
             echo "deploy=false" >> "$GITHUB_OUTPUT"
           else
+            echo "自上次部署（$base）以來有後端變更，部署"
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Deploy to VPS
