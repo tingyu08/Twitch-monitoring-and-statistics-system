@@ -27,11 +27,18 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      # 與正式環境的 Dockerfile（node:22）一致
+      # 與正式環境的 Dockerfile（FROM node:22，每次 build 拿最新的 22.x）一致。
+      # 不加 check-latest 會用 runner 預先快取的 22.x。esm-import.test.ts 曾只在 CI 報
+      # 「Provided module is not an instance of Module」（jest 的 vm-modules 與 Node 版本相關），
+      # 而在最新的 node:22（v22.23.4）上會過，懷疑是快取版本較舊
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          check-latest: true
           cache: npm
+      # log 要登入才看得到，版本號寫成 notice 才能從 API 讀到
+      - name: Report Node version
+        run: echo "::notice title=Node version::$(node -v)"
       - name: Install backend dependencies
         run: npm ci --workspace backend --include-workspace-root
       - name: Generate Prisma client
